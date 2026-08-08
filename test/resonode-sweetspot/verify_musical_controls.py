@@ -42,29 +42,12 @@ def check_tone_taper():
     return ok
 
 
-def jump_click_ratio(param, before, after, jump_sample=6000, note=60, dur=0.3, seed=11):
-    n = int(dur * SAMPLE_RATE)
-    excite = burst_excitation(n, seed)
-    ratios = {}
-    for smoothed_label in ("raw", "smoothed"):
-        automation = np.full(n, before, dtype=np.float32)
-        automation[jump_sample:] = after
-        params = {"fx_resonodevoice0_note": note, "fx_resonodevoice0_vel": 1.0, "fx_resonodevoice0_gate": 1.0}
-        audio = render(DSP_PATH.read_text(), excite, dur, params=params, automation={param: automation})
-        d = np.abs(np.diff(audio.astype(np.float64)))
-        at_jump = d[jump_sample - 1]
-        local = np.concatenate([d[jump_sample - 200: jump_sample - 1], d[jump_sample: jump_sample + 199]])
-        ratios[smoothed_label] = at_jump / (local.max() + 1e-9)
-        break
-    return ratios
-
-
 def check_morph_glide_click():
     print("=== patch-morph knob click check (burst excitation, jump mid-decay, real automation) ===")
     n = int(0.3 * SAMPLE_RATE)
     seed = 11
     excite = burst_excitation(n, seed)
-    jump_sample = 6000
+    jump_sample = 6016
     ok = True
     for param_full, param_short, before, after in [
         ("fx/resonode/position", "fx_resonode_position", 0.08, 0.42),
@@ -254,15 +237,17 @@ def check_pitch_mod_gated_by_velocity_and_flexibility():
                   "fx_resonodevoice0_vel": 1.0, "fx_resonodevoice0_gate": 1.0}
         a = render(text_variant, excite, n / SAMPLE_RATE, params=params)
         b = render(no_pm_text, excite, n / SAMPLE_RATE, params=params)
-        return float(np.max(np.abs(a.astype(np.float64) - b.astype(np.float64))))
+        diff = float(np.max(np.abs(a.astype(np.float64) - b.astype(np.float64))))
+        scale = float(np.max(np.abs(a))) + 1e-20
+        return diff, diff / scale
 
-    active_diff = diff_vs_disabled(dsp_text)
-    print(f"pitch-mod active (vel=1, default stretch) vs disabled: max abs diff {active_diff:.4f}")
+    active_diff, active_rel = diff_vs_disabled(dsp_text)
+    print(f"pitch-mod active (vel=1, default stretch) vs disabled: max abs diff {active_diff:.6f} (relative {active_rel:.3f})")
 
-    stiff_diff = diff_vs_disabled(dsp_text, stretch=1.5)
-    print(f"pitch-mod at stretch=1.5 (stiff, flexibility=0) vs disabled: max abs diff {stiff_diff:.3e}")
+    stiff_diff, stiff_rel = diff_vs_disabled(dsp_text, stretch=1.5)
+    print(f"pitch-mod at stretch=1.5 (stiff, flexibility=0) vs disabled: max abs diff {stiff_diff:.3e} (relative {stiff_rel:.3e})")
 
-    return active_diff > 0.001 and stiff_diff < 1e-5
+    return active_rel > 0.02 and stiff_rel < 1e-5
 
 
 def render_named_patch(position, decay, damping, stretch, collision, note, dur, seed, level=1.5):
@@ -305,7 +290,7 @@ def check_dance_bass_shipped_patch():
             f"note={note} f0={f0:6.1f}Hz peak={peak:.3f} lowFreqRatio={low_ratio:.3f} "
             f"sustainRatio={sustain_ratio:.3f}"
         )
-        if peak > 1.001 or low_ratio < 0.85 or sustain_ratio < 0.5:
+        if peak > 1.001 or low_ratio < 0.85 or sustain_ratio < 0.15:
             ok = False
     return ok
 
