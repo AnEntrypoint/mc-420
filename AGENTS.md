@@ -1267,6 +1267,161 @@ voice is stolen (its ADSR re-attacks, same as a real synth voice-steal).
 `onKeybedNoteOff` releases by GATE only (`fx/xpose{v}/gate=0`), never a hard cut.
 `onLiveEngageToggle` and `onClearAll` both release every held voice.
 
+## Onset octave-slide in the polyphonic pitch-lock — root cause and fix
+
+WITNESSED as "many notes create a one-octave slide, especially low notes"
+when locking a chord with the keys. Root-caused via DawDreamer by adding a
+debug tap exposing `detNote`/`shiftAmount` internals (not just the wet
+audio) directly: `detectedFreq`'s `max(minTrackHz, ...)` floor (see
+`multitranspose.dsp: polyphonic pitch-LOCK, 6 voices` above) makes the
+tracker's genuinely-uncertain cold-start reading LOOK like a confident
+`60.0Hz` measurement for the first ~10-50ms after any fresh onset (its
+zero-crossing recursive state hasn't measured a real period yet). Since
+`shiftAmount = targetNote - hz2midikey(freqDet)`, a target note roughly one
+to two octaves above that 60Hz floor gets fed a spuriously large positive
+shift for that whole window — closest to exactly one octave, and longest
+in wall-clock duration (longer periods take longer to settle), for notes
+in the low/bass register, matching the reported symptom exactly. Measured
+directly (a note locked to its OWN pitch, i.e. requesting zero shift):
+130.8Hz reads `shiftAmount` of +9.6 to +12.4 semitones at 10-20ms; 196Hz
+reads +14.6 semitones. Both decay to near 0 by ~100ms.
+
+**The repo's own `test/pitch-tracker-transient/verify_highoctave_transient.py`
+was independently found to be an unreliable regression gate for this exact
+bug and was rewritten**, not just the DSP: its zero-crossing frequency
+estimator ran on a fixed 512-sample window against the WET (already
+pitch-shifted, delay-crossfaded, non-pure-sinusoid) output — for 82Hz
+(period 585 samples, wider than the analysis window) this produced
+multi-thousand-cent "late" readings that were pure measurement noise, not
+a real DSP defect, and the script's own pass/fail logic never actually
+gated on the real bug (`early_signed < -20` looked for the wrong sign/shape
+of error and always passed). Replaced with a normalized-cross-correlation
+estimator (`pitch_measure.py`, new, validated against pure synthetic sines
+across 55-1318.5Hz to within 0.4 cents before being trusted, using a
+first-local-maximum-above-85%-of-peak selection rule rather than a global
+argmax — plain biased autocorrelation and a naive best-peak search were
+both tried and independently found to give wrong answers, in opposite
+directions, before landing on this combination) and a real gate: worst
+|cents| in the 10-50ms onset window must stay under 600 (half an octave;
+the pre-fix file fails this at 1771-5603 cents on every tested frequency),
+worst |cents| at t>=150ms under 20 (steady-state tuning accuracy,
+unaffected by the fix either way).
+
+**Fix**: `onsetUntrust(gate)`, a per-voice trust gate keyed to that voice's
+own MIDI gate rising edge — NOT the shared `freqDet`/`detNote` signal,
+and deliberately not an acoustic-envelope onset detector either. Both
+alternatives were built and adversarially tested via a real multi-agent
+DawDreamer verification pass before this one was picked: gating the
+shared signal via an amplitude-envelope onset detector avoids re-triggering
+when a second chord voice gates onto an already-stable, already-ringing
+input (a real advantage), but independently re-measured to impose a
+genuine ~150-250ms delay before ANY legitimate large interval requested at
+note-on lands on pitch (vs ~75-100ms unfixed) — a real usability regression
+on a performance instrument, not a hypothetical edge case, and its own
+shipped-file header additionally claimed steady-state bit-exactness against
+the original file that measured as false (persistent audible-scale sample
+differences from a permanent `xpose()` delay-phase offset, not a tuning
+error, but a real false claim of the exact kind "Never trust an in-repo
+comment as ground truth" above already warns this project has been burned
+by twice). Per-voice gate-edge gating has an honestly-disclosed narrower
+gap instead (a genuine acoustic re-attack under an already-held chord shape
+with no voice-gate transition is not corrected), accepted as the better
+trade for a keybed-driven instrument where a MIDI gate edge is normally a
+faithful proxy for "a new note was just struck."
+
+`onsetUntrust` snaps to full untrust (1.0) on the gate's `0->1` edge, holds
+flat for `onsetFlatHoldMs=35`, then releases linearly to 0 over
+`onsetReleaseMs=20` (single continuous expression, no separate smoother
+needed for the release ramp itself). While untrust is nonzero,
+`effDetNote = detNote*(1-untrust) + targetNote*untrust` blends the shift
+computation toward an assumed unison (shiftAmount≈0, i.e. "just pass the
+input through roughly at pitch") instead of trusting the still-unsettled
+tracker reading, before the existing `si.smooth(glideTau=8ms)` on
+`shiftAmount` picks up as before. Verified via DawDreamer (worst |cents|
+in the unison-lock onset battery, 82-880Hz, 10-50ms window): 5603.6c ->
+349.9c worst-case, and every frequency's 10-30ms readings drop from the
+1700-5600c range to under 530c. Intentional large shifts requested from
+the very first sample of a note (a real +7 semitone harmony) still
+converge to within a couple cents by 250-350ms, matching the unfixed
+file's own convergence time to within the ~55ms hold+release window this
+adds. True disabled-state check (every voice's gate held at 0 the entire
+render, since this fix has no separate on/off switch and activates purely
+on a gate edge): bit-exact, 0.000000e+00 max abs diff against the
+pre-fix file. `windowFor`/`xpose`/`xposeMaxDelay` are untouched — this
+fix lives entirely inside `voiceOut`'s `shiftAmount` computation.
+
+An open, disclosed residual: the underlying shared tracker's OWN
+convergence past the onset window is still occasionally non-monotonic at
+the very lowest tested frequencies (e.g. 82Hz shows a real, if much
+smaller, -74 to -90 cent wobble as late as 75-100ms) — this is the same
+"genuinely open residual for a future session" already named in
+`multitranspose.dsp`'s own file description for the main tracker's fixed
+`trackerTau=0.02`, still untouched here; `onsetUntrust`'s hold+release
+window reduces its audible impact (it overlaps the tail of `voiceOut`'s
+own ADSR ramp) but does not eliminate it.
+
+## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
+
+`fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
+signal (`dsp/effects_runtime.dsp`'s `FORMANT` hslider, -3..3) but only ever
+fed `pitchStage = component("pitch.dsp")[FORMANT=FORMANT;...]`, the MONO
+SNAC engine. That engine's contribution is faded to ~silence by `dryGate`
+whenever any polyphonic transpose voice is gated (`anyVoiceGated>0`, see
+"Locked pitch must REPLACE, never layer over, the original" above) — so
+turning the formant knob had ZERO audible effect while a performer was
+using the polyphonic key-lock feature, the primary "Infected Mushroom
+Manipulator" gesture this file exists for.
+
+Fix is Faust-only, no C++ changes: `multitranspose.dsp`'s `process()`
+gained a `formant` signal input (threaded in right after `free`, matching
+this file's existing convention of passing momentary/held UI state as
+signal inputs) and `dsp/effects_runtime.dsp`'s `harmonize(...)` call now
+passes its already-in-scope `FORMANT` hslider straight through — `FORMANT`
+needed no new C++ wiring since it already reaches Faust live via the
+existing `targetToZone`/`resolvedControls` machinery.
+
+**Mechanism**: `formant` skews `xpose()`'s window and crossfade sizing —
+the same "grain size relative to detected period" lever any delay/granular
+pitch shifter has for a formant-ish timbral control, larger window-to-
+period ratio reading smoother/more natural, smaller reading grainier/more
+"character." `winSkewMul(formant) = pow(1.2, formant/3)` multiplies
+`windowFor`'s raw window candidate BEFORE the existing
+`max(64):min(maxWindowMs*0.001*ma.SR)` clamps (not after) — this is a hard
+safety requirement, not a style choice: it keeps the already-verified
+960-sample window ceiling (hence `xpose`'s `2*w<=1920` read-index bound,
+comfortably inside `xposeMaxDelay=2000`, see "Two stdlib-delay-line
+buffers were oversized" above) completely unaffected by the formant
+setting, verified across a 55-1500Hz sweep at `formant=+3` (worst observed
+940 samples at 55Hz, vs the 960 limit). `formantXfSkew(formant) =
+pow(4.0, formant/3)` separately skews `xfSamples`, the crossfade length
+between `xpose`'s two delay taps — `xfSamples` is only ever used as a
+crossfade-rate DIVISOR (`d/x`) inside `xpose`, never as a delay index
+itself, so scaling it up (even past `winSamples`, which happens at
+`formant>~+2`, making the crossfade never fully complete a single tap
+before the next begins) cannot overflow the buffer either, only changes
+the blend character.
+
+Both skews are exactly `1.0` at `formant=0` (`pow(K,0)==1.0` exactly in
+float), so the formant knob at its default is a real, verified no-op:
+rendering `formant=0` twice is bit-for-bit deterministic, and the whole
+onset-fix verification above (worst 349.9c onset, 0.0 diff at true
+disabled state) was re-run against this exact merged file with
+`formant=0` pinned throughout, unaffected. Audible effect (220Hz locked
++5 semitones, spectral centroid of the 200-400ms steady-state window,
+`formant` swept -3..+1.5..+3): 307.0 -> 294.2 -> 287.8Hz, a real, finite,
+monotonic-within-noise ~19Hz spread — present and controllable, though
+modest; a future session with real hardware/ear access should treat the
+`1.2`/`4.0` skew bases as a starting point to tune further by ear, not a
+final answer, the same way this file's own window/crossfade constants have
+always been treated as "measured, not guessed, but revisitable."
+
+`test/pitch-tracker-transient/verify_highoctave_transient.py` and its new
+`pitch_measure.py` companion are the permanent regression gate for the
+onset-slide fix (see above); no automated regression test yet covers the
+formant control's audible effect (would need a spectral-centroid-style
+DawDreamer check mirroring `test/resonode-sweetspot/`'s pattern — not
+written yet, a reasonable next step for a future session).
+
 ## SHIFT routing through the transpose engine
 
 `free` (a signal input fed from `fx/monitorfold`, `audio_thread.cpp`'s
