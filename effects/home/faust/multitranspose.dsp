@@ -1,7 +1,7 @@
 declare name "MultiKeyTranspose";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Polyphonic pitch-LOCK harmonizer: an.pitchTracker-derived detNote drives each held voice's shift (targetNote - detNote), landing the wet output on the exact pressed key. Two additions on top of the base engine: (1) onsetUntrust, a per-voice trust gate keyed to that voice's own gate rising edge, which holds effDetNote at its own last-settled (pre-onset) value for a flat-hold-then-release window after note-on so the shared pitch tracker's floor-pinned post-onset reading can't inflate shiftAmount into a spurious octave-scale slide -- NOT a blend toward targetNote, which would zero shiftAmount and audibly unlock every note attack (a real regression, fixed this way after direct user report); (2) formant (-3..3, default 0), which skews xpose's window/crossfade sizing (winSkewMul/formantXfSkew) for a real, monotonic timbral character control reachable while voices are locking a chord. Both additions are exact no-ops in their disabled/default state -- see AGENTS.md 'multitranspose.dsp: polyphonic pitch-LOCK, 6 voices' for the full derivation and numeric verification.";
+declare description "Polyphonic pitch-LOCK harmonizer: an.pitchTracker-derived detNote drives each held voice's shift (targetNote - detNote), landing the wet output on the exact pressed key. Two additions on top of the base engine: (1) onsetUntrust, a per-voice trust gate keyed to that voice's own gate rising edge, which holds effDetNote at a two-tier fallback (heldDetNote) for a flat-hold-then-release window after note-on -- on this voice's first-ever onset (no prior gate), heldDetNote tracks targetNote live (a bounded, musically-safe fallback matching the original fix); on any LATER retrigger, it freezes at detNote's own last-settled pre-onset value instead, preserving whatever pitch-lock was already established rather than zeroing shiftAmount. Neither a pure blend-to-targetNote (zeroes shiftAmount, unlocks every attack) nor a pure freeze-last-value (has nothing sane to freeze onto on a true cold start) alone is correct -- both were tried, both regressed, see AGENTS.md; (2) formant (-3..3, default 0), which skews xpose's window/crossfade sizing (winSkewMul/formantXfSkew) for a real, monotonic timbral character control reachable while voices are locking a chord. Both additions are exact no-ops in their disabled/default state -- see AGENTS.md 'multitranspose.dsp: polyphonic pitch-LOCK, 6 voices' for the full derivation and numeric verification.";
 
 import("stdfaust.lib");
 
@@ -75,11 +75,14 @@ with {
 
 voiceOut(sig, detNote, winSamples, xfSamples, targetNote, gate) = wet
 with {
-    untrust     = onsetUntrust(gate);
-    rising      = gate > (gate : mem);
-    heldDetNoteStep(prev) = ba.if(rising, detNote : mem, prev);
-    heldDetNote = heldDetNoteStep ~ _;
-    effDetNote  = detNote*(1.0-untrust) + heldDetNote*untrust;
+    untrust          = onsetUntrust(gate);
+    everGatedStep(prev) = max(prev, gate > 0.5);
+    everGatedBefore  = (everGatedStep ~ _) : mem;
+    rising           = gate > (gate : mem);
+    heldDetNoteStep(prev) = ba.if(everGatedBefore & rising, detNote : mem,
+                             ba.if(everGatedBefore, prev, targetNote));
+    heldDetNote      = heldDetNoteStep ~ _;
+    effDetNote       = detNote*(1.0-untrust) + heldDetNote*untrust;
     shiftAmount = (targetNote - effDetNote) : si.smooth(glideTau);
     voiceEnv    = en.adsr(0.003, 0.03, 1, 0.05, gate);
     wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * voiceGain;
