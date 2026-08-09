@@ -966,6 +966,181 @@ baseline no-flags ≈ 4.27% DSP CPU; with the shipped Faust flag set ≈ 4.12%. 
 full-stack figure is ≈12.0% — the difference is the real cost of the polyphonic
 pitch-lock engine added since, not a regression.
 
+## `-vs` (vector size) is unexamined territory — a real ~14% win measured, unshipped pending real hardware
+
+A full-repo Faust-optimization sweep (fanned out across parallel finder
+agents, each candidate independently re-verified via DawDreamer JIT A/B
+before being trusted) benchmarked the shipped `-vs 32` against every other
+candidate vector size on `dsp/aloop.dsp` via `faust2bench` (real Linux x86_64
+host, `-bs 64`, matching this repo's own documented methodology, 20 runs per
+value, re-confirmed with interleaved rounds to rule out drift): `-vs 8` ≈
+9.85%, `-vs 16` ≈ 9.63-9.77%, `-vs 32` (SHIPPED) ≈ 11.29-11.36% — consistently
+the WORST of every value tried — `-vs 64` ≈ 10.6-10.9%, `-vs 128` ≈ 9.97-10.3%
+DSP CPU. `-vs 16` is a reproducible **~14% relative DSP-CPU reduction**
+against the shipped value, on the real Core-1 home stack at the project's
+actual 64-sample block size, and the same direction/magnitude reproduces on
+`guitar_lofi_fx.dsp` (Core-3 LV2 bundle: `-vs 32` ≈0.424% vs `-vs 16` ≈0.368%).
+
+A direct diff of the generated C++ for `-vs 16` vs `-vs 32` confirms this is
+a PURE loop-tiling/scratch-buffer-sizing change — every arithmetic statement
+and evaluation order is textually identical; only `fYecNN[16]`/`[32]`
+scratch-buffer sizes, ring masks, and vectorized-loop trip counts differ.
+There is no accuracy/bit-exactness risk of the `-fm`/`-mapp` kind.
+
+**Not shipped, on purpose.** All of the above numbers come from an x86_64
+CI-style host with AVX-512 (32×512-bit vector registers); the real target is
+Cortex-A72 NEON (32×128-bit registers, a differently-sized/organized L1/L2).
+Per "Compiling clean proves nothing about runtime safety" above — already
+burned twice by an x86_64-clean flag (`-mapp`, `-fm def`) behaving
+differently on real aarch64 — a register-pressure inflection point measured
+on a 512-bit vector unit has no guaranteed correspondence to one on a
+128-bit NEON unit. The naive "`-vs` should match/divide the block size"
+rule of thumb from the optimizing-compiler manual doesn't even hold on THIS
+host (`-vs 64`, matching the real 64-sample block size exactly, is also
+worse than `-vs 16`) — only real measurement predicts the real optimum, and
+that measurement has only been done on x86_64 so far.
+
+**Next step for whoever has real Pi 4 access**: change `-vs 32` to `-vs 16`
+at all 5 real invocation sites (`build-local.sh:85`, `build-binary.yml:64`,
+`build-lv2.yml:104/245/368` — they must move together) in a
+cross-compiled aarch64/musl build, deploy via `image/dsp-hotdeploy.js`, and
+compare real `core_busy`/xrun telemetry against the current `-vs 32` build
+before making this the shipped default.
+
+## Faust already CSEs `par()`-replicated pure-signal subexpressions — do not hand-hoist them
+
+A candidate finding from the same sweep proposed manually hoisting
+`dsp/loop.dsp`'s `oneLooper`-internal `gridStep`/`phaseInGrid`/
+`gridTickCrossed`/`speedClamped`/`varispeedActive` (each built purely from
+the shared `masterPhase`/`masterLen`/`effSpeed` signal inputs, with no
+per-looper-varying operand) out of the `par(i, NLOOPERS, oneLooper(...))`
+20-way replication into `loopEngine`'s own scope, reasoning that `par()`
+literally replicates the block diagram 20 times so these subexpressions must
+be recomputed 20×/sample. **Independent re-verification found this false for
+the code as it compiles today**: grepping the ALREADY-SHIPPED generated C++
+for each subexpression's compiled form (`0.0625f * masterLen`, the
+`speedClamped` min/max chain, the `!= 1.0f` compare) shows each appears
+EXACTLY ONCE, not 20 times, and a real hoisted rebuild produces
+structurally-identical generated C++ (same struct field count, same
+functions, only Faust's internal signal-numbering shifted) with no
+measurable `faust2bench` delta (noise-band difference, not a real one).
+
+**Lesson**: under this project's shipped flags, Faust's compiler already
+performs signal-level common-subexpression elimination across `par()`
+instances for any subexpression built purely from already-shared signal
+inputs — including through `mem`/`~` (stateful recursive) signals, not just
+stateless arithmetic. This does NOT contradict "`par()`-replicated UI
+controls silently duplicate" above — that rule is specifically about
+`button()`/`hslider()` boxes, which Faust deliberately never merges (each
+must produce its own addressable UI zone even when structurally identical).
+A pure-signal expression with no UI primitive of its own is not subject to
+that rule and is already deduplicated for free. Before proposing a manual
+hoist of a `par()`-internal expression, check the REAL generated C++ for the
+actual call count first — the source-level "replicated 20 times" intuition
+is not reliable evidence.
+
+## Two stdlib-delay-line buffers were oversized well past their real usage ceiling
+
+The same "Faust stdlib functions can hide oversized buffers" lesson that
+found `ef.transpose`'s 65536-sample hardcoded buffer (see above) generalizes
+to this codebase's OWN declared buffer constants, not just stdlib internals:
+
+- **`multitranspose.dsp`'s `xposeMaxDelay`** was `4096`, but `xpose()`'s real
+  read index (`d+w`, where `d` is a `fmod`-bounded letrec accumulator and `w`
+  is `windowFor()`'s own hard ceiling of 960 samples) can mathematically never
+  exceed `2*960 = 1920` — proven analytically (fmod's own magnitude
+  guarantee) and confirmed numerically (float32 simulation across shift
+  -200..+200 semitones, measured max 1919.97). Because the index is produced
+  by a RECURSIVE (`letrec`) signal, Faust's interval analyzer cannot narrow
+  the buffer size the way it does for a feed-forward index (confirmed by A/B
+  against `flanger.dsp`'s textually-similar but feed-forward LFO delay index,
+  which DOES get narrowed) — it falls back to the declared constant, and
+  `de.fdelay`'s own `n+2`-slot internal need then rounds 4096 up to the next
+  power-of-two tier (real allocated ring: `8192` floats, not 4096). Lowered to
+  `xposeMaxDelay = 2000` (real ring: `2048` floats, a 4× reduction) — verified
+  bit-exact (max abs diff 0.0) via DawDreamer JIT across shift -101..+91
+  semitones both standalone and inside the full `effects_runtime.dsp` chain,
+  and via a byte-for-byte diff of the real generated `dsp/aloop.dsp` C++
+  showing this is the ONLY array that changes size anywhere in the home
+  stack.
+- **`delay.dsp`'s `MAXD`** was `96000`, but `TIME`'s own `targetSamples()`
+  formula caps the real usable delay at ~999.6ms (~47999 samples @ 48kHz) —
+  already documented in this file's own TIME-to-ms sweep table above, roughly
+  HALF of `MAXD`. `96000` itself also crosses just past the `65536`
+  power-of-two tier, so the real allocated ring was `131072` floats — 2.73×
+  the already-2×-oversized nominal figure. Lowered to `MAXD = 52000` (inside
+  the `65536` tier with ~8.3% margin over the real ~47999-sample ceiling;
+  bisection confirms 49152-65500 all land safely in this tier). Verified
+  bit-exact (max abs diff 0.0) via DawDreamer JIT across the full TIME(0..1)
+  × DELAYAMT(0..1) grid plus an abrupt TIME 0→1→0 transient/feedback-edge
+  case, warmed 90000 samples per this file's own documented delay-line
+  discipline. This is a memory-only fix (131072→65536 floats, 512KB→256KB) —
+  measured `faust2bench` delta is within run-to-run noise, unlike the
+  already-shipped `multitranspose`/`ef.transpose` fix, which had a real
+  cache-locality CPU win.
+
+Neither change touches `-ct 0`'s safety story: both are `de.fdelay`/`de.delay`
+stdlib ring sizing (power-of-2 array + bitmask codegen), a structurally
+different mechanism from the `rwtable`/`table` primitives that flag governs.
+
+## Faust comments compile away to nothing — verified, not just assumed
+
+Removing a `.dsp` file's comments (per "No comments in code, ever" above)
+is provably inert to the compiler: for every file checked in this sweep
+(`bitcrush.dsp`, `compressor.dsp`, `microrepeat.dsp`), a real `faust -lang
+cpp` A/B on the exact shipped flags produced BYTE-IDENTICAL generated C++
+before and after comment removal (module name/filename metadata aside). A
+comment-only diff carries zero numeric or runtime risk on any target,
+including aarch64 — no DawDreamer render or real-hardware check is needed
+to trust it, only the compiler-output diff. `compressor.dsp`'s
+"Verification history"/attempt-log narrative and `microrepeat.dsp`'s
+"sampleIdx counting from PROGRAM START" bug-history narrative (both real,
+substantive design rationale previously living inline) are preserved
+nowhere else in-repo after this cleanup — if that history is needed again,
+it was: `compressor.dsp` tried four rejected makeup-gain/ceiling designs
+before landing on excess-only soft-limiting (see `softLimit`/`saturateExcess`
+in the file itself, whose behavior IS the rationale); `microrepeat.dsp`'s
+ring/capture bug was a stale-`sampleIdx`-since-program-start read that the
+current `sampleIdxSinceEngage` name and `engageEdge`-reset structure now
+make self-evident without narration.
+
+Every file in `effects/home/faust/` (`delay.dsp`, `reverb.dsp`, `phaser.dsp`,
+`tremolo.dsp`, `chain.dsp`, `filters.dsp`, `flutter.dsp`,
+`guitar_lofi_fx.dsp`, `samplerate.dsp`, `vinyl.dsp`) has since had the same
+full-file sweep applied; `flanger.dsp` and `pitch.dsp` already had zero
+comments. Every sweep was confirmed byte-identical generated C++ (both the
+standalone file and the whole `dsp/aloop.dsp` aggregate build) before
+committing. Before partially fixing any one file, count its total comment
+lines first — a partial excision that leaves the file still mostly comments
+does not satisfy the rule (this was checked and rejected once for
+`phaser.dsp` before landing the full sweep instead). `dsp/loop.dsp`,
+`dsp/effects_runtime.dsp`, and `dsp/aloop.dsp` were already clean (zero
+comments). The entire `.dsp` tree (`dsp/` and `effects/home/faust/`) is now
+comment-free.
+
+## Faust already shares one `pow()`/`tan()` computation across all `par()`-replicated call sites with a textually-identical argument
+
+Two candidate `pow()`→`exp(x*ln(K))` and `pow(K,x)`-factoring optimizations
+for `resonode_synth.dsp`'s `stretchRatio2..6`/`modeR`/`pitchModPole` were
+proposed and REJECTED after real measurement: the algebraic factoring
+(`stretchRatio4 = stretchRatio2*stretchRatio2`, exploiting `4=2²`) is
+numerically safe (float32-rounding-band diff, same class as the shipped
+mode2/3/4 fix) but the actual per-sample call-count reduction is only 2
+`pow()` calls TOTAL (these bindings are already computed once per sample and
+shared across all 4 voices, not per-voice/per-mode) — too small a fraction
+of a per-sample graph containing 24 mode filters, 4 envelopes, 4 lowpass
+filters and a `tanh` to clear real measurement noise (`faust2bench`, 20 runs
+each: -0.40% relative, Welch t=0.638, not significant). The `pow(K,x)` →
+`exp(x*ln(K))` libm-routing swap measured in BOTH directions across repeated
+runs (+4.8% one run, -2.5% the next on DawDreamer JIT; ±0.5% on
+`faust2bench`, an order of magnitude below the ~10% same-binary run-to-run
+noise floor measured on the same host) — no reliable effect either way.
+Lesson: before proposing a `pow()`/`tan()` strength-reduction, check whether
+the call site is already a once-per-sample shared top-level binding (as
+`mode2`/`mode3`/`mode4`'s ORIGINAL fix correctly was — those were genuinely
+called 4×/sample, once per voice) rather than assuming source-level call
+syntax implies real per-sample multiplicity.
+
 ## Faust compiler flags — deliberately NOT shipped
 
 - **`-mapp`** — causes a 100%-reproducible SIGSEGV (`si_addr=0x0`) inside
