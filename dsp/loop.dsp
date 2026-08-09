@@ -46,7 +46,8 @@ with {
     ring = rwtable(MAXLEN, 0.0, writeIdx, writeVal, readIdx0);
 
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
-    takeLenRatio = float(wrapLen) / max(1.0, masterLen);
+    finishTakeLen = max(1, writeIdxForLatch);
+    takeLenRatio = float(finishTakeLen) / max(1.0, masterLen);
     anchorGridLen = ba.if(takeLenRatio >= 1.0, masterLen,
                      ba.if(takeLenRatio >= 0.5, masterLen * 0.5, gridStep));
     finishGridLen = ba.if(masterLen < 0.5, gridStep, anchorGridLen);
