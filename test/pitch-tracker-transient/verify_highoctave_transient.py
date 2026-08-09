@@ -4,12 +4,18 @@ from pathlib import Path
 import numpy as np
 import dawdreamer as daw
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pitch_measure import measure_freq
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DSP_PATH = REPO_ROOT / "effects" / "home" / "faust" / "multitranspose.dsp"
 
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 64
 COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
+
+ONSET_WORST_CENTS_LIMIT = 600.0
+STEADY_STATE_CENTS_LIMIT = 20.0
 
 
 def compile_processor(engine, dsp_text, name):
@@ -30,7 +36,7 @@ def sine_transient(n, freq_hz, attack_samples=64, amp=0.9):
     return tone * env
 
 
-def make_inputs(n, dry, free, target_note, gate):
+def make_inputs(n, dry, free, formant, target_note, gate):
     zero = np.zeros(n)
     ones = np.ones(n)
     return np.stack(
@@ -38,114 +44,87 @@ def make_inputs(n, dry, free, target_note, gate):
             dry,
             zero,
             free * ones,
+            formant * ones,
             target_note * ones,
             gate * ones,
-            zero, zero, zero, zero, zero, zero, zero, zero, zero, zero,
+            zero, zero, zero, zero, zero, zero, zero, zero, zero,
         ],
         axis=0,
     )
 
 
-def render(dsp_text, freq_hz, target_note, dur=0.3, seed=1):
+def render(dsp_text, freq_hz, target_note, formant=0.0, dur=0.4):
     engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
     n = int(dur * SAMPLE_RATE)
     dry = sine_transient(n, freq_hz)
-    inputs = make_inputs(n, dry, 0.0, target_note, 1.0)
+    inputs = make_inputs(n, dry, 0.0, formant, target_note, 1.0)
     playback = engine.make_playback_processor("in", inputs)
     faust = compile_processor(engine, dsp_text, "multitranspose")
     engine.load_graph([(playback, []), (faust, ["in"])])
     engine.render(dur)
-    return engine.get_audio()[0], dry
-
-
-def instantaneous_freq_via_zero_crossings(x, sr, win_samples=512, hop=64):
-    n = len(x)
-    freqs = []
-    times = []
-    for start in range(0, n - win_samples, hop):
-        seg = x[start:start + win_samples]
-        signs = np.sign(seg)
-        signs[signs == 0] = 1
-        crossings = np.sum(np.abs(np.diff(signs)) > 0)
-        dur_s = win_samples / sr
-        f = crossings / (2.0 * dur_s)
-        freqs.append(f)
-        times.append((start + win_samples / 2) / sr)
-    return np.array(times), np.array(freqs)
+    return engine.get_audio()[0]
 
 
 def cents_error(measured_hz, target_hz):
-    if measured_hz <= 0 or target_hz <= 0:
+    if measured_hz is None or np.isnan(measured_hz) or measured_hz <= 0 or target_hz <= 0:
         return float("nan")
     return 1200.0 * np.log2(measured_hz / target_hz)
 
 
-def check_high_octave_transient(freq_hz, target_note_offset_semis=0):
-    print(f"=== high-octave transient check: input={freq_hz}Hz ===")
+def check_unison_lock_onset(freq_hz):
     text = DSP_PATH.read_text()
-    target_note = 69.0 + 12.0 * np.log2(freq_hz / 440.0) + target_note_offset_semis
-    audio, dry = render(text, freq_hz, target_note, dur=0.3)
-    target_hz = freq_hz * (2.0 ** (target_note_offset_semis / 12.0))
+    target_note = 69.0 + 12.0 * np.log2(freq_hz / 440.0)
+    audio = render(text, freq_hz, target_note)
 
-    # Control: measure the SAME zero-crossing method against the raw dry
-    # input tone (no DSP at all) to separate "the measurement method itself
-    # is noisy on a ramping onset" from "the multitranspose output has a
-    # real tracking error" -- the control should read near target_hz==freq_hz
-    # everywhere the signal has real amplitude.
-    dry_times, dry_freqs = instantaneous_freq_via_zero_crossings(dry, SAMPLE_RATE)
-    dry_early_mask = (dry_times >= 0.035) & (dry_times < 0.10)
-    dry_early_errs = [cents_error(f, freq_hz) for f in dry_freqs[dry_early_mask] if f > 0]
-    dry_early_mean = np.mean(dry_early_errs) if dry_early_errs else float("nan")
-    print(f"  CONTROL (dry input, zero-crossing method only): "
-          f"early(35-100ms)_mean_signed_cents={dry_early_mean:.1f}")
+    row = {}
+    worst_onset = 0.0
+    worst_steady = 0.0
+    for tms in (10, 20, 30, 50, 75, 100, 150, 250):
+        win = max(256, int(3.0 * SAMPLE_RATE / freq_hz))
+        start = int(tms / 1000 * SAMPLE_RATE)
+        seg = audio[start:start + win]
+        f = measure_freq(seg, SAMPLE_RATE, min_hz=40.0, max_hz=2000.0)
+        c = cents_error(f, freq_hz)
+        row[tms] = c
+        if not np.isnan(c):
+            if tms <= 50:
+                worst_onset = max(worst_onset, abs(c))
+            if tms >= 150:
+                worst_steady = max(worst_steady, abs(c))
 
-    times, freqs = instantaneous_freq_via_zero_crossings(audio, SAMPLE_RATE)
-    # voiceOut's en.adsr(0.003, 0.03, ...) attack+decay means the voice's own
-    # amplitude is still ramping for the first ~35ms -- zero-crossing counting
-    # on a near-silent/ramping signal is itself noisy, not a tracker artifact.
-    # "early" is measured PAST that ramp (35-100ms), "very_early" separately
-    # captures the ramp window itself so ramp-noise is visible, not conflated.
-    very_early_mask = (times >= 0.0) & (times < 0.035)
-    early_mask = (times >= 0.035) & (times < 0.10)
-    late_mask = times > 0.20
-    very_early_errs = [cents_error(f, target_hz) for f in freqs[very_early_mask] if f > 0]
-    early_errs = [cents_error(f, target_hz) for f in freqs[early_mask] if f > 0]
-    late_errs = [cents_error(f, target_hz) for f in freqs[late_mask] if f > 0]
-    early_max_abs = max((abs(e) for e in early_errs), default=float("nan"))
-    late_max_abs = max((abs(e) for e in late_errs), default=float("nan"))
-    early_signed_mean = np.mean(early_errs) if early_errs else float("nan")
-    very_early_signed_mean = np.mean(very_early_errs) if very_early_errs else float("nan")
-    print(f"  target_hz={target_hz:.1f} very_early(0-35ms,ramp)_mean_signed_cents={very_early_signed_mean:.1f} "
-          f"early(35-100ms)_max|cents|={early_max_abs:.1f} mean_signed_cents={early_signed_mean:.1f} "
-          f"late(>200ms)_max|cents|={late_max_abs:.1f}")
-    return early_signed_mean, early_max_abs, late_max_abs
+    print(f"  {freq_hz:7.1f}Hz: " + " ".join(
+        f"t={t}ms={row[t]:+7.1f}c" if not np.isnan(row[t]) else f"t={t}ms=    nan" for t in row
+    ))
+    return worst_onset, worst_steady
 
 
 def main():
-    print("multitranspose.dsp transient pitch-tracking check (low + high octaves)")
+    print("multitranspose.dsp onset pitch-lock regression check (unison-lock, low + high octaves)")
     print(f"DSP: {DSP_PATH}")
-    results = []
-    for freq_hz in (82.0, 196.0, 880.0, 1046.5, 1318.5):
-        early_signed, early_max, late_max = check_high_octave_transient(freq_hz)
-        results.append((freq_hz, early_signed, early_max, late_max))
+    print(f"Gate: worst |cents| in the 10-50ms onset window must stay under {ONSET_WORST_CENTS_LIMIT:.0f} "
+          f"(a full octave is 1200 -- this catches the floor-pinned-detNote octave-slide bug); "
+          f"worst |cents| at t>=150ms must stay under {STEADY_STATE_CENTS_LIMIT:.0f} (steady-state tuning).")
 
-    print("\n=== summary ===")
-    upslide_detected = False
-    for freq_hz, early_signed, early_max, late_max in results:
-        direction = "UP-SLIDE (starts flat, rises)" if early_signed < -20 else \
-                    "DOWN-SLIDE (starts sharp, falls)" if early_signed > 20 else "converged fast"
-        print(f"  {freq_hz:.1f}Hz: early_signed_cents={early_signed:.1f} ({direction}), "
-              f"late_max_cents={late_max:.1f}")
-        if early_signed < -20:
-            upslide_detected = True
+    failures = []
+    for freq_hz in (82.0, 110.0, 130.8, 164.8, 196.0, 220.0, 440.0, 880.0, 1046.5, 1318.5):
+        worst_onset, worst_steady = check_unison_lock_onset(freq_hz)
+        onset_ok = worst_onset < ONSET_WORST_CENTS_LIMIT
+        steady_ok = worst_steady < STEADY_STATE_CENTS_LIMIT
+        print(f"    -> worst_onset(10-50ms)={worst_onset:.1f}c ({'OK' if onset_ok else 'FAIL'}), "
+              f"worst_steady(>=150ms)={worst_steady:.1f}c ({'OK' if steady_ok else 'FAIL'})")
+        if not onset_ok:
+            failures.append(f"{freq_hz}Hz onset worst={worst_onset:.1f}c >= {ONSET_WORST_CENTS_LIMIT:.0f}c limit")
+        if not steady_ok:
+            failures.append(f"{freq_hz}Hz steady-state worst={worst_steady:.1f}c >= {STEADY_STATE_CENTS_LIMIT:.0f}c limit")
 
-    if upslide_detected:
-        print("\nCONFIRMED: high-octave transients show an up-slide convergence pattern "
-              "(detNote reads low right after onset, shiftAmount reads high, output starts "
-              "flat and rises into target pitch) -- matches the user-reported symptom.")
+    print()
+    if failures:
+        print("FAILED:")
+        for f in failures:
+            print(f"  - {f}")
         sys.exit(1)
     else:
-        print("\nNo significant up-slide detected at tested octaves within the checked window.")
+        print("PASSED: no octave-scale onset slide and steady-state tuning is accurate at every tested frequency.")
         sys.exit(0)
 
 
