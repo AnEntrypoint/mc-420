@@ -1104,13 +1104,16 @@ ring/capture bug was a stale-`sampleIdx`-since-program-start read that the
 current `sampleIdxSinceEngage` name and `engageEdge`-reset structure now
 make self-evident without narration.
 
-`delay.dsp`, `reverb.dsp`, `phaser.dsp`, `tremolo.dsp`, and other
-`effects/home/faust/*.dsp` files still carry real comment-rule violations
-(large header-essay and inline blocks) not yet swept — same fix, same
-zero-risk mechanism, not yet applied to every file. `phaser.dsp` in
-particular was checked and found NOT safe to partially fix (removing just
-the two comment lines nearest `apCoeff` leaves the file 55% comments) — any
-fix there must be a full-file sweep in one pass, not a partial excision.
+`delay.dsp`, `reverb.dsp`, `phaser.dsp`, and `tremolo.dsp` have since had the
+same full-file sweep applied (byte-identical generated C++ confirmed for
+each, and for the whole `dsp/aloop.dsp` aggregate build). `chain.dsp`,
+`filters.dsp`, `flanger.dsp`, `flutter.dsp`, `guitar_lofi_fx.dsp`,
+`pitch.dsp`, `samplerate.dsp`, and `vinyl.dsp` have not yet been checked for
+comments — same fix, same zero-risk mechanism, just not yet applied there.
+Before partially fixing any one file, count its total comment lines first —
+a partial excision that leaves the file still mostly comments does not
+satisfy the rule (this was checked and rejected once for `phaser.dsp`
+before landing the full sweep instead).
 
 ## Faust already shares one `pow()`/`tan()` computation across all `par()`-replicated call sites with a textually-identical argument
 
