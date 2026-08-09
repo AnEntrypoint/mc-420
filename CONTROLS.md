@@ -121,8 +121,11 @@ output lands on the exact held key regardless of the input's actual pitch.
 ## Grid-beat visualization
 
 The 4 top-right otherwise-unassigned pads show the shared 16-beat Link phrase
-position live as a cumulative bar-graph (blank → yellow → red → green per
-beat index), read from `AudioThread::Telemetry::gridBeatIndex`.
+position live, read from `AudioThread::Telemetry::gridBeatIndex`. Each pad is
+one quarter of the 16-beat phrase. Dark when nothing is playing; green
+whenever any looper is playing; a quarter already passed turns yellow; the
+red position marker cycles across the 4 pads once per beat, landing on the
+pad matching the current position within the active quarter.
 
 ## 3-bank FX knob surface
 

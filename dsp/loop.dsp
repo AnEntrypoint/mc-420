@@ -34,8 +34,6 @@ with {
     finishRequested = finishRequestedStep ~ _;
     wrapLenStep(prev) = ba.if(finishEdge, writeIdxForLatch, prev);
     wrapLen = max(1, wrapLenStep ~ _);
-    wrapLenEstablishedStep(prev) = ba.if(finishEdge, 1.0, prev);
-    wrapLenEstablished = wrapLenEstablishedStep ~ _;
     writeIdxForLatch = ba.if(finishRequested, finishTargetN, writeIdx);
     recordingGate(prev) = (recN > 0.5) | (finishRequested & (prev < finishTargetN));
     writeIdxStep(prev) = ba.if(armEdge, 0,
@@ -48,9 +46,12 @@ with {
     ring = rwtable(MAXLEN, 0.0, writeIdx, writeVal, readIdx0);
 
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
-    armGridLen = ba.if(wrapLenEstablished > 0.5, min(float(wrapLen), gridStep), gridStep);
-    armGridSnap = ba.if(armGridLen < 0.5, armMasterPhase,
-                    floor(armMasterPhase / armGridLen + 0.5) * armGridLen);
+    takeLenRatio = float(wrapLen) / max(1.0, masterLen);
+    anchorGridLen = ba.if(takeLenRatio >= 1.0, masterLen,
+                     ba.if(takeLenRatio >= 0.5, masterLen * 0.5, gridStep));
+    finishGridLen = ba.if(masterLen < 0.5, gridStep, anchorGridLen);
+    armGridSnap = ba.if(finishGridLen < 0.5, armMasterPhase,
+                    floor(armMasterPhase / finishGridLen + 0.5) * finishGridLen);
     armPhaseBias = armMasterPhase - armGridSnap;
     recordStartPhaseOffsetStep(prev) = ba.if(finishEdge, masterPhase - latencyBiasN - armPhaseBias, prev);
     recordStartPhaseOffset = recordStartPhaseOffsetStep ~ _;

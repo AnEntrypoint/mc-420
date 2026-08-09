@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=603f9418b5ca52c5878e41fcb30d3fc5a0ef9a2a">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=57afc4c3285776634aec06cb281d42f9938ea575">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -186,8 +186,11 @@ top of the unshifted signal.</li>
 <h2 id="grid-beat-visualization">Grid-beat visualization</h2>
 
 <p>The 4 top-right otherwise-unassigned pads show the shared 16-beat Link phrase
-position live as a cumulative bar-graph (blank → yellow → red → green per
-beat index), read from <code class="language-plaintext highlighter-rouge">AudioThread::Telemetry::gridBeatIndex</code>.</p>
+position live, read from <code class="language-plaintext highlighter-rouge">AudioThread::Telemetry::gridBeatIndex</code>. Each pad is
+one quarter of the 16-beat phrase. Dark when nothing is playing; green
+whenever any looper is playing; a quarter already passed turns yellow; the
+red position marker cycles across the 4 pads once per beat, landing on the
+pad matching the current position within the active quarter.</p>
 
 <h2 id="3-bank-fx-knob-surface">3-bank FX knob surface</h2>
 
