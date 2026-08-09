@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e1a8f5491da6a15df106e7a8d64c58dffc88c257">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=530dfebec8bcb2837618ebfdbb8fe6ef239f263f">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1443,29 +1443,67 @@ directly: a note-on locking 220Hz input to A4/440Hz read 225-285Hz (near
 the raw, unshifted input) for the first 5-40ms post-onset, only reaching
 440Hz by ~70-80ms.
 
-**Fixed by holding `effDetNote` at its own last-settled (pre-onset) value
-during the untrust window, not blending it toward `targetNote`.**
-`heldDetNote` latches `detNote`'s value one sample before the gate's
-rising edge (`ba.if(rising, detNote:mem, prev) ~ _`) and holds it through
-untrust; `effDetNote = detNote*(1-untrust) + heldDetNote*untrust`. This
-freezes whatever pitch-lock relationship was already established
-(correctly re-locking within single-digit cents by 5-10ms for a voice
-retriggered while the tracker/lock context is warm — the common case of
-rapid melodic/chordal playing) instead of forcing the shift to zero. For a
-genuinely cold first note (silence before onset, no prior lock to freeze
-onto) this is dramatically better than BOTH the pre-`onsetUntrust` file
-(worst-case -2621 to -2987 cents at 5-10ms, i.e. up to ~2.5 octaves flat,
-converging by 150-200ms) and the blend-to-unison version it replaces
-(worst-case ~350-530 cents but at the cost of zeroing the lock on every
-subsequent warm retrigger too) — held-last-shift's worst cold-start case
-measures ~320 cents at 10ms, converging the same ~150-200ms, while adding
-zero regression on the warm-retrigger case the blend-to-unison version
-broke. True disabled-state check (every voice's gate held at 0 the entire
-render): bit-exact silent output, unaffected by this change (gated
+**Fixed with a two-tier `heldDetNote`: freeze on a warm retrigger, fall
+back to the original blend-to-`targetNote` behavior on this voice's
+genuinely first-ever onset.** A naive single-tier "always freeze at the
+pre-onset `detNote`" fix was tried FIRST and independently found wrong by
+this project's own CI (`test-pitch-tracker.yml`,
+`verify_highoctave_transient.py`, a unison-lock/cold-start battery with no
+prior note before the tested onset at all): every tested frequency failed
+the 600-cent onset gate at 1875-5604 cents, reproducing the ORIGINAL
+octave-slide bug almost exactly. Root cause of that failed attempt: with
+no real prior note, `heldDetNote` had nothing meaningful to freeze onto —
+it latched its own zero-initialized recursive state (MIDI note 0, an
+absurd multi-octave-flat value) the instant the first-ever rising edge
+fired, which is strictly worse than the blend-to-`targetNote` fallback it
+replaced for exactly the case that fallback existed to cover.
+
+The shipped fix tracks `everGatedBefore` (a sticky, one-sample-delayed
+latch: `max(prev, gate&gt;0.5) ~ _ : mem`, true once this voice's gate has
+EVER been high before the current sample) and a `heldDetNote` recursion
+whose behavior branches on it: while `everGatedBefore` is false (this
+voice has never yet been gated), `heldDetNote` continuously TRACKS
+`targetNote` live, so at the very moment the first-ever rising edge fires,
+`heldDetNote` already equals `targetNote` — identical to the original
+`1e8f5f8` fix's bounded fallback for a true cold start. Once
+`everGatedBefore` flips true, `heldDetNote` instead freezes at `detNote`'s
+value one sample before each subsequent rising edge
+(`ba.if(everGatedBefore &amp; rising, detNote:mem, prev)`) and holds through
+the untrust window — the held-last-shift behavior that fixes warm
+retriggers. `effDetNote = detNote*(1-untrust) + heldDetNote*untrust` is
+unchanged; only what `heldDetNote` resolves to changed.
+
+Verified via DawDreamer, both scenarios: the project's own CI battery
+(cold start, `verify_highoctave_transient.py`, gate held high for the
+ENTIRE render with no prior note) now passes at every tested frequency
+(worst case 349.9 cents at 82Hz, vs the failed naive attempt's 5603.6
+cents and the original unfixed bug's 1700-5600 cents) — matching the
+original `1e8f5f8` fix's own bounded-fallback numbers, since that is
+exactly what this case now falls back to. A separate rapid-melodic-retrigger
+scenario (three successive notes 220ms apart, tracker/lock context warm
+from the first note onward) shows the SECOND and THIRD notes locking
+within -58/-48 cents by 5ms and under 20 cents by 20-40ms — the
+held-last-shift behavior this whole redesign exists for, confirming
+warm retriggers are not regressed by adding the cold-start branch back.
+True disabled-state check (every voice's gate held at 0 the entire
+render): bit-exact silent output, unaffected by either branch (gated
 entirely by `voiceEnv`'s ADSR, upstream of `effDetNote`).
 `windowFor`/`xpose`/`xposeMaxDelay` are untouched — this fix lives
 entirely inside `voiceOut`'s `shiftAmount` computation, same as the
-original `onsetUntrust` fix it replaces the blend-target of.
+original `onsetUntrust` fix it revises.
+
+**Lesson for any future revision to this mechanism**: this file's own
+onset-handling logic has now been wrong in production TWICE in a row for
+two DIFFERENT, complementary reasons — once for warm retriggers (the
+original blend-to-`targetNote`, which zeroed the lock on every note
+attack) and once for cold starts (the first attempted fix, which had
+nothing sane to freeze onto with no prior note). Any further change here
+needs BOTH a synthetic warm-retrigger scenario (a prior note establishing
+real tracker/lock context, matching how a performer actually plays) AND
+this project's own true-cold-start CI battery (gate held high with no
+possible prior onset) exercised together before shipping — one alone is
+not sufficient evidence, as this session's own history now directly
+demonstrates.
 
 An open, disclosed residual: the underlying shared tracker's OWN
 convergence past the onset window is still occasionally non-monotonic at
