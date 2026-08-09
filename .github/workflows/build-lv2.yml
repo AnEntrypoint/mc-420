@@ -18,6 +18,7 @@ on:
 jobs:
   home-fx-lv2:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +27,7 @@ jobs:
           platforms: arm64
 
       - name: Install Faust (host codegen only -- see the cross-compile step below)
+        timeout-minutes: 8
         run: |
           sudo apt-get update
           # libboost-dev: the Faust lv2.cpp architecture uses boost/circular_buffer.
@@ -61,6 +63,7 @@ jobs:
       # (runs on the host, never touches musl/aarch64). Only the FINAL
       # -shared .so link needs to target the real device.
       - name: Build the full home stack (loop engine + effects) as a musl/aarch64 LV2
+        timeout-minutes: 15
         run: |
           set -e
           FAUSTLIB=$(dirname "$(ls -f /usr/share/faust/lv2ui.cpp /usr/local/share/faust/lv2ui.cpp 2>/dev/null | tail -1)")
@@ -189,6 +192,7 @@ jobs:
   # directly against the real repo path.
   guitar-lofi-fx-lv2:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -225,6 +229,7 @@ jobs:
       # build-binary.yml's exact split: Faust codegen here on Ubuntu, the
       # actual .so cross-compiled inside a real Alpine aarch64 QEMU container.
       - name: Build guitar_lofi_fx.dsp as its own musl/aarch64 LV2 bundle
+        timeout-minutes: 15
         run: |
           set -e
           FAUSTLIB=$(dirname "$(ls -f /usr/share/faust/lv2ui.cpp /usr/local/share/faust/lv2ui.cpp 2>/dev/null | tail -1)")
@@ -344,6 +349,7 @@ jobs:
   # pushes guitar/lofi-fx's own knob targets.
   resonode-lv2:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -357,6 +363,7 @@ jobs:
           sudo apt-get install -y faust lv2-dev pkg-config build-essential libboost-dev
 
       - name: Build resonode_synth.dsp as its own musl/aarch64 LV2 bundle
+        timeout-minutes: 15
         run: |
           set -e
           FAUSTLIB=$(dirname "$(ls -f /usr/share/faust/lv2ui.cpp /usr/local/share/faust/lv2ui.cpp 2>/dev/null | tail -1)")
