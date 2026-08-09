@@ -1421,6 +1421,83 @@ still untouched here; `onsetUntrust`'s hold+release window reduces its
 audible impact (it overlaps the tail of `voiceOut`'s own ADSR ramp) but
 does not eliminate it.
 
+## `trackPitchHz` must octave-correct against a shifting harmonic balance, not just onset transients
+
+Separate from the onset-window bugs above: WITNESSED by direct user report
+("swapping octaves the whole time as the input sound changes") that the
+tracker could jump a full octave and NEVER RECOVER mid-note, purely from
+the input's own harmonic balance shifting over time (a real
+instrument/voice whose 2nd harmonic amplitude grows relative to its
+fundamental — normal, common timbral movement, not a defect in the input).
+Reproduced via DawDreamer: a synthetic tone with the fundamental (220Hz)
+fading from full amplitude to 30% while the 2nd harmonic (440Hz) rises from
+30% to 90% causes `detectedFreq` to jump from ~224Hz to ~436-442Hz partway
+through and stay there for the rest of the note, even though the true
+220Hz fundamental never disappears (just becomes quieter).
+
+**Root cause**: `an.zcr`'s zero-crossing counting operates on
+`fi.lowpass(N, cutoff, xHighpassed)` with `cutoff` adaptively following the
+tracker's OWN prior output `y` — a purely self-referential local-tracking
+loop with no ground-truth anchor and no mechanism to prefer the lower,
+correct fundamental once the dominant zero-crossing-rate-producing
+component shifts to a harmonic. This is a structurally different bug class
+from the onset-transient issues above (which are about the first tens of
+milliseconds after a note-on); this one can strike at any point during a
+sustained note, mid-phrase, driven purely by the input's own spectral
+content changing.
+
+**Fix**: `octaveCorrect(rawY, xHighpassed)`, a downstream stage on
+`trackPitchHz`'s raw output (not woven into its own `~` recursion — see the
+compile-cost note below for why). Computes `halfY = rawY * 0.5` (the
+candidate subharmonic) and an INDEPENDENT second `an.zcr` reading locked to
+a `fi.lowpass` at that half-frequency; if that reading is self-consistent
+with `halfY` (within `subharmConsistentTolRatio=0.15`, i.e. real periodic
+energy genuinely exists there, not just noise), prefers `halfY` over
+`rawY`. This directly tests "does the lower octave's own fundamental
+period still show up in the signal" rather than trusting the raw
+zero-crossing rate, which is exactly what fails when a harmonic
+transiently dominates.
+
+Verified via DawDreamer against three scenarios: (1) the reproduction
+above — corrected tracker holds 217-224Hz throughout the full 3-second
+timbre shift, vs the pre-fix permanent jump to 436-442Hz; (2) a genuine
+intentional octave-leap note change (a real new note at exactly double the
+previous frequency, no old-fundamental energy left at all) still tracks
+correctly and converges within ~100ms — `octaveCorrect` does not suppress
+this, since the halved-frequency check correctly finds no real energy
+there; (3) disabled state (no voice ever gated) stays bit-exact silent,
+unaffected. The project's own existing CI battery
+(`verify_highoctave_transient.py`, the cold-start/onset-transient
+regression suite from the fixes above) still passes at every tested
+frequency (worst onset 371.3c against the 600c gate, worst steady-state
+6.6c against the 20c gate) — this fix does not regress the onset-handling
+work.
+
+**Compile-cost lesson, the actual hard part of this fix**: every variant
+that re-computed `fi.highpass(1, 20.0, x)` a SECOND time — calling a fresh
+highpass on `sig` inside a new function, rather than reusing the exact
+signal instance `trackPitchHz` already computes — caused the FULL 6-voice
+file's DawDreamer JIT compile time to explode to 227-395+ seconds (one
+attempt never finished after 5+ minutes), despite the identical logic
+compiling in under 1 second when `trackPitchHz`/`detectedFreq` was tested
+standalone in isolation. A `resonbp`-based subharmonic-energy check and a
+plain second `an.zcr` call both hit this independently — the common factor
+was re-filtering `sig`, not the specific primitive used. Fixed by
+restructuring `trackPitchHz` into `trackPitchHzAndHp`, returning BOTH the
+tracked frequency AND the already-computed `xHighpassed` signal as a
+2-wire output, piped directly into `octaveCorrect` via Faust's standard
+multi-wire `:` operator — zero re-filtering, the same signal instance
+reused. This brought full-file compile time down to ~21-26s (still a real
+increase over the ~5-10s unfixed baseline, but a stable, acceptable one).
+**Lesson for any future addition to this file**: touching a shared input
+signal (`sig`/`xHighpassed`) a second time via a fresh filter call, even
+one that looks cheap and correct in isolation, can produce compile-time
+blowup once combined with this file's existing 6-voice-shared signal
+graph — thread the ALREADY-COMPUTED signal through as an explicit
+multi-wire output instead of recomputing it, and always time-check a
+change against the FULL file, not just an isolated standalone test of the
+new function.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
