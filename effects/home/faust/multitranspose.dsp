@@ -35,7 +35,7 @@ with {
     };
 };
 
-trackPitchHz(N, t, x) = loop ~ _
+trackPitchHzAndHp(N, t, x) = (loop ~ _), xHighpassed
 with {
     xHighpassed = fi.highpass(1, 20.0, x);
     loop(y) = an.zcr(t, fi.lowpass(N, cutoff, xHighpassed)) * ma.SR * .5
@@ -46,8 +46,18 @@ with {
     };
 };
 
-detectedFreq(sig) = sig
-    : trackPitchHz(trackerHarmonics, trackerTau)
+subharmCheckTau = 0.02;
+subharmConsistentTolRatio = 0.15;
+
+octaveCorrect(rawY, xHighpassed) = correctedY
+with {
+    halfY = max(minTrackHz, rawY * 0.5);
+    subZcr = an.zcr(subharmCheckTau, fi.lowpass(trackerHarmonics, halfY, xHighpassed)) * ma.SR * .5;
+    subharmConsistent = abs(subZcr - halfY) < (halfY * subharmConsistentTolRatio);
+    correctedY = ba.if(subharmConsistent, halfY, rawY);
+};
+
+detectedFreq(sig) = trackPitchHzAndHp(trackerHarmonics, trackerTau, sig) : octaveCorrect
     : max(minTrackHz) : min(maxTrackHz);
 
 winSkewMul(formant) = pow(1.2, formant * (1.0/3.0));
