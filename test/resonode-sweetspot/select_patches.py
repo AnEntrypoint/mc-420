@@ -6,13 +6,17 @@ import numpy as np
 
 RESULTS_PATH = Path(__file__).resolve().parent / "sweep_results.jsonl"
 
-FEATURE_KEYS = ["decayTimeMs", "transientRatio", "spectralCentroidHz", "lowFreqEnergyRatio", "inharmonicity"]
+FEATURE_KEYS = ["decayTimeMs", "transientRatio", "spectralCentroidHz", "lowFreqEnergyRatio", "inharmonicity", "sustainRatio"]
 
 TARGET_DIRECTION = {
-    "Percussive":   {"decayTimeMs": -1.0, "transientRatio": +1.0, "spectralCentroidHz":  0.0, "lowFreqEnergyRatio":  0.0, "stretchBonus": 0.0, "stretchAbsPenalty": 0.0},
-    "MetalGlass":   {"decayTimeMs": +0.6, "transientRatio": -0.4, "spectralCentroidHz": +1.0, "lowFreqEnergyRatio": -1.0, "stretchBonus": 1.5, "stretchAbsPenalty": 0.0},
-    "Strings":      {"decayTimeMs": +0.5, "transientRatio": -0.4, "spectralCentroidHz": +0.15, "lowFreqEnergyRatio": -0.6, "stretchBonus": 0.0, "stretchAbsPenalty": 1.0},
-    "DanceBass":    {"decayTimeMs": +0.2, "transientRatio": +0.1, "spectralCentroidHz": -1.0, "lowFreqEnergyRatio": +1.0, "stretchBonus": 0.0, "stretchAbsPenalty": 0.6},
+    "Percussive":   {"decayTimeMs": -1.0, "transientRatio": +1.0, "spectralCentroidHz":  0.0, "lowFreqEnergyRatio":  0.0, "sustainRatio": -0.5, "stretchBonus": 0.0, "stretchAbsPenalty": 0.0},
+    "MetalGlass":   {"decayTimeMs": +0.6, "transientRatio": -0.4, "spectralCentroidHz": +1.0, "lowFreqEnergyRatio": -1.0, "sustainRatio": +0.5, "stretchBonus": 1.5, "stretchAbsPenalty": 0.0},
+    "Strings":      {"decayTimeMs": +0.5, "transientRatio": -0.4, "spectralCentroidHz": +0.15, "lowFreqEnergyRatio": -0.6, "sustainRatio": +0.5, "stretchBonus": 0.0, "stretchAbsPenalty": 1.0},
+    "DanceBass":    {"decayTimeMs": +0.2, "transientRatio": +0.1, "spectralCentroidHz": -1.0, "lowFreqEnergyRatio": +1.0, "sustainRatio": +1.0, "stretchBonus": 0.0, "stretchAbsPenalty": 0.6},
+}
+
+REQUIRES = {
+    "DanceBass": {"sustainRatio": (0.3, None), "lowFreqEnergyRatio": (0.85, None)},
 }
 
 
@@ -65,14 +69,25 @@ def main():
 
     chosen = {}
     for name, target in TARGET_DIRECTION.items():
-        scores = np.array([score(z[i], rows[i]["params"]["stretch"], target) for i in range(len(rows))])
-        order = np.argsort(-scores)
-        top = order[:5]
-        print(f"=== {name} top 5 ===")
-        for idx in top:
+        requires = REQUIRES.get(name, {})
+        eligible = [
+            i for i in range(len(rows))
+            if all(
+                (lo is None or rows[i]["features"][feat] >= lo) and (hi is None or rows[i]["features"][feat] <= hi)
+                for feat, (lo, hi) in requires.items()
+            )
+        ]
+        if not eligible:
+            print(f"=== {name}: NO CANDIDATE SATISFIES {requires} ===")
+            continue
+        scores = np.array([score(z[i], rows[i]["params"]["stretch"], target) for i in eligible])
+        order = np.argsort(-scores)[:5]
+        print(f"=== {name} top 5{' (filtered by ' + str(requires) + ')' if requires else ''} ===")
+        for rank in order:
+            idx = eligible[rank]
             r = rows[idx]
-            print(f"  score={scores[idx]:7.3f} params={r['params']} feats={r['features']}")
-        chosen[name] = rows[top[0]]
+            print(f"  score={scores[rank]:7.3f} params={r['params']} feats={r['features']}")
+        chosen[name] = rows[eligible[order[0]]]
         print()
 
     print("=== FINAL PICKS (position, decay, damping, stretch) ===")

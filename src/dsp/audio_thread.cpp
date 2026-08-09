@@ -123,6 +123,9 @@ aloop::UsbRecorder* g_usbRecorder = nullptr;
 float g_manualSpeedMul = 1.0f;
 constexpr int kTransposeVoices = 6;
 
+static bool isResonodeLv2ControlTarget(const std::string& target) {
+    return target.rfind("fx/resonode/", 0) == 0 || target.rfind("fx/resonodevoice", 0) == 0;
+}
 
 static std::string targetToZone(const std::string& target) {
     if (target.rfind("looper", 0) == 0) {
@@ -143,15 +146,7 @@ static std::string targetToZone(const std::string& target) {
     if (target == "fx/formant") return "FORMANT";
     if (target == "fx/pitch")   return "SEMIS";
     if (target == "fx/bank")    return "fx/bank";
-    // fx/resonode/position|tone|decay|damping|stretch|collision|level and
-    // fx/resonodevoice*/* are resonode.lv2's OWN control ports now (Resonode
-    // moved to a standalone LV2 bundle) -- pushed via Lv2Host::setControl in
-    // the worker loop's resonodeParamSlots resolution, never through this
-    // Faust-zone path. fx/resonode/engaged is different: it ALSO still
-    // drives AloopLoopDsp's own RESONODE_ENGAGED checkbox (effects_runtime.dsp's
-    // audio-path crossfade gate that mixes resonodeIn into the output) --
-    // written directly via fui.set() in the worker loop, not through
-    // targetToZone/resolvedControls (see the resonodeEngagedNow block).
+    if (isResonodeLv2ControlTarget(target)) return "";
     return "";
 }
 
@@ -291,9 +286,6 @@ static void* worker(void*) {
     userFx.loadDir(g_cfg.userDir, g_cfg.userFxCore);
     userFx.connect(N, ch);
 
-    // Resonode: its own dedicated Lv2Host, loaded once, but process() is only
-    // ever called on it when fx/resonode/engaged is true (see the worker loop
-    // below). Never hot-swapped, never shares homeDir/userDir's rescan path.
     Lv2Host resonodeFx;
     resonodeFx.loadDir(g_cfg.resonodeDir, g_cfg.homeFxCore);
     resonodeFx.connect(N, ch);
@@ -437,7 +429,7 @@ static void* worker(void*) {
                     resonodeEngagedSlot = -1;
                     g_params->forEach([&](const std::string& target, int slotIdx){
                         if (target == "fx/resonode/engaged") { resonodeEngagedSlot = slotIdx; return; }
-                        if (target.rfind("fx/resonode/", 0) == 0 || target.rfind("fx/resonodevoice", 0) == 0) {
+                        if (isResonodeLv2ControlTarget(target)) {
                             resonodeParamSlots.push_back({slotIdx, target});
                         }
                     });
@@ -682,21 +674,10 @@ static void* worker(void*) {
             }
             timespec t0, t1;
             clock_gettime(CLOCK_MONOTONIC, &t0);
-            // guitar/lofi-fx now run as an INPUT stage, before the dubfx home
-            // chain -- they color what dubfx's pitch/harmony/filter/delay/
-            // reverb stages receive, not the finished mix. Previously these
-            // ran on fout AFTER faustHome.compute, i.e. purely at the output.
             if (!g_cfg.disableCore3Lv2) {
                 homeFx.process(fin.data(), N);
                 userFx.process(fin.data(), N);
             }
-            // Resonode: excited from the SAME post-guitar/lofi-fx signal (so
-            // its excitation is colored by guitar/lofi-fx too, not just
-            // dubfx's later stages), but only actually computed when engaged
-            // -- the whole reason it was pulled out of the always-on Faust
-            // stack. Its output re-enters effects_runtime.dsp's existing
-            // resonodeIn crossfade, so it still passes through dubfx's
-            // filter/delay/reverb downstream.
             bool resonodeEngagedNow = g_params && resonodeEngagedSlot >= 0 &&
                                        g_params->getBySlot(resonodeEngagedSlot) > 0.5f;
             fui.set("fx/resonode/engaged", resonodeEngagedNow ? 1.0f : 0.0f);
@@ -704,17 +685,6 @@ static void* worker(void*) {
                 std::copy(fin.begin(), fin.end(), resonodeInBuf.begin());
                 resonodeFx.process(resonodeInBuf.data(), N);
             } else {
-                // Engaged but no resonode.lv2 loaded (e.g. an older deploy
-                // that predates this bundle, or a stale fx/resonode/engaged
-                // ParamStore value from an old preset): Lv2Host::process()
-                // no-ops on an empty plugin list, which would otherwise leave
-                // resonodeInBuf holding the raw copied mic signal -- that
-                // then gets crossfaded in at full resonodeEngageGate as if it
-                // were genuine Resonode output, silently leaking unprocessed
-                // dry mic disguised as "Resonode engaged". Zero it instead:
-                // silence is the correct, named degraded behavior here, not
-                // a passthrough (unlike homeFx/userFx, where dry-passthrough
-                // IS the correct degraded mode for "no user effect present").
                 std::fill(resonodeInBuf.begin(), resonodeInBuf.end(), 0.0f);
             }
             faustHome.compute(N, fins, fouts);
