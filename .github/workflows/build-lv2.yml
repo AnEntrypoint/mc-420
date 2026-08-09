@@ -18,7 +18,7 @@ on:
 jobs:
   home-fx-lv2:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -63,7 +63,7 @@ jobs:
       # (runs on the host, never touches musl/aarch64). Only the FINAL
       # -shared .so link needs to target the real device.
       - name: Build the full home stack (loop engine + effects) as a musl/aarch64 LV2
-        timeout-minutes: 15
+        timeout-minutes: 25
         run: |
           set -e
           FAUSTLIB=$(dirname "$(ls -f /usr/share/faust/lv2ui.cpp /usr/local/share/faust/lv2ui.cpp 2>/dev/null | tail -1)")
@@ -192,7 +192,7 @@ jobs:
   # directly against the real repo path.
   guitar-lofi-fx-lv2:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -349,7 +349,7 @@ jobs:
   # pushes guitar/lofi-fx's own knob targets.
   resonode-lv2:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
