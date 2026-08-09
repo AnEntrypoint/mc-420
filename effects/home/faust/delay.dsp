@@ -19,7 +19,7 @@
 import("stdfaust.lib");
 
 SR   = 48000.0;
-MAXD = 96000;
+MAXD = 52000;
 SLEW = 0.0001;
 
 DELAYAMT = 0.0;
