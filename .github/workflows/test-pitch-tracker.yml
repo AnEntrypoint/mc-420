@@ -26,3 +26,6 @@ jobs:
 
       - name: Diagnose isolated floor-estimator convergence (no main lowpass loop)
         run: python3 test/pitch-tracker-transient/diag_isolate_floor.py
+
+      - name: Trace main-loop y trajectory (baseline vs frequency-scaled main tracker)
+        run: python3 test/pitch-tracker-transient/diag_trace_main_loop.py
