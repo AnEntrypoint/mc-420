@@ -1,7 +1,7 @@
 declare name "MultiKeyTranspose";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Polyphonic pitch-LOCK harmonizer: an.pitchTracker detects the tracked signal's own fundamental once per sample, and each held voice's shift is (targetNote - detectedNote), so the wet output always lands on the exact pressed key regardless of what pitch is actually being played -- Infected Mushroom Manipulator style, not a fixed-interval transpose. The shift window is pitch-synchronous (sized from the detected period, like davemollen/dm-Whammy and DawDreamer's own dt_whammy.dsp auto_window), since a fixed window measurably detunes ef.transpose at large shift ratios -- confirmed via DawDreamer: a fixed 10ms window put a +22-semitone lock ~114 cents flat, while pitch-synchronous sizing holds every tested shift within a few cents. free crossfades the tracked/shifted source between dry (free=0) and loopSum (free=1), and routes the single shared wet bus to the matching output (dryWet/loopWet) -- so SHIFT-held polyphonic keyplay locks the loops instead of the live input, with no second pitch-tracker/voice bank. trackPitchHz reimplements an.pitchTracker's zero-crossing/adaptive-lowpass loop locally with two broadband zero-crossing floors on the adaptive cutoff (coarseTrackerTau=3ms, fastTrackerTau=1.5ms, both taken via max() against the main tracker's own recursive state, never replacing it): the stock function's cutoff is bounded only by a hardcoded 20Hz and its own zero-initialized recursive state, so after silence a fresh attack's cutoff has to crawl up from that floor, starving the filter of the true fundamental and reading far too low -- since shiftAmount is targetNote-detNote, an under-read detNote inflates the locked output sharp for the whole crawl. Two rounds of fixes: first, wideningfastHz's multiplier from *.5 to *.8 (WITNESSED via a real CI DawDreamer run) reduced but did not eliminate a real 123-188 cent mean sharp bias in the 35-100ms window specifically at 880-1318Hz, because both floors' time constants (coarseTrackerTau/fastTrackerTau) are fixed WALL-CLOCK values -- a high note's much shorter period means the same fixed tau spans proportionally many more of its own cycles before converging than it does for a low note. Second fix: freqScaledPole/onePoleZc replace an.zcr's fixed-tau smoothing for both floors with a hand-written one-pole (an.zcr's tau argument and si.smooth's pole coefficient are BOTH compile-time-constant-only per faustlibraries' analyzers.lib/filters.lib/signals.lib source -- verified, ruling out feeding a runtime signal into an.zcr directly, though the recursion shape itself IS identical to si.smooth's own at any fixed tau) whose coefficient is derived each sample from the main tracker's own previous-sample output y (already in scope, no new estimator needed), scaled so the effective tau shrinks proportionally above minFloorCoeffHz -- unchanged at/below 60Hz (matching the original fixed baseline exactly there), progressively faster above it. WITNESSED via CI (run 31307024182) this floor-only fix is a real net improvement at every tested octave (82Hz 140.3->115.3, 196Hz 172.0->142.7, 880Hz 123.3->121.7, 1046.5Hz 137.6->121.5, 1318.5Hz 187.8->181.6 cents, all reductions, none regressions), though smaller at the highest octaves than at the low ones -- diag_isolate_floor.py confirms the isolated floor already converges accurately by 35ms at every tested octave, so it is not the sole remaining source of the residual bias. Applying the SAME frequency-scaled treatment to the MAIN tracker's own an.zcr(t,...) stage was tried and WITNESSED to be a real regression, not an improvement (CI run 31307150451: 82Hz 115.3->348.8 cents, 880Hz 121.7->259.3 cents) -- reverted. The main tracker's own convergence speed is a distinct, harder problem than the floors' and is not fixed by the same technique; it remains untouched at its original fixed trackerTau=0.02, a genuinely open residual for a future session.";
+declare description "Polyphonic pitch-LOCK harmonizer: an.pitchTracker-derived detNote drives each held voice's shift (targetNote - detNote), landing the wet output on the exact pressed key. Two additions on top of the base engine: (1) onsetUntrust, a per-voice trust gate keyed to that voice's own gate rising edge, which blends effDetNote toward targetNote for a flat-hold-then-release window after note-on so the shared pitch tracker's floor-pinned post-onset reading can't inflate shiftAmount into a spurious octave-scale slide; (2) formant (-3..3, default 0), which skews xpose's window/crossfade sizing (winSkewMul/formantXfSkew) for a real, monotonic timbral character control reachable while voices are locking a chord. Both additions are exact no-ops in their disabled/default state -- see AGENTS.md 'multitranspose.dsp: polyphonic pitch-LOCK, 6 voices' for the full derivation and numeric verification.";
 
 import("stdfaust.lib");
 
@@ -18,6 +18,12 @@ maxWindowMs = 20.0;
 coarseTrackerTau = 0.003;
 fastTrackerTau = 0.0015;
 minFloorCoeffHz = 60.0;
+
+onsetFlatHoldMs = 35.0;
+onsetReleaseMs = 20.0;
+onsetFlatHoldSamples = onsetFlatHoldMs * 0.001 * ma.SR;
+onsetReleaseSamples = onsetReleaseMs * 0.001 * ma.SR;
+onsetTotalSamples = onsetFlatHoldSamples + onsetReleaseSamples;
 
 freqScaledPole(baseTau, freqHz) = ba.tau2pole(baseTau * minFloorCoeffHz / max(minFloorCoeffHz, freqHz));
 
@@ -44,7 +50,9 @@ detectedFreq(sig) = sig
     : trackPitchHz(trackerHarmonics, trackerTau)
     : max(minTrackHz) : min(maxTrackHz);
 
-windowFor(freqHz) = (ma.SR / freqHz)
+winSkewMul(formant) = pow(1.2, formant * (1.0/3.0));
+
+windowForFormant(freqHz, formant) = (ma.SR / freqHz) * winSkewMul(formant)
     : max(64) : min(maxWindowMs * 0.001 * ma.SR)
     : si.smooth(ba.tau2pole(0.05)) : max(64) : int;
 
@@ -57,9 +65,19 @@ with {
     d = i : (+ : +(w) : fmod(_,w)) ~ _;
 };
 
+formantXfSkew(formant) = pow(4.0, formant * (1.0/3.0));
+
+onsetUntrust(gate) = loop ~ _ : /(onsetReleaseSamples) : min(1.0) : max(0.0)
+with {
+    rising = gate > (gate : mem);
+    loop(prevCnt) = ba.if(rising, onsetTotalSamples, max(0.0, prevCnt - 1.0));
+};
+
 voiceOut(sig, detNote, winSamples, xfSamples, targetNote, gate) = wet
 with {
-    shiftAmount = (targetNote - detNote) : si.smooth(glideTau);
+    untrust     = onsetUntrust(gate);
+    effDetNote  = detNote*(1.0-untrust) + targetNote*untrust;
+    shiftAmount = (targetNote - effDetNote) : si.smooth(glideTau);
     voiceEnv    = en.adsr(0.003, 0.03, 1, 0.05, gate);
     wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * voiceGain;
 };
@@ -69,13 +87,14 @@ harmonySum(sig, detNote, winSamples, xfSamples, n0,g0, n1,g1, n2,g2, n3,g3, n4,g
   + voiceOut(sig,detNote,winSamples,xfSamples,n2,g2) + voiceOut(sig,detNote,winSamples,xfSamples,n3,g3)
   + voiceOut(sig,detNote,winSamples,xfSamples,n4,g4) + voiceOut(sig,detNote,winSamples,xfSamples,n5,g5);
 
-process(dry, loopSum, free, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
+process(dry, loopSum, free, formant, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
 with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
     freqDet    = detectedFreq(sigIn);
-    winSamples = windowFor(freqDet);
-    xfSamples  = int(winSamples * 0.5) : max(32);
+    winSamples = windowForFormant(freqDet, formant);
+    xfSkew     = formantXfSkew(formant);
+    xfSamples  = int(winSamples * 0.5 * xfSkew) : max(32);
     wet = harmonySum(
         sigIn, ba.hz2midikey(freqDet), winSamples, xfSamples,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5
