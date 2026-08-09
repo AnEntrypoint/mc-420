@@ -37,15 +37,20 @@ public:
             }
         }
         {
-            static constexpr uint8_t kBeatDigitColors[4] = { kLedOff, kLedYellow, kLedRed, kLedGreen };
             static constexpr int kBeatPadNotes[4] = { 15, 23, 31, 39 };
+            bool anyPlaying = false;
+            for (int lp = 0; lp < kLooperCount; lp++) {
+                if (grid.looperPlaying(lp)) { anyPlaying = true; break; }
+            }
             int activeGroup = gridBeatIndex >= 0 ? (gridBeatIndex >> 2) : -1;
             int posInGroup  = gridBeatIndex >= 0 ? (gridBeatIndex & 0x3) : 0;
+            bool havePhrase = gridBeatIndex >= 0;
             for (int g = 0; g < 4; g++) {
                 uint8_t color;
-                if (activeGroup < 0 || g > activeGroup)      color = kLedOff;
-                else if (g < activeGroup)                    color = kLedGreen;
-                else                                         color = kBeatDigitColors[posInGroup];
+                if (!anyPlaying)                     color = kLedOff;
+                else if (havePhrase && g < activeGroup) color = kLedYellow;
+                else                                  color = kLedGreen;
+                if (anyPlaying && havePhrase && g == posInGroup) color = kLedRed;
                 sendCoalesced(kBeatPadNotes[g], color, write);
             }
         }
