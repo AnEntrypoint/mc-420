@@ -2370,6 +2370,24 @@ engaged` bug. Pitch-mod needs no new bind — it has no C++-side control at
 all, it is computed entirely inside the DSP from the existing `vel` signal
 input and the existing `stretch` hslider.
 
+## `audio_thread.cpp` must silence `resonodeInBuf`, never passthrough it, when Resonode is engaged but `resonode.lv2` isn't loaded
+
+`Lv2Host::process()` no-ops on an empty plugin list (an older deploy that
+predates the `resonode.lv2` bundle, or a stale `fx/resonode/engaged`
+ParamStore value carried over from an old preset). Without an explicit
+`else` branch, `resonodeInBuf` would still hold the raw copy of `fin` made
+just before the `process()` call, and that raw mic signal would then get
+crossfaded into the output at full `resonodeEngageGate` as if it were
+genuine Resonode output — silently leaking unprocessed dry mic disguised as
+"Resonode engaged", with no error anywhere. The worker loop's `else` branch
+zeros `resonodeInBuf` instead: silence is the correct, clearly-broken
+degraded behavior here, unlike `homeFx`/`userFx`, where dry-passthrough on
+an empty plugin list IS the correct degraded mode (per "Two ALSA devices,
+never conflate them" and the plain LV2-hosting model, an FX slot with no
+user effect present is defined to pass its input straight through).
+Resonode has no such "no effect present" identity — it either genuinely
+resonates or it should be audibly silent, never a hidden dry leak.
+
 ## Resonode's modal filter had no gain normalization -- it was permanently saturating, not resonating
 
 `modeFilterR`'s biquad (`fi.tf2(1.0, 0.0, -1.0, a1, a2)`, zeros at DC/Nyquist,

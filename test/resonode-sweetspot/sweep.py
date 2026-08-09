@@ -1,12 +1,13 @@
 import itertools
 import json
 import math
-import re
 import sys
 from pathlib import Path
 
 import numpy as np
 import dawdreamer as daw
+
+from harness import compile_processor
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DSP_PATH = REPO_ROOT / "effects" / "home" / "faust" / "resonode_synth.dsp"
@@ -17,45 +18,6 @@ BLOCK_SIZE = 64
 BURST_MS = 15.0
 RENDER_S = 2.5
 TEST_NOTE = 60
-
-HSLIDER_RANGES = {
-    "position": (0.0, 1.0),
-    "decay": (0.05, 8.0),
-    "damping": (0.05, 1.0),
-    "stretch": (-0.5, 1.5),
-}
-
-
-def substitute_once(text, pattern, replacement):
-    matches = list(re.finditer(pattern, text))
-    if len(matches) != 1:
-        raise RuntimeError(f"expected exactly 1 match for {pattern!r}, got {len(matches)}")
-    return text[: matches[0].start()] + replacement + text[matches[0].end() :]
-
-
-def build_dsp_text(params):
-    text = DSP_PATH.read_text()
-    text = substitute_once(
-        text,
-        r'hslider\("fx/resonode/position", [^,]+,',
-        f'hslider("fx/resonode/position", {params["position"]},',
-    )
-    text = substitute_once(
-        text,
-        r'hslider\("fx/resonode/decay", [^,]+,',
-        f'hslider("fx/resonode/decay", {params["decay"]},',
-    )
-    text = substitute_once(
-        text,
-        r'hslider\("fx/resonode/damping", [^,]+,',
-        f'hslider("fx/resonode/damping", {params["damping"]},',
-    )
-    text = substitute_once(
-        text,
-        r'hslider\("fx/resonode/stretch", [^,]+,',
-        f'hslider("fx/resonode/stretch", {params["stretch"]},',
-    )
-    return text
 
 
 def build_excitation(sample_rate, render_s, burst_ms, seed):
@@ -76,44 +38,23 @@ def midi_to_hz(note):
 
 
 def render_case(params, note=TEST_NOTE):
-    dsp_text = build_dsp_text(params)
+    dsp_text = DSP_PATH.read_text()
     engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
-    excite = build_excitation(SAMPLE_RATE, RENDER_S, BURST_MS, seed=42)
+    excite = build_excitation(SAMPLE_RATE, RENDER_S, BURST_MS, seed=42).astype(np.float32)
     n = excite.shape[0]
 
-    note_sig = np.full(n, float(note), dtype=np.float64)
-    gate_sig = np.ones(n, dtype=np.float64)
-    vel_sig = np.ones(n, dtype=np.float64)
-    zero_sig = np.zeros(n, dtype=np.float64)
-
-    inputs = np.stack(
-        [
-            excite,
-            note_sig,
-            gate_sig,
-            vel_sig,
-            zero_sig,
-            zero_sig,
-            zero_sig,
-            zero_sig,
-            zero_sig,
-            zero_sig,
-            zero_sig,
-            zero_sig,
-            zero_sig,
-        ],
-        axis=0,
-    )
-
-    playback = engine.make_playback_processor("in", inputs)
-
-    faust = engine.make_faust_processor("resonode")
-    faust.set_dsp_string(dsp_text)
-    faust.compile_flags = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
-    if not faust.compile():
-        raise RuntimeError("faust compile failed")
-
+    playback = engine.make_playback_processor("in", excite.reshape(1, -1))
+    faust, index, _ = compile_processor(engine, dsp_text)
     engine.load_graph([(playback, []), (faust, ["in"])])
+
+    faust.set_parameter(index["fx_resonode_position"], float(params["position"]))
+    faust.set_parameter(index["fx_resonode_decay"], float(params["decay"]))
+    faust.set_parameter(index["fx_resonode_damping"], float(params["damping"]))
+    faust.set_parameter(index["fx_resonode_stretch"], float(params["stretch"]))
+    faust.set_parameter(index["fx_resonodevoice0_note"], float(note))
+    faust.set_parameter(index["fx_resonodevoice0_gate"], 1.0)
+    faust.set_parameter(index["fx_resonodevoice0_vel"], 1.0)
+
     duration_s = n / SAMPLE_RATE
     if not engine.render(duration_s):
         raise RuntimeError("render failed")
@@ -197,12 +138,21 @@ def analyze(audio, sr, f0):
     else:
         inharmonicity = 0.0
 
+    n_early_sus0, n_early_sus1 = int(0.05 * sr), int(0.15 * sr)
+    n_late_sus0, n_late_sus1 = int(0.5 * sr), int(0.6 * sr)
+    early_sus = audio[n_early_sus0:n_early_sus1]
+    late_sus = audio[n_late_sus0:n_late_sus1] if len(audio) > n_late_sus1 else audio[n_late_sus0:]
+    early_sus_rms = math.sqrt(float(np.mean(early_sus * early_sus)) + 1e-20)
+    late_sus_rms = math.sqrt(float(np.mean(late_sus * late_sus)) + 1e-20)
+    sustain_ratio = late_sus_rms / (early_sus_rms + 1e-9)
+
     return {
         "decayTimeMs": decay_time_ms,
         "transientRatio": transient_ratio,
         "spectralCentroidHz": centroid,
         "lowFreqEnergyRatio": low_freq_ratio,
         "inharmonicity": inharmonicity,
+        "sustainRatio": sustain_ratio,
         "peakDb": peak_db,
     }
 
