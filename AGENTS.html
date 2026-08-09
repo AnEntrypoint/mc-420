@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=cfbc316ebfc7dd7141e520c4abd7d33290eb1053">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=77b7d202ae30351ea216c00fa6caf1fa2f85b8b9">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1940,6 +1940,50 @@ threshold (can trim up to 0.68×M off a genuine take); an M/16-linear-step grid
 clean multiples, always).
 
 Use `writeIdx` telemetry, not wall-clock, for the raw duration input here too.
+
+## Content phase-anchor: arm-press timing must never shift the recorded downbeat
+
+Duration quantization (above) fixes loop LENGTH; it says nothing about where
+the performer's actual downbeat lands WITHIN that length. `dsp/loop.dsp`
+handles that separately: `armPending`/`gridTickCrossed`/`armEdge` defer the
+real recording start from the raw button press to the next `masterLen/16`
+grid tick, so recording content always begins on-grid regardless of how loose
+the press was. At FINISH, `armGridSnap`/`armPhaseBias` re-snap that grid-tick
+instant to the coarser grid the take's own classification deserves
+(`anchorGridLen`: the full `masterLen` for a full-or-longer take, half of it
+for a half-phrase take, the fine `masterLen/16` grid otherwise), and the
+residual (`armPhaseBias`) corrects `recordStartPhaseOffset` so playback reads
+back phase-aligned to that coarser anchor — this is what makes "drop a loose
+half-phrase take onto a full phrase and have it repeat cleanly at both ends"
+actually work.
+
+**Both the length classification and the phase-anchor classification must
+read the SAME take's real finish-time length, not two independently-derived
+values.** `finishTakeLen = max(1, writeIdxForLatch)` feeds `takeLenRatio`
+(`dsp/loop.dsp`), where `writeIdxForLatch` already resolves to
+`finishTargetN` (this take's real, tempo-and-power-of-2-corrected length as
+decided by `apc_grid.cpp`'s quantizer) whenever `finishRequested` is set —
+available combinatorially at `finishEdge`, no new state or control-rate round
+trip. Do NOT read the recursive `wrapLen` signal for this: `wrapLen` only
+updates AT `finishEdge` (one sample after `writeIdxForLatch` computes the
+value it's about to become), so at every earlier point in a take —
+specifically the moment `armPhaseBias` needs to know which anchor grid this
+take belongs to — `wrapLen` still holds the PREVIOUS take's committed length,
+not this one's. A looper that previously held a short (e.g. 1/16-grid) take
+and is now recording a genuinely long (e.g. two-phrase) take would silently
+pick the fine grid for the new take's phase anchor while the C++ layer
+independently quantizes its length to the coarse multi-phrase length — two
+uncorrelated reference frames for the same take, the exact class of bug this
+section exists to prevent.
+
+Verified via `test/phrase-anchor/verify_phase_anchor.py` (real DawDreamer JIT
+against `dsp/loop.dsp` in single-looper isolation): a fixed musical downbeat
+marker recorded across several different raw press timings sharing one grid
+cell lands at byte-identical playback-relative sample positions, across
+sub-phrase (1/16-grid, quarter-phrase, half-phrase), exact-phrase, and
+multi-phrase (2x) take lengths, and the masterLen-establishing take (loop 1)
+is unaffected (grid-deferral is skipped entirely when no master phrase
+exists yet, per the section above).
 
 ## Real APC Key25 hardware re-sends note-on for an already-held pad
 
