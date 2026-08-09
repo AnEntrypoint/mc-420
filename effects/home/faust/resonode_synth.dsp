@@ -96,10 +96,11 @@ r4 = modeR(decayTime*dampCube);
 r5 = modeR(decayTime*dampQuad);
 r6 = modeR(decayTime*dampQuin);
 
-modeFilterR(r, freq, gain) = fi.tf2(1.0, 0.0, -1.0, a1, a2) * gain
+modeFilterR(r, freq, gain) = fi.tf2(b0, 0.0, -b0, a1, a2) * gain
 with {
     a1 = -2.0*r*cos(2.0*ma.PI*freq/ma.SR);
     a2 = r*r;
+    b0 = 1.0 - r;
 };
 
 bank(freqHz, exc) = exc <: (m1, m2, m3, m4, m5, m6) :> _
