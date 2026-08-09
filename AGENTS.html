@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fb7787ea6ee68877842e940d5bec86ed612ef4bc">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5fd481c0f044457d21fd99b58eb45f46bc36ef36">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1591,6 +1591,55 @@ graph — thread the ALREADY-COMPUTED signal through as an explicit
 multi-wire output instead of recomputing it, and always time-check a
 change against the FULL file, not just an isolated standalone test of the
 new function.
+
+**`octaveCorrect`'s `halfY` floor-clamp was itself a real regression on low
+notes — WITNESSED by direct user report** ("lower notes on input messes it
+up a lot") the very next session after the fix above shipped. `halfY =
+max(minTrackHz, rawY * 0.5)` clamps the CANDIDATE subharmonic to the floor
+whenever the true subharmonic would fall below `minTrackHz=60`. For a real
+low note near the floor (e.g. a correctly-tracked 65Hz reading, true
+subharmonic 32.5Hz), this produced `halfY=60` — an arbitrary floor value,
+not a genuine subharmonic — and the consistency check then spuriously
+passed (60Hz sits close enough to the real 65Hz fundamental's own region to
+look "consistent"), permanently pinning the tracker at exactly 60.0Hz.
+DawDreamer A/B against the pre-`octaveCorrect` file confirmed this was a
+real regression, not pre-existing: the original tracker read 65Hz correctly
+as 63.9Hz; the `octaveCorrect`-added file pinned it at 60.0Hz.
+
+Fixed with `halfYReachable = halfYRaw &gt;= minTrackHz` (checking the
+UNCLAMPED candidate, `halfYRaw = rawY * 0.5`, before any floor is applied)
+gating `subharmConsistent` — the correction can only fire when the true
+subharmonic genuinely clears the floor on its own; a note whose subharmonic
+would need clamping is left as `rawY` unconditionally, since a clamped
+`halfY` can never be a real subharmonic reading. Verified via DawDreamer: a
+low-note sweep (60-120Hz, harmonically rich) now reads within -36c to +14c
+of true pitch at every tested frequency (worst case right at the floor
+itself, 62Hz), with no more catastrophic floor-pinning; the original
+timbre-shift octave-swap reproduction still holds 217-224Hz correctly
+(unaffected — that scenario's candidate frequencies were always well above
+the floor); the existing onset-transient CI suite still passes; disabled
+state stays bit-exact silent.
+
+**A separate, NOT-yet-fixed problem, confirmed pre-existing and unrelated to
+either fix above**: a realistic-harmonic-content note swept across
+60-440Hz shows real steady-state tuning jitter at SOME mid-range
+frequencies (e.g. 246.9Hz oscillates continuously between ~235-260Hz,
+never settling, up to 83 cents off) — confirmed via DawDreamer A/B to be
+IDENTICAL on the original pre-any-session file and the current file, so
+neither `octaveCorrect` nor its floor-clamp fix caused or fixed it. This is
+the underlying `an.zcr(trackerTau=0.02, fi.lowpass(trackerHarmonics,
+cutoff, xHighpassed))` main-tracker loop's own convergence/measurement
+noise, a KNOWN HARD PROBLEM: a prior session tried speeding up this exact
+loop's convergence (frequency-scaling its pole the same way the
+coarse/fast floors already are) and it made things WORSE, not better
+(CI-measured: 82Hz onset error 115.3→348.8 cents, 880Hz 121.7→259.3 cents)
+— see the `pitch-tracker-main-tracker-regression-real-cause` mutable
+history. Do not re-attempt that same frequency-scaling approach on the
+main loop blind; any future fix needs real sample-by-sample DawDreamer
+tracing of the main loop's `y` trajectory during STEADY STATE (not just
+onset) to distinguish genuine `an.zcr` zero-crossing measurement noise
+(possibly irreducible at this frequency given the harmonic content) from a
+fixable instability, before proposing a fix shape.
 
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
