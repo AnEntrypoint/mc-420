@@ -48,7 +48,7 @@ windowFor(freqHz) = (ma.SR / freqHz)
     : max(64) : min(maxWindowMs * 0.001 * ma.SR)
     : si.smooth(ba.tau2pole(0.05)) : max(64) : int;
 
-xposeMaxDelay = 4096;
+xposeMaxDelay = 2000;
 
 xpose(w, x, s, sig) = de.fdelay(xposeMaxDelay,d,sig)*ma.fmin(d/x,1) +
     de.fdelay(xposeMaxDelay,d+w,sig)*(1-ma.fmin(d/x,1))
