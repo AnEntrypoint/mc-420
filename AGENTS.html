@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=77b7d202ae30351ea216c00fa6caf1fa2f85b8b9">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e1a8f5491da6a15df106e7a8d64c58dffc88c257">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1426,33 +1426,56 @@ faithful proxy for "a new note was just struck."
 `onsetUntrust` snaps to full untrust (1.0) on the gate's `0-&gt;1` edge, holds
 flat for `onsetFlatHoldMs=35`, then releases linearly to 0 over
 `onsetReleaseMs=20` (single continuous expression, no separate smoother
-needed for the release ramp itself). While untrust is nonzero,
-`effDetNote = detNote*(1-untrust) + targetNote*untrust` blends the shift
-computation toward an assumed unison (shiftAmount≈0, i.e. "just pass the
-input through roughly at pitch") instead of trusting the still-unsettled
-tracker reading, before the existing `si.smooth(glideTau=8ms)` on
-`shiftAmount` picks up as before. Verified via DawDreamer (worst |cents|
-in the unison-lock onset battery, 82-880Hz, 10-50ms window): 5603.6c -&gt;
-349.9c worst-case, and every frequency's 10-30ms readings drop from the
-1700-5600c range to under 530c. Intentional large shifts requested from
-the very first sample of a note (a real +7 semitone harmony) still
-converge to within a couple cents by 250-350ms, matching the unfixed
-file's own convergence time to within the ~55ms hold+release window this
-adds. True disabled-state check (every voice's gate held at 0 the entire
-render, since this fix has no separate on/off switch and activates purely
-on a gate edge): bit-exact, 0.000000e+00 max abs diff against the
-pre-fix file. `windowFor`/`xpose`/`xposeMaxDelay` are untouched — this
-fix lives entirely inside `voiceOut`'s `shiftAmount` computation.
+needed for the release ramp itself).
+
+**The first shipped version of this fix blended `effDetNote` toward
+`targetNote` while untrust was nonzero — WITNESSED, by direct user report
+("we lost pitch locking when playing the pitch shifter as notes"), to be
+a real regression, not a safe fallback.** `shiftAmount = targetNote -
+effDetNote`, and blending `effDetNote` toward `targetNote` drives
+`shiftAmount` toward exactly ZERO — `xpose(w,x,s,sig)`'s own `i =
+1-pow(2,s/12)` is `0` exactly at `s=0`, so a `shiftAmount` of zero is not
+"a safe assumed-unison fallback", it is a full ~55ms window of
+UNSHIFTED/UNLOCKED passthrough on every single note-on, audible on
+literally every attack of a Whammy-style keyplay performance — the exact
+musical instant pitch-lock matters most. DawDreamer confirmed this
+directly: a note-on locking 220Hz input to A4/440Hz read 225-285Hz (near
+the raw, unshifted input) for the first 5-40ms post-onset, only reaching
+440Hz by ~70-80ms.
+
+**Fixed by holding `effDetNote` at its own last-settled (pre-onset) value
+during the untrust window, not blending it toward `targetNote`.**
+`heldDetNote` latches `detNote`'s value one sample before the gate's
+rising edge (`ba.if(rising, detNote:mem, prev) ~ _`) and holds it through
+untrust; `effDetNote = detNote*(1-untrust) + heldDetNote*untrust`. This
+freezes whatever pitch-lock relationship was already established
+(correctly re-locking within single-digit cents by 5-10ms for a voice
+retriggered while the tracker/lock context is warm — the common case of
+rapid melodic/chordal playing) instead of forcing the shift to zero. For a
+genuinely cold first note (silence before onset, no prior lock to freeze
+onto) this is dramatically better than BOTH the pre-`onsetUntrust` file
+(worst-case -2621 to -2987 cents at 5-10ms, i.e. up to ~2.5 octaves flat,
+converging by 150-200ms) and the blend-to-unison version it replaces
+(worst-case ~350-530 cents but at the cost of zeroing the lock on every
+subsequent warm retrigger too) — held-last-shift's worst cold-start case
+measures ~320 cents at 10ms, converging the same ~150-200ms, while adding
+zero regression on the warm-retrigger case the blend-to-unison version
+broke. True disabled-state check (every voice's gate held at 0 the entire
+render): bit-exact silent output, unaffected by this change (gated
+entirely by `voiceEnv`'s ADSR, upstream of `effDetNote`).
+`windowFor`/`xpose`/`xposeMaxDelay` are untouched — this fix lives
+entirely inside `voiceOut`'s `shiftAmount` computation, same as the
+original `onsetUntrust` fix it replaces the blend-target of.
 
 An open, disclosed residual: the underlying shared tracker's OWN
 convergence past the onset window is still occasionally non-monotonic at
 the very lowest tested frequencies (e.g. 82Hz shows a real, if much
-smaller, -74 to -90 cent wobble as late as 75-100ms) — this is the same
-"genuinely open residual for a future session" already named in
-`multitranspose.dsp`'s own file description for the main tracker's fixed
-`trackerTau=0.02`, still untouched here; `onsetUntrust`'s hold+release
-window reduces its audible impact (it overlaps the tail of `voiceOut`'s
-own ADSR ramp) but does not eliminate it.
+smaller, wobble as late as 75-100ms) — this is the same "genuinely open
+residual for a future session" already named in `multitranspose.dsp`'s
+own file description for the main tracker's fixed `trackerTau=0.02`,
+still untouched here; `onsetUntrust`'s hold+release window reduces its
+audible impact (it overlaps the tail of `voiceOut`'s own ADSR ramp) but
+does not eliminate it.
 
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
