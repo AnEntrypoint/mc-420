@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=9f141cf72962bbb39e6ef35ee2d51a99cfea6390">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1f5ff31777232dbb5df8e70e44060c10c30a777e">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -2463,6 +2463,97 @@ silent no-op on real hardware exactly like the historical `fx/resonode/
 engaged` bug. Pitch-mod needs no new bind — it has no C++-side control at
 all, it is computed entirely inside the DSP from the existing `vel` signal
 input and the existing `stretch` hslider.
+
+## Resonode's modal filter had no gain normalization -- it was permanently saturating, not resonating
+
+`modeFilterR`'s biquad (`fi.tf2(1.0, 0.0, -1.0, a1, a2)`, zeros at DC/Nyquist,
+poles at radius `r`) is the standard two-zero resonator, but was missing the
+`(1-r)` numerator normalization every textbook derivation of it carries. Verified
+analytically and numerically (a plain-Python biquad matching the exact Faust
+coefficients, no DawDreamer needed for this part): its steady-state gain AT
+resonance is `1/(1-r)`, not `1.0`. Since `r = modeR(decayTime*dampingExponent)`
+sits extremely close to 1 for every musically useful decay time, this gain was
+never small: ~348x at the shortest playable decay (0.05s) up in a straight line
+to ~55600x at the longest (8.0s), verified at 110/440/4000Hz alike. Every one of
+the 4 shipped named patches' decay/damping settings sat well inside this range.
+
+The audible consequence, confirmed by rendering the pre-fix DSP through a real
+held note (note=60, gate=1, a modest 0.3-peak noise excitation) via DawDreamer:
+peak output pinned at exactly `outLevel` (0.8) with RMS 0.49-0.78 -- i.e. the
+final `ma.tanh` was being driven so far past its saturation knee that the output
+was close to a hard square wave for every decay/damping combination tested,
+including all 4 named patches. This is indistinguishable from "the DSP is
+broken" by ear: harsh, undifferentiated buzz instead of a controlled resonant
+tone, regardless of which patch or knob position was dialed in. WITNESSED
+report: "sounds pretty trash when playing it".
+
+Fix: `modeFilterR(r, freq, gain) = fi.tf2(b0, 0.0, -b0, a1, a2) * gain` with
+`b0 = 1.0 - r`. Verified via a synthetic sustained-sine sweep (numpy, matching
+the exact biquad coefficients) that steady-state gain at resonance settles to
+`1.0000` across decay 0.05s-8.0s and frequency 110Hz-4000Hz -- the standard
+normalized-resonator identity. Re-measured the same held-note DawDreamer render
+post-fix: peak/RMS now track the actual excitation and decay setting instead of
+pinning at the `outLevel` ceiling (e.g. decay=1.2s, damping=0.85: RMS 0.7605 -&gt;
+0.0009), and a matched-frequency sine excitation at the played note (0.5 peak,
+a representative "singing/humming the note" case) settles to a sane, bounded,
+non-clipping 0.12-0.17 peak with no forced saturation at any decay time tested.
+This is a genuine, large loudness-character change -- correct now, but it means
+the instrument goes quiet on excitation uncorrelated with the played note's
+resonance (physically correct: a narrow-bandwidth resonator captures little
+power from broadband noise far from its passband) rather than always roaring at
+the tanh ceiling regardless of input. `outLevel`'s existing 0-1.5 `level` knob
+range already covers a reasonable make-up-gain span; further loudness/patch
+balancing is a by-ear task on real hardware, not something to guess further here
+per "Real hardware over asking the user to reproduce input" above.
+
+## `test/resonode-sweetspot/*.py`'s DawDreamer harness was vacuous -- it never actually gated a voice
+
+Found while re-verifying the gain-normalization fix above: `verify_musical_controls.py`
+(and `sweep.py`, which underlies the whole named-patch grid search) built a
+13-row `note0,gate0,vel0, ...` array and connected it to the Faust processor as
+one 13-channel bus (`engine.load_graph([(playback, []), (faust, ["in"])])`).
+`resonode_synth.dsp`'s `process(exciteIn)` has exactly ONE real audio input --
+every `note{n}`/`gate{n}`/`vel{n}` is an `hslider` control port (per the
+"Resonode is a separate, conditionally-called LV2 bundle" entry above), not a
+signal argument. DawDreamer connects channel 0 and silently drops the rest
+(`Warning: Unable to connect in channel 1..12`), so every voice's gate stayed at
+its compiled-in default of `0.0` for the ENTIRE suite. Every check therefore
+rendered pure silence and passed vacuously (`0 &gt;= 0*0.98`, `0 &lt; 1e-5`, `0/0`
+ratios all trivially satisfied); `collision_zero_is_identity`'s regex additionally
+no longer matched the current `voice()` signature and just threw when actually
+run. This had been true since whichever refactor moved per-voice control to LV2
+ports, so the extensively-documented "verified via DawDreamer" trail for
+collision, pitch-mod, the alias guard, and the 625-combo named-patch sweep above
+was never actually run against live signal.
+
+Fixed by driving the DSP the way a real `FaustProcessor` actually expects:
+`faust.set_parameter(index, value)` for constant-per-render controls and
+`faust.set_automation(full_name, array)` for time-varying ones (`gate`/`note`
+mid-render for steal tests, a knob mid-decay for click tests), both resolved by
+name via `get_parameters_description()` rather than guessed indices (new
+`harness.py`). Re-running the full suite for real surfaced two more real test
+bugs, not DSP bugs: `set_automation` applies at the next 64-sample block
+boundary, not at the exact sample index requested, so an unaligned `jump_sample`
+was measuring the click ratio 16 samples away from the actual transition
+(morphGlide genuinely reduces the click 6.2x-&gt;0.6x once measured at the right
+sample); and two of the old checks used absolute-amplitude thresholds tuned
+against the old permanently-saturated (~0.8 peak) DSP, which the correctly-quiet
+post-fix output no longer clears -- `pitch_mod_gated_by_velocity_and_flexibility`
+now checks the diff RELATIVE to the render's own peak (still a clear &gt;10% effect
+when active, &lt;1e-5 when gated off) and `dance_bass_shipped_patch`'s
+`sustainRatio` floor was rederived from the actual `t60` math (decay=7.0s implies
+-4.3dB, ratio 0.61, by the 500ms mark even for a single undamped mode alone; real
+measurement across notes 28/36/48 lands 0.277-0.552) instead of the old
+saturation-inflated 0.5. All 11 checks pass for real against the fixed DSP.
+
+`sweep.py`/`select_patches.py` have the identical unconnected-channel bug and are
+NOT fixed here -- re-running the 625-combo grid search that originally picked
+the 4 named patches' `(position,decay,damping,stretch)` values is a separate,
+larger follow-up. The re-verified `dance_bass_shipped_patch` check above did
+re-confirm the CURRENT shipped values produce physically sane, bass-dominant,
+non-clipping output under the fixed gain, so they are not obviously wrong -- but
+their original "measured, not guessed" grid-search provenance should be treated
+as unconfirmed until that sweep is re-run for real.
 
 ## CC53 formant constants (must match `../looper` exactly)
 
