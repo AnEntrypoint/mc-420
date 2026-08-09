@@ -51,9 +51,11 @@ subharmConsistentTolRatio = 0.15;
 
 octaveCorrect(rawY, xHighpassed) = correctedY
 with {
-    halfY = max(minTrackHz, rawY * 0.5);
+    halfYRaw = rawY * 0.5;
+    halfYReachable = halfYRaw >= minTrackHz;
+    halfY = max(minTrackHz, halfYRaw);
     subZcr = an.zcr(subharmCheckTau, fi.lowpass(trackerHarmonics, halfY, xHighpassed)) * ma.SR * .5;
-    subharmConsistent = abs(subZcr - halfY) < (halfY * subharmConsistentTolRatio);
+    subharmConsistent = halfYReachable & (abs(subZcr - halfY) < (halfY * subharmConsistentTolRatio));
     correctedY = ba.if(subharmConsistent, halfY, rawY);
 };
 
