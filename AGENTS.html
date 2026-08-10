@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f9644be04de0575c080f0be33d44a7c302b5bca7">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=bf42bb26439d50eab1abca9e1257347933978625">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -2158,6 +2158,154 @@ the walk-bug fix alone, CI-red, was correctly judged worse than not
 shipping it — the pre-existing `jumpGuard`-only baseline remains materially
 safer even though it does not fix the plosive symptom this session set out
 to eliminate.
+
+**A follow-up session tried the recommended next step directly — recover
+`octaveCorrect`'s functionality via `slowRef` itself, avoiding a second
+`an.zcr` call — and it also failed, via a NEW failure mode distinct from
+every prior attempt: the gate can now trap itself at its own cold-start
+value forever, on ordinary clean sustained tones, with no burst involved
+at all.** The design: keep `octaveCorrect` completely textually unchanged
+in the pipe (confirmed this specific integration pattern — modifying only
+`jumpGuard`'s internal scope, never touching `octaveCorrect`'s call site or
+restructuring `detectedFreq`'s output-splitting — reliably avoids the
+compile-time wall; this run compiled in 26-34s, consistent with the
+"walk-bug-only" fix's fast compile). `jumpGuard` gained a second recursive
+signal, `slowRef` (its own 2-wire `~` pair, `slowRefTriple`), a
+plausibility-gated one-pole low-pass on `rawFreq` with its OWN, longer
+(90ms vs. `jumpGuard`'s own 25ms) resync timer, required to independently
+agree (`candOk = plausible(slowRef, rawFreq)`) before `jumpGuard`'s own
+anchor could ever accept a new value — explicitly closing the "walk" gap by
+requiring agreement with a genuinely slower-moving, harder-to-drag
+reference rather than only the last-accepted anchor.
+
+Traced against the plosive reproduction (110/164.8/220/440Hz): the design
+DID categorically eliminate the 1500Hz ceiling hit (zero occurrences across
+all 4 frequencies) and converged to within a few Hz of target by
+t+150-250ms — matching or exceeding every previous session's best result on
+the specific symptom this bug report is about. But running the FULL
+`verify_highoctave_transient.py` battery (the same gate that caught the
+prior session's high-frequency regression) revealed a categorically WORSE
+failure: at 164.8Hz, 220Hz, and 440Hz, `detectedFreq` READ A CONSTANT,
+WRONG VALUE FOR THE ENTIRE 250ms MEASUREMENT WINDOW from the very first
+sample (63.04Hz, 82.09Hz, and 87.29Hz respectively — each a `onePoleZc`
+cold-start floor artifact, not the requested frequency) with ZERO
+convergence at any point, on a plain clean sustained tone with no burst
+or transient anywhere in the test. Only 110Hz (barely) tracked correctly.
+
+**Root cause: `slowRef` inherits the exact self-trapping failure design 5
+("Adaptive-tau `an.zcr`") already named, one layer removed.** `slowRef`
+itself zero-inits to the first raw sample per its own `firstSample`
+snap, but that first raw sample IS the tracker's own cold-start garbage
+(`onePoleZc`'s internal state hasn't measured a real period yet — this is
+the identical mechanism the original onset-octave-slide bug's root cause
+names: the tracker's genuinely-uncertain cold-start reading looks like a
+confident measurement). `slowRefPlausible` then gates every SUBSEQUENT
+raw sample against that frozen-wrong `slowRef`, and since `slowRef`'s own
+90ms resync timer only fires when `slowRefOk` has been continuously false
+— exactly the state it's now permanently in — the resync condition and the
+plausibility condition became mutually exclusive in practice: by the time
+the timer's 90ms elapsed, `jumpGuard`'s OWN anchor had already independently
+locked onto the same wrong floor value via its faster 25ms resync (which
+also requires `candOk = plausible(slowRef, ...)`, i.e. plausible against the
+already-wrong `slowRef`), so `jumpGuard`'s anchor and `slowRef` ended up
+mutually confirming each other's wrong cold-start value rather than either
+one correcting the other. **This is a more severe version of the exact gap
+design 5 named ("an outlier detector whose reference is derived from the
+same signal it is judging can chase its own tail; it needs an INDEPENDENT
+reference") — `slowRef` was intended to BE that independent reference for
+`jumpGuard`'s anchor, but because both are seeded from the identical
+`rawFreq` stream at `ba.time==0` with no cross-check against anything
+outside that stream, they are not actually independent at the one moment
+independence matters most: cold start.**
+
+**Lesson, generalizable to any future two-reference gating design in this
+file**: two plausibility gates that both snap to the SAME raw signal's
+first sample, then only ever check plausibility against EACH OTHER (never
+against a signal with a genuinely different origin — e.g. a fixed prior,
+a different tau's `onePoleZc` output, or `octaveCorrect`'s own subharmonic
+check, all of which already exist elsewhere in this file and are computed
+from the SAME `xHighpassed` but via different filter states, hence
+genuinely decorrelated at cold start even though ultimately derived from
+the same input) are not two independent votes — they are one vote counted
+twice, and if that one vote is wrong (which cold-start structurally
+guarantees it might be), nothing in the design can ever recover. Reverted
+in full to `71c8122` (confirmed zero working-tree diff after revert). This
+design should not be re-attempted in this exact shape; any future
+dual-reference gate MUST verify at design time, before any tuning, that its
+two references can become wrong TOGETHER at cold start, and if so, add a
+third, genuinely-differently-derived check (not just a differently-tau'd
+copy of the same recursive structure) before trusting either reference to
+validate the other.
+
+**A follow-up attempt, in the same session, tried to fix the cold-start
+self-trap directly by delaying `slowRef`'s seed sample instead of snapping
+it at `ba.time==0`** — `slowRefStep`'s `seedSample = ba.time ==
+int(slowRefWarmupSamples)` (30ms after start, well past `onePoleZc`'s
+fast/coarse convergence taus of 1.5-3ms), with `jumpGuard`'s own
+`candOk = (1.0 - warm) | plausible(slowRef, rawFreq)` forcing the pre-warmup
+window to behave exactly like the unmodified baseline (no `slowRef` gate
+active at all until `slowRef` has had a real chance to be correct). This
+compiled fast (26-32s, confirmed twice, well inside the safe range) and
+initial isolated tracing against the plosive reproduction alone looked
+promising (zero 1500Hz-ceiling hits, clean convergence by 150-250ms at all
+4 tested frequencies).
+
+**Running the FULL `verify_highoctave_transient.py` battery (which this
+session's own documented history already names as mandatory before trusting
+any change to this file's tracker core) surfaced a real, different
+regression: a near-full-octave-down error appearing specifically at
+196.0Hz and 220.0Hz, and specifically AFTER onset settling, not during
+it.** 196Hz read -1525.8c at t=250ms (worst_steady, gate limit 20c); 220Hz
+read -1693.1c at t=150ms and -1481.6c at t=250ms — both roughly
+"-1200c plus a few hundred more", i.e. landing BELOW a clean octave-down
+error, not at the -1200c an ordinary octave-halving artifact would produce.
+Every other tested frequency (82-1318.5Hz, 8 of the 10 gate frequencies)
+passed cleanly, including the two frequencies immediately adjacent to the
+failing pair (164.8Hz: 18.4c, comfortably under the 20c gate; 440Hz: 4.9c).
+This is a narrow, specific failure band, not a general regression across
+all frequencies the way the previous session's `octaveCorrect`-removal
+regression was (that one failed uniformly at 440-1318.5Hz).
+
+**Root cause not yet fully traced, but the failure shape rules out the
+cold-start self-trap mechanism documented immediately above — this is a
+DIFFERENT bug in the same design.** The self-trap failure (previous entry)
+freezes `detectedFreq` at a WRONG CONSTANT VALUE for the entire render,
+visible from t=10ms onward with zero movement. This new failure instead
+shows NORMAL-LOOKING onset convergence (196Hz: -255c at 10ms, settling
+toward -10c by 100ms, exactly matching the shape of a healthy fix) before
+DIVERGING sharply at t=150-250ms — i.e. `slowRef`/`jumpGuard`'s anchor
+correctly tracked the real frequency through the onset transient, then
+something caused it to accept a wrong subharmonic-ish value well AFTER
+convergence looked complete. This timing (150-250ms, past `slowRef`'s own
+20ms tau and past the 30ms warmup) is consistent with `slowRef`'s OWN
+dynamics interacting with `octaveCorrect`'s subharmonic check in a way not
+present in the unmodified baseline — but this is a hypothesis, not yet
+verified by direct sample tracing the way the walk bug and the cold-start
+trap were both fully understood before being documented. Reverted in full
+(confirmed zero git diff against `71c8122` after revert).
+
+**This is the fourth distinct failure mode found for slowRef-style
+dual-reference gating designs this session alone** (drags with corruption →
+forceResync bypass makes it worse → unconditional-gate self-trap at cold
+start → this narrow-band late-divergence regression with a delayed,
+gated seed). Given the pattern of "fix one specific failure mode, discover
+a new one in the same design family, each requiring the FULL CI battery
+(not just the plosive-specific test) to even detect" repeating four times
+without landing a clean pass, this codebase's own already-recorded
+recommendation should now be treated as binding, not merely "more
+promising": **stop attempting further jumpGuard/slowRef gating variants
+against the existing zero-crossing-based `detectedFreq` signal graph.** The
+next concrete step is the autocorrelation/periodicity-based tracker as a
+genuinely separate, isolated compilation unit (verified to render fast in
+total isolation, including a FULL RENDER — not just a compile check, which
+this session's compile-only checks have now twice given false confidence
+against — before ever being wired into `multitranspose.dsp`), per the
+"Autocorrelation/periodicity-confidence attempted next" entry above. A
+standalone-compiles-fast result is NOT sufficient evidence a design is safe;
+this session independently re-learned that lesson for the full render/CI
+battery in addition to the already-documented compile-time risk — both need
+checking, every time, against the full existing CI battery, not a narrower
+symptom-specific test alone.
 
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
