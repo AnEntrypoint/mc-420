@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=99c5bb8e8c2ab4e116c411b29ab0320759890d0c">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=801af7a73953787e3458c722c8e4eccefa86e9cd">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1932,6 +1932,68 @@ for a future session with a larger time budget; do not re-attempt option
 (b)'s incremental-cross-reference pattern against the CURRENT signal graph
 shape without first checking compile time on the very first, smallest
 possible addition.
+
+**Eighth design tried under explicit "fix it properly, not just mitigate"
+instruction: a synthetic-oscillator burst gate INSIDE `trackPitchHzAndHp`
+itself, not a downstream guard.** Detects a broadband burst via a
+fast/slow spectral-energy ratio (full-band energy vs. energy through a
+fixed 2200Hz reference lowpass — deliberately reusing the ALREADY-COMPUTED
+`xHighpassed`, no new cross-function reference, avoiding the compile-time
+wall documented above) computed OUTSIDE `loop`'s own scope so it adds no
+recursion depth. While the ratio exceeds threshold, `an.zcr`'s input is
+substituted with a clean synthetic sine holding the last pre-burst
+frequency (latched on the burst's rising edge via a genuine edge detector,
+NOT the live, possibly-already-corrupted `y` — an earlier version of this
+same idea used live `y` continuously and measurably performed worse).
+This compiled in a tractable 37-51s (NOT the 100s+ wall — confirming the
+wall is specifically about cross-`with{}`-scope references between
+`octaveCorrect`/`jumpGuard`, not about adding NEW same-scope logic) and DID
+show real, measured improvement on the plosive reproduction alone: the
+1500Hz ceiling was never hit again (vs. every prior jumpGuard-only run
+hitting it), 220Hz's plosive-burst worst-case deviation dropped to 175-274
+cents (from 3613-3895c unguarded), consistently across three separate
+re-measurements with different `burstRatioThresh`/`jumpResyncMs`/
+`burstHoldMs` tunings.
+
+**But it FAILED the project's own EXISTING, already-accepted
+`verify_highoctave_transient.py` battery — a genuine regression on clean,
+no-burst signal, not just an incomplete plosive fix.** Every one of the
+10 tested frequencies (110-1318.5Hz) that previously passed steady-state
+(&lt;20 cents by 150ms+) now failed, at 22-58 cents. Root cause: the burst
+detector's fast/slow energy-ratio test cannot distinguish "a genuine
+broadband burst" from "the sharp initial attack ramp of a legitimate fresh
+note onset" — both present as a rapid full-band energy rise relative to a
+narrowband reference in the first few milliseconds. `burstSpiking` fired on
+ordinary onset transients too, substituting a synthetic tone into the
+tracker's input during exactly the window a real note's own genuine
+harmonic content needed to be measured, corrupting steady-state settling on
+every tested frequency. **This was caught ONLY because the full existing
+onset CI battery was re-run as a final check before considering the design
+done — an earlier round of tuning this session (three separate parameter
+sweeps) had ONLY run the narrower plosive-specific test and would have
+shipped this regression had the full battery not been checked at the end.
+Lesson, generalizable beyond this specific fix: ANY change to
+`trackPitchHzAndHp`'s or `detectedFreq`'s shared tracking path — even one
+that measurably improves the specific symptom being targeted — MUST be
+verified against the full existing `verify_highoctave_transient.py` suite
+before being considered a candidate fix, not just the narrower test written
+for the new symptom. A narrow test passing is necessary but never
+sufficient evidence for a change to this file's tracker core.**
+
+**Reverted in full; the shipped `jumpGuard`-only state (unchanged from the
+prior session, 22-30s compile, zero regression on the full existing CI
+battery) remains the only state that has ever been verified safe.** The
+synthetic-oscillator burst-gate CONCEPT is not necessarily dead — its
+plosive-specific improvement was real and reproducible — but it needs a
+materially better-discriminating burst detector (one that can tell a
+genuine note attack's own harmonic buildup apart from broadband noise;
+candidates include comparing the ratio's rate-of-change rather than its
+absolute value, or gating on total energy relative to a much slower/longer
+reference than the 1.5ms tau tried here, which may be too reactive to
+distinguish onset shape from noise shape) before it can be safely
+considered again, and any future attempt MUST run the full onset CI battery
+as part of its OWN tuning loop from the first iteration, not as a final
+gate after tuning already feels done.
 
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
