@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=ed7fec11fc22dcd35587d3f526ba9f54dc25b543">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e671a823a6d4a75459bcf679b79f7d9e371bc72e">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -2549,24 +2549,104 @@ CLI-fast. Any future change to `multitranspose.dsp` (or anything
 `build-lv2` CI run — not just a DawDreamer standalone check — before being
 trusted as compile-time-safe, however small or simple the change looks.
 
+**A follow-up session found a genuine local reproduction method (no Docker
+or a separate `faust` CLI install needed) — DawDreamer's own
+`faust.box` module, NOT its usual JIT `FaustProcessor.compile()` path.**
+`import dawdreamer.faust as df; with df.FaustContext(): box =
+df.box.boxFromDSP(src, ['-I', abspath('dsp'), '-I',
+abspath('effects/home/faust')]); source = df.box.boxToSource(box, 'cpp',
+'AloopLoopDsp', ['-vec','-fun','-dfs','-vs','32','-nvi','-ct','0'])` runs
+the REAL Faust box-construction and C++ codegen path (the same one `faust
+-lang cpp` uses), not the LLVM JIT `compile()` this whole investigation's
+earlier "verified fast" checkpoints relied on. **Critical setup
+requirement**: calling `df.box.boxFromDSP` without first entering a
+`with df.FaustContext():` block SEGFAULTS immediately, even on a
+one-line trivial DSP (`process = _,_;`) — this is not a real crash in
+Faust's logic, just a missing-context-initialization bug in the binding
+that produced a misleading "the API is broken" signal at first.
+
+Using this method, the regression was CONFIRMED to reproduce locally:
+compiling the full `dsp/aloop.dsp` (real production file, `-I dsp -I
+effects/home/faust`, matching CI's own exact flags) via `boxToSource`
+took ~113s on the CURRENT (working, byte-identical-to-`f9644be`)
+`multitranspose.dsp` — slower than the real CI runner's 44s (this Windows
+dev host's own hardware is naturally slower, not evidence of anything
+else), but a real, repeatable, bounded number. The SAME `dsp/aloop.dsp`
+compiled with the FIRST broken commit's `multitranspose.dsp` (the
+signal-threaded, tracker-fully-removed version from `2bc2f3c`) took over
+500s and was still climbing with no sign of finishing when killed — a
+genuine, unbounded-looking local reproduction of the exact same failure
+class CI hit, just manifesting as a very slow/hung Python process instead
+of CI's own SIGALRM kill.
+
+**A further, more surgical hypothesis was tested and ALSO failed real
+CI**: keep the ENTIRE old zero-crossing tracker
+(`trackPitchHzAndHp`/`octaveCorrect`/`jumpGuard`) 100% textually intact
+and still computed every block, but gate its CONTRIBUTION to `freqDet`
+off via a new `useExtFreqDet` flag and `ba.if(useExtFreqDet, extFreqDet,
+detectedFreq(sigIn))`, with a new `fx/extfreqdet` hslider added alongside
+it (nothing deleted, only added). This is the most conservative possible
+reintroduction — if "deleting the tracker's code" were the real trigger,
+this should have compiled fine. **It did not**: `build-binary` failed at
+2m2.5s, the identical `Alarm clock`/exit 142 signature, indistinguishable
+from every prior attempt. This DEFINITIVELY rules out "textual deletion
+of the tracker" as the specific trigger — the file fails from an
+ADDITIVE-ONLY change too.
+
+**Seven consecutive real-CI failures now span every reasonable
+variation tested**: audio-rate signal threading through `aloop.dsp`'s own
+signature, control-rate hslider with `aloop.dsp` reverted,
+`pitchtracker_ac.dsp`'s directory placement (in vs. out of the `-I`
+scanned path), full tracker deletion, and finally tracker-kept-but-gated
+addition-only. The ONLY thing that has EVER restored a green
+`build-binary` is reverting `multitranspose.dsp` to EXACT
+byte-identity with `f9644be` — not "functionally equivalent," not "old
+code path still present," but the literal same bytes. **The emerging,
+best-supported conclusion**: this file sits at a genuine, brittle
+real-`faust`-CLI compile-time cliff (not the LLVM JIT — DawDreamer's own
+`compile()` never once reproduced this at any tested scope) where
+essentially ANY textual modification — additive or subtractive,
+regardless of the specific Faust construct involved — has a real chance
+of tipping the real codegen path over into what looks like unbounded
+recompilation. This is consistent with, and a much stronger version of,
+this file's own extensively pre-existing documented history (the
+`par()`-replication compile-time-wall entries above) of being unusually
+sensitive to structural changes.
+
 **Current shipped state**: `multitranspose.dsp` is reverted to
-byte-identical `f9644be` (confirmed via `diff`, zero output) — the
-original zero-crossing `trackPitchHzAndHp`/`octaveCorrect`/`jumpGuard`
-tracker, `jumpGuard`-only baseline, plosive symptom still fully open.
+byte-identical `f9644be` (confirmed via `diff`, zero output, verified
+twice after two separate failed attempts) — the original zero-crossing
+`trackPitchHzAndHp`/`octaveCorrect`/`jumpGuard` tracker, `jumpGuard`-only
+baseline, plosive symptom still fully open.
 `effects/pitchtracker-src/pitchtracker_ac.dsp` (the verified-working
-autocorrelation tracker, relocated per step 4 above),
-`.github/workflows/build-lv2.yml`'s `pitchtracker-lv2` job, and
-`audio_thread.cpp`'s inert `Lv2Host pitchTrackerFx`/`pitchTrackerBuf`
-plumbing are all left in place as real, CI-verified infrastructure — the
-LV2 bundle genuinely builds and would genuinely run if
-`multitranspose.dsp` read its output, it's just not wired in. The concrete
-next step for a future session: get real local `faust`/Docker access,
-re-apply the `fx/extfreqdet` hslider change to `multitranspose.dsp` alone
-(the smallest possible reintroduction, matching the already-proven-safe
-control-rate mechanism from step 3), and measure real local
-`faust -lang cpp -I dsp -I effects/home/faust dsp/aloop.dsp` compile time
-directly and repeatably — bisecting locally in seconds per iteration
-instead of ~15-20 minutes per CI round-trip.
+autocorrelation tracker), `.github/workflows/build-lv2.yml`'s
+`pitchtracker-lv2` job, and `audio_thread.cpp`'s inert `Lv2Host
+pitchTrackerFx`/`pitchTrackerBuf` plumbing are all left in place as real,
+CI-verified infrastructure — the LV2 bundle genuinely builds and would
+genuinely run if `multitranspose.dsp` read its output, it's just not
+wired in, because every wiring attempt broke the parent file's own
+unrelated compile.
+
+**The concrete next step for a future session, now much narrower than
+before**: this local `df.box.boxFromDSP`/`boxToSource` method IS a
+genuine (if slow — 100-500+ real seconds per iteration on this dev
+host's hardware) local reproduction, so further bisection no longer
+strictly requires CI round-trips (~15-20 min each) — but it does require
+budgeting real per-iteration cost (this session's own attempts took
+100-500+ seconds each and the fastest useful signal came from watching
+whether a run cleared or blew past the working baseline's own ~113s
+mark, not from waiting for full completion). The real open question is
+now much narrower: WHY does an isolated, non-recursive, purely additive
+`hslider` declaration (`extFreqDet = hslider("fx/extfreqdet", 220.0,
+minTrackHz, maxTrackHz, 0.01);`) reproducibly destabilize this specific
+file's real Faust codegen path, when the exact same declaration compiles
+trivially fast in `resonode_synth.dsp`/`guitar_lofi_fx.dsp`? A future
+session should use the local `boxToSource` method to test candidates
+narrower than "add one hslider" (e.g., does merely ADDING the hslider
+declaration with ZERO other changes — not even referencing it anywhere —
+reproduce the regression, mirroring the `periodicityConfidenceAt`
+defined-but-unused precedent documented above for a different symptom in
+this same file?) before concluding anything about the specific mechanism.
 
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
