@@ -27,6 +27,14 @@ def compile_processor(engine, dsp_text, name):
     return faust
 
 
+def set_ext_freq_det(faust, freq_hz):
+    for p in faust.get_parameters_description():
+        if p["name"].endswith("fx/extfreqdet"):
+            faust.set_parameter(p["index"], float(freq_hz))
+            return
+    raise RuntimeError("fx/extfreqdet parameter not found")
+
+
 def sine_transient(n, freq_hz, attack_samples=64, amp=0.9):
     t = np.arange(n) / SAMPLE_RATE
     tone = amp * np.sin(2 * np.pi * freq_hz * t)
@@ -36,7 +44,7 @@ def sine_transient(n, freq_hz, attack_samples=64, amp=0.9):
     return tone * env
 
 
-def make_inputs(n, dry, free, formant, ext_freq_det, target_note, gate):
+def make_inputs(n, dry, free, formant, target_note, gate):
     zero = np.zeros(n)
     ones = np.ones(n)
     return np.stack(
@@ -45,7 +53,6 @@ def make_inputs(n, dry, free, formant, ext_freq_det, target_note, gate):
             zero,
             free * ones,
             formant * ones,
-            ext_freq_det * ones,
             target_note * ones,
             gate * ones,
             zero, zero, zero, zero, zero, zero, zero, zero, zero,
@@ -55,21 +62,22 @@ def make_inputs(n, dry, free, formant, ext_freq_det, target_note, gate):
 
 
 def render(dsp_text, freq_hz, target_note, formant=0.0, dur=0.4):
-    # multitranspose.dsp no longer tracks pitch itself -- extFreqDet is an
-    # external signal input (the pitchtracker.lv2 bundle's output in
-    # production, computed in C++). This regression suite exists to gate the
-    # HARMONIZER's own onset/window/glide behavior given a KNOWN-CORRECT
-    # detected frequency, so it feeds the true freq_hz directly rather than
-    # re-testing any tracker's own convergence (that lives in
-    # test/pitch-tracker-transient/verify_plosive_transient.py and the
-    # autocorr_tracker_reference.dsp verification, which exercise the
+    # multitranspose.dsp no longer tracks pitch itself -- fx/extfreqdet is a
+    # control-rate hslider fed once per block from a pitchtracker.lv2 bundle
+    # in production (computed in C++). This regression suite exists to gate
+    # the HARMONIZER's own onset/window/glide behavior given a KNOWN-CORRECT
+    # detected frequency, so it sets fx/extfreqdet to the true freq_hz
+    # directly rather than re-testing any tracker's own convergence (that
+    # lives in test/pitch-tracker-transient/verify_plosive_transient.py and
+    # the autocorr_tracker_reference.dsp verification, which exercise the
     # tracker itself).
     engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
     n = int(dur * SAMPLE_RATE)
     dry = sine_transient(n, freq_hz)
-    inputs = make_inputs(n, dry, 0.0, formant, freq_hz, target_note, 1.0)
+    inputs = make_inputs(n, dry, 0.0, formant, target_note, 1.0)
     playback = engine.make_playback_processor("in", inputs)
     faust = compile_processor(engine, dsp_text, "multitranspose")
+    set_ext_freq_det(faust, freq_hz)
     engine.load_graph([(playback, []), (faust, ["in"])])
     engine.render(dur)
     return engine.get_audio()[0]

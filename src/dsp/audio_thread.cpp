@@ -210,8 +210,8 @@ static void* worker(void*) {
         xposeGateBuf[v].assign((size_t)N, 0.0f);
     }
     std::vector<float> resonodeInBuf((size_t)N, 0.0f);
-    std::vector<float> pitchTrackerBuf((size_t)N, 0.0f);
-    float* fins[22] = {
+    std::vector<float> pitchTrackerBuf((size_t)N, 60.0f);
+    float* fins[21] = {
         fin.data(), prevFiltOut.data(), clearBuf.data(), speedBuf.data(), masterPhaseBuf.data(), masterLenBuf.data(), sidechainEnvBuf.data(),
         freeXposeBuf.data(),
         xposeNoteBuf[0].data(), xposeGateBuf[0].data(),
@@ -221,7 +221,6 @@ static void* worker(void*) {
         xposeNoteBuf[4].data(), xposeGateBuf[4].data(),
         xposeNoteBuf[5].data(), xposeGateBuf[5].data(),
         resonodeInBuf.data(),
-        pitchTrackerBuf.data(),
     };
     int sidechainSrcSlot[AudioThread::Telemetry::kLoopers];
     for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) sidechainSrcSlot[lp] = -1;
@@ -696,8 +695,7 @@ static void* worker(void*) {
             if (pitchTrackerFx.hasPlugins()) {
                 std::copy(fin.begin(), fin.end(), pitchTrackerBuf.begin());
                 pitchTrackerFx.process(pitchTrackerBuf.data(), N);
-            } else {
-                std::fill(pitchTrackerBuf.begin(), pitchTrackerBuf.end(), 60.0f);
+                fui.set("fx/extfreqdet", pitchTrackerBuf[N - 1]);
             }
             faustHome.compute(N, fins, fouts);
             prevLoopSum = rawLoopSum;

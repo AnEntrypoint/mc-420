@@ -1,7 +1,7 @@
 declare name "MultiKeyTranspose";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Polyphonic pitch-LOCK harmonizer: extFreqDet-derived detNote drives each held voice's shift (targetNote - detNote), landing the wet output on the exact pressed key. extFreqDet is an external audio-rate signal input (the pitchtracker.lv2 bundle's own output, computed in audio_thread.cpp) rather than an in-Faust computation -- see AGENTS.md for why. onsetUntrust/heldDetNote and formant are unchanged from before; see AGENTS.md 'multitranspose.dsp: polyphonic pitch-LOCK, 6 voices' for their full derivation.";
+declare description "Polyphonic pitch-LOCK harmonizer: fx/extfreqdet-derived detNote drives each held voice's shift (targetNote - detNote), landing the wet output on the exact pressed key. fx/extfreqdet is a control-rate hslider fed once per block from a pitchtracker.lv2 bundle (computed in audio_thread.cpp) rather than an in-Faust computation -- see AGENTS.md for why. onsetUntrust/heldDetNote and formant are unchanged from before; see AGENTS.md 'multitranspose.dsp: polyphonic pitch-LOCK, 6 voices' for their full derivation.";
 
 import("stdfaust.lib");
 
@@ -12,6 +12,8 @@ voiceGain = 0.6;
 minTrackHz = 60.0;
 maxTrackHz = 1500.0;
 maxWindowMs = 20.0;
+
+extFreqDet = hslider("fx/extfreqdet", 220.0, minTrackHz, maxTrackHz, 0.01);
 
 onsetFlatHoldMs = 110.0;
 onsetReleaseMs = 60.0;
@@ -62,7 +64,7 @@ harmonySum(sig, detNote, winSamples, xfSamples, n0,g0, n1,g1, n2,g2, n3,g3, n4,g
   + voiceOut(sig,detNote,winSamples,xfSamples,n2,g2) + voiceOut(sig,detNote,winSamples,xfSamples,n3,g3)
   + voiceOut(sig,detNote,winSamples,xfSamples,n4,g4) + voiceOut(sig,detNote,winSamples,xfSamples,n5,g5);
 
-process(dry, loopSum, free, formant, extFreqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
+process(dry, loopSum, free, formant, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
 with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
