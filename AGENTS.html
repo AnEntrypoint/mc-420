@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=816463ef9a452235ad95d37e626cc38715edac8c">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=71c8122db8ef7407c63aad4ef767377a17fceae7">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1781,21 +1781,86 @@ attempting a fourth, so the same mistakes aren't repeated:**
    any tuning parameters are considered validated, and low-frequency
    cases specifically need their own settling-time headroom check.**
 
-**Current state: reverted, not shipped.** The fix was reverted to the
-prior committed state (option 3's code fully removed) after finding bug
-(b) — three real, non-trivial bugs surfaced in one session of careful
-iteration is a strong signal this needs a properly time-boxed session of
-its own, not a fourth rushed attempt. A future session picking this up
-should: (1) start from design 3 (closest to working) as the base, not
-from scratch; (2) tune `jumpMaxRatio` per-frequency-region rather than one
-global constant, since 82Hz and 440Hz need materially different
-tolerances; (3) run the FULL existing `verify_highoctave_transient.py`
-suite (not a hand-picked subset) as the acceptance gate from the start of
-tuning, not as a final check after tuning feels done; (4) add a NEW
-plosive-specific CI test (a broadband-burst-mid-sustain reproduction,
-matching this session's manual DawDreamer scenario) to the permanent test
-suite so this bug class has its own regression coverage going forward,
-since none of the existing tests exercise it.
+**Current state: a bounded mitigation is shipped (`jumpGuard`); the
+underlying plosive/octave-search symptom is still open.** A follow-up
+session re-landed design 3 (`jumpGuard`, semitone-proportional ratio
+instead of a fixed one — `jumpMaxRatio = pow(2, maxSemitoneJump/12)` with
+`maxSemitoneJump=9.0`, `jumpResyncMs=25.0`) and verified it clears every
+prior blocker: `ba.time==0` snap avoids the NaN-on-cold-start bug, and the
+semitone-proportional ratio (vs. the earlier fixed 1.3x) passes the FULL
+`verify_highoctave_transient.py` battery at every one of its 10
+frequencies including the previously-failing 82Hz/164.8Hz cases, with zero
+onset/steady-state regression. Disabled-state (no voice ever gated) audio
+is bit-exact against the pre-guard DSP. A genuine 2-octave note leap
+(continuous gate hold, no retrigger) still converges within ~150-200ms,
+matching this file's existing onset-convergence behavior elsewhere — the
+guard does not permanently trap legitimate large jumps.
+
+**But `jumpGuard` alone does NOT fix the plosive reproduction case.**
+Traced `detectedFreq`'s raw per-sample output directly (bypassing the
+harmonizer/xpose chain via a debug `process` override) against the same
+15ms-broadband-burst-mid-sustained-220Hz-tone scenario: the guard's own
+`jumpResyncSamples` timer fires WHILE the tracker's internal
+`onePoleZc`/lowpass state is still corrupted by the burst, so the anchor
+gets forcibly resynced onto a still-garbage reading (traced: anchor holds
+near the pre-burst value for ~20-25ms, then snaps to 1500Hz — the ceiling
+clamp — and only recovers over the following ~100ms as the underlying
+`an.zcr` tracker itself naturally settles, independent of whether the
+guard is present at all). **This is the real finding: the raw tracker's
+OWN recovery time from a burst (~130-150ms) is the dominant factor, not
+anything the guard controls** — every jump-guard variant tried this
+session (plain resync, resync+8%-agreement-streak) converged on
+essentially the same ~130-150ms timeline, because none of them touch the
+tracker's internal state during the burst.
+
+**A fourth design — gate the SIGNAL fed into the tracker during a
+detected transient (envelope fast/slow ratio triggers a hold-last-sample
+freeze on `xHighpassed` itself, denying `an.zcr`/`onePoleZc` any new
+information during the burst) — was also tried and also rejected.**
+Same failure shape as design 1 from the entry above, one level deeper:
+tuned sensitive enough to catch the burst's onset fast enough (before
+`an.zcr`'s own ~20ms integration window had already ingested it), it also
+false-triggered on the sustained tone's own natural envelope ripple,
+including a case that froze `detectedFreq` at the `minTrackHz` floor
+(60Hz) for the ENTIRE pre-burst region — worse than doing nothing. Tuned
+loose enough to leave the clean tone alone, it missed the actual burst
+onset by several milliseconds, letting `an.zcr` ingest the corruption
+before the gate ever closed. **Lesson: a plosive's damaging content
+arrives and starts corrupting `an.zcr`'s internal state within 1-3ms of
+onset — any envelope-ratio detector reactive enough to catch that has
+essentially the same time constant as the tone's own cycle-to-cycle
+envelope ripple, so amplitude-domain detection cannot cleanly separate
+"burst onset" from "normal tone" at the reaction speed this bug needs.**
+
+**What actually needs to change for a real fix, next session**: the
+`an.zcr`/`onePoleZc` tracker itself (`trackPitchHzAndHp`,
+lines ~30-47) needs to either (a) detect non-tonal/broadband content via a
+SPECTRAL measure (e.g. a zero-crossing-RATE-of-zero-crossing-rate
+instability check, or a harmonics-to-noise ratio derived from comparing
+`fi.lowpass(N,...)`'s output energy against the unfiltered `xHighpassed`
+energy — broadband content passes much more energy through a tight
+lowpass's stopband than genuine tonal content does) rather than a
+time-domain amplitude ratio, or (b) accept that the ~130-150ms recovery
+time is the tracker's genuine physical limit at its current integration
+constants (`trackerTau=0.02`, `coarseTrackerTau=0.003`,
+`fastTrackerTau=0.0015`) and instead focus mitigation entirely on the
+OUTPUT side — e.g., extending `jumpGuard`'s bounding to also clamp
+`shiftAmount`'s glide rate specifically during a detected implausible
+window, so even if `detectedFreq` itself briefly swings wide, the audible
+pitch-shifted output glides through it slowly enough to sound like
+portamento rather than a discrete octave "search." Four designs across two
+sessions have now been tried and rejected for the input/tracker side; the
+output-side glide-rate-clamp direction (b) has not yet been attempted and
+is the recommended next angle, since it sidesteps the demonstrated
+difficulty of cleanly detecting a plosive at the raw-signal level
+entirely. A NEW plosive-specific CI test now exists
+(`test/pitch-tracker-transient/verify_plosive_transient.py`, a 15ms
+broadband-burst-mid-sustained-note reproduction across
+110/164.8/220/440Hz) — it currently FAILS against the shipped `jumpGuard`
+alone (worst-case deviation regularly exceeds 1000c during the ~100ms
+recovery window), which is the correct, honest state: the test exists to
+catch this bug class, not to be tuned into passing by loosening its gate
+until the symptom is hidden rather than fixed.
 
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 

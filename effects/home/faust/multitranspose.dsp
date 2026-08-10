@@ -59,8 +59,28 @@ with {
     correctedY = ba.if(subharmConsistent, halfY, rawY);
 };
 
+maxSemitoneJump = 9.0;
+jumpMaxRatio = pow(2.0, maxSemitoneJump / 12.0);
+jumpResyncMs = 25.0;
+jumpResyncSamples = jumpResyncMs * 0.001 * ma.SR;
+
+jumpGuard(rawFreq) = anchorOut
+with {
+    firstSample = ba.time == 0;
+    plausible(a, cand) = (cand < a * jumpMaxRatio) & (cand > a / jumpMaxRatio);
+    pairStep(anchorPrev, cntPrev) = newAnchor, newCnt
+    with {
+        forceResync = cntPrev >= jumpResyncSamples;
+        accept = firstSample | forceResync | plausible(anchorPrev, rawFreq);
+        newAnchor = ba.if(accept, rawFreq, anchorPrev);
+        newCnt = ba.if(accept, 0.0, cntPrev + 1.0);
+    };
+    pair = pairStep ~ (_, _);
+    anchorOut = pair : (_, !);
+};
+
 detectedFreq(sig) = trackPitchHzAndHp(trackerHarmonics, trackerTau, sig) : octaveCorrect
-    : max(minTrackHz) : min(maxTrackHz);
+    : max(minTrackHz) : min(maxTrackHz) : jumpGuard;
 
 winSkewMul(formant) = pow(1.2, formant * (1.0/3.0));
 
