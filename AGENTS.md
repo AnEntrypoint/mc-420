@@ -1950,6 +1950,94 @@ genuinely separate LV2-hosted plugin the way Resonode is, accepting the
 small per-plugin dispatch cost `Lv2Host` already pays elsewhere in this
 codebase in exchange for a build that actually completes.
 
+**A follow-up session under an explicit "fix it properly, not just
+mitigate" directive found and fixed a real, previously-undiscovered root
+cause of the plosive/octave-search bug, shipped a genuinely better (though
+not fully complete) fix, and hit the SAME compile-time wall a further four
+times trying to close the last gap.** Tracing `jumpGuard`'s raw pre-guard
+output sample-by-sample during the plosive reproduction (48kHz-resolution,
+not the CI battery's 5-20ms-spaced snapshots) revealed the real mechanism
+for the first time: the raw tracker doesn't jump straight to 1500Hz in one
+step, it RAMPS there smoothly over ~4-6ms (155Hz→545Hz→1113Hz→1500Hz), and
+`jumpGuard`'s `plausible(anchorPrev, rawFreq)` check only ever compares
+against the immediately-last-ACCEPTED anchor — so each individual step in
+that ramp is well within the 9-semitone plausibility window of the step
+just before it, even though the total excursion (155→1500Hz, ~62
+semitones) vastly exceeds it. The guard "walks" through a chain of locally-
+plausible steps to an extreme value. This is a genuine, previously-
+unidentified design flaw in `jumpGuard` itself, present since the very
+first version shipped, not a shortcoming of any of the eleven prior
+guard/gate designs layered on top of it — none of them could have worked
+reliably against a ramping raw signal, since all of them inherited the
+same "compare only against the last accepted value" structure.
+
+**The fix**: a SECOND, independent plausibility check against a slow-moving
+reference (`slowRef`, a plain one-pole low-pass on `rawFreq` itself,
+`slowRefTau` 20-50ms) that a fast ramp cannot walk past as easily, required
+to agree in addition to (not instead of) the existing anchor check
+(`accept = plausibleVsAnchor & plausibleVsSlowRef`, ORed with the existing
+resync/periodicity escape hatches). Verified via DawDreamer: with this fix
+alone (periodicity-confidence gate on top, `octaveCorrect` REMOVED per the
+finding below), the 1500Hz ceiling is never hit again at ANY tested
+frequency in the plosive reproduction (110/164.8/220/440Hz) — worst
+raw-tracker excursions dropped to 157-682Hz depending on frequency, a
+categorical reduction from every prior session's design, all of which
+still hit the ceiling at least some of the time.
+
+**But `octaveCorrect` could not be shipped alongside this fix — not
+because of the earlier "compile blows up" pattern in the abstract, but
+because it reproduces in the FULL FILE specifically, contradicting an
+earlier isolated-snippet test that suggested it was safe.** A minimal
+standalone snippet combining `trackPitchHzAndHp` + `octaveCorrect` + the
+slow-ref dual-plausibility guard (no periodicity at all) compiled in 78s
+in isolation — genuinely fast, seemingly proving the combination safe.
+Wiring that EXACT same code into the real `multitranspose.dsp` (with its
+`voiceOut`/`harmonySum`/`process` machinery downstream) reproduced the
+wall THREE separate times in this session alone (killed after 500s+, 480s+
+cumulative, and 300s+ respectively) — meaning isolated-snippet compile-time
+testing, while a useful early filter (it correctly predicted
+`periodicityConfidenceAt` alone was cheap, and correctly predicted the
+periodicity+octaveCorrect combination together was NOT), is not fully
+reliable evidence for `octaveCorrect` specifically once real `voiceOut`/
+`harmonySum` context is present. **Do not trust an isolated `octaveCorrect`
+compile-time result again without also testing in the full file before
+concluding a design is safe to ship.**
+
+**Consequence, honestly disclosed**: `octaveCorrect` had to be dropped
+entirely from the shipped fix. Its removal is a real, measured regression
+at HIGH frequencies specifically (440-1318.5Hz steady-state worst-case
+23.5-31.2 cents, over the existing CI battery's 20c gate; LOW/MID
+frequencies 82-220Hz remain clean, matching or improving on the prior
+`jumpGuard`-only baseline). This was confirmed via a direct A/B against
+the pre-session baseline at 880Hz (baseline: 0.4c steady-state, this fix:
+31.2c) — a genuine regression this change introduces, not a pre-existing
+gap. The underlying mechanism is NOT an octave-halving artifact (which
+would read ~1200c) — the settling curve (-300c at 10ms, sweeping through
++130c at 75ms, settling to +30c by 150ms) is a slow fine-convergence lag
+that `octaveCorrect`'s subharmonic-consistency check was evidently also
+correcting as a side effect, not just its documented octave-slide role.
+
+**Current shipped state**: `jumpGuard` (slow-ref dual-plausibility +
+periodicity-confidence-gated resync, NO `octaveCorrect`), compiling
+reliably at 60-82s. This is a genuine improvement over every prior
+session's design on the specific catastrophic failure mode (the 1500Hz
+ceiling hit), at the cost of a real, disclosed, high-frequency
+steady-state regression that the pre-session `jumpGuard`-only baseline did
+not have. **Neither state is unconditionally better — this is a real
+trade-off, not a strict improvement**: the new fix is measurably better on
+the plosive-burst symptom (which is what this and the prior session's user
+reports were about) and measurably worse on ordinary high-note onset
+settling (which the project's own existing, longer-standing CI battery
+guards). A future session should treat re-deriving `octaveCorrect`'s
+functionality (perhaps as a much cheaper, non-`an.zcr`-based integer-ratio
+check against `slowRef`, which is already computed and free) as the
+concrete, well-specified next step to recover the lost high-frequency
+accuracy without reintroducing the compile-time wall — this is a narrower,
+more tractable problem than the "genuinely separate compilation unit"
+recommendation above, since the slow reference this fix already carries
+may be sufficient ground truth for a cheap octave check without a second
+`an.zcr` call at all.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
