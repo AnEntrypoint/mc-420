@@ -46,22 +46,17 @@ with {
     };
 };
 
-periodicityMaxDelay = 1024;
-periodicityEnergyTau = 0.006;
-periodicityConfThresh = 0.75;
-periodicityEpsilon = 1e-6;
-periodicityStreakSamples = 240;
-slowRefTau = 0.02;
+subharmCheckTau = 0.02;
+subharmConsistentTolRatio = 0.15;
 
-periodicityConfidenceAt(freqHz, x) = confidence
+octaveCorrect(rawY, xHighpassed) = correctedY
 with {
-    lagSamples = (ma.SR / max(minTrackHz, freqHz)) : min(periodicityMaxDelay - 1) : max(1.0);
-    delayed = x : de.fdelay(periodicityMaxDelay, lagSamples);
-    xEnergy = (x : ^(2.0)) : si.smooth(ba.tau2pole(periodicityEnergyTau));
-    delayedEnergy = (delayed : ^(2.0)) : si.smooth(ba.tau2pole(periodicityEnergyTau));
-    crossCorr = (x * delayed) : si.smooth(ba.tau2pole(periodicityEnergyTau));
-    denom = sqrt(max(periodicityEpsilon, xEnergy * delayedEnergy));
-    confidence = crossCorr / denom;
+    halfYRaw = rawY * 0.5;
+    halfYReachable = halfYRaw >= minTrackHz;
+    halfY = max(minTrackHz, halfYRaw);
+    subZcr = an.zcr(subharmCheckTau, fi.lowpass(trackerHarmonics, halfY, xHighpassed)) * ma.SR * .5;
+    subharmConsistent = halfYReachable & (abs(subZcr - halfY) < (halfY * subharmConsistentTolRatio));
+    correctedY = ba.if(subharmConsistent, halfY, rawY);
 };
 
 maxSemitoneJump = 9.0;
@@ -69,38 +64,23 @@ jumpMaxRatio = pow(2.0, maxSemitoneJump / 12.0);
 jumpResyncMs = 25.0;
 jumpResyncSamples = jumpResyncMs * 0.001 * ma.SR;
 
-detectedFreq(sig) = trackedHz
+jumpGuard(rawFreq) = anchorOut
 with {
-    trackOut = trackPitchHzAndHp(trackerHarmonics, trackerTau, sig);
-    rawFreq = trackOut : (_, !) : max(minTrackHz) : min(maxTrackHz);
-    xHp = trackOut : (!, _);
-
     firstSample = ba.time == 0;
     plausible(a, cand) = (cand < a * jumpMaxRatio) & (cand > a / jumpMaxRatio);
-    conf = periodicityConfidenceAt(rawFreq, xHp);
-    confOk = conf > periodicityConfThresh;
-    streakStep(prev) = ba.if(confOk, min(periodicityStreakSamples, prev + 1.0), 0.0);
-    streak = streakStep ~ _;
-    candPeriodic = streak >= periodicityStreakSamples;
-
-    slowRefStep(prev) = ba.if(firstSample, rawFreq, rawFreq * (1.0 - pole) + prev * pole)
-    with {
-        pole = ba.tau2pole(slowRefTau);
-    };
-    slowRef = slowRefStep ~ _;
-
     pairStep(anchorPrev, cntPrev) = newAnchor, newCnt
     with {
         forceResync = cntPrev >= jumpResyncSamples;
-        plausibleVsAnchor = plausible(anchorPrev, rawFreq);
-        plausibleVsSlowRef = plausible(slowRef, rawFreq);
-        accept = firstSample | (plausibleVsAnchor & plausibleVsSlowRef) | (forceResync & candPeriodic);
+        accept = firstSample | forceResync | plausible(anchorPrev, rawFreq);
         newAnchor = ba.if(accept, rawFreq, anchorPrev);
         newCnt = ba.if(accept, 0.0, cntPrev + 1.0);
     };
     pair = pairStep ~ (_, _);
-    trackedHz = pair : (_, !);
+    anchorOut = pair : (_, !);
 };
+
+detectedFreq(sig) = trackPitchHzAndHp(trackerHarmonics, trackerTau, sig) : octaveCorrect
+    : max(minTrackHz) : min(maxTrackHz) : jumpGuard;
 
 winSkewMul(formant) = pow(1.2, formant * (1.0/3.0));
 
