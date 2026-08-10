@@ -19,8 +19,8 @@ coarseTrackerTau = 0.003;
 fastTrackerTau = 0.0015;
 minFloorCoeffHz = 60.0;
 
-onsetFlatHoldMs = 35.0;
-onsetReleaseMs = 20.0;
+onsetFlatHoldMs = 110.0;
+onsetReleaseMs = 60.0;
 onsetFlatHoldSamples = onsetFlatHoldMs * 0.001 * ma.SR;
 onsetReleaseSamples = onsetReleaseMs * 0.001 * ma.SR;
 onsetTotalSamples = onsetFlatHoldSamples + onsetReleaseSamples;
