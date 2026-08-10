@@ -445,7 +445,7 @@ jobs:
         run: |
           set -e
           FAUSTLIB=$(dirname "$(ls -f /usr/share/faust/lv2ui.cpp /usr/local/share/faust/lv2ui.cpp 2>/dev/null | tail -1)")
-          cd effects/home/faust
+          cd effects/pitchtracker-src
           CLSNAME=pitchtracker
           WORK=/tmp/lv2work
           mkdir -p "$WORK/$CLSNAME.lv2"
