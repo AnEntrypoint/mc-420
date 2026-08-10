@@ -1768,6 +1768,77 @@ recovery window), which is the correct, honest state: the test exists to
 catch this bug class, not to be tuned into passing by loosening its gate
 until the symptom is hidden rather than fixed.
 
+**Six designs tried and rejected across two sessions — do not re-attempt any
+of these without new evidence.** A follow-up session, explicitly instructed
+to land a complete fix rather than a bounded mitigation, tried three more
+designs beyond the four documented above:
+
+5. **Adaptive-tau `an.zcr`** (the ZC counter's own smoothing pole widens —
+   trusts new samples less — whenever a fresh reading disagrees with the
+   counter's own recent output by more than a fixed ratio). Compiles fast
+   (~45s) and does suppress the worst spikes (peak 812Hz vs the unguarded
+   1500Hz ceiling on the 164.8Hz plosive repro), but the outlier check
+   compares each new reading only against the counter's OWN drifting
+   output — a self-referential loop with no independent ground truth — and
+   this measurably introduces NEW oscillation not present in the unguarded
+   signal (a 220Hz case swung +380c then -581c in adjacent measurement
+   windows, worse instability than doing nothing). **Lesson: any outlier
+   detector whose reference is derived from the same signal it is judging
+   can chase its own tail; it needs an INDEPENDENT reference, not a
+   smoothed copy of itself.**
+
+6. **Cross-validated `jumpGuard`** (a genuinely independent slow reference
+   tracker or a one-shot self-consistency `an.zcr` check, gating whether a
+   forced resync is trusted). This directly addresses lesson 5's gap — an
+   independent reference — and was tried in three shapes: a fully
+   self-contained slow adaptive tracker (`slowRefZcr`, its own `~`
+   recursion), a fixed-tau `onePoleZc` reference (reusing the existing
+   non-recursive-call-site helper), and a one-shot self-consistency check
+   reusing `octaveCorrect`'s own already-proven-cheap non-recursive
+   `an.zcr`-at-a-candidate-cutoff pattern. **All three compile
+   pathologically slowly or hang outright** when wired into the real
+   `detectedFreq` chain: 99.7s, 147.6s (confirmed complete, not a timeout
+   artifact — this is the file's genuine compile time with that change),
+   and a third variant that exceeded 480s cumulative and had to be
+   force-killed (exit 137) without ever finishing. This reproduces even in
+   a MINIMAL isolated snippet containing only `trackPitchHzAndHp` +
+   `octaveCorrect` + the new cross-validated `jumpGuard` — ruling out any
+   interaction with the rest of the file (`voiceOut`/`harmonySum`/etc.) as
+   the cause. **Lesson: this file's existing recursive signal graph
+   (`onePoleZc`×2 inside `trackPitchHzAndHp`, `octaveCorrect`'s subharmonic
+   check, `jumpGuard`'s own anchor recursion) is already near Faust's
+   practical compile-time ceiling for the project's shipped flags
+   (`-vec -fun -dfs -vs 32 -nvi -ct 0`) — ANY further signal reference that
+   crosses between `octaveCorrect`'s and `jumpGuard`'s existing recursive
+   structures, even a single non-recursive `an.zcr` call reusing an
+   already-proven-cheap pattern, risks combinatorial compile-time blowup.
+   This is NOT the same failure mode as the historical `ef.transpose`/
+   `xposeMaxDelay` buffer-oversizing lessons (a memory-cost issue) or the
+   `pitch.dsp`/`ffunction` JIT-linking issue (a feature-support issue) —
+   it is a genuinely new failure class for this codebase: compile-time
+   itself, not runtime behavior or buffer size, is the binding constraint
+   on any further change to `detectedFreq`'s recursive structure.**
+
+**Current honest state, unchanged from before this session's further
+attempts**: the shipped `jumpGuard` (bounded mitigation, verified safe,
+fast-compiling) remains the best available fix. A real elimination of the
+plosive/octave-search symptom needs either (a) a structurally DIFFERENT
+pitch-tracking algorithm for this stage (e.g. autocorrelation-based,
+inherently more robust to broadband noise than zero-crossing counting,
+but a much larger rewrite than any change attempted so far — no autocorrelation
+design has been attempted yet, only variations on zero-crossing-plus-guard),
+or (b) restructuring `trackPitchHzAndHp`/`octaveCorrect`/`jumpGuard`'s
+whole shared signal graph from scratch with compile-time as an explicit,
+continuously-checked constraint from the very first draft (checking
+compile time after EVERY incremental addition, not after the design is
+otherwise complete) rather than an afterthought — six iterations of
+"add one more cross-reference and see" have each cost real session time to
+discover the same class of wall. Option (a) is the more promising direction
+for a future session with a larger time budget; do not re-attempt option
+(b)'s incremental-cross-reference pattern against the CURRENT signal graph
+shape without first checking compile time on the very first, smallest
+possible addition.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
