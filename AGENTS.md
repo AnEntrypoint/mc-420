@@ -1330,9 +1330,11 @@ trade for a keybed-driven instrument where a MIDI gate edge is normally a
 faithful proxy for "a new note was just struck."
 
 `onsetUntrust` snaps to full untrust (1.0) on the gate's `0->1` edge, holds
-flat for `onsetFlatHoldMs=35`, then releases linearly to 0 over
-`onsetReleaseMs=20` (single continuous expression, no separate smoother
-needed for the release ramp itself).
+flat for `onsetFlatHoldMs` (currently 110, was 35 at this mechanism's first
+shipped version — see "onsetUntrust's window must cover the tracker's real
+convergence time" below for why it grew), then releases linearly to 0 over
+`onsetReleaseMs` (currently 60, was 20; single continuous expression, no
+separate smoother needed for the release ramp itself).
 
 **The first shipped version of this fix blended `effDetNote` toward
 `targetNote` while untrust was nonzero — WITNESSED, by direct user report
@@ -1546,6 +1548,58 @@ tracing of the main loop's `y` trajectory during STEADY STATE (not just
 onset) to distinguish genuine `an.zcr` zero-crossing measurement noise
 (possibly irreducible at this frequency given the harmonic content) from a
 fixable instability, before proposing a fix shape.
+
+## `onsetUntrust`'s window must cover the tracker's real convergence time, not an arbitrary short guess
+
+WITNESSED by direct user report the session immediately after both the
+octave-swap fix and its floor-clamp fix shipped: "twitch is gone but we
+lost proper pitch locking." Neither of those two fixes had actually
+touched this — DawDreamer A/B against three consecutive commits
+(pre-octaveCorrect, octaveCorrect-only, floor-clamp-fixed) produced
+IDENTICAL results for a full voice-lock test: a note-on locking a
+harmonically-rich 220Hz input to a real target note showed the wet output
+338-350 cents off target at 80-100ms post-onset, only converging to within
+a few cents by ~250-300ms. Even a PURE SINE input showed the same shape
+(125-338 cents off at 80-100ms). This was a real, longstanding gap that
+the octave-swap symptom (loud, obviously wrong, permanent) had been
+masking — once that symptom was fixed, this quieter-but-still-broken
+mid-convergence mistracking became the dominant audible defect instead.
+
+**Root cause**: `onsetUntrust`'s hold+release window
+(`onsetFlatHoldMs=35 + onsetReleaseMs=20 = 55ms` at the time) is shorter
+than `trackPitchHz`'s real convergence time on realistic input — measured
+via `detectedFreq` directly: a pure 220Hz sine only settles to within a
+few percent by ~90-100ms, fully stable by ~150ms. Once `untrust` releases
+at 55ms, the raw, still-converging `detNote` takes over `effDetNote`, and
+the voice audibly locks to whatever wrong intermediate reading the tracker
+happened to be at — for the ~100-150ms gap between 55ms (window closes)
+and ~150-200ms (tracker actually settles).
+
+**Fix**: widened the window to `onsetFlatHoldMs=110`, `onsetReleaseMs=60`
+(~170ms total) — comfortably past the measured ~150ms real settling time,
+with margin. Verified via DawDreamer: the wrong-pitch window during
+55-200ms is gone (the fallback stays held through it now), convergence by
+250-300ms is unchanged, and the full existing 10-frequency onset-transient
+CI suite (`verify_highoctave_transient.py`) still passes cleanly at every
+frequency (worst onset 354.8c against the 600c gate, worst steady-state
+8.9c against the 20c gate — both comparable to or better than the
+pre-widening baseline). A rapid melodic retrigger scenario (three notes
+180-200ms apart, warm tracker/lock context) confirmed the wider window
+does not make legitimate fast playing feel sluggish — warm retriggers
+still lock within -16 to -40 cents by 30ms post-onset, same as before.
+Disabled state stays bit-exact silent.
+
+**Lesson for this mechanism generally**: `onsetUntrust`'s window length is
+not a free-standing tuning knob picked by feel — it must be re-validated
+against the underlying tracker's ACTUAL measured convergence time
+(via `detectedFreq` in isolation, not just the voice-level lock behavior)
+every time either changes. A window shorter than real convergence
+reintroduces exactly this bug (audible wrong-pitch during release); a
+window much longer than necessary would make legitimate onsets feel
+sluggish. 170ms was chosen from a real measurement with margin, not
+guessed — any future adjustment to `trackerTau`/`coarseTrackerTau`/
+`fastTrackerTau` (the tracker's own convergence speed) should re-measure
+`detectedFreq`'s real settling time and re-derive this window from it.
 
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
