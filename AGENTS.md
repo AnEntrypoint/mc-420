@@ -1601,6 +1601,108 @@ guessed — any future adjustment to `trackerTau`/`coarseTrackerTau`/
 `fastTrackerTau` (the tracker's own convergence speed) should re-measure
 `detectedFreq`'s real settling time and re-derive this window from it.
 
+## Open, reproduced-but-unfixed: plosives/transients mid-sustained-note cause octave search
+
+WITNESSED by direct user report ("pitch lock is searching octaves as the
+input voice changes and gives plosives and transients") — a genuinely
+different bug class from every onset-timing fix above. `onsetUntrust`/
+`heldDetNote` only protect the window right after a MIDI note-on (gate
+rising edge); a plosive consonant (p/t/k) or other transient interrupting
+an ALREADY-HELD sustained note gets zero protection, since the gate never
+changes. Reproduced via DawDreamer: a 15ms broadband noise burst injected
+mid-note into a sustained 220Hz harmonic-rich tone (no gate change) sends
+`detectedFreq` swinging through 1500Hz (the ceiling clamp) → 1312Hz →
+608Hz → 181Hz → 278Hz before recovering to ~220Hz by ~130ms after the
+burst — a real, audible "octave search" with no gate/onset event to hang
+a fix on.
+
+**Three fix designs were tried and rejected this session — read before
+attempting a fourth, so the same mistakes aren't repeated:**
+
+1. **Amplitude-envelope-ratio transient detector** (fast/slow envelope
+   pair on `xHighpassed`, threshold ratio triggering a hold). Two failure
+   modes depending on tuning: a fast-tau/low-threshold version (2ms/1.5x)
+   false-triggered constantly on a completely CLEAN sustained tone (up to
+   7% of render time flagged as "transient" with no plosive present at
+   all) — a 2ms envelope tracks the tone's own within-cycle harmonic
+   beating, not genuine transients. Tuned tighter (15ms/2.8x) to reach
+   ZERO false positives across 82-440Hz clean tones, but then FAILED TO
+   DETECT the actual reproduction plosive at all — the synthetic burst
+   (0.7 peak added to an already-normalized 0.5-peak tone) isn't
+   dramatically louder than the tone itself, even though it clearly
+   corrupts `an.zcr`. **Lesson: amplitude/loudness ratio cannot reliably
+   distinguish "broadband/non-tonal content that will confuse
+   zero-crossing counting" from "a genuinely loud tonal passage" — a
+   plosive's damage comes from its spectral content, not necessarily its
+   relative loudness.**
+
+2. **Simple ratio-jump hold** (freeze `detectedFreq` at its last value
+   whenever a new reading exceeds a plausibility ratio from that value,
+   with a zero-init bootstrap check `prev<=0`). Got permanently stuck at
+   the tracker's own cold-start floor value (60Hz) forever, because
+   `detectedFreq` internally clamps to `minTrackHz` before this stage ever
+   sees it — the guard's own "not yet initialized" sentinel (`prev<=0`)
+   can never fire again once the internal clamp has already produced a
+   nonzero (but wrong, floor) value on sample 0. Adding `ba.time==0` as
+   the init check hit the identical wall, since `rawFreq` is ALREADY 60Hz
+   at true sample 0 (the eventual ~220Hz settled value doesn't exist
+   yet). **Lesson: any "hold last good value" guard downstream of a
+   stage that has its OWN internal clamp/floor needs to account for that
+   floor being a real value the guard will see and potentially lock onto
+   permanently — a single zero-init check is not sufficient when the
+   upstream stage's own bootstrap value is nonzero.**
+
+3. **Resync-after-sustained-mismatch** (anchor+counter recursion via
+   `pairStep ~ (_,_)`: accept a new reading if it's within a plausibility
+   ratio of the current anchor, OR if the anchor has been implausible for
+   a sustained window — treating a brief mismatch as a transient and a
+   persistent one as a genuine new note). This was the closest to
+   working: verified via DawDreamer to eliminate the worst spikes on the
+   plosive reproduction (1500Hz/876Hz/608Hz/181Hz → bounded 370Hz/516Hz),
+   with zero regression across a 16-note full sweep and the genuine
+   octave-leap case, at `jumpMaxRatio=1.3`/`resyncMs=45`. But real testing
+   against this project's OWN existing CI suite
+   (`verify_highoctave_transient.py`) surfaced two further bugs before it
+   could ship: (a) the `~ (_,_)` two-wire recursion zero-initializes both
+   wires, so `anchorOut=0.0` on the true first sample before any real
+   value is accepted — `ba.hz2midikey(0)` computes `12*log2(0)+69 =
+   -Infinity`, which poisons `shiftAmount` and then `xpose()`'s delay-line
+   indexing math, producing **NaN that propagates permanently through the
+   whole render** once introduced (caught only because the CI test
+   exercises a genuine cold-start scenario with no pre-existing settled
+   reading — a case the session's own manual reproduction tests never
+   happened to hit). Fixed with `firstSample = ba.time==0` snapping
+   immediately on the true first sample (matching this file's own
+   `heldDetNote`/`freqGlide`-style convention elsewhere). (b) Even after
+   that fix, 82Hz still FAILED the CI gate's steady-state check (72.8
+   cents at t>=150ms, limit 20c) while 440Hz passed cleanly — low
+   frequencies' own slower/noisier natural convergence produces
+   legitimate small settling steps that repeatedly exceed the
+   plausibility ratio, triggering spurious resyncs that delay final
+   settling past the measurement window. **Lesson: a jump-guard tuned
+   only against a single plosive reproduction and a note-sweep's FINAL
+   settled value is not sufficient verification — it must also be run
+   against this project's own existing onset-transient CI suite (which
+   checks the FULL convergence trajectory, not just the endpoint) before
+   any tuning parameters are considered validated, and low-frequency
+   cases specifically need their own settling-time headroom check.**
+
+**Current state: reverted, not shipped.** The fix was reverted to the
+prior committed state (option 3's code fully removed) after finding bug
+(b) — three real, non-trivial bugs surfaced in one session of careful
+iteration is a strong signal this needs a properly time-boxed session of
+its own, not a fourth rushed attempt. A future session picking this up
+should: (1) start from design 3 (closest to working) as the base, not
+from scratch; (2) tune `jumpMaxRatio` per-frequency-region rather than one
+global constant, since 82Hz and 440Hz need materially different
+tolerances; (3) run the FULL existing `verify_highoctave_transient.py`
+suite (not a hand-picked subset) as the acceptance gate from the start of
+tuning, not as a final check after tuning feels done; (4) add a NEW
+plosive-specific CI test (a broadband-burst-mid-sustain reproduction,
+matching this session's manual DawDreamer scenario) to the permanent test
+suite so this bug class has its own regression coverage going forward,
+since none of the existing tests exercise it.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
