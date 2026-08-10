@@ -2213,6 +2213,138 @@ battery in addition to the already-documented compile-time risk — both need
 checking, every time, against the full existing CI battery, not a narrower
 symptom-specific test alone.
 
+**A follow-up session built the recommended autocorrelation tracker, fully
+isolated, verified it structurally solves the plosive symptom, and STILL hit
+the compile-time wall on integration — this is the single most important
+finding in this whole investigation and changes the recommended path from
+"try a different algorithm" to "this file cannot host any further tracker
+complexity; only a separate compilation unit will work."**
+
+**The isolated tracker itself is real and works.** Built from scratch as a
+normalized-autocorrelation pitch detector (`corrAtLag`: `(x @ lag) * x`
+smoothed over a 10ms energy-normalized window; genuinely different signal
+processing from `an.zcr`'s zero-crossing counting, since broadband noise
+decorrelates with itself at any nonzero lag while a real periodic tone stays
+strongly correlated at its own period — the structural property this whole
+approach exists to exploit). Two real, non-obvious bugs were found and fixed
+during standalone development, each worth remembering for any future
+autocorrelation work in Faust:
+
+1. **Short-lag self-similarity leak.** A naive top-down (highest-frequency-
+   candidate-first) threshold scan picks the SHORTEST candidate lag whose
+   correlation clears threshold — but at very short lags (near
+   `maxTrackHz`'s ~32-sample lag), almost ANY signal with low-frequency
+   content shows spuriously high self-correlation (measured 82Hz's true
+   correlation at a 1500Hz-lag candidate: +0.970, comfortably above a 0.85
+   threshold), because a slowly-varying signal trivially resembles a
+   slightly-shifted copy of itself over a short enough window. This produced
+   a categorical failure (82Hz picked 1500Hz, +5032 cents) structurally
+   identical in symptom to the zero-crossing tracker's own octave-search
+   bug, despite a completely different root mechanism.
+2. **Subharmonic ambiguity in the opposite direction.** Fixing (1) by
+   searching bottom-up (longest-lag-first) instead swapped the failure mode:
+   a pure sine correlates near-perfectly at EVERY integer multiple of its
+   true period (measured at 440Hz: correlation ≈+1.0 at 440Hz, 220Hz, AND
+   110Hz candidates simultaneously), so longest-lag-first picks the lowest
+   subharmonic that clears threshold, not the true fundamental (440Hz
+   test case picked 110Hz, -2400 cents). **The fix for both is the standard
+   local-maximum requirement**: a candidate must clear the threshold AND be
+   `>=` both its immediate shorter-lag and longer-lag neighbors
+   (`isPeak(cLo,cMid,cHi)`) — a genuine fundamental is a true local peak in
+   the correlation-vs-lag curve; its harmonics and subharmonics are not,
+   EXCEPT at the very top of the candidate range, where the topmost
+   candidate has no shorter-lag neighbor to bound it and remains vulnerable
+   to bug (1) even with the local-max test (a genuinely monotonic decline
+   from a short-lag artifact can still look like "greater than its only
+   neighbor"). Fix: exclude the top 1-2 candidates from ever being directly
+   selectable — real playable content essentially never needs the FIRST
+   valid correlation hit to land there, and this closes the failure surface
+   entirely without weakening the local-max test elsewhere.
+
+**Verified, in total isolation** (a standalone scratch `.dsp`, never touching
+`multitranspose.dsp`): a 37-candidate grid (60Hz to 1350Hz, geometric-mean-
+spaced, doubled from an initial working 19-candidate version) plus a 1-sample
+3-point parabolic refinement (`refinedLag = L0 + 0.5*(cLo-cHi)/(cLo-2*cMid+cHi)`,
+clamped to ±0.5 samples and clamped lag bounds to keep Faust's static interval
+analysis happy — an unclamped variable-lag `@` operator fails to compile with
+"possible negative values" even when mathematically always non-negative, since
+Faust's interval analyzer can't prove it from a runtime-computed lag) compiled
+standalone in ~24.5s and produced, across all 10 of the project's own CI-battery
+frequencies (82–1318.5Hz): zero octave-scale errors anywhere, worst-case
+residual -89.7 cents (82Hz) and +53.1 cents (196Hz), most frequencies within
+±10 cents. **Critically, the plosive-burst reproduction (this whole
+investigation's actual target symptom) showed a categorically different and
+better failure mode than the zero-crossing tracker ever did**: during the 15ms
+broadband burst, EVERY tested frequency (110/164.8/220/440Hz) dropped cleanly
+to the `minTrackHz` floor (60Hz) — no correlation candidate clears threshold
+against noise, which is the CORRECT, safe behavior — then recovered to the
+EXACT correct target frequency within 15-25ms of the burst ending, with ZERO
+residual drift or octave-search wandering. Compare to the zero-crossing
+tracker's own documented behavior on the identical reproduction: an unbounded
+swing through 181→608→876→1500Hz territory, ~130-150ms to recover, with
+measurable residual drift even after recovery. This is not another bounded
+mitigation — it is a structurally different failure mode that happens to be
+safe by construction (no correlation peak during noise means no confident
+wrong answer, only an honest "don't know" that resolves the instant clean
+signal returns).
+
+**Wiring this proven design into the real `multitranspose.dsp` (replacing
+`trackPitchHzAndHp`/`octaveCorrect`/`jumpGuard` entirely, keeping
+`voiceOut`/`harmonySum`/`onsetUntrust`/`process` untouched) reproduced the
+exact same compile-time wall this file's history has now documented for
+gating-based designs eleven-plus times.** The identical DSP logic that
+compiled in 24.5s standalone took over 129s of CPU time and 9+ minutes of
+wall-clock time once integrated, still climbing with no sign of finishing
+when killed — the same signature (steady CPU accumulation, no output, far
+past any isolated-snippet baseline) as every previously-documented wall
+instance. This was killed and reverted rather than let run indefinitely,
+matching this file's own established practice.
+
+**This is the decisive piece of evidence the investigation was missing.**
+Every prior compile-time-wall entry involved variations on the SAME
+zero-crossing-based signal graph (`onePoleZc`, `octaveCorrect`'s subharmonic
+check, `jumpGuard`'s anchor recursion), leaving open the possibility that the
+wall was specific to THAT signal graph's particular recursive structure
+rather than something structural to the file as a whole. A completely
+different tracker — no `an.zcr`, no `onePoleZc`, no shared recursive state
+with the old design at all, built from `@` (delay), multiplication, and a
+one-pole smoother — hitting the SAME wall in the SAME integration context
+(present only once `voiceOut`/`harmonySum`/`process`'s full 6-voice
+machinery is compiled alongside it, absent in total isolation) is strong
+evidence the wall is a property of THIS FILE's combined complexity budget,
+not of any one tracking algorithm. **AGENTS.md's own prior guidance — "a
+separate compilation unit is the more promising direction" — should now be
+treated as the ONLY viable direction, not merely the preferred one.** The
+existing `resonode.lv2` precedent (see "Resonode is a separate,
+conditionally-called LV2 bundle" above, pulled out of the always-on Core-1
+Faust program for an analogous reason: RT-budget cost there, compile-time
+budget here) is the concrete template: a genuinely separate `.dsp` file
+compiled into its own LV2 bundle, hosted via `Lv2Host` the same way
+`resonode.lv2`/`guitar_lofi_fx.lv2` already are, with `multitranspose.dsp`
+reduced to receiving the detected frequency as a plain audio-rate signal
+input (or an LV2 control-port-style value, matching how Resonode's own
+per-voice note/gate/vel became control ports rather than in-Faust signal
+computation) rather than computing pitch detection in-process at all. This
+avoids the compile-time budget entirely, at the cost of the small per-plugin
+`Lv2Host::process()` dispatch overhead this codebase already pays elsewhere
+without issue.
+
+**The working isolated tracker's exact source (37-candidate `pickFundamental`
++ `refineFreq` parabolic interpolation, as verified above) is checked into
+`test/pitch-tracker-transient/autocorr_tracker_reference.dsp`** — a real,
+compilable, standalone Faust file (never `import`ed by anything else in the
+tree, so it carries zero build/runtime cost as-is) preserving the exact
+verified design so the next session doesn't need to reconstruct it from this
+prose. It is the concrete starting point for whoever builds the LV2 bundle
+next — it does not need to be redesigned, only re-hosted as a separate
+compilation unit (its own `.dsp` in `effects/home/faust/` or similar,
+compiled by `build-lv2.yml` the same way `resonode_synth.dsp` already is,
+with `multitranspose.dsp` reduced to consuming its output as a plain signal
+input the way `effects_runtime.dsp` already consumes `resonodeIn`). No code
+from this attempt is currently shipped in `multitranspose.dsp` itself; that
+file is reverted to `71c8122` (confirmed zero git diff) and remains at the
+`jumpGuard`-only baseline with the plosive symptom still open.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
