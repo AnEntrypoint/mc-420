@@ -144,6 +144,7 @@ aloop::AudioConfig loadConfig(const char* path) {
         else if (sscanf(line, " home_dir = %199s", s) == 1) cfg.homeDir = s;
         else if (sscanf(line, " user_dir = %199s", s) == 1) cfg.userDir = s;
         else if (sscanf(line, " resonode_dir = %199s", s) == 1) cfg.resonodeDir = s;
+        else if (sscanf(line, " pitchtracker_dir = %199s", s) == 1) cfg.pitchTrackerDir = s;
         // DIAGNOSTIC ONLY, see AudioConfig::disableCore3Lv2's own comment --
         // skips both homeFx/userFx.process() every block entirely, to
         // isolate the live ~1Hz stall investigation without a rebuild.

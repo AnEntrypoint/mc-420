@@ -210,7 +210,8 @@ static void* worker(void*) {
         xposeGateBuf[v].assign((size_t)N, 0.0f);
     }
     std::vector<float> resonodeInBuf((size_t)N, 0.0f);
-    float* fins[21] = {
+    std::vector<float> pitchTrackerBuf((size_t)N, 0.0f);
+    float* fins[22] = {
         fin.data(), prevFiltOut.data(), clearBuf.data(), speedBuf.data(), masterPhaseBuf.data(), masterLenBuf.data(), sidechainEnvBuf.data(),
         freeXposeBuf.data(),
         xposeNoteBuf[0].data(), xposeGateBuf[0].data(),
@@ -220,6 +221,7 @@ static void* worker(void*) {
         xposeNoteBuf[4].data(), xposeGateBuf[4].data(),
         xposeNoteBuf[5].data(), xposeGateBuf[5].data(),
         resonodeInBuf.data(),
+        pitchTrackerBuf.data(),
     };
     int sidechainSrcSlot[AudioThread::Telemetry::kLoopers];
     for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) sidechainSrcSlot[lp] = -1;
@@ -289,6 +291,10 @@ static void* worker(void*) {
     Lv2Host resonodeFx;
     resonodeFx.loadDir(g_cfg.resonodeDir, g_cfg.homeFxCore);
     resonodeFx.connect(N, ch);
+
+    Lv2Host pitchTrackerFx;
+    pitchTrackerFx.loadDir(g_cfg.pitchTrackerDir, g_cfg.homeFxCore);
+    pitchTrackerFx.connect(N, ch);
 
     UsbRecorder usbRecorder(g_cfg.usbMountPoint, g_cfg.sampleRate, g_cfg.usbChunkMinutes, g_cfg.usbChunkCount);
     if (g_cfg.usbRecordEnabled) g_usbRecorder = &usbRecorder;
@@ -686,6 +692,12 @@ static void* worker(void*) {
                 resonodeFx.process(resonodeInBuf.data(), N);
             } else {
                 std::fill(resonodeInBuf.begin(), resonodeInBuf.end(), 0.0f);
+            }
+            if (pitchTrackerFx.hasPlugins()) {
+                std::copy(fin.begin(), fin.end(), pitchTrackerBuf.begin());
+                pitchTrackerFx.process(pitchTrackerBuf.data(), N);
+            } else {
+                std::fill(pitchTrackerBuf.begin(), pitchTrackerBuf.end(), 60.0f);
             }
             faustHome.compute(N, fins, fouts);
             prevLoopSum = rawLoopSum;

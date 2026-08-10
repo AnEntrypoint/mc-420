@@ -107,7 +107,7 @@ boot_tree_apkovl() {
   _work="$1"; _boot="$2"
   OVL="$_work/ovl"
   mkdir -p "$OVL/etc/local.d" "$OVL/etc/runlevels/boot" "$OVL/etc/runlevels/default" \
-           "$OVL/etc/init.d" "$OVL/opt/aloop" "$OVL/effects/home" "$OVL/effects/user" "$OVL/effects/resonode"
+           "$OVL/etc/init.d" "$OVL/opt/aloop" "$OVL/effects/home" "$OVL/effects/user" "$OVL/effects/resonode" "$OVL/effects/pitchtracker"
 
   touch "$OVL/etc/.default_boot_services"
 
@@ -157,7 +157,7 @@ boot_tree_apkovl() {
     echo "[boot-tree] WARNING: no ALOOP_BIN — boot tree has no aloop binary"
   fi
   if [ -n "${LV2_DIR:-}" ] && [ -d "${LV2_DIR}" ]; then
-    find "${LV2_DIR}" -maxdepth 2 -name '*.lv2' ! -name 'aloop.lv2' ! -name 'resonode.lv2' -exec cp -r {} "$OVL/effects/home/" \;
+    find "${LV2_DIR}" -maxdepth 2 -name '*.lv2' ! -name 'aloop.lv2' ! -name 'resonode.lv2' ! -name 'pitchtracker.lv2' -exec cp -r {} "$OVL/effects/home/" \;
     echo "[boot-tree] laid in home-FX LV2: $(ls "$OVL/effects/home")"
   else
     echo "[boot-tree] WARNING: no LV2_DIR — boot tree has no home-FX effects bundle"
@@ -167,6 +167,12 @@ boot_tree_apkovl() {
     echo "[boot-tree] laid in Resonode LV2: $(ls "$OVL/effects/resonode")"
   else
     echo "[boot-tree] WARNING: no RESONODE_LV2_DIR — boot tree has no Resonode bundle, fx/resonode/engaged will be a silent no-op"
+  fi
+  if [ -n "${PITCHTRACKER_LV2_DIR:-}" ] && [ -d "${PITCHTRACKER_LV2_DIR}" ]; then
+    find "${PITCHTRACKER_LV2_DIR}" -maxdepth 2 -name 'pitchtracker.lv2' -exec cp -r {} "$OVL/effects/pitchtracker/" \;
+    echo "[boot-tree] laid in PitchTracker LV2: $(ls "$OVL/effects/pitchtracker")"
+  else
+    echo "[boot-tree] WARNING: no PITCHTRACKER_LV2_DIR — boot tree has no PitchTracker bundle, multitranspose.dsp's pitch-lock will silently read the tracker's compiled-in default (silence/floor) forever"
   fi
 
   cat > "$OVL/etc/init.d/aloop" <<'SVC'

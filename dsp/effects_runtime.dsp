@@ -1,6 +1,6 @@
 declare name "EffectsRuntime";
 declare author "aloop";
-declare description "The dubfx effect stages with every param exposed as a runtime UI control (hslider/checkbox/nentry) instead of a compile-time constant, so the remappable control map can set them live. Zone labels match targetToZone in the native shell (HPCUT, LPCUT, LPRES, REVAMT, DELAYAMT, TIME, FORMANT, SEMIS); any fx/resonode/... or fx/xpose.../... target passes through targetToZone verbatim. resonodeIn is now an external audio-rate signal input (the resonode.lv2 bundle's own output, computed in C++ audio_thread.cpp ONLY when fx/resonode/engaged is true) rather than an in-Faust component -- Resonode's per-block cost used to be paid unconditionally on every block even when idle, since Faust has no runtime branching to skip a stage. dry is now the guitar/lofi-fx LV2 bundle's OUTPUT (an input-stage effect that now runs before this whole chain), not the raw mic signal.";
+declare description "The dubfx effect stages with every param exposed as a runtime UI control (hslider/checkbox/nentry) instead of a compile-time constant, so the remappable control map can set them live. Zone labels match targetToZone in the native shell (HPCUT, LPCUT, LPRES, REVAMT, DELAYAMT, TIME, FORMANT, SEMIS); any fx/resonode/... or fx/xpose.../... target passes through targetToZone verbatim. resonodeIn is now an external audio-rate signal input (the resonode.lv2 bundle's own output, computed in C++ audio_thread.cpp ONLY when fx/resonode/engaged is true) rather than an in-Faust component -- Resonode's per-block cost used to be paid unconditionally on every block even when idle, since Faust has no runtime branching to skip a stage. dry is now the guitar/lofi-fx LV2 bundle's OUTPUT (an input-stage effect that now runs before this whole chain), not the raw mic signal. extFreqDet is a new external audio-rate signal input (the pitchtracker.lv2 bundle's own output, computed continuously in C++ audio_thread.cpp every block, never gated) carrying the detected pitch frequency for harmonize() (multitranspose.dsp)'s pitch-lock voices -- multitranspose.dsp's own in-Faust zero-crossing pitch tracker was replaced by this externally-computed value because wiring a structurally more robust replacement tracker directly into multitranspose.dsp hit a Faust compile-time wall that is inherent to that file's combined complexity, not specific to any tracking algorithm; see AGENTS.md.";
 
 import("stdfaust.lib");
 
@@ -25,12 +25,12 @@ pitchStage  = component("effects/home/faust/pitch.dsp")[ SEMIS=SEMIS; FORMANT=FO
 
 harmonize = component("effects/home/faust/multitranspose.dsp");
 
-process(dry, loopSum, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5, resonodeIn) = mainOut, loopHarmonyWet
+process(dry, loopSum, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5, resonodeIn, extFreqDet) = mainOut, loopHarmonyWet
 with {
     anyVoiceGated = min(1.0, g0+g1+g2+g3+g4+g5);
     dryGate = (1.0 - anyVoiceGated*(1.0-freeXpose)) : si.smoo;
     resonodeEngageGate = RESONODE_ENGAGED : si.smoo;
-    harmonyBus     = harmonize(dry, loopSum, freeXpose, FORMANT, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5);
+    harmonyBus     = harmonize(dry, loopSum, freeXpose, FORMANT, extFreqDet, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5);
     dryWet         = harmonyBus : _,!;
     loopHarmonyWet = harmonyBus : !,_;
     preChain = (pitchStage(dry)*dryGate + dryWet)*(1.0-resonodeEngageGate) + resonodeIn*resonodeEngageGate;

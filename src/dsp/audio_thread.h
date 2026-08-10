@@ -39,6 +39,21 @@ struct AudioConfig {
     // a stage's cost); moving it to its own LV2 bundle lets the C++ call site
     // itself skip the work entirely when idle.
     std::string resonodeDir = "/effects/resonode";
+    // Standalone pitchtracker.lv2 bundle directory. Hosts a normalized-
+    // autocorrelation pitch tracker that replaces multitranspose.dsp's own
+    // in-Faust zero-crossing-based detectedFreq stage, which suffers a
+    // plosive/transient-triggered octave-search bug (see AGENTS.md). The
+    // replacement tracker is structurally immune to that failure class but
+    // could not be integrated in-Faust: wiring it directly into
+    // multitranspose.dsp reproduces the same Faust compile-time wall this
+    // file's history documents for every other tracker-replacement attempt,
+    // regardless of algorithm -- only pulling it out as its own LV2 bundle
+    // (this dir) avoids the wall, mirroring resonodeDir's own extraction.
+    // Unlike Resonode (an audio effect gated by an engaged flag), the pitch
+    // tracker's OUTPUT is a continuous control value multitranspose.dsp needs
+    // every block regardless of any gesture -- process() runs unconditionally
+    // whenever plugins are loaded, never gated.
+    std::string pitchTrackerDir = "/effects/pitchtracker";
     // DIAGNOSTIC ONLY (aloop.conf [effects] disable_core3_lv2=1): skips both
     // homeFx.process()/userFx.process() every block entirely (not just
     // disabling individual plugins -- the Lv2Host::process() call itself,
