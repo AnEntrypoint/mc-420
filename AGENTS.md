@@ -2038,6 +2038,33 @@ recommendation above, since the slow reference this fix already carries
 may be sufficient ground truth for a cheap octave check without a second
 `an.zcr` call at all.
 
+**This fix was NOT shipped — reverted after real CI confirmed the
+trade-off is not acceptable as a final state.** Pushed to `main` and let
+run against the project's own `test-pitch-tracker` CI job (the same
+`verify_highoctave_transient.py` battery, on real Linux CI infrastructure,
+not just this session's local measurements): CI failed with EXACTLY the
+440/880/1046.5/1318.5Hz steady-state numbers already measured locally
+(23.5/31.2/30.5/29.4 cents), confirming the local finding was accurate and
+not host-specific noise, and confirming this repo's own CI gate correctly
+rejects a state that trades one real bug for another. Per this project's
+own standing rule that CI green gates what ships, `multitranspose.dsp` was
+reverted to the last CI-green commit (`71c8122`, `jumpGuard`-only, no
+`octaveCorrect` removal) — the real jumpGuard "walk" bug fix and its
+verified plosive-case improvement are NOT currently live in the shipped
+file, only documented here for a future session to build on. **A future
+session picking this up should treat "ship the slow-ref walk-bug fix
+WITHOUT breaking the existing high-frequency CI gate" as the actual
+target** — either by solving octave-correction's compile-time
+incompatibility (the concrete next step named above), or by finding a
+different way to preserve high-frequency accuracy that doesn't depend on
+`octaveCorrect` at all (e.g., a per-frequency-region tuning of
+`slowRefTau`/`periodicityConfThresh`, which was only lightly explored this
+session and might close the gap without touching `octaveCorrect`). Shipping
+the walk-bug fix alone, CI-red, was correctly judged worse than not
+shipping it — the pre-existing `jumpGuard`-only baseline remains materially
+safer even though it does not fix the plosive symptom this session set out
+to eliminate.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
