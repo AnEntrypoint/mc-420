@@ -1901,6 +1901,55 @@ considered again, and any future attempt MUST run the full onset CI battery
 as part of its OWN tuning loop from the first iteration, not as a final
 gate after tuning already feels done.
 
+**Autocorrelation/periodicity-confidence attempted next (three variants,
+same session) — also blocked, and the finding is more severe than the
+compile-time wall documented above.** A `periodicityConfidenceAt(freqHz,
+x)` helper — normalized cross-correlation between `x` and `x` delayed by
+one estimated period via `de.fdelay`, a genuinely different signal
+(broadband noise decorrelates with itself at any nonzero lag; a real tone
+stays strongly correlated at its own period) rather than another
+zero-crossing-rate variant — was verified STANDALONE to compile in ~1
+second. Three integration attempts into `detectedFreq`/`jumpGuard` all hit
+the same wall as the six cross-reference attempts documented above (100s+
+or an outright kill after 400s+), even a version that added the confidence
+check as a THIRD acceptance criterion inside `jumpGuard`'s own existing
+`pairStep` recursion (no new outer recursion, `xHighpassed` threaded in via
+the same safe parameter-splitting pattern already proven elsewhere in this
+file). **The most severe result: even the version that only DEFINED
+`periodicityConfidenceAt` in the file WITHOUT EVER CALLING IT from
+`detectedFreq` (a true stepping-stone, meant only to confirm the safe
+output-splitting restructure alone was fine) also failed to compile within
+120s+ and had to be killed.** Faust's compiler does not appear to
+eliminate this specific unused top-level definition as dead code the way a
+conventional compiler would — merely being present in the same file as
+`octaveCorrect`+`jumpGuard`, unreferenced, was sufficient to reproduce the
+wall.
+
+**This changes the recommended path from "more promising, larger rewrite"
+to "the only remaining option for a genuine fix."** Pure Faust-source
+iteration against `multitranspose.dsp`'s existing signal graph — whether
+new logic references `octaveCorrect`/`jumpGuard`'s internals, only their
+final outputs, or is merely defined-but-unused in the same file — has now
+failed nine (jumpGuard-integration attempts) plus three (periodicity
+attempts) = eleven times across two sessions, covering every integration
+shape short of rewriting the tracker from scratch as an isolated unit. The
+genuinely tractable next step, per this project's own existing pattern
+(`resonode.lv2`, "Resonode is a separate, conditionally-called LV2 bundle"
+above — pulled out of the always-on Core-1 Faust program specifically to
+solve a cost problem the same way this is now a compile-time problem),
+is a SEPARATE `.dsp` file/compilation unit implementing whatever the real
+fix turns out to be (autocorrelation-based tracking, a better-discriminated
+burst gate, or both), verified to compile fast in TOTAL ISOLATION first
+(as `periodicityConfidenceAt` itself did, at ~1s standalone), then wired
+into `multitranspose.dsp` only via the narrowest possible interface (a
+single frequency-in/frequency-out function call, ideally with the new
+unit's OWN internal state, not sharing any `with{}` scope with
+`trackPitchHzAndHp`/`octaveCorrect`/`jumpGuard` at all) — or, if that
+narrow-interface pattern itself reproduces the wall (not yet tested), as a
+genuinely separate LV2-hosted plugin the way Resonode is, accepting the
+small per-plugin dispatch cost `Lv2Host` already pays elsewhere in this
+codebase in exchange for a build that actually completes.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
