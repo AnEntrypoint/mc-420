@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=05240a1c979e9bac4ef46b6b225c0de1cef3e954">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=3325e7439cecb31a5d752b76f118b1cf7aa1549e">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -2429,15 +2429,144 @@ without issue.
 compilable, standalone Faust file (never `import`ed by anything else in the
 tree, so it carries zero build/runtime cost as-is) preserving the exact
 verified design so the next session doesn't need to reconstruct it from this
-prose. It is the concrete starting point for whoever builds the LV2 bundle
-next — it does not need to be redesigned, only re-hosted as a separate
-compilation unit (its own `.dsp` in `effects/home/faust/` or similar,
-compiled by `build-lv2.yml` the same way `resonode_synth.dsp` already is,
-with `multitranspose.dsp` reduced to consuming its output as a plain signal
-input the way `effects_runtime.dsp` already consumes `resonodeIn`). No code
-from this attempt is currently shipped in `multitranspose.dsp` itself; that
-file is reverted to `71c8122` (confirmed zero git diff) and remains at the
-`jumpGuard`-only baseline with the plosive symptom still open.
+prose.
+
+**A follow-up session built the LV2 bundle exactly as recommended above
+(`effects/home/faust/pitchtracker_ac.dsp`, later moved to
+`effects/pitchtracker-src/pitchtracker_ac.dsp` — see below for why),
+verified it as a genuinely separate, correctly-building musl/aarch64 LV2
+bundle (`pitchtracker-lv2` CI job, real artifact), and then spent a full
+session's remaining budget on six consecutive real-CI round-trips
+discovering that wiring its output back into `multitranspose.dsp` broke
+`build-binary`/`build-lv2`'s real `faust -lang cpp` compile of
+`dsp/aloop.dsp` in a way DawDreamer's JIT never caught, anywhere, at any
+integration point tested. The final state: the fix is REVERTED,
+`multitranspose.dsp` is back to byte-identical `f9644be` (confirmed via
+`diff`), and CI is green again — but the plosive symptom remains open. This
+is the most important lesson from the whole session and is recorded in
+full detail immediately below, since it directly contradicts this file's
+own prior verification methodology.**
+
+**Six consecutive real-CI failures, each with the identical signature: a
+precise ~2m1-3s "Alarm clock" (SIGALRM, exit 142) inside
+`faust -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopLoopDsp -I dsp -I
+effects/home/faust dsp/aloop.dsp -o build/loop.cpp` — the real Faust CLI
+codegen step, never DawDreamer's JIT.** The baseline (`f9644be`, last
+commit before this integration attempt) compiled this exact step in 44
+real seconds. Every subsequent integration attempt hit the identical
+~2-minute wall, REGARDLESS of what was changed:
+
+1. **First integration** (`extFreqDet` threaded as a new audio-rate signal
+   argument through `dsp/aloop.dsp`'s own `process()`/`mixAndFx`
+   signature, `dsp/effects_runtime.dsp`'s `process()`, and
+   `multitranspose.dsp`'s `process()`) — failed at ~2m3s.
+2. **Shrinking the verbose `declare description` strings** added to
+   `multitranspose.dsp` and `effects_runtime.dsp` (this session had
+   separately verified elsewhere that a long description string alone can
+   triple a file's *standalone* compile time, so this was a real,
+   evidence-based hypothesis, not a guess) — failed again, IDENTICAL
+   ~2m1s timing, ruling description length out as a cause for THIS wall.
+3. **Reverting `dsp/aloop.dsp` and `dsp/effects_runtime.dsp` to
+   byte-identical `f9644be`** (confirmed via `diff`, zero output),
+   routing `extFreqDet` instead as a control-rate `hslider`
+   (`fx/extfreqdet`) set once per block via `fui.set` in
+   `audio_thread.cpp` — the exact mechanism `fx/resonode/engaged` already
+   uses, touching `aloop.dsp`'s own top-level signature not at all — still
+   failed, IDENTICAL ~2m1-3s timing.
+4. **Relocating `pitchtracker_ac.dsp` out of `effects/home/faust/`** (the
+   directory `faust -I dsp -I effects/home/faust` scans) into a new
+   `effects/pitchtracker-src/` directory, on the hypothesis that its mere
+   PRESENCE in a scanned `-I` directory — even completely unreferenced by
+   `dsp/aloop.dsp`'s real `component()` chain — was poisoning the compile
+   (a real precedent existed: an earlier session found a merely-DEFINED,
+   never-called Faust function once caused an identical class of blowup).
+   This did NOT fix `build-binary`, but it DID reveal that
+   `pitchtracker-lv2`, `resonode-lv2`, and `guitar-lofi-fx-lv2` all built
+   successfully in the SAME CI run — ruling out anything wrong with
+   `pitchtracker_ac.dsp` itself or its new location, and narrowing the
+   fault specifically to whatever compiles `dsp/aloop.dsp` (`build-binary`
+   and `build-lv2`'s `home-fx-lv2` sub-job, which builds the identical
+   full home stack as a CI-reproducibility check — both hit the wall,
+   confirming it's the same root cause in both jobs).
+5. **The decisive isolation test**: with `dsp/aloop.dsp` and
+   `effects_runtime.dsp` already byte-identical to the working baseline
+   (step 3) and `pitchtracker_ac.dsp` already relocated out of the
+   scanned directory (step 4), the ONLY remaining variable across every
+   failing commit was `multitranspose.dsp`'s own content — despite being
+   SMALLER than the original (65 lines removed: the entire
+   `trackPitchHzAndHp`/`octaveCorrect`/`jumpGuard` zero-crossing tracker),
+   not larger. Reverted `multitranspose.dsp` byte-for-byte to `f9644be`
+   too (confirmed via `diff`, zero output) — leaving `pitchtracker_ac.dsp`,
+   the `pitchtracker-lv2` CI job, and `audio_thread.cpp`'s
+   `pitchTrackerFx`/`pitchTrackerBuf` C++ code all still present but
+   completely inert (nothing in `multitranspose.dsp` reads
+   `fx/extfreqdet` anymore, so the C++ side writes to a Faust zone that no
+   longer exists — a silent no-op, not a hazard, matching this file's own
+   documented precedent for a removed/never-bound zone).
+
+**This isolation test — and ONLY this one — finally cleared the ~2-minute
+wall.** `build-binary` completed successfully in ~18m13s (within the
+baseline's own historically observed 14-18 minute range), `build-lv2` in
+~17m34s, both matching the pre-integration baseline's real timing almost
+exactly. `pitchtracker-lv2` continued to build correctly on its own. This
+is the single most decisive piece of evidence in the whole investigation:
+**`multitranspose.dsp`'s NEW content — smaller, simpler, structurally
+nothing exotic (a `hslider`, some `ba.if` chains, unchanged `voiceOut`/
+`harmonySum`) — was, by process of elimination across five other ruled-out
+hypotheses, THE cause of a real ~2-minute-plus real-Faust-CLI compile-time
+regression that DawDreamer's own LLVM JIT never once reproduced, at any
+integration scope tested (standalone `multitranspose.dsp` alone: 5-6s;
+`effects_runtime.dsp` alone: 11.7s; both fast, both misleadingly
+reassuring).**
+
+**The specific structural trigger inside the new `multitranspose.dsp`
+remains UNIDENTIFIED.** Six real-CI round-trips (at ~15-20 minutes of
+actual wall-clock cost each, since `build-binary`/`build-lv2` cannot be
+meaningfully faster-iterated without real `faust` CLI or Docker access —
+neither available on this session's Windows dev host) is a large cost for
+a `.dsp` file that reads, by inspection, entirely unremarkable. This is a
+genuinely open question for a future session with real local `faust`
+CLI/Docker access to bisect properly (e.g. binary-search which specific
+line/construct in the NEW `multitranspose.dsp` reintroduces the wall by
+re-adding pieces of it one at a time to the reverted baseline and
+re-measuring LOCAL `faust -lang cpp` time directly, rather than paying a
+full CI round-trip per hypothesis).
+
+**The generalizable lesson, worth internalizing for any future Faust
+change in this codebase**: **DawDreamer's JIT compile speed is NOT a
+reliable predictor of the real `faust -lang cpp` codegen path's
+behavior**, specifically once `dsp/aloop.dsp`'s full real
+`component()`/`par()` chain (`loop.dsp`'s 20 loopers +
+`effects_runtime.dsp`'s whole effect chain, including `multitranspose.dsp`)
+is compiled together via the actual CLI Faust invocation CI uses. Every
+individual piece compiling fast under DawDreamer this session (and in
+prior sessions' own extensive verification history) was necessary but
+NEVER sufficient evidence of real-CLI-compile-time safety for a change
+touching `multitranspose.dsp` specifically — this contradicts and
+supersedes any earlier assumption in this file that JIT-fast implies
+CLI-fast. Any future change to `multitranspose.dsp` (or anything
+`component()`'d into `effects_runtime.dsp`) needs a REAL `build-binary` or
+`build-lv2` CI run — not just a DawDreamer standalone check — before being
+trusted as compile-time-safe, however small or simple the change looks.
+
+**Current shipped state**: `multitranspose.dsp` is reverted to
+byte-identical `f9644be` (confirmed via `diff`, zero output) — the
+original zero-crossing `trackPitchHzAndHp`/`octaveCorrect`/`jumpGuard`
+tracker, `jumpGuard`-only baseline, plosive symptom still fully open.
+`effects/pitchtracker-src/pitchtracker_ac.dsp` (the verified-working
+autocorrelation tracker, relocated per step 4 above),
+`.github/workflows/build-lv2.yml`'s `pitchtracker-lv2` job, and
+`audio_thread.cpp`'s inert `Lv2Host pitchTrackerFx`/`pitchTrackerBuf`
+plumbing are all left in place as real, CI-verified infrastructure — the
+LV2 bundle genuinely builds and would genuinely run if
+`multitranspose.dsp` read its output, it's just not wired in. The concrete
+next step for a future session: get real local `faust`/Docker access,
+re-apply the `fx/extfreqdet` hslider change to `multitranspose.dsp` alone
+(the smallest possible reintroduction, matching the already-proven-safe
+control-rate mechanism from step 3), and measure real local
+`faust -lang cpp -I dsp -I effects/home/faust dsp/aloop.dsp` compile time
+directly and repeatably — bisecting locally in seconds per iteration
+instead of ~15-20 minutes per CI round-trip.
 
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
