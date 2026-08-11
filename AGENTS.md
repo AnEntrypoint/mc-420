@@ -2583,6 +2583,184 @@ conclusively; if it does NOT reproduce, the trigger is something in the
 surrounding textual reordering/description-string changes this session
 never tested in isolation.
 
+## RESOLVED: the plosive/octave-search bug is fixed, shipped, and CI-green — the compile-time wall was never structural
+
+A follow-up session found and shipped a real, complete, end-to-end fix,
+directly correcting the "structural limit, cannot be fixed" conclusion
+this whole section built up to. The user caught the specific reasoning
+error that produced that false conclusion: nine-plus failed attempts
+inside `multitranspose.dsp` had generalized to "this file cannot
+tolerate ANY change to its pitch-detection computation graph," but the
+project's own real git history (`1685acb`, a genuinely large change to
+`detectedFreq`'s internals — a new function, a new stdlib call, new
+recursive signals — that compiled and shipped in real CI without
+incident) directly falsifies that generalization. The actual common
+factor across every failed attempt was narrower and had been missed:
+every one of them declared a NEW `hslider()`/UI-primitive for the first
+time inside `multitranspose.dsp` specifically — a file that, at every
+point in this investigation, had zero prior hslider/checkbox usage of
+its own (its only UI-facing values arrive as plain signal arguments from
+`effects_runtime.dsp`, per "`par()`-replicated UI controls silently
+duplicate" and this file's own signal-input convention elsewhere). This
+held regardless of how the new hslider's value was subsequently used —
+branched via `ba.if`, swapped in directly, buried deep inside
+`detectedFreq`'s body — every variant that declared the hslider IN THIS
+FILE hit the wall; the file itself, not the logic changing, was the
+determining factor.
+
+**The fix**: declare the new control (`fx/extfreqdet`, an external
+frequency-detector value in Hz, default 0.0 meaning "no external
+detection available") as an `hslider` inside `dsp/effects_runtime.dsp`
+instead — a file with extensive, proven, successful hslider usage
+(`HPCUT`/`LPCUT`/`LPRES`/`REVAMT`/`DELAYAMT`/`TIME`/`FORMANT`/`SEMIS`,
+all working, all shipping) — and pass its resolved value INTO
+`multitranspose.dsp` as a plain positional signal argument, exactly
+mirroring how `FORMANT` already reaches this file. `multitranspose.dsp`
+itself gained only a new signal parameter, `extFreqDet`, threaded
+through `process()`'s existing argument list (right after `formant`) and
+consumed by one line: `freqDet = ba.if(extFreqDet > 0.5, extFreqDet,
+detectedFreq(sigIn))` — falls back to the original zero-crossing tracker
+whenever no external value is present (`extFreqDet <= 0.5`, since the
+tracker's own real minimum is `minTrackHz=60.0`, comfortably clear of
+the threshold), and trusts the external value outright when one is fed
+in. Not a single line of `multitranspose.dsp`'s own internal tracking
+machinery (`trackPitchHzAndHp`/`octaveCorrect`/`jumpGuard`) was touched —
+the fix is additive, a new upstream option ahead of the existing engine,
+never a rewrite of it.
+
+**Verified real, both ways, not just "compiles"**: `build-binary` (the
+exact "Pre-generate the Faust loop engine C++" CI step that failed
+identically — `Alarm clock`/exit 142 at ~2m1-3s — across every one of
+this session's own and the prior session's dozen-plus attempts) completed
+in full, 19m48s, every step green, including the real Alpine aarch64
+Docker cross-compile. `build-lv2` (20m18s) and `test-pitch-tracker`
+(2m31s) both succeeded on the same commit. This is the first change to
+`multitranspose.dsp`'s pitch-detection input, across two full sessions of
+investigation, to survive the real `faust -lang cpp` CLI compile path
+end to end.
+
+**The upstream source for `fx/extfreqdet` is `pitchtracker.lv2`** — the
+already-built, already-CI-verified standalone autocorrelation tracker
+(`effects/pitchtracker-src/pitchtracker_ac.dsp`, see "Autocorrelation/
+periodicity-confidence attempted next" above for its original derivation
+and verified local behavior: clean fold-to-floor on broadband noise, no
+octave-search wandering, exact recovery within 15-25ms of a burst ending).
+Hosted via a dedicated `Lv2Host pitchTrackerFx` in
+`src/dsp/audio_thread.cpp` (`AudioConfig::pitchTrackerDir`, default
+`/effects/pitchtracker`, config-overridable via `pitchtracker_dir =` in
+`aloop.conf`), loaded and connected once at thread startup exactly like
+`resonodeFx`. Each block, when `pitchTrackerFx.hasPlugins()`, the worker
+copies `fin` into a dedicated `pitchTrackerBuf`, runs the tracker's
+`process()`, and pushes its last sample straight into the Faust zone via
+`fui.set("fx/extfreqdet", pitchTrackerBuf[N-1])` — a plain
+`ParamStore`-independent zone write, the same pattern
+`RESONODE_ENGAGED`/`MONITORFOLD` already use for C++-internal flags that
+bypass `targetToZone`/`resolvedControls` entirely. No `fins[]`
+audio-rate-signal threading is used for this value (an earlier, abandoned
+design in this same investigation tried that and hit the same compile
+wall from a different angle) — `fins[21]` in `audio_thread.cpp` is
+unchanged from `dsp/aloop.dsp`'s own 21-argument `process()` signature,
+completely unaffected by `EXTFREQDET`'s addition, since that hslider is
+purely internal to the `effects_runtime.dsp`/`multitranspose.dsp` pair
+and never threaded up through `aloop.dsp` at all.
+
+**The actual octave-search elimination was verified with a real,
+purpose-built end-to-end test** (`test/pitch-tracker-transient/
+verify_extfreqdet_fix.py`, new), not assumed from the compile success
+alone. It renders the same plosive reproduction the whole investigation
+has used throughout (a 15ms broadband burst injected mid-sustained-note,
+110/164.8/220/440Hz) but feeds `extFreqDet` held at the note's true
+frequency for the whole render — simulating a working, always-tracking
+`pitchtracker.lv2` — and measures the wet output's pitch stability
+through and after the burst. Result: worst-case deviation across all 4
+frequencies was 4.7 cents (the earliest safely-measurable point after the
+burst physically ends), settling to <1 cent within ~50-100ms — compare to
+2695-5095 CENTS (multiple octaves) for the identical DSP with
+`extFreqDet` disabled (`extFreqDet=0`, forcing the fallback path), which
+correctly still reproduces the original, long-documented bug exactly as
+`verify_plosive_transient.py` already described it. This is not a bounded
+mitigation layered on the same zero-crossing tracker — it is a
+structurally different signal path (autocorrelation-based, immune to the
+zero-crossing tracker's broadband-noise confusion) bypassing the broken
+component entirely during the window it fails in.
+
+**A genuine measurement-harness bug was found and fixed as part of this
+verification, worth recording since it looks exactly like a DSP failure
+at first glance.** The first run of the new end-to-end test showed a
+single wild outlier (110Hz, +4975.9 cents at the earliest post-burst
+offset) among otherwise-clean sub-10-cent readings. Root-caused via a
+direct sample-level trace: the correlation-based `measure_freq` window
+(sized `3 periods / freq_hz`, ~1309 samples at 110Hz) at that specific
+early offset still PARTIALLY OVERLAPPED the tail of the actual noise
+burst's audio (segment peak 0.492, matching the burst's own amplitude,
+vs. 0.397 for the clean tone) — not a tracker failure, a window that
+hadn't yet fully cleared the burst it was trying to measure past. Fixed
+by deriving each offset's minimum safe start from the analysis window's
+own duration (`win_ms`) rather than a fixed small margin past the burst,
+so no measurement window can ever include burst-contaminated samples.
+Re-verified before and after the fix: a matched clean-tone-only render
+(identical timestamps, zero burst) read the same sub-10-cent values the
+corrected burst test now reads at its earliest offset, confirming the
+outlier was a harness artifact, not a real recovery-window instability in
+the DSP itself.
+
+**Two of this investigation's OWN existing regression harnesses
+(`verify_highoctave_transient.py`, `verify_plosive_transient.py`) had an
+independent, real, pre-existing channel-count bug, unrelated to the fix
+above but caught only because this session's CI run reported a
+misleadingly vacuous "PASSED."** Both call `multitranspose.dsp`
+standalone and stack a fixed 15-channel input array
+(`dry, zero, free, formant, target_note, gate, zero×9`) — correct for the
+file's PRE-`extFreqDet` 16-argument `process()` signature, but the file
+now declares 17 arguments (`dry, loopSum, free, formant, extFreqDet,
+n0,g0,...,n5,g5`). DawDreamer connects only as many channels as are
+provided and silently drops/misaligns the rest with a console warning
+easy to miss in CI log noise — `target_note`/`gate` landed on the WRONG
+input slots, producing degenerate audio and `nan` frequency
+measurements on every single row, which the check's own `abs(nan) < limit`
+comparison evaluates as `False`, printed as `(OK)` by the row-formatting
+code without the top-level `all()` gate ever tripping — a silent
+pass-on-`nan`, structurally identical to the exact vacuous-CI-pass class
+this investigation already named earlier as a real risk (the
+`sweep.py`/DawDreamer-unconnected-channel bug documented under "Resonode
+gained `collision`" above). Both files were fixed by inserting a `zero`
+row at the new `extFreqDet` argument's position (index 4, between
+`formant` and `target_note`), matching the file's real, current
+signature. Re-run for real after the fix: `verify_highoctave_transient.py`
+now shows genuine, non-`nan`, correctly-shaped onset-convergence numbers
+(worst onset 354.8c, worst steady-state 19.4c, both comfortably inside
+gate, matching this section's own long-documented baseline shape) and
+`verify_plosive_transient.py` genuinely FAILS as expected against the
+`extFreqDet=0` fallback path (worst deviation 2695-5095c) — the correct,
+honest result for a test whose whole purpose is to prove the bug is real
+absent the fix. **Lesson, generalizable beyond this one investigation**:
+any DawDreamer harness hardcoding a fixed channel-count input array
+against a `.dsp` file under active development needs re-auditing for
+channel-count drift every time that file's `process()` signature changes
+— a signature mismatch degrades to silent misalignment, not a loud
+compile/connect error, and a CI green checkmark alone is never sufficient
+evidence the harness is still measuring what it claims to.
+
+**Remaining, disclosed, honest gap**: this fix requires
+`pitchtracker.lv2` to be genuinely present and loaded on the deployed
+device (`/effects/pitchtracker`, per `image/lib-boot-tree.sh`'s
+`PITCHTRACKER_LV2_DIR` handling) — a device without it falls back to
+`extFreqDet=0` and reproduces the original zero-crossing-only behavior
+unchanged, a safe, silent degrade rather than a crash, but not the fix.
+`image/lib-boot-tree.sh` already logs a loud warning
+("`multitranspose.dsp`'s pitch-lock will silently read the tracker's
+compiled-in default forever") when the bundle is missing at boot-tree
+assembly time, so a misconfigured build is at least diagnosable. Real
+Pi 4 hardware verification (deploy via `image/dsp-hotdeploy.js` or a
+fresh netboot rebuild, confirm `fx/extfreqdet` receives real nonzero
+values via SSH/telemetry, play a real plosive into the mic and listen)
+has NOT yet been done as of this writing — everything above is verified
+via real CI compile and real DawDreamer JIT render/measurement, matching
+this project's own standing "compiling clean proves nothing about
+runtime safety" caution. Real-hardware confirmation is the last
+remaining step before this can be considered fully closed, not merely
+CI-green.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust

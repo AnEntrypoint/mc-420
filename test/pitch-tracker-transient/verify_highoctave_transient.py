@@ -45,6 +45,7 @@ def make_inputs(n, dry, free, formant, target_note, gate):
             zero,
             free * ones,
             formant * ones,
+            zero,
             target_note * ones,
             gate * ones,
             zero, zero, zero, zero, zero, zero, zero, zero, zero,
