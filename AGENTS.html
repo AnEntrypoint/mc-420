@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e671a823a6d4a75459bcf679b79f7d9e371bc72e">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c0a9d2790f492e885a06c222ea9aafaf5f550cf7">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -2629,24 +2629,53 @@ unrelated compile.
 
 **The concrete next step for a future session, now much narrower than
 before**: this local `df.box.boxFromDSP`/`boxToSource` method IS a
-genuine (if slow — 100-500+ real seconds per iteration on this dev
-host's hardware) local reproduction, so further bisection no longer
-strictly requires CI round-trips (~15-20 min each) — but it does require
-budgeting real per-iteration cost (this session's own attempts took
-100-500+ seconds each and the fastest useful signal came from watching
-whether a run cleared or blew past the working baseline's own ~113s
-mark, not from waiting for full completion). The real open question is
-now much narrower: WHY does an isolated, non-recursive, purely additive
-`hslider` declaration (`extFreqDet = hslider("fx/extfreqdet", 220.0,
-minTrackHz, maxTrackHz, 0.01);`) reproducibly destabilize this specific
-file's real Faust codegen path, when the exact same declaration compiles
-trivially fast in `resonode_synth.dsp`/`guitar_lofi_fx.dsp`? A future
-session should use the local `boxToSource` method to test candidates
-narrower than "add one hslider" (e.g., does merely ADDING the hslider
-declaration with ZERO other changes — not even referencing it anywhere —
-reproduce the regression, mirroring the `periodicityConfidenceAt`
-defined-but-unused precedent documented above for a different symptom in
-this same file?) before concluding anything about the specific mechanism.
+genuine (if slow — 95-500+ real seconds per iteration on this dev host's
+hardware) local reproduction, so further bisection no longer strictly
+requires CI round-trips (~15-20 min each) — but it does require budgeting
+real per-iteration cost.
+
+**A same-session follow-up test sharpened the trigger considerably**: an
+hslider added to `multitranspose.dsp` but left completely UNREFERENCED
+anywhere (`extFreqDetUnused = hslider("fx/extfreqdet_unused", 220.0,
+60.0, 1500.0, 0.01);`, declared, never used in `process()` or any other
+function) compiled via `boxToSource` in 95.3s — comparable to, even
+slightly faster than, the working baseline's own 113.4s. **This is a
+clean, safe result: mere hslider declaration is NOT the trigger**,
+unlike the `periodicityConfidenceAt` precedent documented above (a
+different symptom, a different file era) where a merely-DEFINED,
+never-CALLED function alone was sufficient to blow up compile time — the
+mechanism here is evidently different.
+
+Combined with the hybrid design's real-CI failure (an hslider that IS
+referenced, but only inside a `ba.if(useExtFreqDet, extFreqDet,
+detectedFreq(sigIn))` gate that during normal operation would keep
+using the OLD tracker's output since `useExtFreqDet` was hardcoded to
+`1` — meaning the NEW hslider's value, while textually reachable, still
+structurally flows into the exact same `freqDet` signal position the old
+`detectedFreq(sigIn)` occupied), the trigger is now narrowed to: **the
+new hslider's value must flow into the live signal graph (specifically,
+into `freqDet`/`windowForFormant`/`harmonySum`'s downstream chain) for
+the regression to appear — pure declaration is safe, but making the
+hslider's value REACHABLE as a real computed signal, even conditionally,
+is not.** The specific WHY (why does introducing a second possible
+source for `freqDet` — one static, one recursive-derived — reproducibly
+destabilize this file's real Faust codegen path specifically at the
+`freqDet`/`windowForFormant` junction, when the same `hslider` primitive
+compiles trivially fast standalone in `resonode_synth.dsp`/
+`guitar_lofi_fx.dsp`) remains unidentified. A future session's next
+concrete, cheap local test (each should take under 2 minutes based on
+this session's own measured timings): does `ba.if(useExtFreqDet,
+extFreqDet, detectedFreq(sigIn))` alone — same signal-flow shape, but
+with `useExtFreqDet` a plain top-level constant rather than threaded
+through anything else — reproduce the regression in isolation from every
+other change this session bundled alongside it (the `declare
+description` rewrite, the `winSkewMul`/`onsetFlatHoldMs` block
+reordering visible in the real diffs above)? If a maximally minimal
+single-line change reproducibly fails while everything else stays
+byte-identical to `f9644be`, that pinpoints the exact trigger
+conclusively; if it does NOT reproduce, the trigger is something in the
+surrounding textual reordering/description-string changes this session
+never tested in isolation.
 
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 

@@ -12,6 +12,7 @@ DELAYAMT = hslider("DELAYAMT",0.0, 0.0, 1.0, 0.001);
 TIME     = hslider("TIME",    0.5, 0.0, 1.0, 0.001);
 FORMANT  = hslider("FORMANT", 0.0, -3.0, 3.0, 0.001);
 SEMIS    = hslider("SEMIS",   0.0, -12.0, 12.0, 0.001);
+EXTFREQDET = hslider("fx/extfreqdet", 0.0, 0.0, 1500.0, 0.01);
 ENGAGED  = checkbox("ENGAGED");
 RESONODE_ENGAGED = checkbox("fx/resonode/engaged");
 glitchDivisor    = nentry("DIV", 0, 0, 16, 1);
@@ -30,7 +31,7 @@ with {
     anyVoiceGated = min(1.0, g0+g1+g2+g3+g4+g5);
     dryGate = (1.0 - anyVoiceGated*(1.0-freeXpose)) : si.smoo;
     resonodeEngageGate = RESONODE_ENGAGED : si.smoo;
-    harmonyBus     = harmonize(dry, loopSum, freeXpose, FORMANT, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5);
+    harmonyBus     = harmonize(dry, loopSum, freeXpose, FORMANT, EXTFREQDET, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5);
     dryWet         = harmonyBus : _,!;
     loopHarmonyWet = harmonyBus : !,_;
     preChain = (pitchStage(dry)*dryGate + dryWet)*(1.0-resonodeEngageGate) + resonodeIn*resonodeEngageGate;
