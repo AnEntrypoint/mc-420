@@ -2795,6 +2795,109 @@ runtime safety" caution. Real-hardware confirmation is the last
 remaining step before this can be considered fully closed, not merely
 CI-green.
 
+**Real-hardware confirmation happened, and found a second, real onset bug
+in `pitchtracker.lv2` itself — a high-octave "chong" at the start of
+every transient.** WITNESSED live, by ear, on the real Pi 4 once
+`pitchtracker.lv2` was actually loaded (see the `serve-netboot-win.js`
+fetch-list fix below): the fix eliminated the mid-sustain plosive
+octave-search this whole section documents, but a new symptom appeared
+that hadn't existed with the tracker disabled — a laser-like high-octave
+blip at the START of ordinary note attacks, not mid-sustain. Reproduced
+via DawDreamer against `effects/pitchtracker-src/pitchtracker_ac.dsp`
+standalone (a fresh 220Hz note, 64-sample attack ramp): `freqDet` read a
+stuck `60.1Hz` (the tracker's own floor) for the first ~15-19ms, then
+snapped hard to the true 219.7Hz — a real, audible discontinuity feeding
+straight into `windowForFormant`'s window-size computation and
+`onsetUntrust`'s glide, right as pitch-lock engages.
+
+**Root cause**: `corrAtLag`'s `smoo` one-pole (`energyTau=0.01`) zero-inits
+its recursive numerator/denominator registers. At `t=0` both start at 0,
+and `den = max(1e-9, smoo(x*x))` floors at `1e-9` while still converging
+— for roughly one `energyTau` (~10ms) after any fresh onset, every
+candidate's `num/den` ratio is numerically unstable, and `pickFundamental`'s
+top-down (highest-frequency-first) scan structure means a short-lag
+candidate can spuriously clear `corrThresh` before the true, longer-lag
+fundamental's own correlation has had time to accumulate — landing on
+`pickFundamental`'s final `60.0` floor fallback in the observed case, but
+structurally capable of landing on any intermediate candidate depending on
+timing, matching "chong from a higher octave" exactly. This is the same
+failure class `pickFundamental`'s local-max test was built to prevent (see
+this file's own "Short-lag self-similarity leak" derivation above) — but
+that fix assumed steady-state correlation values, never accounted for the
+estimator's own convergence time from a cold or post-silence start.
+
+**First fix attempt was itself buggy and made things worse.** A
+`holdLastGood`/`energyReady` gate (hold the tracker's OUTPUT at 0.0 —
+correctly falling back to `multitranspose.dsp`'s internal tracker via
+`extFreqDet > 0.5` — until the input signal has shown continuous energy
+for `onsetHoldMs`) is the right shape, mirroring `multitranspose.dsp`'s
+own `onsetUntrust` design for the identical problem class. The first
+version's readiness gate (`aboveFloor = x*x > 1e-6`, tested directly on
+the raw sample) NEVER opened at all — verified live, output stuck at
+`0.0Hz` for a full 200ms render at 220Hz. Root cause: `x*x` for a sine
+wave touches exactly `0.0` at every zero-crossing (every ~2.27ms at
+220Hz), resetting the readiness counter before it could ever accumulate
+the needed 35ms. **Lesson: any "signal is present" gate must test a
+SMOOTHED energy envelope, never the instantaneous squared sample — a
+period sine's own zero-crossings look identical to real silence to an
+unsmoothed check.** Fixed with a proper one-pole envelope
+(`envTau=0.003`, well under half a period even at the highest tested
+frequency) feeding the readiness gate instead of the raw sample.
+
+**Verified via DawDreamer, both the failure and the fix, at the lowest
+tested frequency (82Hz, the case most likely to stress the envelope
+tau's zero-crossing safety margin) and mid-range (220Hz)**: output holds
+cleanly at `0.0` (correct fallback signal) through the entire
+~35ms-post-onset risk window, then snaps directly to the true frequency
+with no floor spike and no wrong-octave excursion at either frequency.
+A small residual steady-state wobble at 82Hz (77.9Hz vs 84.9Hz at
+different measurement points, ~145 cents) is pre-existing and unrelated
+— it matches this file's own already-documented low-frequency
+steady-state jitter caveat, not a regression from this onset fix.
+
+**This required real hardware to catch, not just CI/DawDreamer.** Every
+earlier verification round in this whole investigation (the plosive
+reproduction, the extFreqDet end-to-end test) used a note that was
+ALREADY sustained before the burst — none of them exercised a genuine
+FRESH note onset through the external tracker, which is exactly the
+scenario a live performer triggers on every single key press. Lesson
+for any future change to this tracker: test both mid-sustain transients
+(plosives/bursts) AND fresh onsets from silence — they stress genuinely
+different parts of the correlation estimator's convergence.
+
+## `serve-netboot-win.js` was silently missing the `pitchtracker-lv2` artifact fetch
+
+WITNESSED live: after the Faust-side `extFreqDet` fix shipped and CI went
+green, the real device rebooted onto the exact new binary (md5 matched
+CI's artifact exactly, `rc-service aloop status` read `started`), yet
+`/effects/pitchtracker/` was an empty directory — `checkAndUpdate` in
+`image/serve-netboot-win.js` downloaded `aloop-aarch64-musl`,
+`home-fx-lv2`, `guitar-lofi-fx-lv2`, and `resonode-lv2`, but never
+`pitchtracker-lv2` (added to `build-lv2.yml` alongside the Faust fix) or
+passed `PITCHTRACKER_LV2_DIR` into `build-netboot.sh`'s env.
+`build-image.yml` (the GitHub-hosted image builder) already fetched and
+passed this artifact correctly — only this local Windows netboot server's
+own fetch list had never been updated when the pitchtracker bundle was
+added, so `fx/extfreqdet` silently degraded to its compiled-in default
+(0.0) on every real device even though every CI job was green.
+
+Fixed by adding the matching `downloadRunArtifact(lv2Run.id,
+'pitchtracker-lv2', ...)` call and `PITCHTRACKER_LV2_DIR` env entry,
+mirroring `resonode-lv2`'s existing shape exactly. Re-verified live: a
+forced rebuild (delete `.netboot-update-sha`, relaunch) fetches
+`pitchtracker.lv2`, `lib-boot-tree.sh` copies it into the apkovl, and
+after reboot the device's own log shows `[host] loaded
+/effects/pitchtracker/pitchtracker.lv2 on core 1`.
+
+**Lesson, generalizable to any future new LV2 bundle added to this
+project**: a new bundle needs its artifact wired into BOTH
+`build-image.yml` (the hosted/CI image path) AND `serve-netboot-win.js`
+(the local dev netboot path) — they are two independently-maintained
+fetch lists for the same set of artifacts, and CI going green plus the
+hosted image path being correct is not evidence the local netboot path
+was updated too. Grep both files for every existing `*-lv2` artifact
+name before considering a new bundle's deploy wiring complete.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust

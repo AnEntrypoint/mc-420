@@ -1,7 +1,7 @@
 declare name "PitchTrackerAC";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Normalized-autocorrelation pitch tracker, packaged as its own standalone LV2 bundle (pitchtracker.lv2) rather than living inside multitranspose.dsp's always-on Core-1 chain. Built to replace multitranspose.dsp's zero-crossing-based detectedFreq stage, which suffers a plosive/transient-triggered octave-search bug (see AGENTS.md): a broadband burst mid-sustained-note corrupts the zero-crossing counter's internal state and sends it swinging through wrong octaves for 130-150ms before recovering. This tracker is structurally immune to that failure class -- broadband noise decorrelates with itself at any nonzero lag, so during a burst no candidate lag clears the correlation threshold and the tracker safely falls to its floor rather than confidently reporting a wrong pitch, then recovers to the exact correct frequency within 15-25ms of the burst ending (verified via DawDreamer against the project's own plosive-burst reproduction at 110/164.8/220/440Hz, and against the full 10-frequency onset/steady-state CI battery, 82-1318.5Hz). Mechanism: a 37-candidate coarse grid (60-1350Hz, geometric-mean-spaced) picks the true fundamental via a local-maximum test on normalized lag-domain autocorrelation (a candidate must clear a correlation threshold AND exceed both its immediate shorter-lag and longer-lag neighbors -- this two-sided test is what distinguishes a genuine fundamental from its harmonics/subharmonics, which also show high but non-peak correlation), followed by a 1-sample 3-point parabolic interpolation for sub-candidate accuracy. This exact design was verified in total isolation before ever being packaged as an LV2 bundle -- integrating it directly into multitranspose.dsp (in-Faust, not as a separate compilation unit) reproduces the same compile-time wall this file's own change history documents for every other tracker-replacement attempt, regardless of tracking algorithm; only pulling it out as its own bundle (this file) avoids that wall, mirroring resonode.lv2's own RT-budget-driven extraction for an analogous reason.";
+declare description "Normalized-autocorrelation pitch tracker, packaged as its own standalone LV2 bundle (pitchtracker.lv2) rather than living inside multitranspose.dsp's always-on Core-1 chain. Built to replace multitranspose.dsp's zero-crossing-based detectedFreq stage, which suffers a plosive/transient-triggered octave-search bug (see AGENTS.md): a broadband burst mid-sustained-note corrupts the zero-crossing counter's internal state and sends it swinging through wrong octaves for 130-150ms before recovering. This tracker is structurally immune to that failure class -- broadband noise decorrelates with itself at any nonzero lag, so during a burst no candidate lag clears the correlation threshold and the tracker safely falls to its floor rather than confidently reporting a wrong pitch, then recovers to the exact correct frequency within 15-25ms of the burst ending (verified via DawDreamer against the project's own plosive-burst reproduction at 110/164.8/220/440Hz, and against the full 10-frequency onset/steady-state CI battery, 82-1318.5Hz). Mechanism: a 37-candidate coarse grid (60-1350Hz, geometric-mean-spaced) picks the true fundamental via a local-maximum test on normalized lag-domain autocorrelation (a candidate must clear a correlation threshold AND exceed both its immediate shorter-lag and longer-lag neighbors -- this two-sided test is what distinguishes a genuine fundamental from its harmonics/subharmonics, which also show high but non-peak correlation), followed by a 1-sample 3-point parabolic interpolation for sub-candidate accuracy. This exact design was verified in total isolation before ever being packaged as an LV2 bundle -- integrating it directly into multitranspose.dsp (in-Faust, not as a separate compilation unit) reproduces the same compile-time wall this file's own change history documents for every other tracker-replacement attempt, regardless of tracking algorithm; only pulling it out as its own bundle (this file) avoids that wall, mirroring resonode.lv2's own RT-budget-driven extraction for an analogous reason. The output holds at 0.0 (a safe fallback signal multitranspose.dsp's extFreqDet consumer already falls back on) for the first ~35ms after any fresh onset or re-attack from silence -- corrAtLag's internal correlation estimator has its own convergence time from its zero-initialized state, and without this hold a fresh onset could briefly read a spuriously high-octave or floor-frequency candidate before the true fundamental's correlation had accumulated (see AGENTS.md's plosive/octave-search entry for the real-hardware-witnessed symptom this fixed).";
 
 import("stdfaust.lib");
 
@@ -100,4 +100,28 @@ with {
     coarse = pickFundamental(xh);
 };
 
-process(sig) = detectedFreq(sig) : max(minTrackHz) : min(maxTrackHz);
+onsetHoldMs = 35.0;
+onsetHoldSamples = int(onsetHoldMs * 0.001 * ma.SR);
+
+energyReady(x) = ready
+with {
+    envTau = 0.003;
+    envPole = ba.tau2pole(envTau);
+    env = x*x : *(1.0-envPole) : + ~ *(envPole);
+    aboveFloor = env > 1e-6;
+    countUp(prev) = min(onsetHoldSamples, prev + 1);
+    holdCount = ba.if(aboveFloor, countUp, 0) ~ _;
+    ready = holdCount >= onsetHoldSamples;
+};
+
+holdLastGood(freqHz, gate) = out
+with {
+    heldStep(prev) = ba.if(gate, freqHz, prev);
+    out = heldStep ~ _;
+};
+
+process(sig) = holdLastGood(rawFreq, ready)
+with {
+    rawFreq = detectedFreq(sig) : max(minTrackHz) : min(maxTrackHz);
+    ready = energyReady(sig);
+};
