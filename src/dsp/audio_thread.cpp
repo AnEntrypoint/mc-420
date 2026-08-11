@@ -202,6 +202,7 @@ static void* worker(void*) {
     std::vector<float> masterPhaseBuf((size_t)N, 0.0f);
     std::vector<float> masterLenBuf((size_t)N, 0.0f);
     std::vector<float> sidechainEnvBuf((size_t)N, 0.0f);
+    std::vector<float> recordedBeatsBuf((size_t)N, 16.0f);
     std::vector<float> freeXposeBuf((size_t)N, 0.0f);
     std::vector<float> xposeNoteBuf[kTransposeVoices];
     std::vector<float> xposeGateBuf[kTransposeVoices];
@@ -211,8 +212,9 @@ static void* worker(void*) {
     }
     std::vector<float> resonodeInBuf((size_t)N, 0.0f);
     std::vector<float> pitchTrackerBuf((size_t)N, 60.0f);
-    float* fins[21] = {
+    float* fins[22] = {
         fin.data(), prevFiltOut.data(), clearBuf.data(), speedBuf.data(), masterPhaseBuf.data(), masterLenBuf.data(), sidechainEnvBuf.data(),
+        recordedBeatsBuf.data(),
         freeXposeBuf.data(),
         xposeNoteBuf[0].data(), xposeGateBuf[0].data(),
         xposeNoteBuf[1].data(), xposeGateBuf[1].data(),
@@ -592,6 +594,13 @@ static void* worker(void*) {
                     std::fill(masterPhaseBuf.begin(), masterPhaseBuf.end(), 0.0f);
                 }
                 std::fill(masterLenBuf.begin(), masterLenBuf.end(), masterLen);
+                {
+                    float recordedBeats = linkDrivingLength
+                        ? 4.0f
+                        : (g_params ? g_params->get("cmd/recorded_beats", 16.0f) : 16.0f);
+                    if (recordedBeats < 1.0f) recordedBeats = 16.0f;
+                    std::fill(recordedBeatsBuf.begin(), recordedBeatsBuf.end(), recordedBeats);
+                }
                 if (linkDrivingLength && g_link) {
                     LinkSnapshot lsBeat = g_link->audioRead();
                     if (lsBeat.phaseValid && lsBeat.quantumMicroBeats > 0) {

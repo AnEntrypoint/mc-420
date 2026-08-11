@@ -72,3 +72,4 @@ tmp/
 # /etc/aloop.conf before it temporarily mutates it -- host-tooling scratch,
 # not repo state
 test/hardware/aloop.conf.backup.*
+__pycache__/

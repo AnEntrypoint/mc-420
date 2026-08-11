@@ -18,8 +18,8 @@ def _short_name(label):
 def single_looper_dsp():
     body = DSP_PATH.read_text()
     body = body.replace(
-        "loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv) = in, (par(i, NLOOPERS, vgroup(\"looper%2i\", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv))) :> _);\n\nprocess(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv) = loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv);",
-        "process(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv) = oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv);",
+        "loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = in, (par(i, NLOOPERS, vgroup(\"looper%2i\", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats))) :> _);\n\nprocess(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats);",
+        "process(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats);",
     )
     assert "process(in, prevFiltIn" in body and body.count("process(") == 1
     return body

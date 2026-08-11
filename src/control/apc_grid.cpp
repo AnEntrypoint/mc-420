@@ -54,6 +54,7 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("fx/formant");
     ps.bind("cmd/master_len", 0.0f);
     ps.bind("cmd/recorded_bpm", 0.0f);
+    ps.bind("cmd/recorded_beats", 0.0f);
 
     ps.bind("fx/reverb",  0.0f);
     ps.bind("fx/delay",   0.0f);
@@ -171,6 +172,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             TempoSolveResult solved = deriveTempoQuant(recordedSeconds);
             ps.setByName("cmd/master_len", (float)m_masterLenSamples);
             ps.setByName("cmd/recorded_bpm", (float)solved.bpm);
+            ps.setByName("cmd/recorded_beats", (float)solved.beats);
             if (link) {
                 link->proposeTempo(solved.bpm);
             }
@@ -363,6 +365,7 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
         m_masterLenSamples = 0;
         ps.setByName("cmd/master_len", 0.0f);
         ps.setByName("cmd/recorded_bpm", 0.0f);
+        ps.setByName("cmd/recorded_beats", 0.0f);
     }
     for (int p = 0; p < kPresetCount; p++) {
         if (!m_presetHeld[p] || m_presetCaptured[p]) continue;
@@ -464,6 +467,7 @@ void ApcGrid::onClearAll(bool held, ParamStore& ps, LinkBridge* link) {
     m_masterLenSamples = 0;
     ps.setByName("cmd/master_len", 0.0f);
     ps.setByName("cmd/recorded_bpm", 0.0f);
+    ps.setByName("cmd/recorded_beats", 0.0f);
     for (int v = 0; v < kTransposeVoices; v++) {
         if (m_transposeVoiceNote[v] < 0) continue;
         m_transposeVoiceNote[v] = -1;

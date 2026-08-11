@@ -37,7 +37,7 @@ def find_all_onsets(x, thresh_frac=0.3, min_gap=200):
 
 
 def run_take(master_len_samples, arm_offset_samples, take_len_samples,
-             record_marker_offset, marker_len=400, total_extra=None):
+             marker_len=400, total_extra=None):
     """
     master_len_samples: established masterLen (0 for the very first take).
     arm_offset_samples: how far (in samples) the performer's raw press lands
@@ -48,10 +48,6 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
         finishtarget (the performer's felt phrase length before power-of-2
         snapping upstream in apc_grid.cpp -- here fed directly since this
         harness targets dsp/loop.dsp in isolation).
-    record_marker_offset: sample offset (from the raw press) where the
-        performer's intended downbeat tone is actually played -- fixed
-        across arm_offset variations to model "the same musical gesture,
-        pressed slightly early or late".
     """
     if total_extra is None:
         total_extra = take_len_samples * 3 + 6000
@@ -60,21 +56,48 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     margin = int(grid_step) + 500 if master_len_samples > 0 else 0
     n = take_len_samples + total_extra + margin + 4000
 
-    masterPhase = (np.arange(n, dtype=np.float64) % max(1, master_len_samples)).astype(np.float32) \
-        if master_len_samples > 0 else np.zeros(n, dtype=np.float32)
-    masterLen = harness.const(n, float(master_len_samples))
+    arm_press_sample = 4000 + arm_offset_samples
+    finish_reference_sample = 4000 + int(grid_step) + 200 if master_len_samples > 0 else arm_press_sample
+    finish_sample = max(finish_reference_sample, arm_press_sample) + take_len_samples
+
+    if master_len_samples > 0:
+        masterPhase = (np.arange(n, dtype=np.float64) % master_len_samples).astype(np.float32)
+        masterLen = harness.const(n, float(master_len_samples))
+    else:
+        # masterLen (and with it masterPhase advancing) only becomes real the
+        # instant loop1's own recording finishes, matching
+        # audio_thread.cpp's masterPhaseSamples/cmd_master_len staying at 0
+        # while no loop has established a phrase length yet and only
+        # starting to reflect a real value once loop1's own finish sets
+        # cmd/master_len nonzero.
+        established_len = max(1, take_len_samples)
+        masterPhase = np.zeros(n, dtype=np.float32)
+        post = np.arange(n - finish_sample, dtype=np.float64) % established_len
+        masterPhase[finish_sample:] = post.astype(np.float32)
+        masterLen = np.zeros(n, dtype=np.float32)
+        masterLen[finish_sample:] = float(established_len)
     effSpeed = harness.const(n, 1.0)
     clearAll = harness.const(n, 0.0)
     sidechainEnv = harness.const(n, 0.0)
+    recordedBeats = harness.const(n, 4.0)
     in_unused = harness.const(n, 0.0)
-
-    arm_press_sample = 4000 + arm_offset_samples
-    finish_reference_sample = 4000 + int(grid_step) + 200 if master_len_samples > 0 else arm_press_sample
-    marker_track = marker_tone(n, finish_reference_sample + record_marker_offset, marker_len)
+    # Marker sits at the MIDDLE of the take (safely inside any trim window --
+    # the trim can only discard up to half of the coarsest anchor grid unit
+    # from the very start, never from the middle). It must be anchored to
+    # the FIXED, grid-deferred armEdge instant (the same absolute sample
+    # for every arm_offset within one gridStep cell -- confirmed via direct
+    # trace), not to the raw arm_press_sample itself, or the marker becomes
+    # a moving target that shifts 1:1 with arm_offset even though the DSP's
+    # own snap/anchor mechanism is correctly jitter-invariant.
+    if master_len_samples > 0:
+        arm_grid_cell_start = int(np.ceil(4000 / grid_step)) * int(grid_step)
+    else:
+        arm_grid_cell_start = arm_press_sample
+    marker_sample = arm_grid_cell_start + take_len_samples // 2
+    marker_track = marker_tone(n, marker_sample, marker_len)
 
     rec_auto = np.zeros(n, dtype=np.float32)
     rec_auto[arm_press_sample:] = 1.0
-    finish_sample = max(finish_reference_sample, arm_press_sample) + take_len_samples
     rec_auto[finish_sample:] = 0.0
 
     finishreq_auto = np.zeros(n, dtype=np.float32)
@@ -84,7 +107,7 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     play_auto = np.zeros(n, dtype=np.float32)
     play_auto[finish_sample:] = 1.0
 
-    channels = np.stack([in_unused, marker_track, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv])
+    channels = np.stack([in_unused, marker_track, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats])
     audio, _, _ = harness.render_take(
         dsp, channels, n,
         params={"vol": 1.0, "sidechainsrc": 0.0},
@@ -95,13 +118,28 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
         },
     )
     out = audio[0]
-    playback = out[finish_sample:]
+    # finish_sample is a NAIVE press-relative estimate; dsp/loop.dsp's real
+    # armEdge grid-deferral shifts the true recording start (and thus the
+    # true playback-loop start) later by a variable amount. Slicing from
+    # finish_sample can therefore start mid-loop or even before the real
+    # loop content exists -- absolute onset position from THIS point is not
+    # a reliable invariant. Search a window that starts well before the
+    # naive estimate (covering the worst-case grid-deferral) and report the
+    # onset's position MODULO the loop's own repeat period (inter-onset
+    # spacing), which is invariant to exactly where the search window
+    # happened to start.
+    search_start = max(0, finish_sample - master_len_samples - 4000)
+    playback = out[search_start:]
     onsets = find_all_onsets(playback)
-    return onsets
+    if len(onsets) < 2:
+        return onsets
+    period = onsets[1] - onsets[0]
+    if period <= 0:
+        return onsets
+    return [o % period for o in onsets]
 
 
-def check_case(name, master_len_samples, take_len_samples, record_marker_offset,
-               arm_offsets, tol=8):
+def check_case(name, master_len_samples, take_len_samples, arm_offsets, tol=8):
     """
     Records the SAME intended musical gesture (marker at a fixed offset from
     the raw press) across several different raw press timings within one
@@ -113,7 +151,7 @@ def check_case(name, master_len_samples, take_len_samples, record_marker_offset,
     """
     positions = []
     for off in arm_offsets:
-        onsets = run_take(master_len_samples, off, take_len_samples, record_marker_offset)
+        onsets = run_take(master_len_samples, off, take_len_samples)
         if not onsets:
             print(f"[{name}] FAIL: arm_offset={off} produced no marker in playback")
             return False
@@ -132,37 +170,37 @@ def main():
 
     results.append(check_case(
         "loop1-establish-raw-duration",
-        master_len_samples=0, take_len_samples=9600, record_marker_offset=0,
+        master_len_samples=0, take_len_samples=9600,
         arm_offsets=[0],
     ))
 
     results.append(check_case(
         "half-phrase-loose-arm-timing",
-        master_len_samples=19200, take_len_samples=9600, record_marker_offset=1400,
+        master_len_samples=19200, take_len_samples=9600,
         arm_offsets=[0, 20, 40, 60, 80],
     ))
 
     results.append(check_case(
         "full-phrase-loose-arm-timing",
-        master_len_samples=19200, take_len_samples=19200, record_marker_offset=1400,
+        master_len_samples=19200, take_len_samples=19200,
         arm_offsets=[0, 20, 40, 60, 80],
     ))
 
     results.append(check_case(
         "two-phrase-loose-arm-timing",
-        master_len_samples=19200, take_len_samples=38400, record_marker_offset=1400,
+        master_len_samples=19200, take_len_samples=38400,
         arm_offsets=[0, 20, 40, 60, 80],
     ))
 
     results.append(check_case(
         "sixteenth-grid-loose-arm-timing",
-        master_len_samples=19200, take_len_samples=2400, record_marker_offset=1400,
+        master_len_samples=19200, take_len_samples=2400,
         arm_offsets=[0, 20, 40, 60, 80],
     ))
 
     results.append(check_case(
         "quarter-phrase-loose-arm-timing",
-        master_len_samples=19200, take_len_samples=4800, record_marker_offset=1400,
+        master_len_samples=19200, take_len_samples=4800,
         arm_offsets=[0, 20, 40, 60, 80],
     ))
 

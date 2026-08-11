@@ -4,7 +4,7 @@ SR       = 48000.0;
 MAXLEN   = 48000 * 60;
 NLOOPERS = 20;
 
-oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv) = out : attachLevel
+oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = out : attachLevel
 with {
     recN  = button("rec");
     playN = checkbox("play");
@@ -19,7 +19,9 @@ with {
 
     recPrev = recN : mem;
     armPulse = (recN > 0.5) & (recPrev < 0.5);
-    gridStep = max(1.0, masterLen / 16.0);
+    beatsPerMasterLen = max(1.0, recordedBeats);
+    oneBeat = max(1.0, masterLen / beatsPerMasterLen);
+    gridStep = max(1.0, oneBeat / 4.0);
     phaseInGrid = wrapAbs(masterPhase, gridStep);
     phaseInGridPrev = phaseInGrid : mem;
     gridTickCrossed = phaseInGrid < phaseInGridPrev;
@@ -32,7 +34,8 @@ with {
     armMasterPhase = armMasterPhaseStep ~ _;
     finishRequestedStep(prev) = ba.if(armEdge, 0, ba.if(finishReqN > 0.5, 1, prev));
     finishRequested = finishRequestedStep ~ _;
-    wrapLenStep(prev) = ba.if(finishEdge, writeIdxForLatch, prev);
+    trimAmount = ba.if(masterLen < 0.5, 0.0, abs(armPhaseBias));
+    wrapLenStep(prev) = ba.if(finishEdge, max(1.0, writeIdxForLatch - trimAmount), prev);
     wrapLen = max(1, wrapLenStep ~ _);
     writeIdxForLatch = ba.if(finishRequested, finishTargetN, writeIdx);
     recordingGate(prev) = (recN > 0.5) | (finishRequested & (prev < finishTargetN));
@@ -46,15 +49,25 @@ with {
     ring = rwtable(MAXLEN, 0.0, writeIdx, writeVal, readIdx0);
 
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
-    finishTakeLen = max(1, writeIdxForLatch);
-    takeLenRatio = float(finishTakeLen) / max(1.0, masterLen);
-    anchorGridLen = ba.if(takeLenRatio >= 1.0, masterLen,
-                     ba.if(takeLenRatio >= 0.5, masterLen * 0.5, gridStep));
+    intendedTakeLen = ba.if(finishTargetN > 0.5, finishTargetN, float(writeIdxForLatch));
+    finishTakeLen = max(1.0, intendedTakeLen);
+    takeLenBeats = finishTakeLen / oneBeat;
+    beatBucketEps = 0.001;
+    anchorGridBeats = ba.if(takeLenBeats > 16.0 + beatBucketEps, 16.0,
+                       ba.if(takeLenBeats > 8.0 + beatBucketEps, 8.0,
+                       ba.if(takeLenBeats > 4.0 + beatBucketEps, 4.0,
+                       ba.if(takeLenBeats > 2.0 + beatBucketEps, 2.0, 1.0))));
+    anchorGridLen = anchorGridBeats * oneBeat;
     finishGridLen = ba.if(masterLen < 0.5, gridStep, anchorGridLen);
     armGridSnap = ba.if(finishGridLen < 0.5, armMasterPhase,
                     floor(armMasterPhase / finishGridLen + 0.5) * finishGridLen);
     armPhaseBias = armMasterPhase - armGridSnap;
-    recordStartPhaseOffsetStep(prev) = ba.if(finishEdge, masterPhase - latencyBiasN - armPhaseBias, prev);
+    trimStartStep(prev) = ba.if(finishEdge, trimAmount, prev);
+    trimStart = trimStartStep ~ _;
+    recordStartPhaseOffsetStep(prev) = ba.if(finishEdge,
+                                          ba.if(masterLen < 0.5, masterPhase - latencyBiasN - armPhaseBias,
+                                                masterPhase - latencyBiasN - armGridSnap),
+                                          prev);
     recordStartPhaseOffset = recordStartPhaseOffsetStep ~ _;
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
@@ -67,8 +80,8 @@ with {
     readPosStep(prev) = ba.if(armEdge | finishEdge, absPos,
                          ba.if(varispeedActive, wrapAbs(prev + speedClamped, wrapLen), absPos));
     readPos = readPosStep ~ _;
-    readIdx0 = int(readPos) % wrapLen;
-    readIdx1 = (readIdx0 + 1) % wrapLen;
+    readIdx0 = (int(readPos) + int(trimStart)) % MAXLEN;
+    readIdx1 = (int(readPos) + int(trimStart) + 1) % MAXLEN;
     readFrac = readPos - floor(readPos);
     ringCeil = rwtable(MAXLEN, 0.0, writeIdx, writeVal, readIdx1);
     delayed = ring + (ringCeil - ring) * readFrac;
@@ -86,6 +99,6 @@ with {
     attachLevel(x) = attach(x, abs(x) : ba.slidingMax(4096, 4096) : levelMeter) : attachWriteIdx : attachWrapLen : attachReadPos;
 };
 
-loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv) = in, (par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv))) :> _);
+loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = in, (par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats))) :> _);
 
-process(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv) = loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv);
+process(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats);
