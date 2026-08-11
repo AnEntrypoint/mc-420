@@ -459,6 +459,7 @@ async function checkAndUpdate() {
     // audio_thread.cpp's dedicated resonodeFx Lv2Host, only ever process()'d
     // when fx/resonode/engaged is true).
     const resonodeDir = await downloadRunArtifact(lv2Run.id, 'resonode-lv2', path.join(work, 'resonode'));
+    const pitchTrackerDir = await downloadRunArtifact(lv2Run.id, 'pitchtracker-lv2', path.join(work, 'pitchtracker'));
     const aloopBin = path.join(binDir, 'aloop');
     if (!fs.existsSync(aloopBin)) throw new Error('aloop binary not found in downloaded artifact at ' + aloopBin);
 
@@ -497,7 +498,7 @@ async function checkAndUpdate() {
     const REBUILD_TIMEOUT_MS = 5 * 60 * 1000;
     await execFileAsync(bashExe, [buildScript], {
       cwd: path.join(__dirname, '..'),
-      env: Object.assign({}, process.env, { OUT: ROOT, ALOOP_BIN: aloopBin, LV2_DIR: lv2Dir, RESONODE_LV2_DIR: resonodeDir, NETBOOT_SERVER: NETBOOT_SERVER }),
+      env: Object.assign({}, process.env, { OUT: ROOT, ALOOP_BIN: aloopBin, LV2_DIR: lv2Dir, RESONODE_LV2_DIR: resonodeDir, PITCHTRACKER_LV2_DIR: pitchTrackerDir, NETBOOT_SERVER: NETBOOT_SERVER }),
       timeout: REBUILD_TIMEOUT_MS,
       killSignal: 'SIGKILL',
       maxBuffer: 64 * 1024 * 1024
