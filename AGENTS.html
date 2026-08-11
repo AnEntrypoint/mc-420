@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=800dd0f778ac580731e7436c5da76037aa4b5265">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d853eb747f8e686f5fb5a10709ce626b0b6692ad">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -2710,6 +2710,114 @@ byte-identical to `f9644be`, that pinpoints the exact trigger
 conclusively; if it does NOT reproduce, the trigger is something in the
 surrounding textual reordering/description-string changes this session
 never tested in isolation.
+
+## Start-of-transient onset-glitch fixed: `xpose`'s own crossfade period was chasing a moving `windowForFormant` value
+
+A distinct bug from the plosive/mid-sustain octave-search class above:
+WITNESSED as "start-of-transient glitches" on every fresh note-on/chord
+attack, not tied to any mid-sustain burst. Root-caused via direct signal
+tracing (a debug tap on `xpose`'s own internal `d`/`w`/`x` values, not
+just `shiftAmount`): for a genuine unison-lock case (`shiftAmount≈0`,
+`d≈0` throughout — this bug is NOT a tracker or lock error, `effDetNote`
+was already bit-exact correct within 1ms of onset), the real output audio
+still showed a large octave-scale error (-354.8c at 10ms for 82Hz,
+matching this section's own onset-transient CI gate's worst historical
+readings) even though `xpose(w,x,0,sig)` should be mathematically a
+same-sample passthrough at `s=0`.
+
+The actual cause: `windowForFormant`'s `si.smooth`-based window-size
+smoother is zero-initialized, so on every fresh note-on `w` genuinely
+RAMPS from near-zero up toward its true steady-state value over
+~150-200ms (confirmed via direct trace: `w=145` at 10ms climbing to `w=547`
+by 100ms for 82Hz, vs. a true steady value near 585). `xpose`'s own
+`d = i : (+ : +(w) : fmod(_,w)) ~ _` recursion modulos its running phase
+accumulator against this SAME moving `w` every sample — a phase
+accumulator wrapped against a changing modulus produces a real, non-zero
+discontinuity in the wrapped result even when the underlying `i`
+(shift-derived increment) is genuinely zero, since the wrap POINT itself
+moves out from under the accumulator mid-flight. This is why the error
+appeared to defy the (correct) tracker/lock-side numbers — it lives
+entirely downstream, inside the shifter's own crossfade-period state, not
+in pitch detection at all.
+
+Two earlier fix attempts this session were tried and rejected first, both
+informative failures:
+- **Snap `windowForFormant`'s smoother to its target value on
+  `ba.time==0`** (mirroring `heldDetNote`/`freqGlide`'s own
+  snap-then-glide idiom elsewhere in this file) made things WORSE, not
+  better: `freqDet` reads its own cold-start floor (`minTrackHz=60.0`) at
+  the very first sample of ANY render, so the snap locked `w` onto the
+  WRONG value (`windowForFormant(60.0,...)≈799`, the `maxWindowMs` clamp
+  ceiling) and then had to glide back down — producing NEW large spikes at
+  `t=10ms` (up to +5095c at 110Hz) plus a persistent 20-30c steady-state
+  residual that never fully settled. This is the same "cold-start
+  self-trap" failure class already documented above for `slowRef` —
+  snapping onto the tracker's own first, unreliable reading is worse than
+  a bounded ramp from zero.
+- **Per-voice frozen-window recursions inside `voiceOut`** (12 new `~`
+  recursions total, 2 per voice x 6 voices) compiled fine in total
+  isolation and via the fast local `df.box.boxFromDSP`/`boxToSource`
+  reproduction (this AGENTS.md's own documented faster alternative to a
+  full CI round-trip), but reproducibly hung the real DawDreamer
+  `FaustProcessor.compile()` JIT path for 35-45+ minutes with zero output,
+  every time, across multiple clean retries. The box-compile path stayed
+  fast (13-17s) for the SAME source the whole time — this is a genuine
+  JIT-specific behavior, not a real compile-time cliff in the CLI-codegen
+  sense this file's history already extensively documents elsewhere; the
+  practical lesson is the same either way: minimize new recursion count
+  added to this file per change, and verify via the box-compile path
+  first, but budget real patience (or accept killing and retrying) for the
+  JIT path specifically once a change is confirmed structurally sound.
+
+**Shipped fix**: freeze the SHARED, top-level `winSamples`/`xfSamples`
+(computed once in `process()`, already shared across all 6 voices) at
+their pre-onset value on ANY voice's gate rising edge, via exactly TWO new
+`~` recursions total (not per-voice) — `anyRising` ORs together all 6
+voices' own rising-edge checks, and `winFrozenStep`/`xfFrozenStep` hold
+the last value until the next `anyRising` edge. This gives `xpose`'s
+internal `d` accumulator a stable modulus for the whole duration a chord
+is held, eliminating the moving-target discontinuity, while changing
+nothing about `shiftAmount`'s own glide or the tracker/lock machinery
+above it. Compiles fast via the box path (11.4s/13.8s) and, unlike the
+per-voice attempt, also completed via the JIT path without hanging.
+
+**Verified via direct per-frequency DawDreamer renders across all 10 of
+this section's own CI-battery frequencies** (the full-battery script
+itself repeatedly hung in the JIT path for 35-50+ minutes this session
+with no output despite the underlying DSP being proven sound via the box
+path — a separate, likely load/host-specific JIT quirk, not evidence
+against the fix; single-frequency renders using the identical DSP source
+and identical `pitch_measure.py` measurement function completed reliably):
+worst onset-window (10-50ms) error dropped from the documented baseline
+(hundreds to thousands of cents, e.g. -354.8c/82Hz, +5095.0c/110Hz,
++2695.0c/440Hz, -2970.0c/1046.5Hz) to 0.0-0.2c at EVERY tested frequency
+(82/110/130.8/164.8/196/220/440/880/1046.5/1318.5Hz), with steady-state
+(t&gt;=150ms) residual 0.4-7.0c, comfortably inside the existing 20c gate.
+
+**Honest, disclosed scope limit — this fix does NOT touch the
+plosive/mid-sustain octave-search bug documented in the section
+immediately below.** `anyRising` only triggers on a genuine MIDI gate
+transition; a broadband burst arriving mid-sustain (no gate change at
+all) leaves `winSamples`/`xfSamples` frozen at whatever they already were,
+which is the CORRECT, intended behavior for onset stability but has no
+bearing on that separate bug's own root cause (the raw tracker's own
+`an.zcr`-based `detectedFreq` swinging wildly during the burst itself,
+independent of window sizing). Re-ran
+`test/pitch-tracker-transient/verify_plosive_transient.py` with this fix
+applied: it FAILS at 220Hz (worst_dev=1183.1c) and 440Hz
+(worst_dev=2695.0c) — but this matches, nearly exactly, the numbers this
+file's own "RESOLVED" section below already documents as the shipped
+`jumpGuard` baseline's KNOWN, PRE-EXISTING, intentionally-still-failing
+state ("worst-case deviation regularly exceeds 1000c... currently FAILS
+against the shipped jumpGuard alone" — see "Open, reproduced-but-unfixed:
+plosives/transients mid-sustained-note cause octave search" above), not a
+new regression this fix introduces. The two bugs are genuinely
+orthogonal: this fix's own onset-transient CI gate
+(`verify_highoctave_transient.py`) exercises a clean note-on from silence
+with the gate rising exactly once; the plosive test exercises a burst
+injected mid-sustain with NO gate transition at all. Fixing one
+structurally cannot regress or repair the other, since they key off
+different edges entirely.
 
 ## RESOLVED: the plosive/octave-search bug is fixed, shipped, and CI-green — the compile-time wall was never structural
 
