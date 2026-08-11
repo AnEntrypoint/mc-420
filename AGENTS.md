@@ -419,6 +419,40 @@ When bisecting with an old commit's binary, expect a crash if it predates the
 nullptr-features fix and any LV2 bundle is present in `/effects/home` or
 `/effects/user`.
 
+**The automatic path was silently missing the `pitchtracker-lv2` artifact
+entirely.** `checkAndUpdate` in `serve-netboot-win.js` downloads
+`aloop-aarch64-musl`, `home-fx-lv2`, `guitar-lofi-fx-lv2`, and `resonode-lv2`
+into `.netboot-update-work/`, but never fetched `pitchtracker-lv2` (added to
+`build-lv2.yml` alongside the `multitranspose.dsp` `fx/extfreqdet` fix — see
+"RESOLVED: the plosive/octave-search bug" above) or passed
+`PITCHTRACKER_LV2_DIR` into `build-netboot.sh`'s env. WITNESSED live: the
+real device rebooted onto a build whose binary hash matched the new CI
+artifact exactly, `rc-service aloop status` read `started`, yet
+`/effects/pitchtracker/` was an empty directory — the Faust-side fix was
+fully shipped and running, but `fx/extfreqdet` could only ever read its
+compiled-in default (0.0, "no external tracker"), silently degrading to the
+original zero-crossing-only behavior forever. `build-image.yml` (the
+GitHub-hosted image builder) already fetched and passed this artifact
+correctly; only the local Windows netboot server's own `checkAndUpdate` had
+never been updated when the pitchtracker feature was added. Fixed by adding
+the same `downloadRunArtifact(lv2Run.id, 'pitchtracker-lv2', ...)` call and
+`PITCHTRACKER_LV2_DIR` env entry, mirroring `resonode-lv2`'s existing shape
+exactly. Re-verified live: a forced rebuild (delete `.netboot-update-sha`,
+relaunch) now downloads `pitchtracker.lv2`, `lib-boot-tree.sh` copies it into
+the apkovl, and after reboot `/effects/pitchtracker/pitchtracker.lv2/`
+contains real `.so`/`.ttl` files and the device's own log shows `[host]
+loaded /effects/pitchtracker/pitchtracker.lv2 on core 1`.
+
+**Lesson, generalizable to any future new LV2 bundle added to this
+project**: a new bundle needs its artifact wired into BOTH
+`build-image.yml` (used by the hosted/CI image path) AND
+`serve-netboot-win.js` (used by this local dev netboot path) — they are two
+independently-maintained fetch lists for the same set of artifacts, and
+CI going green plus the hosted image path being correct is not evidence the
+local netboot path was updated too. Grep both files for every existing
+`*-lv2` artifact name before considering a new bundle's deploy wiring
+complete.
+
 ## `build-netboot.sh` publish discipline
 
 **Publish is a staged-directory atomic `mv`, never `rm -rf` + populate-in-place.**
