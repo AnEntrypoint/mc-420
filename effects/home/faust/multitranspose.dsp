@@ -130,9 +130,19 @@ with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
     freqDet    = ba.if(extFreqDet > 0.5, extFreqDet, detectedFreq(sigIn));
-    winSamples = windowForFormant(freqDet, formant);
+    winSamplesRaw = windowForFormant(freqDet, formant);
     xfSkew     = formantXfSkew(formant);
-    xfSamples  = int(winSamples * 0.5 * xfSkew) : max(32);
+    xfSamplesRaw = int(winSamplesRaw * 0.5 * xfSkew) : max(32);
+    anyRising = (g0 > 0.5) & (g0 : mem < 0.5)
+              | (g1 > 0.5) & (g1 : mem < 0.5)
+              | (g2 > 0.5) & (g2 : mem < 0.5)
+              | (g3 > 0.5) & (g3 : mem < 0.5)
+              | (g4 > 0.5) & (g4 : mem < 0.5)
+              | (g5 > 0.5) & (g5 : mem < 0.5);
+    winFrozenStep(prev) = ba.if(anyRising, winSamplesRaw, prev);
+    winSamples = max(64, int(winFrozenStep ~ _));
+    xfFrozenStep(prev) = ba.if(anyRising, xfSamplesRaw, prev);
+    xfSamples = max(32, int(xfFrozenStep ~ _));
     wet = harmonySum(
         sigIn, ba.hz2midikey(freqDet), winSamples, xfSamples,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5
