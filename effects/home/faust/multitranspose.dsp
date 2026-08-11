@@ -125,11 +125,11 @@ harmonySum(sig, detNote, winSamples, xfSamples, n0,g0, n1,g1, n2,g2, n3,g3, n4,g
   + voiceOut(sig,detNote,winSamples,xfSamples,n2,g2) + voiceOut(sig,detNote,winSamples,xfSamples,n3,g3)
   + voiceOut(sig,detNote,winSamples,xfSamples,n4,g4) + voiceOut(sig,detNote,winSamples,xfSamples,n5,g5);
 
-process(dry, loopSum, free, formant, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
+process(dry, loopSum, free, formant, extFreqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
 with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
-    freqDet    = detectedFreq(sigIn);
+    freqDet    = ba.if(extFreqDet > 0.5, extFreqDet, detectedFreq(sigIn));
     winSamples = windowForFormant(freqDet, formant);
     xfSkew     = formantXfSkew(formant);
     xfSamples  = int(winSamples * 0.5 * xfSkew) : max(32);
