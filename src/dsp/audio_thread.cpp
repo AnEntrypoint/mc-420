@@ -593,9 +593,7 @@ static void* worker(void*) {
                 }
 
                 float masterLen = g_params ? g_params->get("cmd/master_len", 0.0f) : 0.0f;
-                float recordedBeatsShared = linkDrivingLength
-                    ? 4.0f
-                    : (g_params ? g_params->get("cmd/recorded_beats", 16.0f) : 16.0f);
+                float recordedBeatsShared = g_params ? g_params->get("cmd/recorded_beats", 16.0f) : 16.0f;
                 if (recordedBeatsShared < 1.0f) recordedBeatsShared = 16.0f;
                 double beatLenSamplesShared = masterLen > 0.0f
                     ? (double)masterLen / (double)recordedBeatsShared

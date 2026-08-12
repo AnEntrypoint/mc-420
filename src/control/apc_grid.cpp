@@ -107,6 +107,9 @@ void ApcGrid::applyRemoteTransport(ParamStore& ps, LinkBridge* link) {
 
     if (ls.isPlaying != m_lastSeenRemotePlaying) {
         m_lastSeenRemotePlaying = ls.isPlaying;
+        if (ls.isPlaying == m_lastPublishedPlaying) {
+            return;
+        }
         if (ls.isPlaying) {
             m_remoteStartPending = true;
         } else {
