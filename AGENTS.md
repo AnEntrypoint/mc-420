@@ -3112,6 +3112,96 @@ hosted image path being correct is not evidence the local netboot path
 was updated too. Grep both files for every existing `*-lv2` artifact
 name before considering a new bundle's deploy wiring complete.
 
+## Voice-as-hard-dance-bass: large downward locks work under realistic timing, with a known accuracy boundary
+
+`test/pitch-tracker-transient/verify_voice_as_bass.py` (new, diagnostic not a
+hard CI gate) locks a harmonically-rich, vocal-like sustained tone down 1-3
+octaves via `multitranspose.dsp`'s `targetNote`, sweeping `formant`, with a
+realistic mic lead-in (see the cold-start entry below for why the lead-in
+matters). Findings: at `formant=0` with a source frequency the tracker
+handles cleanly, the lock is stable and spectrally bass-dominant (tens of
+cents error, comparable to natural vibrato, low-frequency-energy-ratio
+0.90+). Combining a large downward shift (2+ octaves) with EITHER a nonzero
+`formant` OR certain source frequencies (e.g. 330Hz) can push steady-state
+error into the hundreds of cents — this reproduces, from a new angle, the
+ALREADY-DOCUMENTED "steady-state tuning jitter at SOME mid-range
+frequencies... a KNOWN HARD PROBLEM" (see the `an.zcr`-based main tracker's
+own convergence/measurement-noise entry above, and the note that a prior
+session's attempt to speed up that same loop's convergence made things
+WORSE) — not a new defect introduced this session. Every case tested stayed
+finite, bounded, and click-free; the mechanism itself never crashes or
+destabilizes, it just isn't perfectly in tune at the harder end of this
+combination. Do not tighten the new test into a hard gate, or attempt a
+quick fix to the underlying tracker jitter, without first re-reading that
+section's own history of rejected blind fixes.
+
+## Open, reproduced-but-unfixed: `winSamples`/`xfSamples` can permanently freeze at the floor on a true zero-context cold start
+
+Found while building a new DawDreamer regression test for "lock a vocal input
+down to a bass register" (`test/pitch-tracker-transient/verify_voice_as_bass.py`).
+A minimal repro — `dry` starting at literal sample 0 with `gate` already `1.0`
+from sample 0 (zero prior audio context, no lead-in) — showed the wet output
+staying at the SOURCE frequency regardless of `targetNote`, for shifts from -5
+to -24 semitones. Traced with a debug tap exposing the real internal
+`shiftAmount` (not just `targetNote - detNote`): `shiftAmount` itself DOES
+converge correctly to the target interval (confirmed -12.0 semitones by
+t=200ms for a -12-semitone case) — the bug is downstream, in `xpose`'s
+`winSamples`/`xfSamples` inputs. A further debug tap showed `winSamples`/
+`xfSamples` frozen at their `max(64)`/`max(32)` floor for the ENTIRE render,
+while the live (unfrozen) `winSamplesRaw` correctly converges to ~218-245
+samples by t=50-595ms — the window is stuck ~4x too small for the input's
+real period, and `xpose` cannot correctly pitch-shift a signal whose window is
+smaller than its own period.
+
+**Root cause**: the "Start-of-transient onset-glitch" fix (`anyRising`/
+`winFrozenStep`/`xfFrozenStep`, see above) freezes `winSamples`/`xfSamples`
+at whatever `winSamplesRaw`/`xfSamplesRaw` happen to be AT the gate's rising
+edge — correct for the normal case (freezing a converged value against a
+moving target mid-note), but if the rising edge itself lands before
+`windowForFormant`'s own `si.smooth` smoother AND the upstream `freqDet`
+tracker have had any time to converge (i.e. a note-on with no prior signal at
+all), the freeze locks in the COLD-START value forever, since `anyRising`
+never fires again for the rest of a held note. This is the same
+"cold-start self-trap" failure class already named multiple times elsewhere
+in this file (`heldDetNote`'s first attempted fix, `slowRef`) — a freeze
+mechanism with nothing sane to freeze onto yet.
+
+**Confirmed NOT to matter in realistic performance**: with even a 100ms lead-in
+of the mic signal before the gate/key press (matching how a performer actually
+plays — sing/play into the mic, THEN press the lock key), the tracker has had
+time to converge before the freeze happens, and the lock works correctly
+(measured 115.2Hz vs a 110Hz target, ~76 cents, normal convergence tolerance).
+`verify_voice_as_bass.py` uses a 150ms lead-in for exactly this reason and
+passes cleanly across a downward-lock + formant-sweep battery. On real
+hardware the mic is continuously running, so this specific true-zero-context
+scenario is realistically limited to the first note played after boot/silence,
+not every note-on.
+
+**A fix was designed and attempted, then reverted**: gate the freeze on the
+same already-existing `distrust` signal `shiftAmount`'s own `holdGate` already
+uses (rather than freezing unconditionally at `anyRising`, keep tracking
+`winSamplesRaw`/`xfSamplesRaw` live until `distrust` first clears after the
+rising edge, mirroring `heldDetNote`'s own "track live until first-ever gate"
+idiom) — architecturally the most consistent fix, reusing a signal already in
+scope (no new cross-reference into `detectedFreqAndDistrust`'s internals, the
+specific pattern this file's history already blames for its compile-time
+wall). Adding the 2 new recursions this needs (`everAnyGatedStep`/
+`winWaitingStep`) reproduced the exact real-`faust`-CLI compile-time-wall
+signature this file is infamous for: the local `df.box.boxFromDSP`/
+`boxToSource` reproduction (this file's own documented safe check) exceeded
+100s with no sign of finishing, the same class of hang six-plus prior sessions
+already hit and had to kill. Per this file's own standing rule ("if it hangs
+past ~90s, STOP... revert"), the change was reverted immediately, confirmed
+byte-identical to the pre-change file via `git diff`.
+
+**Current state**: known, disclosed, unfixed. A future session with real
+local `faust` CLI/Docker access (this environment only has DawDreamer's JIT
+and the box-compile reproduction, neither of which can bisect faster than
+"try a change, wait up to 100s") is the concrete next step, per this file's
+own already-standing recommendation for this compile-time-wall class of
+problem. Given the realistic-performance mitigation above, this is a rare
+edge case, not a blocker for normal play.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
@@ -4199,6 +4289,29 @@ hand — nothing ties them together at compile time (a Faust `.dsp` file and a
 C++ constant have no shared type system), so a voice-count change in either
 file needs the matching constant updated in both places.
 
+## Resonode's fundamental gets a register-dependent bass boost, tuned as a performant bass synth
+
+`bassBoost(freqHz)` (`resonode_synth.dsp`, right after `modeGain1..modeGain6`)
+multiplies ONLY `m1`'s (the fundamental mode's) gain term:
+`bassBoost(freqHz) = 1.0 + bassBoostAmt*max(0,min(1,(bassCornerHz-freqHz)/bassSpanHz))`,
+`bassBoostAmt=0.35`, `bassCornerHz=220.0`, `bassSpanHz=160.0` — plain top-level
+constants, deliberately NOT a new `hslider`/knob (an always-on tuning
+improvement, not a new performative control). Exact identity at/above 220Hz
+(verified bit-exact, `0.0` max abs diff); below it, ramps the fundamental's
+gain up to 1.35x as the note falls toward ~60Hz, verified to increase the
+low-frequency-energy-ratio metric (energy ≤1.5x the fundamental, the same
+metric `sweep.py`'s named-patch grid search already uses) at every bass-register
+note tested, with the existing `dance_bass_shipped_patch` regression check
+passing with an IMPROVED margin, not a regression. `bank()` is already called
+with a distinct `freqHz` per voice (not a shared value across all 4 voices the
+way `tone` was, per the "per-voice control that feeds a signal ALL VOICES
+currently share identically defeats cross-voice sharing" lesson below) — this
+change introduces no new cross-voice divergence, since there was nothing
+shared to lose here. The exciter itself is untouched — still mic-only, per
+the standing "keys must never play the exciter" decision below; this is a
+tuning change to the modal filter bank's own gain shaping, not a new
+synthesis mechanism.
+
 ## Resonode named sweetspot patches (`kResonodePatches`)
 
 Once the exciter became mic-only (see "Resonode is a real-input-excited
@@ -4701,6 +4814,113 @@ re-confirm the CURRENT shipped values produce physically sane, bass-dominant,
 non-clipping output under the fixed gain, so they are not obviously wrong -- but
 their original "measured, not guessed" grid-search provenance should be treated
 as unconfirmed until that sweep is re-run for real.
+
+## Guitar shift-bank: `Shift+Guitar` gives a tempo-synced rhythmic gate + already-built stutter/wow/bitcrush-adjacent targets
+
+`kGuitarShiftTargets` (`apc_grid.cpp`) is selected instead of `kGuitarTargets`
+whenever `m_activeBank == FxBank::Guitar && m_shift` — no new `FxBank` enum
+value needed, this reuses the existing Guitar bank's state and just branches
+the knob-target table on `m_shift`, the same pattern `onFormantCC` already
+uses for its deadzone/range switch. Knob0/1 are the new gate
+(`fx2/GATEAMT`/`fx2/GATEPATTERN`); knob2-4 are `fx2/VINYLAMT`/
+`fx2/FLUTTERAMT`/`fx2/SRRAMT` — declared in `guitar_lofi_fx.dsp` since the
+file was first written but never mapped to any knob until now (a pre-existing,
+free, already-verified stutter/wow-flutter/bitcrush-adjacent effect set,
+identified by reading the file rather than adding new DSP); knob5-6 stay
+`SamplerAttackMs`/`SamplerReleaseMs`, unchanged from the plain Guitar bank.
+
+`gateStage` (new, `guitar_lofi_fx.dsp`, appended as the LAST stage of
+`process`, after `samplerateStage`) is a rhythmic amplitude gate — 4 smooth,
+period-1-in-`GATEPHASE` raised-cosine patterns (`gatePat0..gatePat3`: straight
+4-on-the-floor, offbeat/skank, 16th-note stutter, a 3-3-2 broken pattern),
+bucket-selected from `fx2/GATEPATTERN` via a fixed 3-comparison `select2`
+chain (plain arithmetic indexing, not a scan — matches this codebase's
+`div[]`-lookup idiom elsewhere). `gateEnv = 1.0 - GATEAMT*(1.0-selected)` is
+an exact identity at `GATEAMT=0` (`1.0 - 0*(anything) = 1.0` algebraically,
+verified bit-exact in a real JIT render, not just on paper).
+
+**`fx2/GATEPHASE`** (0..1 over a shared 4-beat cycle) is pushed from C++ every
+block, unconditionally, via `homeFx.setControl("fx2/GATEPHASE", ...)` right
+before `homeFx.process()` in `audio_thread.cpp`'s worker loop — the same
+direct-push shape `fx/resonode/engaged`/`fx/extfreqdet` already use for
+values that change every block rather than only on a CC. It is driven from
+`shuffleClockSamples` (see the groove-shuffle entry below — the SAME shared
+4-beat clock backs both the guitar gate's tempo-sync and the groove-shuffle
+buttons, computed once), NOT from `masterPhase`, so the gate keeps ticking
+even with no loop recorded yet (falls back to a nominal half-second beat).
+Verified via the real box-compile method: 0.09-0.10s, nowhere near this
+project's `multitranspose.dsp`/`dsp/aloop.dsp` compile-time cliff (this is a
+wholly separate Core-3 LV2 compilation unit).
+
+## Groove shuffle: the 4 metronome-flash pads (`kBeatPadNotes` 15/23/31/39) are also shuffle buttons
+
+The 4 pads that already flash in sync with the beat (`apc_leds.h`'s
+`kBeatPadNotes`, col 7 rows 1-4 — previously LED-only, never claimed by any
+press handler since `gridLooperIndex`/`gridPresetIndex` both return -1 for
+col 7) are now also pressable: `midi.cpp` intercepts notes 15/23/31/39 BEFORE
+the generic `onPadPress`/`onPadRelease` dispatch and routes them to
+`ApcGrid::onShuffleButtonPress`/`onShuffleButtonRelease`, which track a
+4-bit held-state array and publish the bitmask via `ps.setByName("fx/shuffle/mask",
+...)` (bound in `bindAll`, per the "every internal flag needs `ps.bind()`"
+rule above). No LED behavior changed — the existing beat-flash colors are
+untouched; the buttons are audio-only feedback, like SHIFT-fold.
+
+**The offset math lives entirely in C++** (`audio_thread.cpp`, new static
+helpers `shuffleF0Raw..shuffleF3Raw`/`shuffleOffsetSamples` right before
+`worker()`), added directly into the existing `masterPhaseBuf` per-sample fill
+loop — deliberately NOT a Faust change, both to avoid any risk of
+`multitranspose.dsp`'s compile-time wall (see above) and because
+`masterPhaseBuf` is already filled per-sample in C++ and Faust already treats
+it as an opaque external read-position input (`dsp/loop.dsp`'s own
+"`masterPhaseBuf` must ramp per-sample within the block" rule, unaffected —
+the shuffle is one more per-sample computation feeding the same buffer, still
+a real ramp, never a block-constant fill).
+
+**Design** (numerically verified by a dedicated agent, both in pure Python
+math and via DawDreamer against the real `dsp/loop.dsp`, before being
+transcribed to C++ — see the git history for the full verification report):
+4 base offset functions (`f0`: classic swing, `f1`: dotted/triplet shuffle,
+`f2`: push/drag, `f3`: broken/polymetric), each a pure sum of integer-harmonic
+`sin()` terms over a shared 4-beat cycle — this makes periodicity, C∞
+smoothness at the cycle wrap, and exact zero time-average all hold by
+construction (still verified numerically to float64 noise floor, not just
+asserted). Each is normalized to a peak of exactly `kShuffleAmpFrac
+(0.12) * stepLen` (`stepLen` = 1/16 of the 4-beat cycle, i.e. one 16th-note).
+Held buttons contribute via a per-button smoothed gain (`shuffleGain[4]`,
+ramped over ~32ms on press/release, `kShuffleGainStep = 1/24` per block —
+same shape as `kFoldStep`'s existing ramp), summed, then clamped to
+`kShuffleClampFrac (0.20) * stepLen` so no combination of held buttons can
+ever exceed a bounded excursion regardless of how many are held. Clamping a
+sum of zero-mean sinusoids reintroduces a small nonzero DC per combination
+(verified worst case ~0.9% of the clamp bound) — `kShuffleDcCorrection[16]`,
+one constant per bitmask, subtracts it back out before the final clamp, so
+every one of the 15 non-empty combinations is independently verified
+zero-mean AND pairwise-distinct (minimum pairwise difference 0.118*stepLen
+across the full cycle — no two combos are audibly degenerate copies of each
+other).
+
+**The shuffle clock is independent of any looper's own length.** `masterLen`
+is quantized to powers-of-2 of whatever the performer actually played (see
+"Successive-recording quantization" above) and is not guaranteed to be a
+multiple of a 4-beat cycle, so the shuffle uses its OWN free-running
+`shuffleClockSamples` accumulator (advanced by `N` every block, wrapped at
+`fourBeatLenShared = 4 * beatLenSamplesShared`, `beatLenSamplesShared =
+masterLen/recordedBeats` when a loop exists or a nominal half-second beat
+otherwise) rather than `masterPhaseSamples` — the offset it produces is
+ADDED on top of the real `masterPhaseSamples + i` ramp, never replacing it,
+so the shuffle is a bounded, periodic perturbation of the canonical clock,
+not a new source of long-term drift (average speed over one full 4-beat
+cycle is exactly 1.0 by the zero-mean property above).
+
+**Disclosed, verified characteristic, not a defect**: combinations including
+`f2` (push/drag) plus at least one other pattern can locally exceed a
+derivative magnitude of 1.0 (up to ~1.45x at all-four-held) — meaning the
+read position can briefly move backward by up to a few hundred samples
+during the most aggressive combos. This is smooth and click-free (verified,
+not just asserted) and is a deliberate, disclosed consequence of stacking the
+steepest harmonic pattern at full amplitude — consistent with "broken/glitch"
+being one of the 4 base characters, not a bug. The other 8 masks (every
+combo not containing `f2`, plus `f2` alone) never reverse.
 
 ## CC53 formant constants (must match `../looper` exactly)
 

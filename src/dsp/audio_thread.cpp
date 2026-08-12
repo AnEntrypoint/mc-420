@@ -178,6 +178,48 @@ static void setFlushToZero() {
 #endif
 }
 
+static constexpr float kShuffleTwoPi = 6.28318530717958647692f;
+
+static inline float shuffleF0Raw(float p) {
+    return sinf(kShuffleTwoPi * 4.0f * p);
+}
+static inline float shuffleF1Raw(float p) {
+    return sinf(kShuffleTwoPi * 6.0f * p) + 0.5f * sinf(kShuffleTwoPi * 12.0f * p + 1.04719755f);
+}
+static inline float shuffleF2Raw(float p) {
+    return sinf(kShuffleTwoPi * 16.0f * p - 1.04719755f) + 0.4f * sinf(kShuffleTwoPi * 32.0f * p);
+}
+static inline float shuffleF3Raw(float p) {
+    return sinf(kShuffleTwoPi * 5.0f * p) + 0.6f * sinf(kShuffleTwoPi * 7.0f * p + 0.78539816f);
+}
+
+static constexpr float kShuffleNormConst[4] = {
+    1.0f, 0.6769510745904967f, 0.7251807504553944f, 0.6263311516936046f,
+};
+static constexpr float kShuffleAmpFrac = 0.12f;
+static constexpr float kShuffleClampFrac = 0.20f;
+static constexpr float kShuffleDcCorrection[16] = {
+    0.00000000f, 0.00000000f, 0.00000000f, 0.00059138f,
+    0.00000000f, 0.00126808f, 0.00060658f, -0.00011969f,
+    0.00000000f, 0.00092291f, 0.00042698f, 0.00207681f,
+    0.00026805f, 0.00119046f, 0.00079574f, -0.00005760f,
+};
+
+static inline float shuffleOffsetSamples(float phaseNorm, const float gain[4], float stepLen) {
+    float combined =
+          gain[0] * kShuffleNormConst[0] * shuffleF0Raw(phaseNorm)
+        + gain[1] * kShuffleNormConst[1] * shuffleF1Raw(phaseNorm)
+        + gain[2] * kShuffleNormConst[2] * shuffleF2Raw(phaseNorm)
+        + gain[3] * kShuffleNormConst[3] * shuffleF3Raw(phaseNorm);
+    combined *= kShuffleAmpFrac;
+    int mask = (gain[0] > 0.0f ? 1 : 0) | (gain[1] > 0.0f ? 2 : 0) |
+               (gain[2] > 0.0f ? 4 : 0) | (gain[3] > 0.0f ? 8 : 0);
+    float corrected = combined - kShuffleDcCorrection[mask];
+    float clamped = corrected > kShuffleClampFrac ? kShuffleClampFrac
+                   : (corrected < -kShuffleClampFrac ? -kShuffleClampFrac : corrected);
+    return clamped * stepLen;
+}
+
 static void* worker(void*) {
     setRealtimeSelf(g_cfg.homeFxCore, g_cfg.rtPriority);
     setFlushToZero();
@@ -537,7 +579,30 @@ static void* worker(void*) {
                 static double masterPhaseSamples = 0.0;
                 static double standaloneQuantumPhaseSamples = 0.0;
                 static int64_t lastLinkPhaseMicroBeats = -1;
+                static double shuffleClockSamples = 0.0;
+                static float shuffleGain[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                static int shuffleMaskSlot = -1;
+                if (shuffleMaskSlot < 0 && g_params) shuffleMaskSlot = g_params->getSlot("fx/shuffle/mask");
+                int shuffleMaskNow = shuffleMaskSlot >= 0 && g_params
+                    ? (int)g_params->getBySlot(shuffleMaskSlot) : 0;
+                const float kShuffleGainStep = 1.0f / 24.0f;
+                for (int b = 0; b < 4; b++) {
+                    float target = (shuffleMaskNow & (1 << b)) ? 1.0f : 0.0f;
+                    if (shuffleGain[b] < target) { shuffleGain[b] += kShuffleGainStep; if (shuffleGain[b] > target) shuffleGain[b] = target; }
+                    else if (shuffleGain[b] > target) { shuffleGain[b] -= kShuffleGainStep; if (shuffleGain[b] < target) shuffleGain[b] = target; }
+                }
+
                 float masterLen = g_params ? g_params->get("cmd/master_len", 0.0f) : 0.0f;
+                float recordedBeatsShared = linkDrivingLength
+                    ? 4.0f
+                    : (g_params ? g_params->get("cmd/recorded_beats", 16.0f) : 16.0f);
+                if (recordedBeatsShared < 1.0f) recordedBeatsShared = 16.0f;
+                double beatLenSamplesShared = masterLen > 0.0f
+                    ? (double)masterLen / (double)recordedBeatsShared
+                    : (double)g_cfg.sampleRate * 0.5;
+                double fourBeatLenShared = beatLenSamplesShared * 4.0;
+                double stepLenShared = fourBeatLenShared / 16.0;
+
                 if (masterLen > 0.0f) {
                     if (linkDrivingLength && g_link) {
                         LinkSnapshot ls3 = g_link->audioRead();
@@ -573,18 +638,42 @@ static void* worker(void*) {
                     standaloneQuantumPhaseSamples = 0.0;
                     lastLinkPhaseMicroBeats = -1;
                 }
+
+                double shuffleClockStart = shuffleClockSamples;
+                shuffleClockSamples += (double)N;
+                shuffleClockSamples = std::fmod(shuffleClockSamples, fourBeatLenShared);
+                if (shuffleClockSamples < 0.0) shuffleClockSamples += fourBeatLenShared;
+                {
+                    double gatePhase01 = shuffleClockStart / fourBeatLenShared;
+                    if (gatePhase01 < 0.0) gatePhase01 = 0.0;
+                    if (gatePhase01 >= 1.0) gatePhase01 = 0.0;
+                    homeFx.setControl("fx2/GATEPHASE", (float)gatePhase01);
+                }
+
                 if (masterLen > 0.0f) {
                     const double lenD = (double)masterLen;
-                    if (lenD >= (double)N) {
+                    if (lenD >= (double)N && fourBeatLenShared >= (double)N) {
                         double p = masterPhaseSamples;
+                        double shuffleT = shuffleClockStart;
                         for (int i = 0; i < N; i++) {
-                            masterPhaseBuf[(size_t)i] = (float)p;
+                            float phaseNorm = (float)(shuffleT / fourBeatLenShared);
+                            double offset = (double)shuffleOffsetSamples(phaseNorm, shuffleGain, (float)stepLenShared);
+                            double pp = p + offset;
+                            if (pp >= lenD) pp -= lenD;
+                            if (pp < 0.0) pp += lenD;
+                            masterPhaseBuf[(size_t)i] = (float)pp;
                             p += 1.0;
                             if (p >= lenD) p -= lenD;
+                            shuffleT += 1.0;
+                            if (shuffleT >= fourBeatLenShared) shuffleT -= fourBeatLenShared;
                         }
                     } else {
                         for (int i = 0; i < N; i++) {
-                            double p = masterPhaseSamples + (double)i;
+                            double shuffleT = std::fmod(shuffleClockStart + (double)i, fourBeatLenShared);
+                            if (shuffleT < 0.0) shuffleT += fourBeatLenShared;
+                            float phaseNorm = (float)(shuffleT / fourBeatLenShared);
+                            double offset = (double)shuffleOffsetSamples(phaseNorm, shuffleGain, (float)stepLenShared);
+                            double p = masterPhaseSamples + (double)i + offset;
                             p = std::fmod(p, lenD);
                             if (p < 0.0) p += lenD;
                             masterPhaseBuf[(size_t)i] = (float)p;
@@ -594,13 +683,7 @@ static void* worker(void*) {
                     std::fill(masterPhaseBuf.begin(), masterPhaseBuf.end(), 0.0f);
                 }
                 std::fill(masterLenBuf.begin(), masterLenBuf.end(), masterLen);
-                {
-                    float recordedBeats = linkDrivingLength
-                        ? 4.0f
-                        : (g_params ? g_params->get("cmd/recorded_beats", 16.0f) : 16.0f);
-                    if (recordedBeats < 1.0f) recordedBeats = 16.0f;
-                    std::fill(recordedBeatsBuf.begin(), recordedBeatsBuf.end(), recordedBeats);
-                }
+                std::fill(recordedBeatsBuf.begin(), recordedBeatsBuf.end(), recordedBeatsShared);
                 if (linkDrivingLength && g_link) {
                     LinkSnapshot lsBeat = g_link->audioRead();
                     if (lsBeat.phaseValid && lsBeat.quantumMicroBeats > 0) {

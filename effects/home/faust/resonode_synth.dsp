@@ -83,6 +83,11 @@ modeGain4 = 0.30*abs(sin(ma.PI*position*4));
 modeGain5 = 0.22*abs(sin(ma.PI*position*5));
 modeGain6 = 0.16*abs(sin(ma.PI*position*6));
 
+bassBoostAmt = 0.35;
+bassCornerHz = 220.0;
+bassSpanHz = 160.0;
+bassBoost(freqHz) = 1.0 + bassBoostAmt*max(0.0, min(1.0, (bassCornerHz - freqHz)/bassSpanHz));
+
 dampSq   = damping*damping;
 dampCube = dampSq*damping;
 dampQuad = dampCube*damping;
@@ -110,7 +115,7 @@ with {
     f4 = freqHz*stretchRatio4;
     f5 = freqHz*stretchRatio5;
     f6 = freqHz*stretchRatio6;
-    m1 = modeFilterR(r1, freqHz, modeGain1*aliasGuard(freqHz));
+    m1 = modeFilterR(r1, freqHz, modeGain1*aliasGuard(freqHz)*bassBoost(freqHz));
     m2 = modeFilterR(r2, f2,     modeGain2*aliasGuard(f2));
     m3 = modeFilterR(r3, f3,     modeGain3*aliasGuard(f3));
     m4 = modeFilterR(r4, f4,     modeGain4*aliasGuard(f4));

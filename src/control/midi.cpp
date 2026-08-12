@@ -265,6 +265,10 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
                 if (type == 0x90 && d2 > 0) { grid.onSamplerBtn66Press(); continue; }
                 if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onSamplerBtn66Release(audio ? audio->sampler() : nullptr); continue; }
             }
+            if (d1 == 15 || d1 == 23 || d1 == 31 || d1 == 39) {
+                if (type == 0x90 && d2 > 0) { grid.onShuffleButtonPress((int)d1, ps); continue; }
+                if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onShuffleButtonRelease((int)d1, ps); continue; }
+            }
             if (d1 < kApcRows * kApcCols) {
                 if (type == 0x90 && d2 > 0) { grid.onPadPress((int)d1, now, ps, link, audio); continue; }
                 if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onPadRelease((int)d1, now, ps, link, audio); continue; }

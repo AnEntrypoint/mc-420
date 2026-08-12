@@ -52,6 +52,7 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("fx/microrepeat_div");
     ps.bind("fx/monitorfold");
     ps.bind("fx/formant");
+    ps.bind("fx/shuffle/mask", 0.0f);
     ps.bind("cmd/master_len", 0.0f);
     ps.bind("cmd/recorded_bpm", 0.0f);
     ps.bind("cmd/recorded_beats", 0.0f);
@@ -657,6 +658,15 @@ static const FxKnobTarget kGuitarTargets[kFxKnobCount] = {
     { FxKnobKind::SamplerReleaseMs, nullptr },
     { FxKnobKind::Lv2Control, "fx2/COMPRESSAMT" },
 };
+static const FxKnobTarget kGuitarShiftTargets[kFxKnobCount] = {
+    { FxKnobKind::Lv2Control, "fx2/GATEAMT"     },
+    { FxKnobKind::Lv2Control, "fx2/GATEPATTERN" },
+    { FxKnobKind::Lv2Control, "fx2/VINYLAMT"    },
+    { FxKnobKind::Lv2Control, "fx2/FLUTTERAMT"  },
+    { FxKnobKind::Lv2Control, "fx2/SRRAMT"      },
+    { FxKnobKind::SamplerAttackMs,  nullptr },
+    { FxKnobKind::SamplerReleaseMs, nullptr },
+};
 static const FxKnobTarget kLofiFxTargets[kFxKnobCount] = {
     { FxKnobKind::Lv2Control,         "fx2/BITCRUSHAMT" },
     { FxKnobKind::SamplerGranPatchWeight, nullptr },
@@ -787,7 +797,7 @@ void ApcGrid::onFxKnobCC(int ccNumber, uint8_t data2, ParamStore& ps, Sampler* s
     }
     const FxKnobTarget* targets =
         m_activeBank == FxBank::Dub ? kDubTargets :
-        m_activeBank == FxBank::Guitar ? kGuitarTargets : kLofiFxTargets;
+        m_activeBank == FxBank::Guitar ? (m_shift ? kGuitarShiftTargets : kGuitarTargets) : kLofiFxTargets;
     applyFxKnobTarget(targets[knobIdx], v, ps, sampler, homeFx);
 }
 
@@ -841,6 +851,33 @@ void ApcGrid::onGuitarFxPress(unsigned now_ms, ParamStore&) {
 void ApcGrid::onGuitarFxRelease(ParamStore&) {
     m_guitarFxHeld = false;
     m_guitarFxConsumedByLooperPress = false;
+}
+
+static int shuffleButtonIndex(int note) {
+    switch (note) {
+        case 15: return 0;
+        case 23: return 1;
+        case 31: return 2;
+        case 39: return 3;
+        default: return -1;
+    }
+}
+static void publishShuffleMask(const bool held[4], ParamStore& ps) {
+    uint8_t mask = 0;
+    for (int i = 0; i < 4; i++) if (held[i]) mask |= (uint8_t)(1u << i);
+    ps.setByName("fx/shuffle/mask", (float)mask);
+}
+void ApcGrid::onShuffleButtonPress(int note, ParamStore& ps) {
+    int i = shuffleButtonIndex(note);
+    if (i < 0) return;
+    m_shuffleHeld[i] = true;
+    publishShuffleMask(m_shuffleHeld, ps);
+}
+void ApcGrid::onShuffleButtonRelease(int note, ParamStore& ps) {
+    int i = shuffleButtonIndex(note);
+    if (i < 0) return;
+    m_shuffleHeld[i] = false;
+    publishShuffleMask(m_shuffleHeld, ps);
 }
 
 void ApcGrid::onSidechainLooperToggle(int looper, ParamStore& ps) {

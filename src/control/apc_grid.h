@@ -94,6 +94,9 @@ public:
     void onGuitarFxPress(unsigned now_ms, ParamStore& ps);
     void onGuitarFxRelease(ParamStore& ps);
     void onFxKnobCC(int ccNumber, uint8_t data2, ParamStore& ps, Sampler* sampler, Lv2Host* homeFx);
+
+    void onShuffleButtonPress(int note, ParamStore& ps);
+    void onShuffleButtonRelease(int note, ParamStore& ps);
     FxBank activeBank() const { return m_activeBank; }
     bool bankFlashActive() const { return m_bankFlashReleaseAt != 0; }
     FxBank bankFlashWhich() const { return m_bankFlashWhich; }
@@ -173,6 +176,8 @@ private:
     bool m_guitarFxHeld = false;
     bool m_guitarFxConsumedByLooperPress = false;
     bool m_looperIsSidechainSource[kLooperCount] = {};
+
+    bool m_shuffleHeld[4] = {};
 
     void applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, class LinkBridge* link, class AudioThread* audio = nullptr);
     void capturePreset(int p, ParamStore& ps);
