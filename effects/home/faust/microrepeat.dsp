@@ -7,7 +7,7 @@ STEP = 1.0/16.0;
 DIV = 0;
 MLB = 0;
 
-MR_MAX = 48000;
+MR_MAX = 36000;
 
 divSafe     = max(1, DIV);
 roundNearest(x) = floor(x + 0.5);

@@ -1117,6 +1117,54 @@ Neither change touches `-ct 0`'s safety story: both are `de.fdelay`/`de.delay`
 stdlib ring sizing (power-of-2 array + bitmask codegen), a structurally
 different mechanism from the `rwtable`/`table` primitives that flag governs.
 
+## A fresh full-repo buffer/pow-strength-reduction sweep found one more oversized `rwtable`, confirmed everything else already optimal
+
+A follow-up sweep (fanned across independent finder + independent verifier
+agents, deliberately excluded from touching `multitranspose.dsp`/
+`dsp/aloop.dsp`'s own compile-time cliff) re-audited every `de.fdelay`/
+`de.delay`/`rwtable`/`table` declaration and every `pow`/`tan`/`exp`/`log`
+call site across `effects/home/faust/*.dsp` (excluding `multitranspose.dsp`)
+and `dsp/loop.dsp`, using the same "read the real generated C++, never trust
+the declared source constant" discipline the `xposeMaxDelay`/`delay.dsp`
+fixes above established.
+
+**`microrepeat.dsp`'s `MR_MAX` was the one real find**: declared `48000`, but
+`sliceLen = min(MR_MAX, sliceBlocks*BS)`'s real reachable ceiling (brute-forced
+across the full `DIV∈[0,16] × MLB∈[0,4096]` integer grid, independently
+re-derived by both the finder and verifier agents) is exactly `32768`.
+`rwtable` allocates its declared size exactly, unrounded (confirmed via the
+real generated `float ftbl0[...]` array — a structurally different mechanism
+from `de.delay`/`de.fdelay`'s power-of-2 rounding, so this saves memory 1:1
+rather than needing to cross a tier). Lowered to `36000` (kept strictly above
+32768, matching the ~8-10% margin convention `delay.dsp`'s own fix used, since
+the "not capturing" branch parks a dummy write at `MR_MAX-1` and that index
+must never alias real content). Verified bit-exact (`0.0` max abs diff) across
+a 60-case `DIV×MLB` grid including the exact ceiling point, and the FULL
+`dsp/aloop.dsp` box-compile completed successfully both before and after
+(129.1s / 155.9s — both within this host's own already-documented normal
+95-500s variance for this specific compile, neither showing the
+unbounded-climbing cliff signature).
+
+**Everything else audited came back a genuine, independently-reconfirmed
+null result**: `reverb.dsp`'s `de.delay(8192, L)` LOOKS oversized on paper
+but `L` is a compile-time-constant tuple lookup (max 3571) that Faust's own
+interval analysis already narrows to a real `[4096]` array — lowering the
+declared literal would be cosmetic only, zero effect on the shipped binary.
+`flanger.dsp`/`flutter.dsp`'s existing `MAXD` values already match their real
+ceilings exactly. No integer-exponent `pow()`/`tan()` call anywhere in scope
+still uses the transcendental form uselessly — `guitar_lofi_fx.dsp`'s new
+`gateStage` patterns (`pow(x,4/6/8)`) already compile to Faust's own
+`faustpowerN` multiply-chain helpers, and `resonode_synth.dsp`'s
+`stretchRatio2..6`/`modeR` bindings are already each computed exactly once
+per sample (confirmed via real generated-C++ call counts, not source-level
+"looks replicated 4× per voice" assumption) — the same class of false lead
+this file's own "Faust already CSEs" entry above already warns about. The new
+`gateStage` itself was independently confirmed to cost exactly one k-rate-computed
+float multiply per sample (its coefficient is hoisted to once-per-block by
+Faust's own codegen, and the 4-pattern selector compiles to short-circuiting
+C++ ternaries, never evaluating more than one pattern's `cos()` calls per
+block) — no CSE/hoist opportunity exists to implement.
+
 ## Faust comments compile away to nothing — verified, not just assumed
 
 Removing a `.dsp` file's comments (per "No comments in code, ever" above)
