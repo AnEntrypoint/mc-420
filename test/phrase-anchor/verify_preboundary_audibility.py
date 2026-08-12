@@ -29,9 +29,14 @@ def run_take_with_preboundary_marker(master_len_samples, rec_start_offset_in_phr
     """
     Two DISTINCT tones: a low tone marks the pre-boundary content (what was
     recorded between the raw mid-phrase press and the nearest coarse
-    boundary), a high tone marks true phrase-boundary content. If the
-    pre-boundary tone is audible anywhere in a full loop cycle, the content
-    was repositioned, not trimmed.
+    boundary), a high tone marks true phrase-boundary content. dsp/loop.dsp
+    now NEVER discards captured audio -- the phrase-anchor snap only shifts
+    the loop's start/end phase to the nearest grid tick (recordStartPhaseOffset),
+    it never trims content out of the ring. So pre-boundary content is
+    expected to remain audible (folded into the loop, not deleted) --
+    matching the explicit requirement that the musician's actual recorded
+    timing/mental phrasing is never discarded, only the loop's playback
+    window is aligned to the nearest musically-sensible boundary.
     """
     dsp = harness.single_looper_dsp()
     total_extra = take_len_samples * 3 + 6000
@@ -138,24 +143,33 @@ def check_case(name, master_len_samples, rec_start_offset_in_phrase, take_len_sa
     high_max = max(high_energies) if high_energies else 0.0
     preboundary_present = preboundary_len > 0
     low_audible = low_max > 0.01 * high_max if high_max > 0 else low_max > 1e-6
-    print(f"[{name}] preboundary_len={preboundary_len} take_len={take_len} "
+    ok = (not preboundary_present) or low_audible
+    status = "PASS" if ok else "FAIL"
+    print(f"[{name}] {status}: preboundary_len={preboundary_len} take_len={take_len} "
           f"low(220Hz)_max_energy={low_max:.4f} high(1760Hz)_max_energy={high_max:.4f} "
-          f"preboundary_content_audible_in_playback={low_audible}")
-    return preboundary_present, low_audible
+          f"preboundary_content_audible_in_playback={low_audible} "
+          f"(expected True -- content must never be discarded)")
+    return ok
 
 
 def main():
-    print("Does pre-boundary-recorded content remain audible on playback, or is it trimmed?")
+    print("Pre-boundary-recorded content must remain audible on playback, never discarded.")
     beat = 12000
     master_len = beat * 4
 
-    check_case("half-phrase-mid-start-2phrase-take",
+    results = []
+    results.append(check_case("half-phrase-mid-start-2phrase-take",
                master_len_samples=master_len, rec_start_offset_in_phrase=beat * 2,
-               take_len_samples=master_len * 2)
+               take_len_samples=master_len * 2))
 
-    check_case("1beat-mid-start-4beat-take",
+    results.append(check_case("1beat-mid-start-4beat-take",
                master_len_samples=master_len, rec_start_offset_in_phrase=beat,
-               take_len_samples=master_len)
+               take_len_samples=master_len))
+
+    print()
+    print(f"{sum(results)}/{len(results)} passed")
+    if not all(results):
+        sys.exit(1)
 
 
 if __name__ == "__main__":

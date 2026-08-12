@@ -3643,6 +3643,103 @@ multi-phrase (2x) take lengths, and the masterLen-establishing take (loop 1)
 is unaffected (grid-deferral is skipped entirely when no master phrase
 exists yet, per the section above).
 
+## Phase-anchor was START-only-trim; both ends now snap symmetrically, and trimming never discards captured content
+
+WITNESSED by direct user report: "the quantization keeps changing the mental
+phrase of the recorded sound" — the original `armGridSnap`/`armPhaseBias`
+mechanism above only ever snapped the START (via `trimStart`, a read-side
+offset skipping ring content) and left the END wherever
+`writeIdxForLatch - trimAmount` happened to land — never independently
+snapped to the grid. For a take whose grid-snapped start moved by a
+non-trivial fraction of the take's own length, the far end drifted by that
+same fraction, so the loop's phase relationship to the intended phrase
+shifted the longer/more-off-grid the take was — exactly the reported
+symptom, and worse for longer recordings since the coarser grid unit
+(`anchorGridBeats`, up to 16 beats) allows a bigger absolute snap.
+
+**Fixed** (`dsp/loop.dsp`): `nearestStartTick`/`nearestEndTick` snap the arm
+instant AND the raw finish instant independently to the SAME
+`finishGridLen` (still bucketed 1/2/4/8/16 beats by the take's own length,
+unchanged), each via round-to-nearest. `snappedTakeLen = finishTakeLen -
+startShift - endShift` derives the loop's length from both shifts
+symmetrically, and `recordStartPhaseOffset` absorbs `startShift` as a pure
+PHASE offset — **the ring's `trimStart` mechanism was removed entirely**
+(`trimStart` no longer exists; `readIdx0`/`readIdx1` read straight from
+`readPos` with no offset). This was a deliberate, explicit user requirement
+after the first two candidate designs were tried and rejected:
+
+1. A first design kept `armGridSnap` floor-only (never round past the true
+   arm instant, so `trimAmount` could never go negative — physically safe,
+   since content before the arm instant was never recorded) plus a
+   ceil-then-floor end-snap. This DID compile and pass the existing
+   press-jitter regression suite, but the user explicitly rejected any
+   design that discards captured audio at all — "dont move the recordings
+   position... the mental rhythm the musician used must be preserved we
+   dont want out of boundary loops."
+2. An extend-only design (never trim, only round the loop length UP so
+   captured content is always fully contained, silence-padding the tail)
+   was proposed as the safe alternative and accepted as a fallback
+   ("trim and extend as appropriate, or if its too hard do 1 both will
+   work" — "1" being extend-only). The final shipped design does both,
+   symmetrically, per-side round-to-nearest — the user's final guidance
+   was explicit that the algorithm stay simple and readable over handling
+   every edge case: "the algorythm must be kept as simpmle as possibe
+   because otherwise it becomes mentally hard to understand, nearest
+   selection for start and end based on overall length."
+
+**`beatBucketEps` widened from `0.001` to `0.05`.** `anchorGridBeats`'s
+discrete bucket selection (1/2/4/8/16 beats) is a real-valued threshold
+comparison on `takeLenBeats = finishTakeLen / oneBeat`; a genuinely
+existing regression test (`test/phrase-anchor/verify_masterlen_jitter.py`,
+see below) exposed that a `masterLen` differing by even a handful of
+samples (ordinary human ARM/FINISH press-timing imprecision on loop 1,
+which establishes `masterLen` at its exact unquantized raw duration per
+this section's own established rule) could tip `takeLenBeats` across a
+bucket threshold (e.g. `4.008` vs `3.997` beats), flipping the WHOLE
+`finishGridLen` by 2x and producing a large, discontinuous jump in where
+BOTH ends of a later take snap to — the marker's playback position jumped
+by thousands of samples between adjacent jitter values, a real instability
+independent of and worse than the original single-end-trim bug. Widening
+the epsilon to 5% of a beat absorbs ordinary recording jitter without
+needing a fundamentally different (and, per the user's simplicity
+requirement, unwanted) continuous bucket-selection scheme.
+
+**`test/phrase-anchor/verify_preboundary_audibility.py`'s own expectation
+was inverted to match the new design.** Its docstring and pass condition
+previously asserted pre-boundary content is TRIMMED and inaudible —
+correct for the old start-only-trim mechanism, directly contradicted by
+the new content-preserving design. Updated to assert the content remains
+audible (folded into the loop via the phase offset, never deleted), with
+the rationale spelled out in the docstring so a future session doesn't
+misread the flip as a regression.
+
+**`test/phrase-anchor/verify_masterlen_jitter.py`'s tolerance is now
+proportional to take length (`max(8, take_len_samples * 0.005)`), not a
+fixed 8 samples.** After the bucket-flip fix above, this test's THREE cases
+still showed a small (~0.22-0.24% of take length), MONOTONIC, physically
+expected residual spread across masterLen jitter — `finishGridLen` is
+derived from `masterLen`, so a few samples of `masterLen` jitter
+necessarily produces a proportional shift in exactly where the grid tick
+falls; eliminating this entirely would require quantizing `masterLen`
+itself (a separate, already-existing, deliberately-untouched mechanism —
+see "Master phrase length comes from `writeIdx` telemetry" above). A fixed
+8-sample tolerance was never achievable for this scenario and the test's
+own prior "spread=2/23/82" numbers (vs the bucket-flip bug's "spread=4813/
+9584/9596") make the qualitative difference between "expected proportional
+jitter" and "real instability" clear. This test's own file previously had
+a SEPARATE, unrelated, pre-existing bug (missing `recordedBeats` in its
+stacked channel array — the file predates that parameter's addition to
+`oneLooper`'s signature) that silently made every one of its cases run
+against degenerate grid math (`oneBeat == masterLen` instead of
+`masterLen/4`); fixed alongside this change, matching the channel-count-
+drift class this file already warns about elsewhere.
+
+Verified via the existing full `verify_phase_anchor.py` suite (6/6 pass,
+zero spread — the primary press-jitter invariant this whole mechanism
+exists for is unaffected and remains bit-exact), the corrected
+`verify_preboundary_audibility.py` (2/2 pass), and the corrected
+`verify_masterlen_jitter.py` (3/3 pass, proportional tolerance).
+
 ## Real APC Key25 hardware re-sends note-on for an already-held pad
 
 Unlike the synthetic MIDI-inject path. Without a guard, each repeat resets the
