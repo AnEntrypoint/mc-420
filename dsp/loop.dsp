@@ -34,7 +34,7 @@ with {
     armMasterPhase = armMasterPhaseStep ~ _;
     finishRequestedStep(prev) = ba.if(armEdge, 0, ba.if(finishReqN > 0.5, 1, prev));
     finishRequested = finishRequestedStep ~ _;
-    wrapLenStep(prev) = ba.if(finishEdge, max(1.0, snappedTakeLen), prev);
+    wrapLenStep(prev) = ba.if(finishEdge, max(1.0, snappedWrapLen), prev);
     wrapLen = max(1, wrapLenStep ~ _);
     writeIdxForLatch = ba.if(finishRequested, finishTargetN, writeIdx);
     recordingGate(prev) = (recN > 0.5) | (finishRequested & (prev < finishTargetN));
@@ -51,29 +51,20 @@ with {
     intendedTakeLen = ba.if(finishTargetN > 0.5, finishTargetN, float(writeIdxForLatch));
     finishTakeLen = max(1.0, intendedTakeLen);
     takeLenBeats = finishTakeLen / oneBeat;
-    beatBucketEps = 0.05;
-    anchorGridBeats = ba.if(takeLenBeats > 16.0 + beatBucketEps, 16.0,
-                       ba.if(takeLenBeats > 8.0 + beatBucketEps, 8.0,
-                       ba.if(takeLenBeats > 4.0 + beatBucketEps, 4.0,
-                       ba.if(takeLenBeats > 2.0 + beatBucketEps, 2.0, 1.0))));
-    anchorGridLen = anchorGridBeats * oneBeat;
-    finishGridLen = ba.if(masterLen < 0.5, gridStep, anchorGridLen);
-    rawEndPhase = armMasterPhase + finishTakeLen;
-    nearestStartTick = ba.if(finishGridLen < 0.5, armMasterPhase,
-                          floor(armMasterPhase / finishGridLen + 0.5) * finishGridLen);
-    nearestEndTick = ba.if(finishGridLen < 0.5, rawEndPhase,
-                       floor(rawEndPhase / finishGridLen + 0.5) * finishGridLen);
-    startShift = armMasterPhase - nearestStartTick;
-    endShift = rawEndPhase - nearestEndTick;
-    snappedTakeLen = max(finishGridLen, finishTakeLen - startShift - endShift);
-    recordStartPhaseOffsetStep(prev) = ba.if(finishEdge, masterPhase - latencyBiasN - startShift, prev);
-    recordStartPhaseOffset = recordStartPhaseOffsetStep ~ _;
+    beatBucketEps = 0.5;
+    roundedBeats = ba.if(masterLen < 0.5, takeLenBeats,
+                     max(1.0, floor(takeLenBeats + beatBucketEps)));
+    snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, roundedBeats * oneBeat);
+    recordStartMasterPhaseStep(prev) = ba.if(finishEdge, armMasterPhase, prev);
+    recordStartMasterPhase = recordStartMasterPhaseStep ~ _;
+    ringOffset = ba.if(masterLen < 0.5, 0.0, recordStartMasterPhase);
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
-    cycleOffsetStep(prev) = ba.if(finishEdge | armEdge, 0.0,
-                             ba.if(masterPhaseWrapped, wrapAbs(prev + masterLen, wrapLen), prev));
+    cycleOffsetStep(prev) = ba.if(armEdge, 0.0,
+                             ba.if(masterPhaseWrapped, prev + masterLen, prev));
     cycleOffset = cycleOffsetStep ~ _;
-    absPos = wrapAbs(masterPhase - recordStartPhaseOffset + cycleOffset, wrapLen);
+    absPos = ba.if(masterLen < 0.5, wrapAbs(masterPhase - latencyBiasN, wrapLen),
+               wrapAbs(masterPhase - ringOffset + cycleOffset, wrapLen));
     speedClamped = max(0.1, min(8.0, effSpeed));
     varispeedActive = effSpeed != 1.0;
     readPosStep(prev) = ba.if(armEdge | finishEdge, absPos,

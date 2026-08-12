@@ -3740,6 +3740,83 @@ exists for is unaffected and remains bit-exact), the corrected
 `verify_preboundary_audibility.py` (2/2 pass), and the corrected
 `verify_masterlen_jitter.py` (3/3 pass, proportional tolerance).
 
+## Phase-anchor rebuilt to a true 505-style fixed-cycle lock: every loop, no per-take arbitrary offset
+
+WITNESSED by direct user report immediately after the fix above shipped:
+"the lining up of the recordings phrasee still changes on playback, we
+must make it more like the 505." The symmetric start/end nearest-tick
+snap fix above was itself still wrong at a deeper level — it computed a
+per-take `startShift`/`recordStartPhaseOffset` from THAT take's own
+grid-tick distance, meaning every take's downbeat landed at a slightly
+different point relative to the shared master clock depending on its own
+press timing. A real loop-station (Boss RC-505 and equivalents) does not
+do this: every loop, once a master phrase exists, always plays back
+starting exactly at the SAME shared downbeat (`masterPhase == 0`) — never
+an independently-computed per-take offset. Confirmed with the user
+directly before implementing (`AskUserQuestion`): yes, fixed cycle-0
+anchor always.
+
+**Fix**: removed `startShift`/`endShift`/`nearestStartTick`/`nearestEndTick`
+entirely. `wrapLen` is now simply `roundedBeats * oneBeat` where
+`roundedBeats = floor(takeLenBeats + 0.5)` — a plain nearest-whole-beat
+rounding of the take's own length (the C++ side's `apc_grid.cpp` quantizer
+already produces a clean power-of-2 multiple of `masterLen` for
+`finishtarget`, so this Faust-side rounding is a redundant safety net
+against float noise, not independent quantization logic).
+`recordStartMasterPhase` (renamed from the removed `armPhaseBias`
+machinery) just remembers `armMasterPhase` — the real, grid-deferred
+recording-start instant — as a pure RING INDEXING offset (`ringOffset`):
+ring-index-0 corresponds to `masterPhase == recordStartMasterPhase`, so
+`absPos = wrapAbs(masterPhase - ringOffset + cycleOffset, wrapLen)`
+correctly maps the shared master clock onto "how far into this take's own
+ring content are we" — with NO per-take phase repositioning. Every loop's
+audible downbeat is therefore always the master clock's own downbeat,
+regardless of how loose the original press was (the existing
+`armPending`/`gridTickCrossed` fine-grid deferral still absorbs press
+looseness the same way it always did, at the `masterLen/16` granularity —
+unchanged).
+
+**`cycleOffset` had to be restored** (accumulates `+masterLen` each time
+`masterPhase` wraps, reset only at `armEdge`, unwrapped until the final
+`wrapAbs` around the whole `absPos` expression) — an EARLIER version of
+this exact fix (the one described in the section above, before the 505
+report) had deleted it entirely, assuming `masterPhase` alone could
+reconstruct ring position. This is TRUE only for takes that fit within one
+`masterLen` cycle; for the routine case of a 2/4/8/16-beat multi-phrase
+take, `masterPhase` wraps every single `masterLen`, discarding which
+repetition you're on — `cycleOffset` is exactly the counter that restores
+that information. Its ORIGINAL reset point (at `finishEdge`, in the
+pre-505-fix code) was also wrong: it must reset at `armEdge` and
+accumulate continuously through BOTH the recording and playback phases,
+never resetting again at `finishEdge`, since the true ring-position-0
+instant is `armMasterPhase`, not wherever `masterPhase` happens to sit
+when the take finishes (which — correctly, per the 505 model — is
+wherever the shared clock naturally landed, not a reset point).
+
+**Root-caused via a real, reproducible "recorded content plays back as
+total silence" bug, not a design read-through.** A `takeLenBeats=8.0`
+(exactly 2 masterLen cycles) scenario in `verify_phase_anchor.py`'s own
+`two-phrase-loose-arm-timing` case failed with zero onsets detected at
+ALL — not a phase-shift, total silence. Isolated via a battery of manual
+DawDreamer renders (full-window noise: worked; narrow 400-sample bursts at
+specific absolute positions: silent) before landing on the real
+mechanism: a temporary debug build of `dsp/loop.dsp` with `wrapLen`,
+`absPos`, `recordStartMasterPhase`, `writeIdx`, and `cycleOffset` exposed
+as EXTRA AUDIO-RATE OUTPUTS (not hbargraphs — `faust.get_parameter()`
+readback on hbargraph controls was tried first and always read back
+`0.0` regardless of true internal state, a DawDreamer `FaustProcessor`
+limitation worth remembering for future debugging of this file) showed
+`absPos` at the marker's expected playback time landing exactly one
+`masterLen` short of the correct ring position — the signature of a
+missing cycle counter, which led directly to realizing `cycleOffset` had
+been deleted in the prior session's edit.
+
+Verified via the same three-test suite: `verify_phase_anchor.py` 6/6 pass
+(zero spread, including the previously-silent two-phrase case),
+`verify_masterlen_jitter.py` 3/3 pass (unchanged numbers — that suite
+never exercised a multi-cycle take), `verify_preboundary_audibility.py`
+2/2 pass (content still never discarded, unaffected by this change).
+
 ## Real APC Key25 hardware re-sends note-on for an already-held pad
 
 Unlike the synthetic MIDI-inject path. Without a guard, each repeat resets the
