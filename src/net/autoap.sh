@@ -89,6 +89,7 @@ join_sta() {
     pkill wpa_supplicant 2>/dev/null || true
     ip addr flush dev "$IFACE" 2>/dev/null || true
     ip link set "$IFACE" up 2>/dev/null || true
+    iw dev "$IFACE" set power_save off 2>/dev/null || true
     wpa_supplicant -B -i "$IFACE" -c "$CONF_DIR/wpa_supplicant.conf" >/dev/null 2>&1 || true
     waited=0
     while [ "$waited" -lt "$ASSOC_WAIT" ]; do
@@ -117,6 +118,7 @@ start_ap() {
     ip addr flush dev "$IFACE" 2>/dev/null || true
     ip addr add "$AP_IP" dev "$IFACE"
     ip link set "$IFACE" up
+    iw dev "$IFACE" set power_save off 2>/dev/null || true
     if ! hostapd -B "$CONF_DIR/hostapd.conf"; then
         log "hostapd failed to start on $IFACE -- no mesh AP is being hosted"
         write_role_state none
