@@ -28,6 +28,7 @@ public:
     LinkSnapshot audioRead() const;
 
     void proposeTempo(double bpm);
+    void resetTempoAuthority();
 
     void setTransportPlaying(bool playing);
 

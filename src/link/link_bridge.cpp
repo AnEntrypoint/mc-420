@@ -99,6 +99,10 @@ void LinkBridge::proposeTempo(double bpm) {
 #endif
 }
 
+void LinkBridge::resetTempoAuthority() {
+    g_weSetTempo.store(false, std::memory_order_relaxed);
+}
+
 void LinkBridge::setTransportPlaying(bool playing) {
 #ifdef ALOOP_HAVE_LINK
     if (!link_) return;
