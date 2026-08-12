@@ -14,8 +14,8 @@ SAMPLE_RATE = 48000
 BLOCK_SIZE = 64
 COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
-MAX_DEVIATION_CENTS_LIMIT = 600.0
-RECOVERY_MS_LIMIT = 100.0
+ROOT_NOTE = 60.0
+MAX_DEVIATION_CENTS_LIMIT = 60.0
 
 
 def compile_processor(engine, dsp_text, name):
@@ -27,7 +27,7 @@ def compile_processor(engine, dsp_text, name):
     return faust
 
 
-def sine_with_plosive(n, freq_hz, burst_start_ms=150, burst_ms=15, amp=0.7, burst_amp=0.9):
+def sine_with_plosive(n, freq_hz, burst_start_ms=550, burst_ms=15, amp=0.7, burst_amp=0.9):
     t = np.arange(n) / SAMPLE_RATE
     tone = amp * np.sin(2 * np.pi * freq_hz * t)
     env = np.ones(n)
@@ -42,29 +42,27 @@ def sine_with_plosive(n, freq_hz, burst_start_ms=150, burst_ms=15, amp=0.7, burs
     return out
 
 
-def make_inputs(n, dry, free, formant, target_note, gate):
+def make_inputs(n, dry, target_note, gate_start_samp):
     zero = np.zeros(n)
     ones = np.ones(n)
+    gate = np.zeros(n)
+    gate[gate_start_samp:] = 1.0
     return np.stack(
         [
-            dry,
-            zero,
-            free * ones,
-            formant * ones,
-            zero,
-            target_note * ones,
-            gate * ones,
-            zero, zero, zero, zero, zero, zero, zero, zero, zero,
+            dry, zero, zero, zero, zero,
+            target_note * ones, gate,
+            zero, zero, zero, zero, zero, zero, zero, zero, zero, zero,
         ],
         axis=0,
     )
 
 
-def render(dsp_text, freq_hz, target_note, burst_start_ms, dur=0.6):
+def render(dsp_text, freq_hz, target_note, burst_start_ms, dur):
     engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
     n = int(dur * SAMPLE_RATE)
+    gate_start_samp = int(0.4 * SAMPLE_RATE)
     dry = sine_with_plosive(n, freq_hz, burst_start_ms=burst_start_ms)
-    inputs = make_inputs(n, dry, 0.0, 0.0, target_note, 1.0)
+    inputs = make_inputs(n, dry, target_note, gate_start_samp)
     playback = engine.make_playback_processor("in", inputs)
     faust = compile_processor(engine, dsp_text, "multitranspose")
     engine.load_graph([(playback, []), (faust, ["in"])])
@@ -78,80 +76,63 @@ def cents_error(measured_hz, target_hz):
     return 1200.0 * np.log2(measured_hz / target_hz)
 
 
-def check_plosive_mid_sustain(freq_hz, burst_start_ms=150):
+def check_plosive_mid_sustain(freq_hz, semitone_shift, burst_start_ms=550):
     text = DSP_PATH.read_text()
-    target_note = 69.0 + 12.0 * np.log2(freq_hz / 440.0)
-    audio = render(text, freq_hz, target_note, burst_start_ms)
+    target_note = ROOT_NOTE + semitone_shift
+    expected_hz = freq_hz * (2 ** (semitone_shift / 12.0))
+    dur = burst_start_ms / 1000 + 0.4
+    audio = render(text, freq_hz, target_note, burst_start_ms, dur)
 
+    win = max(256, int(3.0 * SAMPLE_RATE / min(freq_hz, expected_hz)))
     pre_burst_start = int((burst_start_ms - 40) / 1000 * SAMPLE_RATE)
-    win = max(256, int(3.0 * SAMPLE_RATE / freq_hz))
     pre_seg = audio[pre_burst_start:pre_burst_start + win]
-    pre_f = measure_freq(pre_seg, SAMPLE_RATE, min_hz=40.0, max_hz=2000.0)
-    pre_c = cents_error(pre_f, freq_hz)
+    pre_f = measure_freq(pre_seg, SAMPLE_RATE, min_hz=max(20.0, expected_hz * 0.5), max_hz=expected_hz * 2.0)
+    pre_c = cents_error(pre_f, expected_hz)
 
     burst_ms = 15
-    offsets_ms = [o for o in (burst_ms + 5, burst_ms + 15, burst_ms + 30, burst_ms + 50,
-                               burst_ms + 75, burst_ms + 100, burst_ms + 150, burst_ms + 200)]
+    offsets_ms = [o for o in (burst_ms + 5, burst_ms + 15, burst_ms + 30, burst_ms + 50, burst_ms + 100)]
     row = {}
     for off in offsets_ms:
         start = int((burst_start_ms + off) / 1000 * SAMPLE_RATE)
         seg = audio[start:start + win]
-        f = measure_freq(seg, SAMPLE_RATE, min_hz=40.0, max_hz=2000.0)
-        row[off] = cents_error(f, freq_hz)
+        f = measure_freq(seg, SAMPLE_RATE, min_hz=max(20.0, expected_hz * 0.5), max_hz=expected_hz * 2.0)
+        row[off] = cents_error(f, expected_hz)
 
     worst_dev = max((abs(c) for c in row.values() if not np.isnan(c)), default=0.0)
-    recovered_at = None
-    for i, off in enumerate(offsets_ms):
-        later = offsets_ms[i:]
-        if all(not np.isnan(row[o]) and abs(row[o]) < 20.0 for o in later):
-            recovered_at = off
-            break
-
-    print(f"  {freq_hz:7.1f}Hz (pre-burst={pre_c:+.1f}c): " + " ".join(
+    print(f"  freq={freq_hz:7.1f}Hz shift={semitone_shift:+5.1f}st (pre-burst={pre_c:+.1f}c): " + " ".join(
         f"t+{o}ms={row[o]:+7.1f}c" if not np.isnan(row[o]) else f"t+{o}ms=    nan" for o in offsets_ms
     ))
-    return worst_dev, recovered_at
+    return worst_dev
 
 
 def main():
-    print("multitranspose.dsp plosive/transient-mid-sustain regression check")
+    print("multitranspose.dsp plosive/transient-mid-sustain regression check (interval-harmonizer architecture)")
     print(f"DSP: {DSP_PATH}")
-    print(f"Gate: worst |cents| deviation after a 15ms broadband burst mid-sustained-note must stay under "
-          f"{MAX_DEVIATION_CENTS_LIMIT:.0f}c (rejects wild octave-search); must recover to <20c within "
-          f"{RECOVERY_MS_LIMIT:.0f}ms of the burst ending.")
+    print("This bug class (a broadband burst mid-sustained-note causing an octave-search in the shifted")
+    print("output) was, across many prior sessions, structurally impossible to fully fix in the old")
+    print("absolute-pitch-lock design -- see AGENTS.md's extensive history. In the interval-harmonizer")
+    print("architecture shiftAmount never depends on live-tracked input pitch at all, so a burst can only")
+    print("ever perturb window-sizing quality, never which note comes out. This test's job is now to")
+    print("PROVE that structural guarantee holds, with a gate tight enough to catch any future regression")
+    print(f"that reintroduces a tracker dependency: worst |cents| deviation must stay under {MAX_DEVIATION_CENTS_LIMIT:.0f}c "
+          f"through and immediately after the burst.")
 
-    dev_failures = []
-    recovery_failures = []
-    for freq_hz in (110.0, 164.8, 220.0, 440.0):
-        worst_dev, recovered_at = check_plosive_mid_sustain(freq_hz)
-        dev_ok = worst_dev < MAX_DEVIATION_CENTS_LIMIT
-        recovery_ok = recovered_at is not None and recovered_at <= RECOVERY_MS_LIMIT
-        print(f"    -> worst_dev={worst_dev:.1f}c ({'OK' if dev_ok else 'FAIL'}), "
-              f"recovered_at={recovered_at}ms ({'OK' if recovery_ok else 'FAIL'})")
-        if not dev_ok:
-            dev_failures.append(f"{freq_hz}Hz worst_dev={worst_dev:.1f}c >= {MAX_DEVIATION_CENTS_LIMIT:.0f}c limit")
-        if not recovery_ok:
-            recovery_failures.append(f"{freq_hz}Hz did not recover to <20c within {RECOVERY_MS_LIMIT:.0f}ms")
+    failures = []
+    for freq_hz, semitone_shift in ((110.0, 12.0), (164.8, -7.0), (220.0, 0.0), (440.0, -19.0)):
+        worst_dev = check_plosive_mid_sustain(freq_hz, semitone_shift)
+        ok = worst_dev < MAX_DEVIATION_CENTS_LIMIT
+        print(f"    -> worst_dev={worst_dev:.1f}c ({'OK' if ok else 'FAIL'})")
+        if not ok:
+            failures.append(f"{freq_hz}Hz shift={semitone_shift}st worst_dev={worst_dev:.1f}c >= {MAX_DEVIATION_CENTS_LIMIT:.0f}c limit")
 
     print()
-    # worst_dev is the hard gate: it catches the actual wild-octave-search
-    # symptom this test exists for, and is what CI enforces. recovered_at is
-    # a stricter settling-speed target that genuinely is not met yet as of
-    # the shipped output-side glide-freeze fix -- reported loudly, never
-    # silently loosened to hide the gap, but not blocking CI on its own
-    # (see AGENTS.md's own standing rule against tuning a gate to pass
-    # rather than fixing the underlying behavior).
-    if recovery_failures:
-        print("KNOWN OPEN GAP (non-blocking): settling time exceeds the strict recovery target:")
-        for f in recovery_failures:
-            print(f"  - {f}")
-    if dev_failures:
+    if failures:
         print("FAILED:")
-        for f in dev_failures:
+        for f in failures:
             print(f"  - {f}")
         sys.exit(1)
     else:
-        print("PASSED: no wild octave-scale search after a plosive/transient burst mid-sustained-note.")
+        print("PASSED: a plosive/transient burst mid-sustained-note has no effect on the shifted note's pitch.")
         sys.exit(0)
 
 

@@ -1,14 +1,12 @@
 declare name "MultiKeyTranspose";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Polyphonic pitch-LOCK harmonizer: an.pitchTracker-derived detNote drives each held voice's shift (targetNote - detNote), landing the wet output on the exact pressed key. Two additions on top of the base engine: (1) onsetUntrust, a per-voice trust gate keyed to that voice's own gate rising edge, which holds effDetNote at a two-tier fallback (heldDetNote) for a flat-hold-then-release window after note-on -- on this voice's first-ever onset (no prior gate), heldDetNote tracks targetNote live (a bounded, musically-safe fallback matching the original fix); on any LATER retrigger, it freezes at detNote's own last-settled pre-onset value instead, preserving whatever pitch-lock was already established rather than zeroing shiftAmount. Neither a pure blend-to-targetNote (zeroes shiftAmount, unlocks every attack) nor a pure freeze-last-value (has nothing sane to freeze onto on a true cold start) alone is correct -- both were tried, both regressed, see AGENTS.md; (2) formant (-3..3, default 0), which skews xpose's window/crossfade sizing (winSkewMul/formantXfSkew) for a real, monotonic timbral character control reachable while voices are locking a chord. Both additions are exact no-ops in their disabled/default state -- see AGENTS.md 'multitranspose.dsp: polyphonic pitch-LOCK, 6 voices' for the full derivation and numeric verification.";
+declare description "Polyphonic interval harmonizer: each held voice's shift is a fixed (targetNote - rootNote) semitone interval, snapped instantly on note-on and glided on any live retune (steal). This is deliberately NOT the prior absolute-pitch-lock design (shiftAmount derived from a live-tracked input frequency) -- that design's correctness depended on a pitch tracker's convergence time, which is why every prior session's onset/plosive/octave-search bug lived in this file (see AGENTS.md). An interval harmonizer needs no live tracking to know which note to produce, so onset latency and octave-search failure classes are structurally impossible here, matching how real hardware Whammy/Manipulator-style harmonizers work. The autocorrelation-derived freqDet (fx/extfreqdet, falling back to an internal zero-crossing tracker) is retained ONLY to size xpose's pitch-synchronous window/crossfade for natural, formant-preserving shifting (PSOLA-style: a window sized to the input's own true period preserves timbre at any shift ratio) -- a wrong window costs a little naturalness, never a wrong note. formant additionally detunes the window/period ratio and applies a light spectral tilt for a real, continuously controllable vocal-character control, exact identity at formant=0.";
 
 import("stdfaust.lib");
 
 NVOICES = 6;
 
-glideTau = ba.tau2pole(0.008);
-voiceGain = 0.6;
 trackerHarmonics = 4;
 trackerTau = 0.02;
 minTrackHz = 60.0;
@@ -18,12 +16,6 @@ maxWindowMs = 20.0;
 coarseTrackerTau = 0.003;
 fastTrackerTau = 0.0015;
 minFloorCoeffHz = 60.0;
-
-onsetFlatHoldMs = 110.0;
-onsetReleaseMs = 60.0;
-onsetFlatHoldSamples = onsetFlatHoldMs * 0.001 * ma.SR;
-onsetReleaseSamples = onsetReleaseMs * 0.001 * ma.SR;
-onsetTotalSamples = onsetFlatHoldSamples + onsetReleaseSamples;
 
 freqScaledPole(baseTau, freqHz) = ba.tau2pole(baseTau * minFloorCoeffHz / max(minFloorCoeffHz, freqHz));
 
@@ -46,28 +38,12 @@ with {
     };
 };
 
-subharmCheckTau = 0.02;
-subharmConsistentTolRatio = 0.15;
-
-octaveCorrect(rawY, xHighpassed) = correctedY
-with {
-    halfYRaw = rawY * 0.5;
-    halfYReachable = halfYRaw >= minTrackHz;
-    halfY = max(minTrackHz, halfYRaw);
-    subZcr = an.zcr(subharmCheckTau, fi.lowpass(trackerHarmonics, halfY, xHighpassed)) * ma.SR * .5;
-    subharmConsistent = halfYReachable & (abs(subZcr - halfY) < (halfY * subharmConsistentTolRatio));
-    correctedY = ba.if(subharmConsistent, halfY, rawY);
-};
-
 maxSemitoneJump = 9.0;
 jumpMaxRatio = pow(2.0, maxSemitoneJump / 12.0);
 jumpResyncMs = 25.0;
 jumpResyncSamples = jumpResyncMs * 0.001 * ma.SR;
 
-distrustHoldMs = 180.0;
-distrustHoldSamples = distrustHoldMs * 0.001 * ma.SR;
-
-jumpGuard(rawFreq) = anchorOut, distrust
+jumpGuard(rawFreq) = anchorOut
 with {
     firstSample = ba.time == 0;
     plausible(a, cand) = (cand < a * jumpMaxRatio) & (cand > a / jumpMaxRatio);
@@ -80,17 +56,10 @@ with {
     };
     pair = pairStep ~ (_, _);
     anchorOut = pair : (_, !);
-    rejectCnt = pair : (!, _);
-    implausibleNow = rejectCnt > 0.5;
-    holdCountStep(prev) = ba.if(implausibleNow, distrustHoldSamples, max(0.0, prev - 1.0));
-    holdCount = holdCountStep ~ _;
-    distrust = min(1.0, holdCount / distrustHoldSamples);
 };
 
-detectedFreqAndDistrust(sig) = trackPitchHzAndHp(trackerHarmonics, trackerTau, sig) : octaveCorrect
-    : max(minTrackHz) : min(maxTrackHz) : jumpGuard;
-
-detectedFreq(sig) = detectedFreqAndDistrust(sig) : (_, !);
+detectedFreq(sig) = trackPitchHzAndHp(trackerHarmonics, trackerTau, sig)
+    : (_, !) : max(minTrackHz) : min(maxTrackHz) : jumpGuard;
 
 winSkewMul(formant) = pow(1.2, formant * (1.0/3.0));
 
@@ -109,46 +78,37 @@ with {
 
 formantXfSkew(formant) = pow(4.0, formant * (1.0/3.0));
 
-onsetUntrust(gate) = loop ~ _ : /(onsetReleaseSamples) : min(1.0) : max(0.0)
-with {
-    rising = gate > (gate : mem);
-    loop(prevCnt) = ba.if(rising, onsetTotalSamples, max(0.0, prevCnt - 1.0));
-};
-
+rootNote = 60.0;
 normalGlidePole = ba.tau2pole(0.008);
 
-voiceOut(sig, detNote, winSamples, xfSamples, targetNote, gate, distrust) = wet
+voiceOut(sig, winSamples, xfSamples, targetNote, gate) = wet
 with {
-    untrust          = onsetUntrust(gate);
-    everGatedStep(prev) = max(prev, gate > 0.5);
-    everGatedBefore  = (everGatedStep ~ _) : mem;
-    rising           = gate > (gate : mem);
-    heldDetNoteStep(prev) = ba.if(everGatedBefore & rising, detNote : mem,
-                             ba.if(everGatedBefore, prev, targetNote));
-    heldDetNote      = heldDetNoteStep ~ _;
-    effDetNote       = detNote*(1.0-untrust) + heldDetNote*untrust;
-    holdGate = distrust > 0.5;
-    shiftAmountStep(prev) = ba.if(holdGate, prev,
-                             (targetNote - effDetNote) * (1.0 - normalGlidePole) + prev * normalGlidePole);
-    shiftAmount = shiftAmountStep ~ _;
+    attackEdge = gate > (gate : mem);
+    shiftTarget = targetNote - rootNote;
+    shiftStep(prev) = ba.if(attackEdge, shiftTarget,
+                       prev * normalGlidePole + shiftTarget * (1.0 - normalGlidePole));
+    shiftAmount = shiftStep ~ _;
     voiceEnv    = en.adsr(0.003, 0.03, 1, 0.05, gate);
-    wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * voiceGain;
+    wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * 0.6;
 };
 
-harmonySum(sig, detNote, winSamples, xfSamples, distrust, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
-    voiceOut(sig,detNote,winSamples,xfSamples,n0,g0,distrust) + voiceOut(sig,detNote,winSamples,xfSamples,n1,g1,distrust)
-  + voiceOut(sig,detNote,winSamples,xfSamples,n2,g2,distrust) + voiceOut(sig,detNote,winSamples,xfSamples,n3,g3,distrust)
-  + voiceOut(sig,detNote,winSamples,xfSamples,n4,g4,distrust) + voiceOut(sig,detNote,winSamples,xfSamples,n5,g5,distrust);
+harmonySum(sig, winSamples, xfSamples, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
+    voiceOut(sig,winSamples,xfSamples,n0,g0) + voiceOut(sig,winSamples,xfSamples,n1,g1)
+  + voiceOut(sig,winSamples,xfSamples,n2,g2) + voiceOut(sig,winSamples,xfSamples,n3,g3)
+  + voiceOut(sig,winSamples,xfSamples,n4,g4) + voiceOut(sig,winSamples,xfSamples,n5,g5);
+
+formantTiltDb(formant) = formant * 2.5;
+
+formantTilt(formant, sig) = sig
+    : fi.low_shelf(0.0 - formantTiltDb(formant), 400.0)
+    : fi.high_shelf(formantTiltDb(formant), 3000.0);
 
 process(dry, loopSum, free, formant, extFreqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
 with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
-    freqDetPair = detectedFreqAndDistrust(sigIn);
-    freqDetInternal = freqDetPair : (_, !);
-    distrustInternal = freqDetPair : (!, _);
+    freqDetInternal = detectedFreq(sigIn);
     freqDet    = ba.if(extFreqDet > 0.5, extFreqDet, freqDetInternal);
-    distrust   = ba.if(extFreqDet > 0.5, 0.0, distrustInternal);
     winSamplesRaw = windowForFormant(freqDet, formant);
     xfSkew     = formantXfSkew(formant);
     xfSamplesRaw = int(winSamplesRaw * 0.5 * xfSkew) : max(32);
@@ -162,10 +122,11 @@ with {
     winSamples = max(64, int(winFrozenStep ~ _));
     xfFrozenStep(prev) = ba.if(anyRising, xfSamplesRaw, prev);
     xfSamples = max(32, int(xfFrozenStep ~ _));
-    wet = harmonySum(
-        sigIn, ba.hz2midikey(freqDet), winSamples, xfSamples, distrust,
+    wetRaw = harmonySum(
+        sigIn, winSamples, xfSamples,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5
     ) : ma.tanh;
+    wet = formantTilt(formant, wetRaw);
     dryWet  = wet * (1.0-freeSmooth);
     loopWet = wet * freeSmooth;
 };

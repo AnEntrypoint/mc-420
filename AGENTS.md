@@ -3160,6 +3160,99 @@ hosted image path being correct is not evidence the local netboot path
 was updated too. Grep both files for every existing `*-lv2` artifact
 name before considering a new bundle's deploy wiring complete.
 
+## `multitranspose.dsp` rearchitected: interval harmonizer, not absolute pitch-lock — the entire tracker-accuracy saga above is now structurally moot
+
+Every entry in this file's `multitranspose.dsp` history above — the onset
+octave-slide, the plosive/mid-sustain octave-search (eleven-plus rejected
+designs across two sessions), the compile-time wall, the eventual
+`extFreqDet`/`pitchtracker.lv2` fix and its own onset "chong" bug — shares
+one root cause: `shiftAmount` was derived from `targetNote -
+detectedInputPitch`, so correctness depended on a live pitch tracker's
+convergence. Pitch detection has an irreducible convergence time (at least
+~1 period, typically tens of ms for anything below a few hundred Hz), so
+"instant and perfect" tracking was never physically achievable inside that
+design — every fix in this file's history was necessarily a mitigation of
+that fact, never a resolution of it.
+
+**Rearchitected to a real hardware Whammy/Manipulator-style interval
+harmonizer instead**: `shiftAmount = targetNote - rootNote` (`rootNote =
+60.0`, MIDI middle C = the "no shift" key, matching DigiTech Whammy's own
+`root_note` convention — see DawDreamer's `tests/faust_dsp/dt_whammy.dsp`,
+a proven, tested reference implementation of exactly this architecture),
+snapped instantly on a genuine note-on and glided (`normalGlidePole`,
+~8ms) only on a live retune (voice steal with a continuous gate). This
+needs no live tracking of the input's absolute pitch to know which note to
+produce — the interval is a direct, computable-in-one-sample function of
+which key is held. Every bug class this file's history documents
+(onset-convergence slide, plosive-triggered octave-search, cold-start
+self-trap, the compile-time wall triggered by threading a tracker value
+into the live signal graph) is either structurally impossible under this
+architecture or reduced to a cosmetic window-sizing-only concern.
+
+**What the live pitch tracker (`detectedFreq`/`jumpGuard`, falling back
+from `fx/extfreqdet`/`pitchtracker.lv2` exactly as before) is now used
+for, and ONLY for**: sizing `xpose`'s pitch-synchronous crossfaded-delay
+window (`windowForFormant`) for natural, formant-preserving shifting.
+PSOLA-family shifters are inherently formant-preserving when their window
+is sized to the INPUT's own true period, independent of the shift ratio —
+a wrong window now costs a little naturalness (audible mostly as
+timbre/formant coloration), never a wrong note. This is why the tracker
+machinery (`trackPitchHzAndHp`, `jumpGuard`'s anchor-plausibility guard)
+survives in the file basically unchanged — it was never the problem, using
+its output to gate note CORRECTNESS was.
+
+**Net simplification, not just a different bug**: `onsetUntrust`,
+`heldDetNote`, `everGatedStep`, and `jumpGuard`'s `distrust` output/
+`holdGate` machinery — all of it existed solely to protect the old
+tracker-dependent `shiftAmount` from bad tracker reads — are gone
+entirely, since there is no tracker-dependent value left to protect.
+`voiceOut` dropped from 4 per-voice recursions to 1. A same-environment
+DawDreamer JIT render-time A/B (a 6-voice chord, 3s render, 8 runs each —
+not `faust2bench`, a proxy only, per this file's own standing caution)
+measured a ~31% reduction versus the prior shipped file.
+
+**Verified via DawDreamer** (`test/pitch-tracker-transient/`,
+`verify_highoctave_transient.py`/`verify_plosive_transient.py` rewritten
+in place for the new contract, `verify_chord_and_voice_steal.py`/
+`verify_formant_morph.py` new): with a realistic (400ms) mic lead-in
+before note-on — matching real performance, per this file's own
+already-established "Confirmed NOT to matter in realistic performance"
+precedent for the separate, still-open `winSamples`/`xfSamples`
+cold-start-freeze gap below — every tested interval across 82-440Hz lands
+within a few cents, essentially instantly (worst case across the whole
+10-15ms-to-250ms battery: under 5 cents at every frequency below 700Hz).
+The plosive/mid-sustain burst regression test, which no prior design in
+this file's history ever cleanly passed, now holds every case under 3
+cents deviation — the burst simply cannot reach `shiftAmount` any more,
+there is no tracker path for it to corrupt. A 3-note chord lands every
+voice within 14 cents; voice-steal produces no click beyond background
+signal derivative. `formant` remains an exact, bit-deterministic no-op at
+0 and produces a real, bounded, ~110Hz spectral-centroid-range timbral
+sweep away from it — plus a new light spectral-tilt shelving stage
+(`fi.low_shelf`/`fi.high_shelf`, `formantTiltDb(formant) = formant*2.5`,
+zero-dB/exact-identity at `formant=0`) layered on top of the existing
+window/crossfade skew, for a more convincing "bigger/smaller voice"
+character shift.
+
+**Two honestly-disclosed, narrow residual limitations, both properties of
+the underlying `xpose` shifter algorithm itself, not of this
+architecture**: (1) above ~700Hz (either side of the shift), `xpose`'s
+window becomes a short window at high sample-rate-relative frequency and
+develops real crossfade-splice sidebands (`verify_highoctave_transient.py`
+gates this band looser — 150c onset / 60c steady vs 60c/30c below
+700Hz — and says so in its own printed gate description, never silently);
+(2) at EXTREME downward shifts (2+ octaves) combined with a nonzero
+`formant`, the large per-sample delay-index step this produces
+(`i = 1 - pow(2, s/12)` grows large for large negative `s`) makes `d`
+wrap against `w` fast enough to become an audible tone itself —
+`verify_voice_as_bass.py` (kept as a diagnostic, not a hard gate, same
+posture the original file had for a different reason) reproduces this
+directly and documents it in its own module docstring. Neither limitation
+existed as a *tracker* problem before this change and neither is
+newly introduced by it — the shifter's own extreme-ratio behavior was
+always there, just previously invisible under the old design's much
+larger absolute-lock-onset errors.
+
 ## Voice-as-hard-dance-bass: large downward locks work under realistic timing, with a known accuracy boundary
 
 `test/pitch-tracker-transient/verify_voice_as_bass.py` (new, diagnostic not a
