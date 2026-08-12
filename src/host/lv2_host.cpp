@@ -9,6 +9,7 @@
 
 #include <dlfcn.h>
 #include <dirent.h>
+#include <unistd.h>
 #include <csetjmp>
 #include <csignal>
 #include <cctype>
@@ -48,17 +49,20 @@ namespace aloop {
 namespace {
 sigjmp_buf   g_jmp;
 volatile sig_atomic_t g_inPlugin = 0;
-void faultHandler(int sig) {
+void faultHandler(int sig, siginfo_t* info, void*) {
     if (g_inPlugin) siglongjmp(g_jmp, sig);
-    // Not in a plugin → genuine crash; restore default and re-raise.
+    char buf[128];
+    int n = snprintf(buf, sizeof buf, "[fatal] signal=%d si_addr=%p outside-plugin\n",
+                      sig, info ? info->si_addr : nullptr);
+    if (n > 0) { ssize_t w = write(2, buf, (size_t)n); (void)w; }
     signal(sig, SIG_DFL);
     raise(sig);
 }
 void installWatchdog() {
     struct sigaction sa{};
-    sa.sa_handler = faultHandler;
+    sa.sa_sigaction = faultHandler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_NODEFER;
+    sa.sa_flags = SA_NODEFER | SA_SIGINFO;
     sigaction(SIGSEGV, &sa, nullptr);
     sigaction(SIGFPE,  &sa, nullptr);
 }
