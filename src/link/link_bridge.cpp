@@ -83,12 +83,13 @@ void LinkBridge::proposeTempo(double bpm) {
     if (!link_) return;
     auto* l = (ableton::Link*)link_;
     const bool havePeers = (l->numPeers() > 0);
-    if (havePeers && !g_weSetTempo.load(std::memory_order_relaxed)) {
-        fprintf(stderr, "[link] not proposing %.3f bpm — %u peer(s) already own the session tempo\n",
+    auto state = l->captureAppSessionState();
+    const bool sessionIdle = !state.isPlaying();
+    if (havePeers && !g_weSetTempo.load(std::memory_order_relaxed) && !sessionIdle) {
+        fprintf(stderr, "[link] not proposing %.3f bpm — %u peer(s) actively playing at the session tempo\n",
                 bpm, (unsigned)l->numPeers());
         return;
     }
-    auto state = l->captureAppSessionState();
     state.setTempo(bpm, l->clock().micros());
     l->commitAppSessionState(state);
     g_weSetTempo.store(true, std::memory_order_relaxed);
