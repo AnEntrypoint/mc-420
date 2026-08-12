@@ -566,7 +566,7 @@ static void* worker(void*) {
             if (linkDrivingLength && g_params && g_link) {
                 float recordedBpm = g_params->get("cmd/recorded_bpm", 0.0f);
                 LinkSnapshot ls2 = g_link->audioRead();
-                if (recordedBpm > 1.0f && ls2.bpm > 1.0) {
+                if (!ls2.weOwnTempo && recordedBpm > 1.0f && ls2.bpm > 1.0) {
                     linkSpeedRatio = recordedBpm / (float)ls2.bpm;
                 }
             }

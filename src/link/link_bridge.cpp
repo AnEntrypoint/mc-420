@@ -67,6 +67,7 @@ void LinkBridge::controlTick() {
     s.beatPhaseMicroBeats = (int64_t)(phase * 1e6);
     s.quantumMicroBeats   = (int64_t)(kLinkQuantum * 1e6);
     s.isPlaying           = state.isPlaying();
+    s.weOwnTempo          = g_weSetTempo.load(std::memory_order_relaxed);
     (void)beat;
     g_active.store(nxt, std::memory_order_release);
 #endif

@@ -15,6 +15,7 @@ struct LinkSnapshot {
     int64_t quantumMicroBeats   = 0;
     bool    isPlaying    = false;
     int     peerCount    = 0;
+    bool    weOwnTempo   = false;
 };
 
 class LinkBridge {
