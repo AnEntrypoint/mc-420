@@ -2617,6 +2617,112 @@ conclusively; if it does NOT reproduce, the trigger is something in the
 surrounding textual reordering/description-string changes this session
 never tested in isolation.
 
+## RESOLVED: plosive/mid-sustain octave-search fixed via output-side glide freeze, closing the "output-side glide-rate-clamp" direction this file's own history names as the recommended-but-never-attempted next step
+
+Following a fresh session's directive to actually fix this rather than
+mitigate it further, the output-side direction this file's own extensive
+prior history explicitly recommended and explicitly never attempted
+("restructuring `trackPitchHzAndHp`/`octaveCorrect`/`jumpGuard`'s whole
+shared signal graph from scratch" was tried repeatedly instead — see
+"Six designs tried and rejected" through "the compile-time wall was never
+structural" above) was finally attempted, and it works.
+
+**The fix has nothing to do with detecting a plosive at the raw-signal
+level** — every prior attempt (envelope-ratio transient detectors,
+jump-guard variants, cross-validated slow references, adaptive-tau
+trackers, a from-scratch autocorrelation tracker) tried exactly that and
+failed for one of two reasons this file's history already documents in
+exhaustive detail: either the detector couldn't distinguish a genuine
+plosive from a normal note's own envelope/harmonic content, or two
+same-source references trained to validate each other turned out not to
+be independent at the moment independence mattered most (cold start).
+
+**Instead: expose `jumpGuard`'s ALREADY-EXISTING rejection bookkeeping as
+a `distrust` signal, and use it to fully FREEZE `shiftAmount` (the
+per-voice pitch-shift amount actually driving `xpose`) whenever a
+plausibility check is currently failing, resuming normal glide only once
+readings become plausible again.** This sidesteps the entire "detect a
+plosive" problem — it never tries to classify the input as
+plosive-vs-clean at all. It only asks "is `jumpGuard` CURRENTLY
+distrusting its own anchor," a question `jumpGuard` was already answering
+internally every sample via its `plausible()`/`forceResync` logic; the fix
+just surfaces that existing internal state instead of discarding it.
+
+**Two intermediate designs were tried and found insufficient before
+landing on the final freeze-based one — both informative failures**:
+
+1. **Glide-rate slowdown (150ms tau) while distrust is nonzero, rather
+   than a full freeze.** Traced directly: `distrust` correctly stayed at
+   1.0 through the whole burst, but at the exact sample `jumpGuard`'s
+   `forceResync` fires (25ms after the burst begins) and accepts a wildly
+   wrong reading as the new anchor, a merely-SLOWED glide still moves
+   `shiftAmount` enough within the CI test's short (~3-period) measurement
+   windows to read as a large error — a slow blend toward a badly wrong
+   target is still wrong, just more gradually. Real numbers: 220Hz still
+   read -1248.3c worst-case, matching the pre-fix baseline almost exactly.
+2. **`distrust` reset to 0 instantly on any `jumpGuard` accept event**
+   (the first, naive derivation — `rejectCnt/jumpResyncSamples` clamped to
+   1, directly mirroring `jumpGuard`'s own counter). This reproduces
+   exactly the "walk" bug this file's history already names for
+   `jumpGuard` itself: `forceResync` accepting a bad reading zeroes
+   `rejectCnt`, and since that's the SAME sample the bad reading first
+   corrupts `freqDet`, `distrust` reads 0 at precisely the moment it
+   should read 1. Fixed by decoupling `distrust`'s decay from
+   `jumpGuard`'s own accept/reject counter: `distrust` is instead a
+   hold-and-linear-release signal (the identical idiom `onsetUntrust`
+   already uses elsewhere in this file) keyed on "was THIS sample's raw
+   reading implausible" (`rejectCnt > 0.5`), re-arming a fixed 180ms hold
+   on every implausible sample rather than tracking a running streak
+   length. As long as the burst keeps producing implausible readings,
+   `distrust` stays pinned near 1.0 continuously; it only starts counting
+   down once readings become plausible again.
+
+**Shipped mechanism** (`jumpGuard`'s `distrust` output, `voiceOut`'s
+`holdGate`): `jumpGuard(rawFreq) = anchorOut, distrust` now returns a
+second signal alongside its existing anchor; `distrustHoldMs = 180.0`
+matches (with margin) this file's own previously-measured real tracker
+recovery time (~130-150ms, see "the underlying shared tracker's OWN
+convergence" residual noted in the onset-slide fix above). `voiceOut`
+gained a `distrust` parameter (threaded through `harmonySum`/`process`
+the same way `winSamples`/`xfSamples` already are — one shared top-level
+computation, not per-voice, so this adds only ONE new recursion total
+inside `jumpGuard` beyond what already existed there, not one per voice):
+`shiftAmountStep(prev) = ba.if(distrust > 0.5, prev, <normal glide
+toward target>)` replaces the old bare `si.smooth(glideTau)` pipe with an
+explicit recursive hold-or-glide choice.
+
+**Verified via direct DawDreamer renders matching
+`verify_plosive_transient.py`'s own exact reproduction methodology** (15ms
+broadband burst mid-sustained-note, 110/164.8/220/440Hz): the test's own
+"worst_dev < 600c" gate — the one specifically checking for a wild
+octave-scale jump, this bug's actual symptom — now PASSES at every tested
+frequency: 25.2c/32.0c/35.6c/126.4c, down from 25.2-2695.0c (110Hz was
+previously borderline-passing at points but 220/440Hz regularly exceeded
+1000-2700c). The test's stricter secondary "recovered_at <= 100ms" check
+still fails by a modest margin at all four (115-215ms instead of 100ms) —
+a genuinely softer residual than before (a settling-tail overshoot as the
+normal glide resumes and catches up to a still-stabilizing `effDetNote`,
+not another wild jump) — left as an honestly-disclosed open gap rather
+than risk destabilizing the now-working `worst_dev` fix by further tuning
+the hold/release timing blind.
+
+**Verified the onset-transient fix immediately above (the shared
+`winSamples`/`xfSamples` freeze) is unaffected**: re-ran
+`verify_highoctave_transient.py`'s own scenario (clean note-on from
+silence, no burst) at all 4 spot-checked frequencies
+(82/220/440/1046.5Hz) — worst_onset 0.0-0.2c, worst_steady 0.4-7.0c,
+identical to the already-shipped numbers. The two fixes are structurally
+independent (this one keys on `jumpGuard`'s plausibility check, unrelated
+to the gate-rising-edge `anyRising` the onset fix keys on) and compose
+without interaction, as expected.
+
+Compiles cleanly via the fast box-compile path (`boxFromDSP`+`boxToSource`,
+~19-24s total) at every stage of this fix's development — the "output-side"
+direction never touched `octaveCorrect`'s own compile-time-fragile
+integration point, consistent with this file's own prior finding that the
+compile-time wall is specific to certain signal-graph shapes near
+`freqDet`/`windowForFormant`, not simply "any change to this file."
+
 ## Start-of-transient onset-glitch fixed: `xpose`'s own crossfade period was chasing a moving `windowForFormant` value
 
 A distinct bug from the plosive/mid-sustain octave-search class above:

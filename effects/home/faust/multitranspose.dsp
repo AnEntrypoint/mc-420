@@ -64,7 +64,10 @@ jumpMaxRatio = pow(2.0, maxSemitoneJump / 12.0);
 jumpResyncMs = 25.0;
 jumpResyncSamples = jumpResyncMs * 0.001 * ma.SR;
 
-jumpGuard(rawFreq) = anchorOut
+distrustHoldMs = 180.0;
+distrustHoldSamples = distrustHoldMs * 0.001 * ma.SR;
+
+jumpGuard(rawFreq) = anchorOut, distrust
 with {
     firstSample = ba.time == 0;
     plausible(a, cand) = (cand < a * jumpMaxRatio) & (cand > a / jumpMaxRatio);
@@ -77,10 +80,17 @@ with {
     };
     pair = pairStep ~ (_, _);
     anchorOut = pair : (_, !);
+    rejectCnt = pair : (!, _);
+    implausibleNow = rejectCnt > 0.5;
+    holdCountStep(prev) = ba.if(implausibleNow, distrustHoldSamples, max(0.0, prev - 1.0));
+    holdCount = holdCountStep ~ _;
+    distrust = min(1.0, holdCount / distrustHoldSamples);
 };
 
-detectedFreq(sig) = trackPitchHzAndHp(trackerHarmonics, trackerTau, sig) : octaveCorrect
+detectedFreqAndDistrust(sig) = trackPitchHzAndHp(trackerHarmonics, trackerTau, sig) : octaveCorrect
     : max(minTrackHz) : min(maxTrackHz) : jumpGuard;
+
+detectedFreq(sig) = detectedFreqAndDistrust(sig) : (_, !);
 
 winSkewMul(formant) = pow(1.2, formant * (1.0/3.0));
 
@@ -105,7 +115,9 @@ with {
     loop(prevCnt) = ba.if(rising, onsetTotalSamples, max(0.0, prevCnt - 1.0));
 };
 
-voiceOut(sig, detNote, winSamples, xfSamples, targetNote, gate) = wet
+normalGlidePole = ba.tau2pole(0.008);
+
+voiceOut(sig, detNote, winSamples, xfSamples, targetNote, gate, distrust) = wet
 with {
     untrust          = onsetUntrust(gate);
     everGatedStep(prev) = max(prev, gate > 0.5);
@@ -115,21 +127,28 @@ with {
                              ba.if(everGatedBefore, prev, targetNote));
     heldDetNote      = heldDetNoteStep ~ _;
     effDetNote       = detNote*(1.0-untrust) + heldDetNote*untrust;
-    shiftAmount = (targetNote - effDetNote) : si.smooth(glideTau);
+    holdGate = distrust > 0.5;
+    shiftAmountStep(prev) = ba.if(holdGate, prev,
+                             (targetNote - effDetNote) * (1.0 - normalGlidePole) + prev * normalGlidePole);
+    shiftAmount = shiftAmountStep ~ _;
     voiceEnv    = en.adsr(0.003, 0.03, 1, 0.05, gate);
     wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * voiceGain;
 };
 
-harmonySum(sig, detNote, winSamples, xfSamples, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
-    voiceOut(sig,detNote,winSamples,xfSamples,n0,g0) + voiceOut(sig,detNote,winSamples,xfSamples,n1,g1)
-  + voiceOut(sig,detNote,winSamples,xfSamples,n2,g2) + voiceOut(sig,detNote,winSamples,xfSamples,n3,g3)
-  + voiceOut(sig,detNote,winSamples,xfSamples,n4,g4) + voiceOut(sig,detNote,winSamples,xfSamples,n5,g5);
+harmonySum(sig, detNote, winSamples, xfSamples, distrust, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
+    voiceOut(sig,detNote,winSamples,xfSamples,n0,g0,distrust) + voiceOut(sig,detNote,winSamples,xfSamples,n1,g1,distrust)
+  + voiceOut(sig,detNote,winSamples,xfSamples,n2,g2,distrust) + voiceOut(sig,detNote,winSamples,xfSamples,n3,g3,distrust)
+  + voiceOut(sig,detNote,winSamples,xfSamples,n4,g4,distrust) + voiceOut(sig,detNote,winSamples,xfSamples,n5,g5,distrust);
 
 process(dry, loopSum, free, formant, extFreqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
 with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
-    freqDet    = ba.if(extFreqDet > 0.5, extFreqDet, detectedFreq(sigIn));
+    freqDetPair = detectedFreqAndDistrust(sigIn);
+    freqDetInternal = freqDetPair : (_, !);
+    distrustInternal = freqDetPair : (!, _);
+    freqDet    = ba.if(extFreqDet > 0.5, extFreqDet, freqDetInternal);
+    distrust   = ba.if(extFreqDet > 0.5, 0.0, distrustInternal);
     winSamplesRaw = windowForFormant(freqDet, formant);
     xfSkew     = formantXfSkew(formant);
     xfSamplesRaw = int(winSamplesRaw * 0.5 * xfSkew) : max(32);
@@ -144,7 +163,7 @@ with {
     xfFrozenStep(prev) = ba.if(anyRising, xfSamplesRaw, prev);
     xfSamples = max(32, int(xfFrozenStep ~ _));
     wet = harmonySum(
-        sigIn, ba.hz2midikey(freqDet), winSamples, xfSamples,
+        sigIn, ba.hz2midikey(freqDet), winSamples, xfSamples, distrust,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5
     ) : ma.tanh;
     dryWet  = wet * (1.0-freeSmooth);
