@@ -650,15 +650,19 @@ static void* worker(void*) {
                     homeFx.setControl("fx2/GATEPHASE", (float)gatePhase01);
                 }
 
+                bool shuffleActive = shuffleGain[0] > 0.0f || shuffleGain[1] > 0.0f ||
+                                     shuffleGain[2] > 0.0f || shuffleGain[3] > 0.0f;
                 if (masterLen > 0.0f) {
                     const double lenD = (double)masterLen;
                     if (lenD >= (double)N && fourBeatLenShared >= (double)N) {
                         double p = masterPhaseSamples;
                         double shuffleT = shuffleClockStart;
                         for (int i = 0; i < N; i++) {
-                            float phaseNorm = (float)(shuffleT / fourBeatLenShared);
-                            double offset = (double)shuffleOffsetSamples(phaseNorm, shuffleGain, (float)stepLenShared);
-                            double pp = p + offset;
+                            double pp = p;
+                            if (shuffleActive) {
+                                float phaseNorm = (float)(shuffleT / fourBeatLenShared);
+                                pp += (double)shuffleOffsetSamples(phaseNorm, shuffleGain, (float)stepLenShared);
+                            }
                             if (pp >= lenD) pp -= lenD;
                             if (pp < 0.0) pp += lenD;
                             masterPhaseBuf[(size_t)i] = (float)pp;
@@ -669,10 +673,13 @@ static void* worker(void*) {
                         }
                     } else {
                         for (int i = 0; i < N; i++) {
-                            double shuffleT = std::fmod(shuffleClockStart + (double)i, fourBeatLenShared);
-                            if (shuffleT < 0.0) shuffleT += fourBeatLenShared;
-                            float phaseNorm = (float)(shuffleT / fourBeatLenShared);
-                            double offset = (double)shuffleOffsetSamples(phaseNorm, shuffleGain, (float)stepLenShared);
+                            double offset = 0.0;
+                            if (shuffleActive) {
+                                double shuffleT = std::fmod(shuffleClockStart + (double)i, fourBeatLenShared);
+                                if (shuffleT < 0.0) shuffleT += fourBeatLenShared;
+                                float phaseNorm = (float)(shuffleT / fourBeatLenShared);
+                                offset = (double)shuffleOffsetSamples(phaseNorm, shuffleGain, (float)stepLenShared);
+                            }
                             double p = masterPhaseSamples + (double)i + offset;
                             p = std::fmod(p, lenD);
                             if (p < 0.0) p += lenD;
