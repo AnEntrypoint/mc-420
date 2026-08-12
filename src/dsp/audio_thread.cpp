@@ -761,7 +761,12 @@ static void* worker(void*) {
 bool AudioThread::start(const AudioConfig& cfg, ParamStore* params, LinkBridge* link) {
     cfg_ = cfg; g_cfg = cfg; g_params = params; g_link = link;
     g_running.store(true);
-    if (pthread_create(&g_worker, nullptr, worker, nullptr) != 0) {
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 16u * 1024u * 1024u);
+    int rc = pthread_create(&g_worker, &attr, worker, nullptr);
+    pthread_attr_destroy(&attr);
+    if (rc != 0) {
         fprintf(stderr, "[audio] fatal: could not create audio thread\n");
         return false;
     }

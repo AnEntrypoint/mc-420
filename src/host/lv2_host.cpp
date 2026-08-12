@@ -59,10 +59,17 @@ void faultHandler(int sig, siginfo_t* info, void*) {
     raise(sig);
 }
 void installWatchdog() {
+    static char altStack[SIGSTKSZ * 4];
+    stack_t ss{};
+    ss.ss_sp = altStack;
+    ss.ss_size = sizeof(altStack);
+    ss.ss_flags = 0;
+    sigaltstack(&ss, nullptr);
+
     struct sigaction sa{};
     sa.sa_sigaction = faultHandler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_NODEFER | SA_SIGINFO;
+    sa.sa_flags = SA_NODEFER | SA_SIGINFO | SA_ONSTACK;
     sigaction(SIGSEGV, &sa, nullptr);
     sigaction(SIGFPE,  &sa, nullptr);
 }
