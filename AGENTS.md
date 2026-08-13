@@ -666,6 +666,45 @@ a jam's tempo when joining". Audit any Link change against it.
   snapshot. If it fails, the levers are a shorter publish interval or explicit
   output-latency compensation — never added buffering.
 
+## `pinLinkThreadsToControlCore`: a witnessed ~30-37ms/1Hz audio stall traced to Link's own internal threads
+
+WITNESSED live on a real Pi 4: a new ~30-37ms stall on the audio thread's
+per-block read, firing at almost exactly a 1.000-second period (wall-clock
+`[diag-gap]` log lines: t=26.037, 27.037, 28.037... — a real, consistent
+period, not jitter). Confirmed absent in the pre-LOFI baseline, so a
+regression from that session's own work, not a pre-existing hardware limit.
+
+`ableton::Link` spawns its OWN internal threads ("Link Main" and "Link
+Dispatcher", named by the library itself) the moment `ableton::Link(...)` is
+constructed in `LinkBridge::start()` — this codebase has never had any
+control over their scheduling, since Link's public API exposes no
+thread-affinity hook. `ps`/`/proc/<tid>/stat` showed both threads'
+cumulative kernel time growing in lockstep, consistent with Link's own
+peer-discovery protocol sending gateway/session-sync messages on
+~second-scale intervals — a real candidate for periodically contending with
+the isolated audio cores (1, 3), since nothing had ever excluded them.
+
+Fix: `main.cpp`'s `pinLinkThreadsToControlCore` walks `/proc/self/task`,
+matches threads by `comm` name ("Link Main"/"Link Dispatcher" — the only
+host-visible handle Link gives us), and `sched_setaffinity`s them onto the
+control core (`kControlCore = 2`, matching `kernel/rt-tune.sh`'s
+`CONTROL_CORE` — both must be kept in sync if that ever changes). This adds
+no audio-path latency (the hard constraint for this investigation) — it
+only steers two pre-existing background threads' CPU affinity, matching
+`kernel/rt-tune.sh`'s existing "steer non-audio work off the isolated cores"
+strategy for IRQs, applied here to these two specific threads by name.
+
+## `[link] enabled` was silently ignored for a while — parse as a word, not `%d`
+
+`aloop.conf`'s `[link] enabled = true` was previously parsed NOWHERE while
+`link.start()` got a hardcoded `true`, so the key was a silent decoy — an
+operator disabling Link via config had no actual effect. Fixed by parsing
+it in `loadConfig`, but as a WORD (`%199s`), not `%d`: the shipped value is
+the literal text `true`, and `sscanf(line, " enabled = %d", &v)` returns 0
+matches against that (verified) — an int-typed parse would have shipped a
+second, differently-shaped decoy. `cfg.linkEnabled` accepts `true`/`1`/
+`yes`/`on`, matching `usb_record`'s own boolean-parsing convention.
+
 ## Unproven: AP-mode multicast forwarding on the Pi
 
 Whether Link's multicast crosses between the Pi's own AP and its associated
@@ -747,6 +786,19 @@ soundcard while the DSP stays mono internally. Runs at boot from `/etc/local.d`
 after `libcomposite` loads. The kernel's `f_uac2` lays out isochronous microframes
 correctly by construction, eliminating the buzz/crackle/-4608 corruption class the
 bare-metal looper had to fix by hand (ADR-008).
+
+## `main.cpp` declares `AudioThread` before starting the MIDI thread on purpose
+
+`aloop::AudioThread audio;` is declared, and its address handed to
+`runMidiLoop` (so LED VU-meter coloring can read live per-looper level
+telemetry), BEFORE `audio.start()` runs — the MIDI thread may begin running
+before `audio.start()` completes. This is safe only because
+`AudioThread::snapshotTelemetry()` is safe to call before `start()`: it
+returns the default-constructed, all-zero `Telemetry` rather than reading
+uninitialized state, so there is no ordering hazard. Any future change to
+`AudioThread`'s construction must preserve this default-safe-snapshot
+property or `runMidiLoop`'s LED-coloring read needs its own explicit
+readiness gate.
 
 ## Flush-to-zero must be set explicitly on the audio thread
 
