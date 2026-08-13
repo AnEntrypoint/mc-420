@@ -146,6 +146,8 @@ static std::string targetToZone(const std::string& target) {
     if (target == "fx/formant") return "FORMANT";
     if (target == "fx/pitch")   return "SEMIS";
     if (target == "fx/bank")    return "fx/bank";
+    if (target.rfind("fx/dubgate/", 0) == 0) return target;
+    if (target.rfind("fx/dublfo/", 0) == 0) return target;
     if (isResonodeLv2ControlTarget(target)) return "";
     return "";
 }
@@ -646,6 +648,7 @@ static void* worker(void*) {
                     if (gatePhase01 < 0.0) gatePhase01 = 0.0;
                     if (gatePhase01 >= 1.0) gatePhase01 = 0.0;
                     homeFx.setControl("fx2/GATEPHASE", (float)gatePhase01);
+                    fui.set("fx/dubgate/clockphase", (float)gatePhase01);
                 }
 
                 bool shuffleActive = shuffleGain[0] > 0.0f || shuffleGain[1] > 0.0f ||

@@ -27,10 +27,13 @@ constexpr int kFxBankCount = 3;
 constexpr int kApcBtnDubFx    = 67;
 constexpr int kApcBtnGuitarFx = 68;
 constexpr int kApcBtnLofiFx   = 69;
-constexpr int kFxKnobCount = 7;
+constexpr int kFxKnobCount = 8;
 
 enum class FxKnobKind : uint8_t { FaustZone, Lv2Control, SamplerAttackMs, SamplerReleaseMs,
-                                   SamplerGranPatchWeight };
+                                   SamplerGranPatchWeight, Unused,
+                                   SamplerAmpDecayMs, SamplerAmpSustain,
+                                   SamplerFilterAttackMs, SamplerFilterDecayMs,
+                                   SamplerFilterSustain, SamplerFilterReleaseMs };
 struct FxKnobTarget {
     FxKnobKind kind;
     const char* name;
@@ -82,8 +85,6 @@ public:
     void onShiftPress(ParamStore& ps);
     void onShiftRelease(ParamStore& ps);
     bool shiftHeld() const { return m_shift; }
-
-    void onFormantCC(uint8_t data2, ParamStore& ps);
 
     void onDubFxPress(unsigned now_ms, ParamStore& ps);
     void onLofiFxPress(unsigned now_ms, ParamStore& ps, Sampler* sampler, class AudioThread* audio = nullptr);
@@ -148,10 +149,11 @@ private:
     long m_masterLenSamples = 0;
 
     float m_fxBankValues[kFxBankCount][kFxKnobCount] = {
-        {0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f},
-        {0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
     };
+    void applyFormantCC(uint8_t data2, ParamStore& ps);
     FxBank m_activeBank = FxBank::Dub;
     unsigned m_bankFlashReleaseAt = 0;
     FxBank m_bankFlashWhich = FxBank::Dub;
