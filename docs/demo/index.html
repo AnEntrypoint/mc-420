@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>aloop — control surface demo</title>
 <meta name="description" content="Interactive, simulated replica of aloop's APC Key25 control surface — pads, banks, knobs and keybed, driven by the same gesture rules as src/control/apc_grid.cpp.">
-<link rel="stylesheet" href="https://unpkg.com/anentrypoint-design@latest/dist/247420.css">
+<link rel="stylesheet" href="https://raw.githack.com/AnEntrypoint/design/main/dist/247420.css">
 <script type="importmap">
-{ "imports": { "anentrypoint-design": "https://unpkg.com/anentrypoint-design@latest/dist/247420.js" } }
+{ "imports": { "anentrypoint-design": "https://raw.githack.com/AnEntrypoint/design/main/dist/247420.js" } }
 </script>
 <style>
   :root {
@@ -694,7 +694,7 @@ try {
   state.loadError = String(err && err.message || err);
   document.getElementById('app').innerHTML =
     '<div class="err-banner">Failed to initialize (' + state.loadError + '). ' +
-    'This page needs network access to unpkg.com for the anentrypoint-design CDN bundle.</div>';
+    'This page needs network access to raw.githack.com for the anentrypoint-design CDN bundle.</div>';
   console.error(err);
 }
 </script>
