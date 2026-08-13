@@ -1,13 +1,6 @@
-# gm plugkit runtime
 .agentplug-kv/
 .gm/pw-sock-*/
 .gm/exec-spool/
-# gm-plugkit occasionally registers/reboots the watcher from a cwd other
-# than the repo root (e.g. mid-session while a shell's cwd was temporarily
-# test/hardware/) -- WITNESSED this session, creates a stray nested .gm/
-# tree wherever that cwd was. **/.gm/ (not root-anchored) catches any such
-# subdirectory, not just the real repo-root .gm/ this file's own patterns
-# above assume.
 **/.gm/exec-spool/
 **/.gm/pw-sock-*/
 .gm/witness/
@@ -34,7 +27,6 @@
 .gm/config-source-cache-default*.sync.json
 .gm/.embed-generation*
 
-# build artifacts
 build/
 *.o
 *.so
@@ -44,14 +36,11 @@ image/*.img
 kernel/*-build/
 node_modules/
 
-# cross-compile output
 out/
 dist/
 
-# scratch dir for downloaded CI artifacts during manual deploy/debug
 tmp/
 
-# host-side netboot serving scratch (artifacts + WSL adhoc scripts)
 .netboot-stage/
 .netboot-serve/
 .netboot-serve.new.*/
@@ -64,16 +53,10 @@ tmp/
 .netboot-update-work/
 .netboot-cache/
 
-# MinGW/MSYS2 subprocess crash dumps (host-tooling artifact, not repo state)
 *.stackdump
 .image-flash-work/
 
-# test/hardware/bisect-1hz-stall.js's local safety-backup of the live
-# /etc/aloop.conf before it temporarily mutates it -- host-tooling scratch,
-# not repo state
 test/hardware/aloop.conf.backup.*
 __pycache__/
 
-# Claude Code local session/agent-worktree state -- harness machinery, not
-# repo content (background Agent isolation:"worktree" runs land here).
 .claude/
