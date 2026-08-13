@@ -835,7 +835,8 @@ void ApcGrid::onFxKnobCC(int ccNumber, uint8_t data2, ParamStore& ps, Sampler* s
     if (knobIdx < 0) return;
     float v = (float)data2 / 127.0f;
     if (m_activeBank == FxBank::LofiFx && knobIdx > 0) {
-        if (m_fxBankValues[(int)m_activeBank][knobIdx] == v) return;
+        if (m_lofiFxKnobTouched[knobIdx] && m_fxBankValues[(int)m_activeBank][knobIdx] == v) return;
+        m_lofiFxKnobTouched[knobIdx] = true;
         m_fxBankValues[(int)m_activeBank][knobIdx] = v;
         if (m_resonodeEngaged) {
             if (knobIdx <= kResonodePatchCount) applyResonodePatchMorph(ps);

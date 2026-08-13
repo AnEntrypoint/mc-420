@@ -156,6 +156,7 @@ private:
         {0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
     };
+    bool m_lofiFxKnobTouched[kFxKnobCount] = {};
     void applyFormantCC(uint8_t data2, ParamStore& ps);
     FxBank m_activeBank = FxBank::Dub;
     unsigned m_bankFlashReleaseAt = 0;
