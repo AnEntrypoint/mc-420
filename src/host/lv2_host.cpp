@@ -299,6 +299,22 @@ void Lv2Host::setControl(const std::string& symbol, float value) {
     }
 }
 
+Lv2Host::ControlHandle Lv2Host::resolveControl(const std::string& symbol) const {
+    ControlHandle h;
+    std::string prefix = mangleFaustLabel(symbol) + "_";
+    for (auto& p : plugins_) {
+        for (size_t i = 0; i < p.controlPortIdx.size(); i++) {
+            size_t portIdx = p.controlPortIdx[i];
+            if (portIdx >= p.ports.size()) continue;
+            const std::string& sym = p.ports[portIdx].symbol;
+            if (sym.size() > prefix.size() && sym.compare(0, prefix.size(), prefix) == 0) {
+                h.cells.push_back(const_cast<float*>(&p.controlValues[portIdx]));
+            }
+        }
+    }
+    return h;
+}
+
 void Lv2Host::rescanUser(const std::string& userDir) {
     loadDir(userDir);
 }

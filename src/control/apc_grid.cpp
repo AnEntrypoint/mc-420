@@ -57,6 +57,7 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("cmd/master_len", 0.0f);
     ps.bind("cmd/recorded_bpm", 0.0f);
     ps.bind("cmd/recorded_beats", 0.0f);
+    ps.bind("cmd/clearall", 0.0f);
 
     ps.bind("fx/reverb",  0.0f);
     ps.bind("fx/delay",   0.0f);

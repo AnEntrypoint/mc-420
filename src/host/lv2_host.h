@@ -49,6 +49,14 @@ public:
 
     void setControl(const std::string& symbol, float value);
 
+    struct ControlHandle {
+        std::vector<float*> cells;
+    };
+    ControlHandle resolveControl(const std::string& symbol) const;
+    static void setControlFast(const ControlHandle& h, float value) {
+        for (float* cell : h.cells) *cell = value;
+    }
+
     void rescanUser(const std::string& userDir);
 
     enum class Topology { SERIAL, FORK_JOIN };

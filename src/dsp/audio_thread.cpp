@@ -361,6 +361,7 @@ static void* worker(void*) {
     homeFx.loadDir(g_cfg.homeDir, g_cfg.userFxCore);
     homeFx.connect(N, ch);
     g_homeFx = &homeFx;
+    Lv2Host::ControlHandle gatePhaseHandle = homeFx.resolveControl("fx2/GATEPHASE");
 
     Lv2Host userFx;
     userFx.loadDir(g_cfg.userDir, g_cfg.userFxCore);
@@ -699,7 +700,7 @@ static void* worker(void*) {
                     double gatePhase01 = shuffleClockStart / fourBeatLenShared;
                     if (gatePhase01 < 0.0) gatePhase01 = 0.0;
                     if (gatePhase01 >= 1.0) gatePhase01 = 0.0;
-                    homeFx.setControl("fx2/GATEPHASE", (float)gatePhase01);
+                    Lv2Host::setControlFast(gatePhaseHandle, (float)gatePhase01);
                     fui.set("fx/dubgate/clockphase", (float)gatePhase01);
                 }
 
