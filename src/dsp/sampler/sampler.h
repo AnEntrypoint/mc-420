@@ -108,7 +108,7 @@ public:
     void setFilterAttackMs(float ms)  { m_filterAttackMs  = _clampMs(ms); _recomputeFilterEngaged(); }
     void setFilterDecayMs(float ms)   { m_filterDecayMs   = _clampMs(ms); _recomputeFilterEngaged(); }
     void setFilterSustain(float v01)  { m_filterSustainLevel = _clamp01(v01); _recomputeFilterEngaged(); }
-    void setFilterReleaseMs(float ms) { m_filterReleaseMs = _clampMs(ms); }
+    void setFilterReleaseMs(float ms) { m_filterReleaseMs = _clampMs(ms); _recomputeFilterEngaged(); }
 
     void setGranulatorEnabled(bool on) { m_granOn = on; }
     bool granulatorEnabled() const     { return m_granOn; }
@@ -730,7 +730,7 @@ private:
 
     void _recomputeFilterEngaged()
     {
-        m_filterEngaged = (m_filterSustainLevel < 0.999f) || (m_filterAttackMs > 5.0f) || (m_filterDecayMs > 5.0f);
+        m_filterEngaged = (m_filterSustainLevel < 0.999f) || (m_filterAttackMs > 5.0f) || (m_filterDecayMs > 5.0f) || (m_filterReleaseMs > 5.0f);
     }
 
     static constexpr float kGrainGainCompReferenceWindowRms = 0.612372f;
@@ -759,5 +759,5 @@ private:
     uint32_t m_grainRngState = 2463534242u;
 };
 
-} // namespace aloop
-#endif // ALOOP_SAMPLER_H
+}
+#endif

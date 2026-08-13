@@ -681,7 +681,7 @@ static const FxKnobTarget kGuitarTargets[kFxKnobCount] = {
     { FxKnobKind::Lv2Control, "fx2/DISTAMT"     },
     { FxKnobKind::Lv2Control, "fx2/VINYLAMT"    },
     { FxKnobKind::Lv2Control, "fx2/FLUTTERAMT"  },
-    { FxKnobKind::Unused, nullptr },
+    { FxKnobKind::Lv2Control, "fx2/GATEAMT"     },
 };
 static const FxKnobTarget kGuitarShiftTargets[kFxKnobCount] = {
     { FxKnobKind::SamplerFilterAttackMs,  nullptr },
