@@ -1,40 +1,3 @@
-// aloop sampler — direct port of ../looper's patches/sampler.h. This class is
-// intentionally UNCHANGED from the reference (it was already portable C++ with
-// no bare-metal/Circle dependencies) — only the include guard and namespace
-// wrapping are aloop-specific; every data structure, algorithm, and constant
-// below matches looper's real hardware sampler exactly.
-//
-// Two capture modes, both gesture-driven from the APC Key 25:
-//   * Button 65 HELD  -> record ONE shared "chromatic" sample. On release the
-//     leading/trailing silence is auto-clipped and the 25 keyboard keys play
-//     the sample pitched chromatically (middle C = note 60 = original speed),
-//     polyphonically.
-//   * Button 66 HELD  -> drum-record mode. While 66 is held, holding a keyboard
-//     key records into THAT key's own drum slot (auto-clip on release). A loaded
-//     drum slot plays at ORIGINAL pitch as a one-shot and OVERRIDES the
-//     chromatic sample on that key.
-//
-// LOAD-BEARING INVARIANTS (unchanged from looper):
-//   * Independent of the looper: this object touches NO loop-engine state. The
-//     loopers keep recording/playing while the sampler records/plays.
-//   * Sampler audio is mixed INTO the dry input buffer BEFORE the pitch/
-//     effects/microrepeat/filter chain (renderInto), so samples get all
-//     effects and are recordable by a loop.
-//   * Capture reads the fully-effected, one-block-lagged post-fx signal
-//     (audio_thread.cpp's prevFiltOut), the same tap the loopers' own
-//     record path uses -- see AGENTS.md's "Sampler capture must tap the
-//     fully-effected post-fx signal" entry.
-//   * MIDI events arrive on the control thread; audio runs on the RT audio
-//     thread. Events cross via a lock-free SPSC ring (pushEvent producer,
-//     drained in renderInto consumer). Buffers are written and read only on
-//     the audio thread.
-//   * Click-free: per-voice attack/release gain ramps + a few-sample fade at
-//     the auto-trim edges.
-//
-// Buffers are heap-allocated once in the ctor; no allocation in the audio
-// path. Storage is s16 (short) to halve the footprint; the audio path here
-// is s32 (int) mono, matching aloop's own s32-scale capture buffer.
-
 #ifndef ALOOP_SAMPLER_H
 #define ALOOP_SAMPLER_H
 
@@ -46,19 +9,19 @@ namespace aloop {
 
 class Sampler {
 public:
-    static const int SR             = 48000;          // native rate
-    static const int CHROM_MAX      = 5 * SR;         // 5s chromatic sample
-    static const int DRUM_MAX       = 2 * SR;         // 2s per drum slot
-    static const int NUM_DRUM       = 25;             // 25 keyboard keys
-    static const int BASE_NOTE      = 48;             // lowest keyboard key (C2)
-    static const int ROOT_NOTE      = 60;             // chromatic original-speed (C4/middle C)
-    static const int VOICES         = 16;             // poly voice pool
-    static const int EVENT_RING     = 64;             // control-thread -> audio-thread event ring
-    static const int TRIM_THRESH    = 200;            // |s16| silence threshold
-    static const int EDGE_FADE      = 64;             // trailing fade-out (samples)
-    static const int PREROLL        = 32;             // samples kept before onset (preserve attack)
-    static const int LEAD_DECLICK   = 8;              // tiny leading fade-in (declick only, keeps punch)
-    static const int MAX_GRAINS     = 48;             // fixed granular pool (pre-allocated, no per-block alloc)
+    static const int SR             = 48000;
+    static const int CHROM_MAX      = 5 * SR;
+    static const int DRUM_MAX       = 2 * SR;
+    static const int NUM_DRUM       = 25;
+    static const int BASE_NOTE      = 48;
+    static const int ROOT_NOTE      = 60;
+    static const int VOICES         = 16;
+    static const int EVENT_RING     = 64;
+    static const int TRIM_THRESH    = 200;
+    static const int EDGE_FADE      = 64;
+    static const int PREROLL        = 32;
+    static const int LEAD_DECLICK   = 8;
+    static const int MAX_GRAINS     = 48;
 
     enum EvType { EV_NONE = 0, EV_NOTE_ON, EV_NOTE_OFF,
                   EV_REC_START, EV_REC_STOP };
@@ -81,7 +44,7 @@ public:
         m_ageCtr = 0;
 
         m_recActive = false;
-        m_recTarget = -2;   // -2 = none, -1 = chromatic, 0..24 = drum key
+        m_recTarget = -2;
         m_recPos    = 0;
 
         m_evHead = 0;
@@ -90,7 +53,7 @@ public:
         m_ampAttackMs     = 2.0f;
         m_ampDecayMs      = 50.0f;
         m_ampSustainLevel = 1.0f;
-        m_ampReleaseMs    = 1000.0f / 48.0f;   // == old GAIN_STEP (1/48 per sample @48k) in ms
+        m_ampReleaseMs    = 1000.0f / 48.0f;
         m_filterAttackMs     = 2.0f;
         m_filterDecayMs      = 50.0f;
         m_filterSustainLevel = 1.0f;
@@ -116,23 +79,17 @@ public:
         for (int k = 0; k < NUM_DRUM; k++) { delete[] m_drumM[k]; }
     }
 
-    // ---- Producer side (control thread) --------------------------------------
-    // Lock-free SPSC push. target: REC_START uses note field as -1 (chromatic)
-    // or 0..24 (drum key). NOTE_ON/OFF use note (raw MIDI note) + vel.
     void pushEvent(EvType type, int note, int vel)
     {
         unsigned head = m_evHead;
         unsigned next = (head + 1) % EVENT_RING;
-        if (next == m_evTail) return;              // ring full -> drop
+        if (next == m_evTail) return;
         m_ev[head].type = (uint8_t)type;
         m_ev[head].note = (int16_t)note;
         m_ev[head].vel  = (int16_t)vel;
-        m_evHead = next;                           // publish after fields written
+        m_evHead = next;
     }
 
-    // Content gates read by the control thread to decide whether the keyboard
-    // routes to the sampler. Cross-thread reads of plain bools — eventually-
-    // consistent, which is fine for a UI routing gate.
     bool chromaticLoaded() const { return m_chromLoaded; }
     bool drumLoaded(int keyIdx) const
     {
@@ -143,15 +100,6 @@ public:
         return (note >= BASE_NOTE && note < BASE_NOTE + NUM_DRUM) ? (note - BASE_NOTE) : -1;
     }
 
-    // ---- Full ADSR for CHROMATIC voices only ---------------------------------
-    // Two independent envelopes, both real attack->decay->sustain->release
-    // state machines (see AdsrPhase/advanceEnv): one gates voice amplitude, the
-    // other modulates a per-voice one-pole lowpass cutoff. Ranges chosen
-    // generously (0-2000ms attack/decay/release, 0-1 sustain) to cover
-    // pad-like slow fades through to plucky instant hits, matching typical
-    // synth envelope UIs. Drum one-shot voices are entirely unaffected — they
-    // keep their own fixed duration-scaled attack / GAIN_STEP release, per
-    // "drums out of scope" below.
     void setAmpAttackMs(float ms)  { m_ampAttackMs  = _clampMs(ms); }
     void setAmpDecayMs(float ms)   { m_ampDecayMs   = _clampMs(ms); }
     void setAmpSustain(float v01)  { m_ampSustainLevel = _clamp01(v01); }
@@ -162,7 +110,6 @@ public:
     void setFilterSustain(float v01)  { m_filterSustainLevel = _clamp01(v01); _recomputeFilterEngaged(); }
     void setFilterReleaseMs(float ms) { m_filterReleaseMs = _clampMs(ms); }
 
-    // ---- Feature 2: granulator controls (chromatic + drum) -------------------
     void setGranulatorEnabled(bool on) { m_granOn = on; }
     bool granulatorEnabled() const     { return m_granOn; }
 
@@ -195,25 +142,19 @@ public:
         _recomputeGrainGainComp();
     }
 
-    // ---- Consumer side (audio thread) ---------------------------------------
-    // Append the DRY input block to the armed record buffer (no-op when not
-    // recording). in is [M0..M_{n-1}] s32.
     void captureBlock(const int *in, int n)
     {
         if (!m_recActive) return;
         short *dm; int maxLen; int *lenp;
         if (!_recBuffers(dm, maxLen, lenp)) return;
         for (int i = 0; i < n; i++) {
-            if (m_recPos >= maxLen) { m_recActive = false; break; }   // overrun clamp
+            if (m_recPos >= maxLen) { m_recActive = false; break; }
             dm[m_recPos] = _clip16(in[i]);
             m_recPos++;
         }
         *lenp = m_recPos;
     }
 
-    // Drain queued events, then mix all active voices into inout (s32, same
-    // layout). Voices are additive; the host gates nothing — the sampler is one
-    // more source in the dry input buffer.
     void renderInto(int *inout, int n)
     {
         _drainEvents();
@@ -253,13 +194,10 @@ public:
             }
 
             for (int i = 0; i < n; i++) {
-                // End-of-sample: begin release so the tail fades click-free.
                 if (vo.pos >= (double)(vo.len - 1)) { vo.target = 0.0f; }
 
                 float sm = _readInterp(vo.M, vo.len, vo.pos);
 
-                // Per-sample gain ramp toward target -- drum one-shots only
-                // (chromatic voices use the full ADSR state machine above).
                 if (vo.gain < vo.target)      { vo.gain += vo.attackStep;  if (vo.gain > vo.target) vo.gain = vo.target; }
                 else if (vo.gain > vo.target) { vo.gain -= vo.releaseStep; if (vo.gain < vo.target) vo.gain = vo.target; }
 
@@ -271,7 +209,6 @@ public:
         }
     }
 
-    // ---- Telemetry -----------------------------------------------------------
     bool recording() const   { return m_recActive; }
     int  recLen() const      { return m_recPos; }
     int  drumLoadedCount() const
@@ -286,7 +223,7 @@ public:
     }
 
 private:
-    static constexpr float GAIN_STEP = 1.0f / 48.0f;   // ~1ms attack/release @48k
+    static constexpr float GAIN_STEP = 1.0f / 48.0f;
 
     enum AdsrPhase : uint8_t { kAdsrAttack, kAdsrDecay, kAdsrSustain, kAdsrRelease, kAdsrIdle };
 
@@ -326,9 +263,6 @@ private:
         return samples > 0.0f ? (1.0f / samples) : 1.0f;
     }
 
-    // Filter envelope value (0..1) -> lowpass cutoff Hz, exponential taper
-    // (same shape as Resonode's tone knob -- see AGENTS.md) so the perceptually
-    // useful low end isn't compressed into a sliver of the envelope's travel.
     static constexpr float kFilterCutoffMinHz = 80.0f;
     static constexpr float kFilterCutoffMaxHz = 18000.0f;
     static float _filterCutoffHz(float envLevel)
@@ -347,18 +281,17 @@ private:
         int    len;
         double pos;
         double rate;
-        bool   sustain;     // chromatic: released by NOTE_OFF; drum one-shot: false
-        int    note;        // raw MIDI note this voice answers NOTE_OFF for (-1 = none)
+        bool   sustain;
+        int    note;
         float  gain;
         float  target;
-        float  attackStep;  // drum-only per-voice attack ramp; scaled so short/fast (high-note) voices still reach audible gain before the sample ends
-        float  releaseStep; // drum-only per-voice release ramp (always GAIN_STEP)
+        float  attackStep;
+        float  releaseStep;
         unsigned age;
-        bool   isChrom;     // true = triggered via _noteOn's chromatic path (full ADSR + filter envelope, see below);
-                             // false = drum one-shot (must keep its old fixed EDGE_FADE/LEAD_DECLICK/GAIN_STEP behavior untouched)
-        bool   granular;    // true = this voice is rendered by the grain-cloud path instead of the plain _readInterp path
-        double grainAccum;  // fractional grain-spawn accumulator (see renderInto's granular branch)
-        float  velGain;     // vel/127, clamped [0,1]; scales overall voice loudness and (granular only) grain spawn density
+        bool   isChrom;
+        bool   granular;
+        double grainAccum;
+        float  velGain;
 
         uint8_t ampPhase;
         float   ampLevel;
@@ -376,23 +309,16 @@ private:
         float   lpState;
     };
 
-    // A single active grain: an independent short-lived read into the SAME
-    // m_chromM/m_drumM buffer as the owning voice, windowed with a raised-
-    // cosine envelope so overlapping grains sum without clicks at their
-    // boundaries. Grains are pooled globally (MAX_GRAINS) rather than per-voice
-    // because voice count and grain count are independent RT-safety concerns —
-    // one fixed pool sized for the worst case avoids a second per-voice
-    // allocation-shaped structure.
     struct Grain {
         bool   active;
-        int    voiceSlot;   // which m_voice[] this grain belongs to (for buffer pointer + note-off tracking)
+        int    voiceSlot;
         const short *M;
         int    len;
-        double pos;         // fractional read position (own pointer, independent of the owning voice's scan pointer)
-        double rate;        // this grain's own playback rate (note rate * random pitch-spray factor)
-        int    lifeSamples; // total grain length in samples (fixed at spawn from m_grainMs)
-        int    lifePos;     // samples elapsed since spawn (0..lifeSamples)
-        float  envShape;    // 0 = round raised-cosine window, 1 = percussive fast-attack/decay window
+        double pos;
+        double rate;
+        int    lifeSamples;
+        int    lifePos;
+        float  envShape;
     };
 
     static short _clip16(int v)
@@ -402,92 +328,149 @@ private:
 
     static float _readInterp(const short *buf, int len, double pos)
     {
+        if (len <= 0) return 0.0f;
+        if (pos < 0.0) pos = 0.0;
         int i0 = (int)pos;
-        if (i0 < 0) i0 = 0;
         if (i0 >= len) return 0.0f;
-        int i1 = i0 + 1; if (i1 >= len) i1 = len - 1;
+        int i1 = (i0 + 1 < len) ? i0 + 1 : i0;
         float frac = (float)(pos - (double)i0);
+        if (frac < 0.0f) frac = 0.0f;
         return (float)buf[i0] * (1.0f - frac) + (float)buf[i1] * frac;
     }
 
-    // Cheap xorshift32 PRNG, member state so it's deterministic-per-instance
-    // and touches no global/thread-shared state (rand() is not guaranteed
-    // reentrant/RT-safe across platforms; this is branch-free and allocation-
-    // free, safe to call from the audio thread). Returns a float in [-1, 1).
     float _randBipolar()
     {
-        m_rngState ^= m_rngState << 13;
-        m_rngState ^= m_rngState >> 17;
-        m_rngState ^= m_rngState << 5;
-        // Top 24 bits -> [0, 1) -> [-1, 1)
-        uint32_t bits = m_rngState;
-        float u = (float)(bits >> 8) * (1.0f / 16777216.0f);   // [0,1)
+        m_grainRngState ^= m_grainRngState << 13;
+        m_grainRngState ^= m_grainRngState >> 17;
+        m_grainRngState ^= m_grainRngState << 5;
+        uint32_t bits = m_grainRngState;
+        float u = (float)(bits >> 8) * (1.0f / 16777216.0f);
         return u * 2.0f - 1.0f;
     }
 
-    // Spawn one grain for voice slot `vSlot` at the given scan position, using
-    // the voice's note-rate plus a random pitch-spray factor. Picks the oldest
-    // grain if the pool is full (a fixed pool can't grow — audible truncation
-    // of the single oldest grain is far less noticeable than dropping the
-    // newest spawn, and both are rare in practice at MAX_GRAINS=48).
+    float _randTriangular()
+    {
+        return 0.5f * (_randBipolar() + _randBipolar());
+    }
+
+    static float _blackmanWindow(float phase)
+    {
+        const float pi = 3.14159265f;
+        return 0.42f - 0.5f * cosf(2.0f * pi * phase) + 0.08f * cosf(4.0f * pi * phase);
+    }
+
+    static float _grainWindow(float phase, float envShape)
+    {
+        if (phase < 0.0f) phase = 0.0f;
+        if (phase > 1.0f) phase = 1.0f;
+        if (envShape < 0.5f) {
+            float x = envShape * 2.0f;
+            float blackmanWin = _blackmanWindow(phase);
+            if (x <= 0.0f) return blackmanWin;
+            float hannWin = 0.5f * (1.0f - cosf(2.0f * 3.14159265f * phase));
+            return blackmanWin + (hannWin - blackmanWin) * x;
+        }
+        float x = (envShape - 0.5f) * 2.0f;
+        float hannWin = 0.5f * (1.0f - cosf(2.0f * 3.14159265f * phase));
+        if (x <= 0.0f) return hannWin;
+        float percAttack = 0.12f;
+        float percWin;
+        if (phase < percAttack) {
+            percWin = phase / percAttack;
+        } else {
+            float t = (phase - percAttack) / (1.0f - percAttack);
+            percWin = (1.0f - t) * (1.0f - t);
+        }
+        return hannWin + (percWin - hannWin) * x;
+    }
+
+    static float _grainWindowRmsLevel(float envShape)
+    {
+        const int kSteps = 65;
+        float sumSq = 0.0f;
+        for (int i = 0; i < kSteps; i++) {
+            float phase = (float)i / (float)(kSteps - 1);
+            float w = _grainWindow(phase, envShape);
+            sumSq += w * w;
+        }
+        return sqrtf(sumSq / (float)kSteps);
+    }
+
+    static int _clipGrainLifeToBuffer(double pos, double rate, int len, int nominalLifeSamples)
+    {
+        int maxLifeSamples = nominalLifeSamples;
+        if (rate > 1e-6) {
+            double samplesToEnd = ((double)(len - 1) - pos) / rate;
+            if (samplesToEnd < (double)maxLifeSamples) maxLifeSamples = (int)samplesToEnd;
+        } else if (rate < -1e-6) {
+            double samplesToStart = pos / (-rate);
+            if (samplesToStart < (double)maxLifeSamples) maxLifeSamples = (int)samplesToStart;
+        }
+        return maxLifeSamples < 2 ? 2 : maxLifeSamples;
+    }
+
+    int _stealMostFinishedGrainSlot() const
+    {
+        int best = 0;
+        float bestFrac = -1.0f;
+        for (int g = 0; g < MAX_GRAINS; g++) {
+            float frac = (float)m_grains[g].lifePos / (float)(m_grains[g].lifeSamples > 0 ? m_grains[g].lifeSamples : 1);
+            if (frac > bestFrac) { bestFrac = frac; best = g; }
+        }
+        return best;
+    }
+
+    void _killGrainsOwnedByVoice(int vSlot)
+    {
+        for (int g = 0; g < MAX_GRAINS; g++)
+            if (m_grains[g].active && m_grains[g].voiceSlot == vSlot) m_grains[g].active = false;
+    }
+
+    void _releaseVoicesUsingBuffer(const short *buf)
+    {
+        for (int v = 0; v < VOICES; v++) {
+            if (m_voice[v].active && m_voice[v].M == buf) {
+                m_voice[v].active = false;
+                _killGrainsOwnedByVoice(v);
+            }
+        }
+    }
+
     void _spawnGrain(int vSlot, double scanPos)
     {
         Voice &vo = m_voice[vSlot];
         int slot = -1;
         for (int g = 0; g < MAX_GRAINS; g++) { if (!m_grains[g].active) { slot = g; break; } }
-        if (slot < 0) {
-            // Pool full: steal the grain furthest along in its own life (closest
-            // to naturally finishing anyway, so the cut is least audible).
-            int best = 0; float bestFrac = -1.0f;
-            for (int g = 0; g < MAX_GRAINS; g++) {
-                float frac = (float)m_grains[g].lifePos / (float)(m_grains[g].lifeSamples > 0 ? m_grains[g].lifeSamples : 1);
-                if (frac > bestFrac) { bestFrac = frac; best = g; }
-            }
-            slot = best;
-        }
+        if (slot < 0) slot = _stealMostFinishedGrainSlot();
+
         Grain &gr = m_grains[slot];
         gr.active = true;
         gr.voiceSlot = vSlot;
         gr.M = vo.M;
         gr.len = vo.len;
 
-        // Position jitter: random offset around the scan pointer, converted
-        // from ms to samples in BUFFER time (not output time) since it's a
-        // read-position offset, not a playback-duration.
         double jitterSamples = 0.0;
         if (m_posJitterMs > 0.0f) {
-            jitterSamples = (double)(_randBipolar() * m_posJitterMs * 0.001f * (float)SR);
+            jitterSamples = (double)(_randTriangular() * m_posJitterMs * 0.001f * (float)SR);
         }
         double p = scanPos + jitterSamples;
         if (p < 0.0) p = 0.0;
         if (p > (double)(vo.len - 1)) p = (double)(vo.len - 1);
         gr.pos = p;
 
-        // Pitch spray: random +/- cents around the voice's own note rate.
-        float centsOffset = (m_pitchSprayCents > 0.0f) ? (_randBipolar() * m_pitchSprayCents) : 0.0f;
-        gr.rate = vo.rate * pow(2.0, (double)centsOffset / 1200.0);
+        float pitchSprayCentsOffset = (m_pitchSprayCents > 0.0f) ? (_randTriangular() * m_pitchSprayCents) : 0.0f;
+        gr.rate = vo.rate * pow(2.0, (double)pitchSprayCentsOffset / 1200.0);
 
-        // Reverse-grain probability: flips this grain's read direction.
-        // _randBipolar() returns [-1,1); mapping to [0,1) via *0.5+0.5 keeps
-        // one RNG draw per grain rather than a second dedicated call.
-        bool reversed = (m_reverseProb > 0.0f) && ((_randBipolar() * 0.5f + 0.5f) < m_reverseProb);
-        if (reversed) gr.rate = -gr.rate;
+        bool grainReversed = (m_reverseProb > 0.0f) && ((_randBipolar() * 0.5f + 0.5f) < m_reverseProb);
+        if (grainReversed) gr.rate = -gr.rate;
 
-        gr.lifeSamples = (int)((m_grainMs * 0.001f) * (float)SR);
-        if (gr.lifeSamples < 2) gr.lifeSamples = 2;   // avoid degenerate 0/1-sample "grain"
+        int nominalLifeSamples = (int)((m_grainMs * 0.001f) * (float)SR);
+        if (nominalLifeSamples < 2) nominalLifeSamples = 2;
+        gr.lifeSamples = _clipGrainLifeToBuffer(gr.pos, gr.rate, vo.len, nominalLifeSamples);
         gr.lifePos = 0;
         gr.envShape = m_envShape;
     }
 
-    // Render one granular voice's grain cloud into inout for n samples, and
-    // spawn new grains as the voice's own scan position advances. The voice
-    // itself carries NO independent audio contribution while granular=true —
-    // vo.pos here is repurposed as the SCAN pointer (where new grains spawn
-    // from), not a direct read position; grains do the actual buffer reads.
-    // This mirrors the non-granular path's overall envelope semantics (a held
-    // chromatic note keeps spawning grains until NOTE_OFF sets target=0, then
-    // fades) but the "gain ramp" targets grain spawn-gating rather than a
-    // single continuous read's amplitude.
     void _renderGranularVoice(int vSlot, int *inout, int n)
     {
         Voice &vo = m_voice[vSlot];
@@ -497,10 +480,6 @@ private:
         double spawnPeriod = (double)SR / ((double)m_grainRateHz * (double)densityFromVel);
 
         for (int i = 0; i < n; i++) {
-            // Attack/decay/sustain/release gates whether we KEEP SPAWNING
-            // grains (attack/decay/sustain) or let the cloud die out
-            // (release) -- chromatic voices use the full ADSR state machine,
-            // drum one-shots keep the original 2-stage gain ramp.
             float envLevel;
             bool  sounding;
             if (chrom) {
@@ -515,23 +494,16 @@ private:
                 sounding = (vo.target > 0.0f);
             }
 
-            // Only spawn new grains while sounding; once released, let the
-            // already-live grains ring out rather than cutting them.
             if (sounding) {
                 vo.grainAccum += 1.0;
                 if (vo.grainAccum >= spawnPeriod) {
                     vo.grainAccum -= spawnPeriod;
                     _spawnGrain(vSlot, vo.pos);
                 }
-                // Scan position advances at rate*scanRate: scanRate=1 tracks
-                // normal playback speed (grains spawn from where a plain read
-                // would be), 0 freezes (grains keep re-picking near one spot),
-                // >1 scrubs forward faster than real-time.
                 vo.pos += vo.rate * (double)m_scanRate;
-                if (vo.pos >= (double)(vo.len - 1)) vo.pos = 0.0;   // wrap: loop the scan through the buffer
+                if (vo.pos >= (double)(vo.len - 1)) vo.pos = 0.0;
             }
 
-            // Mix all grains owned by this voice slot.
             float mixed = 0.0f;
             for (int g = 0; g < MAX_GRAINS; g++) {
                 Grain &gr = m_grains[g];
@@ -540,16 +512,7 @@ private:
                 float sm = _readInterp(gr.M, gr.len, gr.pos);
 
                 float phase = (float)gr.lifePos / (float)gr.lifeSamples;
-                float hannWin = 0.5f * (1.0f - cosf(2.0f * 3.14159265f * phase));
-                float percAttack = 0.12f;
-                float percWin;
-                if (phase < percAttack) {
-                    percWin = phase / percAttack;
-                } else {
-                    float t = (phase - percAttack) / (1.0f - percAttack);
-                    percWin = (1.0f - t) * (1.0f - t);
-                }
-                float win = hannWin + (percWin - hannWin) * gr.envShape;
+                float win = _grainWindow(phase, gr.envShape);
 
                 mixed += sm * win;
 
@@ -569,13 +532,7 @@ private:
 
             bool done = chrom ? (vo.ampPhase == kAdsrIdle) : (vo.gain <= 0.0f && vo.target == 0.0f);
             if (done) {
-                // Voice released and faded: kill any still-active grains it
-                // owns (avoids an orphaned grain rendering forever after the
-                // voice slot is reused, since a fresh voice checks
-                // grains[g].voiceSlot==thisSlot without checking "is this MY
-                // spawn generation").
-                for (int g = 0; g < MAX_GRAINS; g++)
-                    if (m_grains[g].active && m_grains[g].voiceSlot == vSlot) m_grains[g].active = false;
+                _killGrainsOwnedByVoice(vSlot);
                 vo.active = false;
                 break;
             }
@@ -594,27 +551,12 @@ private:
 
     void _startRecord(int target)
     {
-        // target: -1 chromatic, 0..24 drum. Stop any voices reading a drum slot
-        // we are about to overwrite (no read mid-rewrite). Also kill any grains
-        // those voices owned -- a granular voice's grains hold their own copy
-        // of the buffer pointer (Grain::M) and would otherwise keep reading a
-        // buffer that's about to be overwritten by the incoming recording.
         if (target >= 0 && target < NUM_DRUM) {
-            for (int v = 0; v < VOICES; v++)
-                if (m_voice[v].active && m_voice[v].M == m_drumM[target]) {
-                    m_voice[v].active = false;
-                    for (int g = 0; g < MAX_GRAINS; g++)
-                        if (m_grains[g].active && m_grains[g].voiceSlot == v) m_grains[g].active = false;
-                }
+            _releaseVoicesUsingBuffer(m_drumM[target]);
             m_drumLoaded[target] = false;
             m_drumLen[target] = 0;
         } else if (target == -1) {
-            for (int v = 0; v < VOICES; v++)
-                if (m_voice[v].active && m_voice[v].M == m_chromM) {
-                    m_voice[v].active = false;
-                    for (int g = 0; g < MAX_GRAINS; g++)
-                        if (m_grains[g].active && m_grains[g].voiceSlot == v) m_grains[g].active = false;
-                }
+            _releaseVoicesUsingBuffer(m_chromM);
             m_chromLoaded = false;
             m_chromLen = 0;
         }
@@ -625,8 +567,6 @@ private:
 
     void _stopRecord()
     {
-        // Finalize whenever a capture target is pending — m_recActive may already
-        // be false if captureBlock hit the overrun clamp before the stop event.
         if (m_recTarget == -2) return;
         m_recActive = false;
         short *dm; int maxLen; int *lenp;
@@ -639,30 +579,20 @@ private:
         m_recTarget = -2;
     }
 
-    // Auto-clip leading/trailing silence in place; returns new length. A short
-    // fade-in/out is applied at the trimmed edges for click-free one-shots.
-    // All-silence -> returns 0 (slot stays unloaded).
     static int _autoTrim(short *M, int len)
     {
         if (len <= 0) return 0;
-        // First and last sample whose magnitude clears the silence threshold.
         int start = -1, end = -1;
         for (int i = 0; i < len; i++) {
             int a = M[i]; if (a < 0) a = -a;
             if (a > TRIM_THRESH) { if (start < 0) start = i; end = i; }
         }
-        if (start < 0 || end < start) return 0;     // all silence
-        // PRE-ROLL: keep a few samples BEFORE the first threshold crossing so the
-        // real attack transient (drum hit / pluck) is preserved, not chopped at
-        // the steep part of its rise. Without this the onset starts mid-transient
-        // and a leading fade would further soften the punch.
+        if (start < 0 || end < start) return 0;
         if (start > PREROLL) start -= PREROLL; else start = 0;
         int newLen = end - start + 1;
         if (start > 0) {
             memmove(M, M + start, sizeof(short) * newLen);
         }
-        // Leading edge: only a TINY declick (preserve the attack), not a long
-        // fade-in. Trailing edge: a longer fade-out so one-shots end click-free.
         int fin = newLen < LEAD_DECLICK ? newLen : LEAD_DECLICK;
         for (int i = 0; i < fin; i++) {
             float g = (float)i / (float)fin;
@@ -677,9 +607,6 @@ private:
         return newLen;
     }
 
-    // Returns the voice slot used, so callers can do post-spawn setup (e.g.
-    // arming the granular grain cloud) without a second linear scan for "which
-    // slot did we just steal/take".
     int _spawnVoice(const short *M, int len, double rate, bool sustain, int note, bool isChrom, float velGain)
     {
         if (len <= 0) return -1;
@@ -696,24 +623,14 @@ private:
         vo.granular = false;
         vo.grainAccum = 0.0;
         vo.velGain = velGain;
-        // Stealing this slot orphans any grains it owned from a previous voice;
-        // kill them so a stolen slot doesn't keep spawning/rendering grains
-        // that think they belong to the new voice's buffer/rate.
-        for (int g = 0; g < MAX_GRAINS; g++)
-            if (m_grains[g].active && m_grains[g].voiceSlot == slot) m_grains[g].active = false;
+        _killGrainsOwnedByVoice(slot);
 
-        // DRUM path: completely unchanged from before this feature — same
-        // duration-scaled attack, same fixed GAIN_STEP release. Untouched per
-        // the explicit "drums out of scope" constraint.
         double playable = (rate > 0.0) ? ((double)len / rate) : (double)len;
         float fastStep = (playable > 4.0) ? (float)(1.0 / (playable * 0.25)) : 0.25f;
         float legacyAttackStep = fastStep > GAIN_STEP ? fastStep : GAIN_STEP;
         vo.attackStep  = legacyAttackStep;
         vo.releaseStep = GAIN_STEP;
 
-        // CHROMATIC path: full ADSR (amp) + a second ADSR modulating a
-        // per-voice lowpass cutoff (filter), both re-armed from the current
-        // knob positions at every note-on.
         if (isChrom) {
             vo.ampPhase = kAdsrAttack;
             vo.ampLevel = 0.0f;
@@ -744,27 +661,22 @@ private:
         float velGain = (float)(vel < 1 ? 1 : (vel > 127 ? 127 : vel)) / 127.0f;
         int k = keyIndex(note);
         if (k >= 0 && m_drumLoaded[k]) {
-            // Drum one-shot at original pitch (ignores note-off, plays to end).
-            int slot = _spawnVoice(m_drumM[k], m_drumLen[k], 1.0, false, -1, /*isChrom=*/false, velGain);
+            int slot = _spawnVoice(m_drumM[k], m_drumLen[k], 1.0, false, -1, false, velGain);
             if (slot >= 0 && m_granOn) m_voice[slot].granular = true;
             return;
         }
         if (m_chromLoaded) {
-            // Mono-per-note retrigger: release any voice already sustaining THIS
-            // note so a re-press doesn't stack voices and so the 16-voice steal
-            // can't orphan a held note's eventual NOTE_OFF (auto-sustain bug).
             for (int v = 0; v < VOICES; v++)
                 if (m_voice[v].active && m_voice[v].sustain && m_voice[v].note == note)
                     _releaseChromVoice(m_voice[v]);
             double rate = pow(2.0, (double)(note - ROOT_NOTE) / 12.0);
-            int slot = _spawnVoice(m_chromM, m_chromLen, rate, true, note, /*isChrom=*/true, velGain);
+            int slot = _spawnVoice(m_chromM, m_chromLen, rate, true, note, true, velGain);
             if (slot >= 0 && m_granOn) m_voice[slot].granular = true;
         }
     }
 
     void _noteOff(int note)
     {
-        // Release sustaining (chromatic) voices owned by this note.
         for (int v = 0; v < VOICES; v++)
             if (m_voice[v].active && m_voice[v].sustain && m_voice[v].note == note)
                 _releaseChromVoice(m_voice[v]);
@@ -780,38 +692,32 @@ private:
             switch (type) {
                 case EV_NOTE_ON:   _noteOn(note, vel);  break;
                 case EV_NOTE_OFF:  _noteOff(note);      break;
-                case EV_REC_START: _startRecord(note);  break;   // note field = target
+                case EV_REC_START: _startRecord(note);  break;
                 case EV_REC_STOP:  _stopRecord();       break;
                 default: break;
             }
         }
     }
 
-    // Chromatic sample
     short *m_chromM;
     int    m_chromLen;
     volatile bool m_chromLoaded;
 
-    // Per-key drum slots
     short *m_drumM[NUM_DRUM];
     int    m_drumLen[NUM_DRUM];
     volatile bool m_drumLoaded[NUM_DRUM];
 
-    // Voice pool
     Voice    m_voice[VOICES];
     unsigned m_ageCtr;
 
-    // Record state (audio thread only)
     volatile bool m_recActive;
-    int  m_recTarget;   // -2 none, -1 chromatic, 0..24 drum
+    int  m_recTarget;
     int  m_recPos;
 
-    // control-thread -> audio-thread event ring
     struct Ev { uint8_t type; int16_t note; int16_t vel; };
     volatile Ev m_ev[EVENT_RING];
     volatile unsigned m_evHead, m_evTail;
 
-    // Full ADSR (chromatic voices only; see setAmpAttackMs/../setFilterReleaseMs).
     float m_ampAttackMs;
     float m_ampDecayMs;
     float m_ampSustainLevel;
@@ -822,22 +728,22 @@ private:
     float m_filterReleaseMs;
     bool  m_filterEngaged = true;
 
-    // Cheap enough to always run; the real cost this gates is the per-sample
-    // one-pole filter apply in renderInto/_renderGranularVoice, skipped
-    // entirely whenever the filter envelope can't produce an audible sweep
-    // from its current knob positions (default state: transparent bypass).
     void _recomputeFilterEngaged()
     {
         m_filterEngaged = (m_filterSustainLevel < 0.999f) || (m_filterAttackMs > 5.0f) || (m_filterDecayMs > 5.0f);
     }
 
-    // Feature 2: granulator pool + runtime params. Pool is fixed-size and
-    // constructed once (see ctor) — no allocation on the audio path.
+    static constexpr float kGrainGainCompReferenceWindowRms = 0.612372f;
+
     void _recomputeGrainGainComp()
     {
         float overlap = (m_grainMs * 0.001f) * m_grainRateHz;
         if (overlap < 1.0f) overlap = 1.0f;
-        m_grainGainComp = 1.0f / sqrtf(overlap);
+        float windowRms = _grainWindowRmsLevel(m_envShape);
+        if (windowRms < 0.05f) windowRms = 0.05f;
+        float effectiveOverlap = overlap * (windowRms / kGrainGainCompReferenceWindowRms);
+        if (effectiveOverlap < 1.0f) effectiveOverlap = 1.0f;
+        m_grainGainComp = 1.0f / sqrtf(effectiveOverlap);
     }
 
     Grain    m_grains[MAX_GRAINS];
@@ -850,7 +756,7 @@ private:
     float    m_reverseProb = 0.0f;
     float    m_envShape = 0.0f;
     float    m_grainGainComp = 1.0f;
-    uint32_t m_rngState = 2463534242u;   // xorshift32 seed (any nonzero value works; fixed for reproducibility)
+    uint32_t m_grainRngState = 2463534242u;
 };
 
 } // namespace aloop
