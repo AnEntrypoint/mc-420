@@ -64,6 +64,14 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("fx/lpres",   0.0f);
     ps.bind("fx/lp",      1.0f);
     ps.bind("fx/pitch",   0.0f);
+
+    ps.bind("fx/dubgate/amt",     0.0f);
+    ps.bind("fx/dubgate/pattern", 0.0f);
+    ps.bind("fx/dublfo/rate",     0.3f);
+    ps.bind("fx/dublfo/depth",    0.0f);
+    ps.bind("fx/dublfo/shape",    0.0f);
+    ps.bind("fx/dublfo/target",   0.0f);
+    ps.bind("fx/dublfo/phase",    0.0f);
 }
 
 static void setLooper(ParamStore& ps, int looper, const char* field, float v) {
