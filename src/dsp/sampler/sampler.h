@@ -87,17 +87,15 @@ public:
         m_evHead = 0;
         m_evTail = 0;
 
-        // Feature 1 defaults: reproduce today's chromatic behavior exactly.
-        // The old code had no fixed attack time at all — attackStep was
-        // *derived* from voice duration (see _spawnVoice) — so there is no
-        // single "old attack ms" to store. Instead we keep that duration-scaled
-        // computation as the DEFAULT attack behavior (m_attackMs < 0 sentinel
-        // means "use the legacy auto-scaled attack"), and only switch to a
-        // fixed runtime-controlled ms value once the user explicitly calls
-        // setAttackMs(). Release had a real fixed constant (GAIN_STEP, ~1ms),
-        // so m_releaseMs defaults to that exact value converted to ms.
-        m_attackMs  = -1.0f;               // sentinel: legacy auto-scaled attack
-        m_releaseMs = 1000.0f / 48.0f;     // == old GAIN_STEP (1/48 per sample @48k) in ms
+        m_ampAttackMs     = 2.0f;
+        m_ampDecayMs      = 50.0f;
+        m_ampSustainLevel = 1.0f;
+        m_ampReleaseMs    = 1000.0f / 48.0f;   // == old GAIN_STEP (1/48 per sample @48k) in ms
+        m_filterAttackMs     = 2.0f;
+        m_filterDecayMs      = 50.0f;
+        m_filterSustainLevel = 1.0f;
+        m_filterReleaseMs    = 1000.0f / 48.0f;
+        _recomputeFilterEngaged();
 
         m_granOn         = false;
         m_grainMs        = 60.0f;
@@ -145,33 +143,24 @@ public:
         return (note >= BASE_NOTE && note < BASE_NOTE + NUM_DRUM) ? (note - BASE_NOTE) : -1;
     }
 
-    // ---- Feature 1: runtime attack/release for CHROMATIC voices only --------
-    // Ranges chosen generously (0-2000ms) to cover pad-like slow fades through
-    // to plucky instant hits, matching typical synth envelope UIs. Values are
-    // clamped so a bad/uninitialized control-surface knob can't feed a negative
-    // or absurdly long ramp into the audio thread (a negative attackStep would
-    // never converge -> stuck-silent voice; a huge one is merely a slow fade,
-    // harmless, but still clamped for sanity).
-    //
-    // NOTE: calling setAttackMs() at all switches chromatic voices OFF the
-    // legacy duration-auto-scaled attack (see _spawnVoice) and onto a fixed
-    // ms-based ramp. This is a one-way switch by design: once a user dials in
-    // an explicit attack, "voice duration changed the attack time under you"
-    // would be a confusing regression. Until this is called, behavior is
-    // bit-for-bit the old auto-scaled attack (m_attackMs stays at its -1
-    // sentinel from the ctor).
-    void setAttackMs(float ms)
-    {
-        if (ms < 0.0f) ms = 0.0f;
-        if (ms > 2000.0f) ms = 2000.0f;
-        m_attackMs = ms;
-    }
-    void setReleaseMs(float ms)
-    {
-        if (ms < 0.0f) ms = 0.0f;
-        if (ms > 2000.0f) ms = 2000.0f;
-        m_releaseMs = ms;
-    }
+    // ---- Full ADSR for CHROMATIC voices only ---------------------------------
+    // Two independent envelopes, both real attack->decay->sustain->release
+    // state machines (see AdsrPhase/advanceEnv): one gates voice amplitude, the
+    // other modulates a per-voice one-pole lowpass cutoff. Ranges chosen
+    // generously (0-2000ms attack/decay/release, 0-1 sustain) to cover
+    // pad-like slow fades through to plucky instant hits, matching typical
+    // synth envelope UIs. Drum one-shot voices are entirely unaffected — they
+    // keep their own fixed duration-scaled attack / GAIN_STEP release, per
+    // "drums out of scope" below.
+    void setAmpAttackMs(float ms)  { m_ampAttackMs  = _clampMs(ms); }
+    void setAmpDecayMs(float ms)   { m_ampDecayMs   = _clampMs(ms); }
+    void setAmpSustain(float v01)  { m_ampSustainLevel = _clamp01(v01); }
+    void setAmpReleaseMs(float ms) { m_ampReleaseMs = _clampMs(ms); }
+
+    void setFilterAttackMs(float ms)  { m_filterAttackMs  = _clampMs(ms); _recomputeFilterEngaged(); }
+    void setFilterDecayMs(float ms)   { m_filterDecayMs   = _clampMs(ms); _recomputeFilterEngaged(); }
+    void setFilterSustain(float v01)  { m_filterSustainLevel = _clamp01(v01); _recomputeFilterEngaged(); }
+    void setFilterReleaseMs(float ms) { m_filterReleaseMs = _clampMs(ms); }
 
     // ---- Feature 2: granulator controls (chromatic + drum) -------------------
     void setGranulatorEnabled(bool on) { m_granOn = on; }
@@ -238,18 +227,39 @@ public:
                 continue;
             }
 
+            if (vo.isChrom) {
+                for (int i = 0; i < n; i++) {
+                    if (vo.pos >= (double)(vo.len - 1) && vo.ampPhase != kAdsrRelease && vo.ampPhase != kAdsrIdle) {
+                        vo.ampPhase = kAdsrRelease;
+                        vo.filterPhase = kAdsrRelease;
+                    }
+
+                    float sm = _readInterp(vo.M, vo.len, vo.pos);
+
+                    _advanceEnv(vo.ampPhase, vo.ampLevel, vo.ampAttackStep, vo.ampDecayStep, vo.ampSustainLevel, vo.ampReleaseStep);
+                    if (m_filterEngaged) {
+                        _advanceEnv(vo.filterPhase, vo.filterLevel, vo.filterAttackStep, vo.filterDecayStep, vo.filterSustainLevel, vo.filterReleaseStep);
+                        float alpha = _filterAlpha(_filterCutoffHz(vo.filterLevel));
+                        vo.lpState += alpha * (sm - vo.lpState);
+                        sm = vo.lpState;
+                    }
+
+                    inout[i] += (int)(sm * vo.ampLevel * vo.velGain);
+
+                    vo.pos += vo.rate;
+                    if (vo.ampPhase == kAdsrIdle) { vo.active = false; break; }
+                }
+                continue;
+            }
+
             for (int i = 0; i < n; i++) {
                 // End-of-sample: begin release so the tail fades click-free.
                 if (vo.pos >= (double)(vo.len - 1)) { vo.target = 0.0f; }
 
                 float sm = _readInterp(vo.M, vo.len, vo.pos);
 
-                // Per-sample gain ramp toward target. Attack uses the per-voice
-                // (duration-scaled, or runtime ms for chromatic) step so
-                // short/fast voices open in time; release uses releaseStep,
-                // which is the ORIGINAL fixed ~1ms GAIN_STEP for drum voices
-                // (untouched) and the runtime-controllable ms-derived step for
-                // chromatic voices (defaults to the same ~1ms value).
+                // Per-sample gain ramp toward target -- drum one-shots only
+                // (chromatic voices use the full ADSR state machine above).
                 if (vo.gain < vo.target)      { vo.gain += vo.attackStep;  if (vo.gain > vo.target) vo.gain = vo.target; }
                 else if (vo.gain > vo.target) { vo.gain -= vo.releaseStep; if (vo.gain < vo.target) vo.gain = vo.target; }
 
@@ -278,6 +288,59 @@ public:
 private:
     static constexpr float GAIN_STEP = 1.0f / 48.0f;   // ~1ms attack/release @48k
 
+    enum AdsrPhase : uint8_t { kAdsrAttack, kAdsrDecay, kAdsrSustain, kAdsrRelease, kAdsrIdle };
+
+    static float _clampMs(float ms)  { return ms < 0.0f ? 0.0f : (ms > 2000.0f ? 2000.0f : ms); }
+    static float _clamp01(float v)   { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
+
+    static void _advanceEnv(uint8_t &phase, float &level, float attackStep, float decayStep, float sustainLevel, float releaseStep)
+    {
+        switch (phase) {
+            case kAdsrAttack:
+                level += attackStep;
+                if (level >= 1.0f) { level = 1.0f; phase = kAdsrDecay; }
+                break;
+            case kAdsrDecay:
+                if (level > sustainLevel) {
+                    level -= decayStep;
+                    if (level <= sustainLevel) { level = sustainLevel; phase = kAdsrSustain; }
+                } else {
+                    phase = kAdsrSustain;
+                }
+                break;
+            case kAdsrSustain:
+                level = sustainLevel;
+                break;
+            case kAdsrRelease:
+                level -= releaseStep;
+                if (level <= 0.0f) { level = 0.0f; phase = kAdsrIdle; }
+                break;
+            default:
+                break;
+        }
+    }
+
+    static float _msToStep(float ms)
+    {
+        float samples = (ms * 0.001f) * (float)SR;
+        return samples > 0.0f ? (1.0f / samples) : 1.0f;
+    }
+
+    // Filter envelope value (0..1) -> lowpass cutoff Hz, exponential taper
+    // (same shape as Resonode's tone knob -- see AGENTS.md) so the perceptually
+    // useful low end isn't compressed into a sliver of the envelope's travel.
+    static constexpr float kFilterCutoffMinHz = 80.0f;
+    static constexpr float kFilterCutoffMaxHz = 18000.0f;
+    static float _filterCutoffHz(float envLevel)
+    {
+        return kFilterCutoffMinHz * powf(kFilterCutoffMaxHz / kFilterCutoffMinHz, envLevel);
+    }
+    static float _filterAlpha(float cutoffHz)
+    {
+        float a = 1.0f - expf(-2.0f * 3.14159265f * cutoffHz / (float)SR);
+        return a < 0.0f ? 0.0f : (a > 1.0f ? 1.0f : a);
+    }
+
     struct Voice {
         bool   active;
         const short *M;
@@ -288,14 +351,29 @@ private:
         int    note;        // raw MIDI note this voice answers NOTE_OFF for (-1 = none)
         float  gain;
         float  target;
-        float  attackStep;  // per-voice attack ramp; scaled so short/fast (high-note) voices still reach audible gain before the sample ends
-        float  releaseStep; // per-voice release ramp (chromatic: runtime-controlled via m_releaseMs; drum: always GAIN_STEP)
+        float  attackStep;  // drum-only per-voice attack ramp; scaled so short/fast (high-note) voices still reach audible gain before the sample ends
+        float  releaseStep; // drum-only per-voice release ramp (always GAIN_STEP)
         unsigned age;
-        bool   isChrom;     // true = triggered via _noteOn's chromatic path (subject to setAttackMs/setReleaseMs);
+        bool   isChrom;     // true = triggered via _noteOn's chromatic path (full ADSR + filter envelope, see below);
                              // false = drum one-shot (must keep its old fixed EDGE_FADE/LEAD_DECLICK/GAIN_STEP behavior untouched)
         bool   granular;    // true = this voice is rendered by the grain-cloud path instead of the plain _readInterp path
         double grainAccum;  // fractional grain-spawn accumulator (see renderInto's granular branch)
         float  velGain;     // vel/127, clamped [0,1]; scales overall voice loudness and (granular only) grain spawn density
+
+        uint8_t ampPhase;
+        float   ampLevel;
+        float   ampAttackStep;
+        float   ampDecayStep;
+        float   ampSustainLevel;
+        float   ampReleaseStep;
+
+        uint8_t filterPhase;
+        float   filterLevel;
+        float   filterAttackStep;
+        float   filterDecayStep;
+        float   filterSustainLevel;
+        float   filterReleaseStep;
+        float   lpState;
     };
 
     // A single active grain: an independent short-lived read into the SAME
@@ -413,22 +491,33 @@ private:
     void _renderGranularVoice(int vSlot, int *inout, int n)
     {
         Voice &vo = m_voice[vSlot];
+        bool chrom = vo.isChrom;
 
         float densityFromVel = 0.4f + 0.6f * vo.velGain;
         double spawnPeriod = (double)SR / ((double)m_grainRateHz * (double)densityFromVel);
 
         for (int i = 0; i < n; i++) {
-            // Attack/release envelope reuses the same gain state machine as
-            // the plain-read path, but here it gates whether we KEEP SPAWNING
-            // grains (attack/sustain) or let the cloud die out (release), plus
-            // scales each grain's window amplitude — so NOTE_OFF still fades
-            // the granular texture out click-free, same contract as before.
-            if (vo.gain < vo.target)      { vo.gain += vo.attackStep;  if (vo.gain > vo.target) vo.gain = vo.target; }
-            else if (vo.gain > vo.target) { vo.gain -= vo.releaseStep; if (vo.gain < vo.target) vo.gain = vo.target; }
+            // Attack/decay/sustain/release gates whether we KEEP SPAWNING
+            // grains (attack/decay/sustain) or let the cloud die out
+            // (release) -- chromatic voices use the full ADSR state machine,
+            // drum one-shots keep the original 2-stage gain ramp.
+            float envLevel;
+            bool  sounding;
+            if (chrom) {
+                _advanceEnv(vo.ampPhase, vo.ampLevel, vo.ampAttackStep, vo.ampDecayStep, vo.ampSustainLevel, vo.ampReleaseStep);
+                if (m_filterEngaged) _advanceEnv(vo.filterPhase, vo.filterLevel, vo.filterAttackStep, vo.filterDecayStep, vo.filterSustainLevel, vo.filterReleaseStep);
+                envLevel = vo.ampLevel;
+                sounding = (vo.ampPhase != kAdsrRelease && vo.ampPhase != kAdsrIdle);
+            } else {
+                if (vo.gain < vo.target)      { vo.gain += vo.attackStep;  if (vo.gain > vo.target) vo.gain = vo.target; }
+                else if (vo.gain > vo.target) { vo.gain -= vo.releaseStep; if (vo.gain < vo.target) vo.gain = vo.target; }
+                envLevel = vo.gain;
+                sounding = (vo.target > 0.0f);
+            }
 
-            // Only spawn new grains while sounding (target>0); once released,
-            // let the already-live grains ring out rather than cutting them.
-            if (vo.target > 0.0f) {
+            // Only spawn new grains while sounding; once released, let the
+            // already-live grains ring out rather than cutting them.
+            if (sounding) {
                 vo.grainAccum += 1.0;
                 if (vo.grainAccum >= spawnPeriod) {
                     vo.grainAccum -= spawnPeriod;
@@ -469,9 +558,17 @@ private:
                 if (gr.lifePos >= gr.lifeSamples || gr.pos < 0.0 || gr.pos >= (double)(gr.len - 1)) gr.active = false;
             }
 
-            inout[i] += (int)(mixed * vo.gain * m_grainGainComp);
+            if (chrom && m_filterEngaged) {
+                float alpha = _filterAlpha(_filterCutoffHz(vo.filterLevel));
+                vo.lpState += alpha * (mixed - vo.lpState);
+                mixed = vo.lpState;
+            }
 
-            if (vo.gain <= 0.0f && vo.target == 0.0f) {
+            float finalGain = chrom ? (envLevel * vo.velGain) : envLevel;
+            inout[i] += (int)(mixed * finalGain * m_grainGainComp);
+
+            bool done = chrom ? (vo.ampPhase == kAdsrIdle) : (vo.gain <= 0.0f && vo.target == 0.0f);
+            if (done) {
                 // Voice released and faded: kill any still-active grains it
                 // owns (avoids an orphaned grain rendering forever after the
                 // voice slot is reused, since a fresh voice checks
@@ -608,33 +705,38 @@ private:
         // DRUM path: completely unchanged from before this feature — same
         // duration-scaled attack, same fixed GAIN_STEP release. Untouched per
         // the explicit "drums out of scope" constraint.
-        //
-        // CHROMATIC path: if the user never called setAttackMs()/setReleaseMs(),
-        // m_attackMs stays at its -1 sentinel and m_releaseMs stays at its
-        // ctor default (== old GAIN_STEP in ms) -> bit-for-bit old behavior.
-        // Once set, chromatic voices use the fixed ms-derived step instead of
-        // the duration-auto-scaled one.
         double playable = (rate > 0.0) ? ((double)len / rate) : (double)len;
         float fastStep = (playable > 4.0) ? (float)(1.0 / (playable * 0.25)) : 0.25f;
         float legacyAttackStep = fastStep > GAIN_STEP ? fastStep : GAIN_STEP;
+        vo.attackStep  = legacyAttackStep;
+        vo.releaseStep = GAIN_STEP;
 
-        if (isChrom && m_attackMs >= 0.0f) {
-            // ms -> per-sample step: full 0..1 traverse in (m_attackMs/1000)*SR
-            // samples. Guard against ms==0 (instant attack -> avoid div-by-zero,
-            // just snap in one sample).
-            float samples = (m_attackMs * 0.001f) * (float)SR;
-            vo.attackStep = (samples > 0.0f) ? (1.0f / samples) : 1.0f;
-        } else {
-            vo.attackStep = legacyAttackStep;
-        }
-
+        // CHROMATIC path: full ADSR (amp) + a second ADSR modulating a
+        // per-voice lowpass cutoff (filter), both re-armed from the current
+        // knob positions at every note-on.
         if (isChrom) {
-            float samples = (m_releaseMs * 0.001f) * (float)SR;
-            vo.releaseStep = (samples > 0.0f) ? (1.0f / samples) : 1.0f;
-        } else {
-            vo.releaseStep = GAIN_STEP;   // drum: always the old fixed constant
+            vo.ampPhase = kAdsrAttack;
+            vo.ampLevel = 0.0f;
+            vo.ampAttackStep   = _msToStep(m_ampAttackMs);
+            vo.ampDecayStep    = _msToStep(m_ampDecayMs);
+            vo.ampSustainLevel = m_ampSustainLevel;
+            vo.ampReleaseStep  = _msToStep(m_ampReleaseMs);
+
+            vo.filterPhase = kAdsrAttack;
+            vo.filterLevel = 0.0f;
+            vo.filterAttackStep   = _msToStep(m_filterAttackMs);
+            vo.filterDecayStep    = _msToStep(m_filterDecayMs);
+            vo.filterSustainLevel = m_filterSustainLevel;
+            vo.filterReleaseStep  = _msToStep(m_filterReleaseMs);
+            vo.lpState = 0.0f;
         }
         return slot;
+    }
+
+    static void _releaseChromVoice(Voice &vo)
+    {
+        if (vo.ampPhase != kAdsrIdle) vo.ampPhase = kAdsrRelease;
+        if (vo.filterPhase != kAdsrIdle) vo.filterPhase = kAdsrRelease;
     }
 
     void _noteOn(int note, int vel)
@@ -653,7 +755,7 @@ private:
             // can't orphan a held note's eventual NOTE_OFF (auto-sustain bug).
             for (int v = 0; v < VOICES; v++)
                 if (m_voice[v].active && m_voice[v].sustain && m_voice[v].note == note)
-                    m_voice[v].target = 0.0f;
+                    _releaseChromVoice(m_voice[v]);
             double rate = pow(2.0, (double)(note - ROOT_NOTE) / 12.0);
             int slot = _spawnVoice(m_chromM, m_chromLen, rate, true, note, /*isChrom=*/true, velGain);
             if (slot >= 0 && m_granOn) m_voice[slot].granular = true;
@@ -665,7 +767,7 @@ private:
         // Release sustaining (chromatic) voices owned by this note.
         for (int v = 0; v < VOICES; v++)
             if (m_voice[v].active && m_voice[v].sustain && m_voice[v].note == note)
-                m_voice[v].target = 0.0f;
+                _releaseChromVoice(m_voice[v]);
     }
 
     void _drainEvents()
@@ -709,13 +811,25 @@ private:
     volatile Ev m_ev[EVENT_RING];
     volatile unsigned m_evHead, m_evTail;
 
-    // Feature 1: runtime attack/release (chromatic voices only; see setAttackMs/
-    // setReleaseMs). m_attackMs's -1 sentinel means "use the legacy duration-
-    // auto-scaled attack" (see _spawnVoice) — there is no equivalent sentinel
-    // needed for release since the old code had one real fixed constant
-    // (GAIN_STEP) to default to exactly.
-    float m_attackMs;
-    float m_releaseMs;
+    // Full ADSR (chromatic voices only; see setAmpAttackMs/../setFilterReleaseMs).
+    float m_ampAttackMs;
+    float m_ampDecayMs;
+    float m_ampSustainLevel;
+    float m_ampReleaseMs;
+    float m_filterAttackMs;
+    float m_filterDecayMs;
+    float m_filterSustainLevel;
+    float m_filterReleaseMs;
+    bool  m_filterEngaged = true;
+
+    // Cheap enough to always run; the real cost this gates is the per-sample
+    // one-pole filter apply in renderInto/_renderGranularVoice, skipped
+    // entirely whenever the filter envelope can't produce an audible sweep
+    // from its current knob positions (default state: transparent bypass).
+    void _recomputeFilterEngaged()
+    {
+        m_filterEngaged = (m_filterSustainLevel < 0.999f) || (m_filterAttackMs > 5.0f) || (m_filterDecayMs > 5.0f);
+    }
 
     // Feature 2: granulator pool + runtime params. Pool is fixed-size and
     // constructed once (see ctor) — no allocation on the audio path.

@@ -646,6 +646,7 @@ static void* worker(void*) {
                     if (gatePhase01 < 0.0) gatePhase01 = 0.0;
                     if (gatePhase01 >= 1.0) gatePhase01 = 0.0;
                     homeFx.setControl("fx2/GATEPHASE", (float)gatePhase01);
+                    fui.set("fx/dubgate/clockphase", (float)gatePhase01);
                 }
 
                 bool shuffleActive = shuffleGain[0] > 0.0f || shuffleGain[1] > 0.0f ||

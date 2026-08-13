@@ -3,10 +3,11 @@ import("stdfaust.lib");
 SR = 48000.0;
 
 FLANGEAMT = hslider("FLANGEAMT", 0.0, 0.0, 1.0, 0.01);
+BANKSPEED = hslider("BANKSPEED", 0.5, 0.0, 1.0, 0.01);
 
-LFO_RATE_MIN_HZ = 0.2;
-LFO_RATE_MAX_HZ = 3.0;
-lfoRateHz = LFO_RATE_MIN_HZ + FLANGEAMT * (LFO_RATE_MAX_HZ - LFO_RATE_MIN_HZ);
+RATE_MIN_HZ = 0.1;
+DECADES     = 2.0;
+lfoRateHz   = RATE_MIN_HZ * pow(10.0, DECADES * BANKSPEED);
 
 DEPTH_MIN_MS = 1.0;
 DEPTH_MAX_MS_BASE  = 10.0;

@@ -634,7 +634,7 @@ void ApcGrid::onShiftRelease(ParamStore& ps) {
     ps.setByName("fx/monitorfold", 0.0f);
 }
 
-void ApcGrid::onFormantCC(uint8_t data2, ParamStore& ps) {
+void ApcGrid::applyFormantCC(uint8_t data2, ParamStore& ps) {
     const bool inDeadzone = (data2 >= 60 && data2 <= 68);
     if (inDeadzone) { ps.setByName("fx/formant", 0.0f); return; }
     const float range = m_shift ? 3.0f : 1.0f;
@@ -643,7 +643,7 @@ void ApcGrid::onFormantCC(uint8_t data2, ParamStore& ps) {
     ps.setByName("fx/formant", v);
 }
 
-static const int kFxKnobCcNumbers[kFxKnobCount] = { 48, 49, 50, 51, 54, 55, 57 };
+static const int kFxKnobCcNumbers[kFxKnobCount] = { 48, 49, 50, 51, 54, 55, 57, 53 };
 
 static const FxKnobTarget kDubTargets[kFxKnobCount] = {
     { FxKnobKind::FaustZone, "fx/reverb" },
@@ -653,38 +653,52 @@ static const FxKnobTarget kDubTargets[kFxKnobCount] = {
     { FxKnobKind::FaustZone, "fx/lpres"  },
     { FxKnobKind::FaustZone, "fx/lp"     },
     { FxKnobKind::FaustZone, "fx/pitch"  },
+    { FxKnobKind::Unused, nullptr },
+};
+static const FxKnobTarget kDubShiftTargets[kFxKnobCount] = {
+    { FxKnobKind::FaustZone, "fx/dubgate/amt"     },
+    { FxKnobKind::FaustZone, "fx/dubgate/pattern" },
+    { FxKnobKind::FaustZone, "fx/dublfo/rate"     },
+    { FxKnobKind::FaustZone, "fx/dublfo/depth"    },
+    { FxKnobKind::FaustZone, "fx/dublfo/shape"    },
+    { FxKnobKind::FaustZone, "fx/dublfo/target"   },
+    { FxKnobKind::FaustZone, "fx/dublfo/phase"    },
+    { FxKnobKind::Unused, nullptr },
 };
 static const FxKnobTarget kGuitarTargets[kFxKnobCount] = {
     { FxKnobKind::Lv2Control, "fx2/FLANGEAMT"   },
     { FxKnobKind::Lv2Control, "fx2/TREMOLOAMT"  },
     { FxKnobKind::Lv2Control, "fx2/BANKSPEED"   },
     { FxKnobKind::Lv2Control, "fx2/PHASERAMT"   },
-    { FxKnobKind::SamplerAttackMs,  nullptr },
-    { FxKnobKind::SamplerReleaseMs, nullptr },
-    { FxKnobKind::Lv2Control, "fx2/COMPRESSAMT" },
-};
-static const FxKnobTarget kGuitarShiftTargets[kFxKnobCount] = {
-    { FxKnobKind::Lv2Control, "fx2/GATEAMT"     },
-    { FxKnobKind::Lv2Control, "fx2/GATEPATTERN" },
+    { FxKnobKind::Lv2Control, "fx2/DISTAMT"     },
     { FxKnobKind::Lv2Control, "fx2/VINYLAMT"    },
     { FxKnobKind::Lv2Control, "fx2/FLUTTERAMT"  },
-    { FxKnobKind::Lv2Control, "fx2/SRRAMT"      },
-    { FxKnobKind::SamplerAttackMs,  nullptr },
-    { FxKnobKind::SamplerReleaseMs, nullptr },
+    { FxKnobKind::Unused, nullptr },
+};
+static const FxKnobTarget kGuitarShiftTargets[kFxKnobCount] = {
+    { FxKnobKind::SamplerFilterAttackMs,  nullptr },
+    { FxKnobKind::SamplerFilterDecayMs,   nullptr },
+    { FxKnobKind::SamplerFilterSustain,   nullptr },
+    { FxKnobKind::SamplerFilterReleaseMs, nullptr },
+    { FxKnobKind::SamplerAttackMs,        nullptr },
+    { FxKnobKind::SamplerAmpDecayMs,      nullptr },
+    { FxKnobKind::SamplerAmpSustain,      nullptr },
+    { FxKnobKind::SamplerReleaseMs,       nullptr },
 };
 static const FxKnobTarget kLofiFxTargets[kFxKnobCount] = {
-    { FxKnobKind::Lv2Control,         "fx2/BITCRUSHAMT" },
+    { FxKnobKind::Lv2Control,             "fx2/BITCRUSHAMT" },
     { FxKnobKind::SamplerGranPatchWeight, nullptr },
     { FxKnobKind::SamplerGranPatchWeight, nullptr },
     { FxKnobKind::SamplerGranPatchWeight, nullptr },
     { FxKnobKind::SamplerGranPatchWeight, nullptr },
     { FxKnobKind::SamplerGranPatchWeight, nullptr },
     { FxKnobKind::SamplerGranPatchWeight, nullptr },
+    { FxKnobKind::Unused, nullptr },
 };
 
 struct GranPatch { float grainMs, grainRateHz, pitchSprayCents, posJitterMs, scanRate, reverseProb, envShape; };
 
-constexpr int kGranPatchCount = kFxKnobCount - 1;
+constexpr int kGranPatchCount = 6;
 static const GranPatch kGranPatches[kGranPatchCount] = {
     { 200.0f,   8.0f,  0.0f,   0.0f, 1.0f, 0.00f, 0.00f },
     {  90.0f,  35.0f, 25.0f,  35.0f, 0.4f, 0.10f, 0.15f },
@@ -705,13 +719,14 @@ static const ResonodePatch kResonodePatches[kResonodePatchCount] = {
 };
 
 struct ResonodeDirectKnobRange { const char* zone; float lo; float hi; bool logTaper; };
-static const ResonodeDirectKnobRange kResonodeDirectKnobRanges[kFxKnobCount - 1 - kResonodePatchCount] = {
+constexpr int kResonodeDirectKnobCount = 2;
+static const ResonodeDirectKnobRange kResonodeDirectKnobRanges[kResonodeDirectKnobCount] = {
     { "fx/resonode/tone",  200.0f, 18000.0f, true },
     { "fx/resonode/level", 0.0f, 1.5f, false },
 };
 static void applyResonodeDirectKnob(int knobIdx, float v01, ParamStore& ps) {
     int i = knobIdx - 1 - kResonodePatchCount;
-    if (i < 0 || i >= kFxKnobCount - 1 - kResonodePatchCount) return;
+    if (i < 0 || i >= kResonodeDirectKnobCount) return;
     const ResonodeDirectKnobRange& r = kResonodeDirectKnobRanges[i];
     float v = r.logTaper ? r.lo * std::pow(r.hi / r.lo, v01) : r.lo + v01 * (r.hi - r.lo);
     ps.setByName(r.zone, v);
@@ -768,13 +783,20 @@ void ApcGrid::applyGranulatorMorph(Sampler* sampler) {
 static void applySamplerFxKnob(FxKnobKind kind, float v01, Sampler* sampler) {
     if (!sampler) return;
     switch (kind) {
-        case FxKnobKind::SamplerAttackMs:  sampler->setAttackMs(v01 * 2000.0f); break;
-        case FxKnobKind::SamplerReleaseMs: sampler->setReleaseMs(v01 * 2000.0f); break;
+        case FxKnobKind::SamplerAttackMs:         sampler->setAmpAttackMs(v01 * 2000.0f); break;
+        case FxKnobKind::SamplerReleaseMs:        sampler->setAmpReleaseMs(v01 * 2000.0f); break;
+        case FxKnobKind::SamplerAmpDecayMs:       sampler->setAmpDecayMs(v01 * 2000.0f); break;
+        case FxKnobKind::SamplerAmpSustain:       sampler->setAmpSustain(v01); break;
+        case FxKnobKind::SamplerFilterAttackMs:   sampler->setFilterAttackMs(v01 * 2000.0f); break;
+        case FxKnobKind::SamplerFilterDecayMs:    sampler->setFilterDecayMs(v01 * 2000.0f); break;
+        case FxKnobKind::SamplerFilterSustain:    sampler->setFilterSustain(v01); break;
+        case FxKnobKind::SamplerFilterReleaseMs:  sampler->setFilterReleaseMs(v01 * 2000.0f); break;
         default: break;
     }
 }
 
 static void applyFxKnobTarget(const FxKnobTarget& t, float v01, ParamStore& ps, Sampler* sampler, Lv2Host* homeFx) {
+    if (t.kind == FxKnobKind::Unused) return;
     float v = (t.name && strcmp(t.name, "fx/reverb") == 0) ? (v01 * 2.0f) : v01;
     switch (t.kind) {
         case FxKnobKind::FaustZone:  ps.setByName(t.name, v); break;
@@ -784,6 +806,10 @@ static void applyFxKnobTarget(const FxKnobTarget& t, float v01, ParamStore& ps, 
 }
 
 void ApcGrid::onFxKnobCC(int ccNumber, uint8_t data2, ParamStore& ps, Sampler* sampler, Lv2Host* homeFx) {
+    if (ccNumber == 53 && m_activeBank == FxBank::Dub) {
+        applyFormantCC(data2, ps);
+        return;
+    }
     int knobIdx = -1;
     for (int k = 0; k < kFxKnobCount; k++) {
         if (kFxKnobCcNumbers[k] == ccNumber) { knobIdx = k; break; }
@@ -801,7 +827,7 @@ void ApcGrid::onFxKnobCC(int ccNumber, uint8_t data2, ParamStore& ps, Sampler* s
         return;
     }
     const FxKnobTarget* targets =
-        m_activeBank == FxBank::Dub ? kDubTargets :
+        m_activeBank == FxBank::Dub ? (m_shift ? kDubShiftTargets : kDubTargets) :
         m_activeBank == FxBank::Guitar ? (m_shift ? kGuitarShiftTargets : kGuitarTargets) : kLofiFxTargets;
     applyFxKnobTarget(targets[knobIdx], v, ps, sampler, homeFx);
 }
