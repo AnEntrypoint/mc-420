@@ -73,3 +73,7 @@ tmp/
 # not repo state
 test/hardware/aloop.conf.backup.*
 __pycache__/
+
+# Claude Code local session/agent-worktree state -- harness machinery, not
+# repo content (background Agent isolation:"worktree" runs land here).
+.claude/
