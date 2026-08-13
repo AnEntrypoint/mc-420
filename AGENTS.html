@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1eb80d985b5f5e96ad8d265fc132c87d1803972a">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=3c04024bff2759e2b1f1d9a2ad03f6824f5e1385">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -5148,42 +5148,104 @@ non-clipping output under the fixed gain, so they are not obviously wrong -- but
 their original "measured, not guessed" grid-search provenance should be treated
 as unconfirmed until that sweep is re-run for real.
 
-## Guitar shift-bank: `Shift+Guitar` gives a tempo-synced rhythmic gate + already-built stutter/wow/bitcrush-adjacent targets
+## Three-page x regular/shift x 8-knob control surface (current architecture)
 
-`kGuitarShiftTargets` (`apc_grid.cpp`) is selected instead of `kGuitarTargets`
-whenever `m_activeBank == FxBank::Guitar &amp;&amp; m_shift` — no new `FxBank` enum
-value needed, this reuses the existing Guitar bank's state and just branches
-the knob-target table on `m_shift`, the same pattern `onFormantCC` already
-uses for its deadzone/range switch. Knob0/1 are the new gate
-(`fx2/GATEAMT`/`fx2/GATEPATTERN`); knob2-4 are `fx2/VINYLAMT`/
-`fx2/FLUTTERAMT`/`fx2/SRRAMT` — declared in `guitar_lofi_fx.dsp` since the
-file was first written but never mapped to any knob until now (a pre-existing,
-free, already-verified stutter/wow-flutter/bitcrush-adjacent effect set,
-identified by reading the file rather than adding new DSP); knob5-6 stay
-`SamplerAttackMs`/`SamplerReleaseMs`, unchanged from the plain Guitar bank.
+Every FX page (Dub, Guitar, LofiFx) has TWO independently-latching 8-knob
+banks (regular and Shift), selected per-CC by `ApcGrid::onFxKnobCC`
+(`apc_grid.cpp`) branching on `m_activeBank`/`m_shift`. `kFxKnobCount` is 8;
+`kFxKnobCcNumbers = {48, 49, 50, 51, 54, 55, 57, 53}` — CC53 is the physical
+knob that also carries Formant on the Dub page (see below), so every
+non-Dub bank's table is free to repurpose that same physical knob for its
+own 8th control.
 
-`gateStage` (new, `guitar_lofi_fx.dsp`, appended as the LAST stage of
-`process`, after `samplerateStage`) is a rhythmic amplitude gate — 4 smooth,
-period-1-in-`GATEPHASE` raised-cosine patterns (`gatePat0..gatePat3`: straight
-4-on-the-floor, offbeat/skank, 16th-note stutter, a 3-3-2 broken pattern),
-bucket-selected from `fx2/GATEPATTERN` via a fixed 3-comparison `select2`
-chain (plain arithmetic indexing, not a scan — matches this codebase's
-`div[]`-lookup idiom elsewhere). `gateEnv = 1.0 - GATEAMT*(1.0-selected)` is
-an exact identity at `GATEAMT=0` (`1.0 - 0*(anything) = 1.0` algebraically,
-verified bit-exact in a real JIT render, not just on paper).
+**Dub regular** (`kDubTargets`): unchanged — `fx/reverb`, `fx/delay`,
+`fx/time`, `fx/hp`, `fx/lpres`, `fx/lp`, `fx/pitch`, and CC53 is intercepted
+BEFORE this table is even consulted (`onFxKnobCC`'s `ccNumber==53 &amp;&amp;
+m_activeBank==FxBank::Dub` branch calls `applyFormantCC` directly) — Formant
+lives ONLY here, never on any other bank or page.
 
-**`fx2/GATEPHASE`** (0..1 over a shared 4-beat cycle) is pushed from C++ every
-block, unconditionally, via `homeFx.setControl("fx2/GATEPHASE", ...)` right
-before `homeFx.process()` in `audio_thread.cpp`'s worker loop — the same
-direct-push shape `fx/resonode/engaged`/`fx/extfreqdet` already use for
-values that change every block rather than only on a CC. It is driven from
-`shuffleClockSamples` (see the groove-shuffle entry below — the SAME shared
-4-beat clock backs both the guitar gate's tempo-sync and the groove-shuffle
-buttons, computed once), NOT from `masterPhase`, so the gate keeps ticking
-even with no loop recorded yet (falls back to a nominal half-second beat).
-Verified via the real box-compile method: 0.09-0.10s, nowhere near this
-project's `multitranspose.dsp`/`dsp/aloop.dsp` compile-time cliff (this is a
-wholly separate Core-3 LV2 compilation unit).
+**Dub shift** (`kDubShiftTargets`): a dance-gate + LFO bank, entirely new
+Faust DSP in `dsp/effects_runtime.dsp`'s always-on Core-1 chain, appended
+as `dubGateLfoStage` at the very end of `mainOut` (post-reverb, giving a
+classic gated-reverb-tail character). Knob0/1 are `fx/dubgate/amt`/
+`fx/dubgate/pattern` (4 raised-cosine patterns bucket-selected the same way
+`guitar_lofi_fx.dsp`'s own gate does); knob2-6 are `fx/dublfo/rate`
+(0.02-20Hz), `fx/dublfo/depth`, `fx/dublfo/shape` (sine-to-square blend),
+`fx/dublfo/target` (crossfades tremolo-style volume-mod against an
+auto-wah-style lowpass-mod), `fx/dublfo/phase`; CC53 is Unused here (Formant
+stays Dub-regular-only). The gate's tempo sync rides the shared
+`fx/dubgate/clockphase` zone, pushed from C++ every block from the same
+`shuffleClockSamples`-derived phase the guitar gate and groove-shuffle
+buttons already share (see below) — NOT `masterPhase`, so it keeps ticking
+with no loop recorded. All 7 controls are bit-exact identity at their
+compiled-in defaults (verified via DawDreamer against a reference with the
+stage stripped entirely).
+
+**Guitar regular** (`kGuitarTargets`): flanger/tremolo/phaser/distortion,
+replacing the old compressor — `guitar_lofi_fx.dsp`'s `COMPRESSAMT` hslider
+was replaced by `DISTAMT` (`distortion.dsp`, a `drive`+`tanh` shaper with a
+tone-darkening lowpass tied to the same amount, bit-exact identity at
+`DISTAMT=0`); `compressor.dsp` itself is kept in-tree, unreferenced by the
+live chain, ONLY because `test/faust-flags/ab_fm_def.py` still uses it for
+an unrelated fast-math-flag verification — do not delete it without also
+updating that test. Knob0-4: `fx2/FLANGEAMT`, `fx2/TREMOLOAMT`,
+`fx2/BANKSPEED`, `fx2/PHASERAMT`, `fx2/DISTAMT`. `BANKSPEED` is a single
+shared LFO-rate control (`RATE_MIN_HZ=0.1`, 2 decades) driving flanger,
+tremolo, AND phaser together — "from nothing to crazy amounts", per the
+original design intent, rather than three independent unsynced rates.
+Knob5/6: `fx2/VINYLAMT`/`fx2/FLUTTERAMT`. Knob7 (CC53): `fx2/GATEAMT` — a
+rhythmic amplitude gate, `gateStage` (new, `guitar_lofi_fx.dsp`, the LAST
+stage of `process`), a single fixed raised-cosine pattern (straight
+4-on-the-floor) driven by `fx2/GATEPHASE` (pushed from C++ every block, same
+shared 4-beat clock as the Dub-shift gate and groove-shuffle). `gateEnv =
+1.0 - GATEAMT*(1.0-selected)` is an exact identity at `GATEAMT=0`. An
+earlier revision also exposed `fx2/GATEPATTERN` (multi-pattern select) and
+`fx2/SRRAMT`/`samplerateStage` (a bitrate-adjacent stutter effect) here, but
+the 8-dial-ADSR-bank swap (below) left no free knob slot for either —
+`GATEPATTERN`'s select chain and `samplerateStage` were removed from
+`guitar_lofi_fx.dsp` entirely (dead weight with no reachable control is a
+real DSP-CPU cost, not just an unreachable feature) rather than left as
+permanently-stuck-at-default dead controls; `SRRAMT`'s stutter/bitcrush
+character overlapped conceptually with the LofiFx page's own bitcrush
+anyway.
+
+**Guitar shift** (`kGuitarShiftTargets`): an 8-dial DUAL ADSR envelope bank
+for the sampler engine (`src/dsp/sampler/sampler.h`), swapped in place of
+the old gate/vinyl/flutter/samplerate bank above. Top row (knob0-3, real
+Faust-independent C++ ADSR state, `AdsrPhase` state machine +
+one-pole-lowpass filter-cutoff modulation, `Sampler::_advanceEnv`):
+`SamplerFilterAttackMs`, `SamplerFilterDecayMs`, `SamplerFilterSustain`,
+`SamplerFilterReleaseMs` — drives a filter envelope from
+`kFilterCutoffMinHz=80Hz` to `kFilterCutoffMaxHz=18000Hz`
+(`_filterCutoffHz`/`_filterAlpha`), gated by `Sampler::m_filterEngaged`
+(`_recomputeFilterEngaged`: true whenever sustain&lt;0.999 OR any of
+attack/decay/release exceeds 5ms — ALL FOUR stages must be checked, a
+release-only sweep with fast attack/decay and sustain=1.0 is a real,
+previously-missed engagement case; every one of the four setters calls
+`_recomputeFilterEngaged()`). Bottom row (knob4-7): `SamplerAttackMs`
+(amp attack), `SamplerAmpDecayMs`, `SamplerAmpSustain`, `SamplerReleaseMs`
+(amp release, on CC53) — the amplitude ADSR. This bank has no `fx2/*`
+Faust/LV2 targets at all; every knob writes straight into the C++ Sampler
+object via `applySamplerFxKnob`.
+
+**LofiFx** (`kLofiFxTargets`): knob0 is `fx2/BITCRUSHAMT`; knob1-6 are
+`SamplerGranPatchWeight` — the granulator's 6 named-patch blend weights
+when Resonode is NOT engaged, or Resonode's own 4 named-patch weights plus
+2 direct dials (tone/level) when it IS engaged (`m_resonodeEngaged`, a
+Shift+tap toggle on the same physical LofiFx button) — see "Resonode named
+sweetspot patches"/"Super music granulator" elsewhere in this file for the
+patch tables themselves; unchanged by the 8-knob rework beyond the extra
+knob7 (CC53) also being `SamplerGranPatchWeight`/direct-knob-eligible now
+that `kFxKnobCount` is 8, decoupled behind explicit `kGranPatchCount=6`/
+`kResonodeDirectKnobCount=2` constants so neither surface silently grew.
+
+`gateStage` verified via the real box-compile method: ~0.09-0.10s for
+`guitar_lofi_fx.dsp` standalone, and `dsp/effects_runtime.dsp`'s
+`dubGateLfoStage` addition similarly nowhere near this project's
+`multitranspose.dsp`/`dsp/aloop.dsp` compile-time cliff — both are ordinary
+signal-processing additions, not new UI primitives declared inside a
+compile-time-fragile file (the specific trigger class that file's own
+history warns about).
 
 ## Groove shuffle: the 4 metronome-flash pads (`kBeatPadNotes` 15/23/31/39) are also shuffle buttons
 
