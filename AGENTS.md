@@ -3601,6 +3601,63 @@ This is why the stage is bit-identical to `../looper`'s `EngineSoladSnac`: the
 pitched sample is produced by that real C++ engine via the ffunction bridge, not
 a Faust-side approximation of it.
 
+## `pitch_ffi.h`'s `dubfx_pitch_tick` has a hidden 1-block (64-sample) latency, matching the SNAC engine's own block cadence
+
+`EngineSoladSnac`'s SNAC cadence tracks state by BLOCK SIZE directly
+(`m_sinceDetect += n` inside `soladSnacOctaver.h`'s `processBlock`), so
+calling `processBlock(...,1)` once per sample would drift from the
+looper's own `processBlock(...,64)` cadence — the engine's internal pitch
+detection is tuned against 64-sample blocks specifically, not the
+per-sample cadence Faust's `ffunction` bridge would naively suggest.
+
+Fix: `dubfx_pitch_tick` buffers exactly `DUBFX_BS=64` input samples and
+calls `processBlock(buf, out, 64)` once per block, EXACTLY as the looper
+does, then serves the 64 outputs one tick at a time. Faust runs `-bs 64`
+in lockstep, so `tick()` fires 64 times per block in the same order. This
+introduces a real, permanent 1-block (64-sample, ~1.333ms) latency: the
+input sample of block `k` is buffered and processed only once the block
+fills, with its output served across the NEXT 64 tick calls — so
+`dubfx_pitch_tick` at any given call returns the output of the block
+processed one block ago, not the current one. Any C++ reference harness
+comparing this stage's output against the real engine must apply the
+identical 1-block delay before diffing, or the comparison silently
+misaligns by one full block.
+
+This latency is the pitch stage's own algorithmic cost while engaged (the
+SNAC engine's real block-cadence dependency), not an addition to the fixed
+dry-path block chain — it falls under this file's own "a wet effect's own
+algorithmic latency while engaged... is not covered by [the never-add-
+audio-path-latency] rule" carve-out (see Working Rules above), matching
+`ef.transpose`'s window latency and Resonode's engaged-only cost.
+
+## `grainFormant.h`: a -12 octaver with independent formant via grain playback-speed
+
+Part of `EngineSoladSnac` (ADR-004), linked exactly as `../looper` ships it.
+Reads the dry input at THREE independent rates: output-epoch spacing =
+`Tin/scale` (sets the -12 pitch), input-epoch advance = `Tin` per emission
+(consumes input at `scale`), grain CONTENT read = `fm` (formant) — at
+`fm==1` formants ride with pitch (a natural -12); grains are overlapping
+Hann-windowed 2-period windows for click-free crossfades.
+
+**Streaming gap-bound, the part an offline prototype (`proto-grain-formant.cpp`)
+didn't need**: the input epoch lags the writer by the -12 lag and advances at
+only `~scale`/sample, so left unbounded it walks off the ring. When the lag
+drifts too far from `targetLag`, `read()` RESPLICES — jumps the epoch forward
+by a WHOLE number of input periods (pitch-neutral, matching the main
+`soladSnacOctaver.h` engine's own splice) rather than an arbitrary offset,
+since a whole-period jump preserves phase (hence pitch) and the Hann overlap
+hides the splice point.
+
+**The resplice deadband is deliberately wide (`kRespliceDeadbandPeriods =
+5.0`, was `2.0`).** Each resplice snaps the grain source to a DIFFERENT
+moment of past audio; on real (non-synthetic) input the period estimate
+jitters, so a tight deadband triggers frequent snaps, audible as the
+texture "jumping in and out of different moments" — closer to two
+overlapping voices than one continuous grain stream. Widening the deadband
+makes snaps rare (only on genuine large drift), keeping the grain stream on
+one continuous stretch of source audio far longer; the extra lag drift this
+permits is a few milliseconds, inaudible.
+
 ## DawDreamer verification harness
 
 Numeric/behavioral verification of `.dsp` changes uses
