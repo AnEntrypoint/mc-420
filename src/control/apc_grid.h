@@ -37,6 +37,7 @@ enum class FxKnobKind : uint8_t { FaustZone, Lv2Control, SamplerAttackMs, Sample
 struct FxKnobTarget {
     FxKnobKind kind;
     const char* name;
+    float scale = 1.0f;
 };
 
 inline int gridLooperIndex(int row, int col) {
@@ -147,6 +148,8 @@ private:
     int allocateTransposeVoice(int note);
     void releaseTransposeVoice(int note, ParamStore& ps);
     long m_masterLenSamples = 0;
+    int m_monitorFoldSlot = -1;
+    int monitorFoldSlot(ParamStore& ps);
 
     float m_fxBankValues[kFxBankCount][kFxKnobCount] = {
         {0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f},

@@ -358,9 +358,9 @@ void Lv2Host::process(float* buf, int nframes) {
     if (plugins_.empty()) return;
     int n = nframes;
     if ((int)ioBuffer_.size() < n) return;   // safety: connect() must have sized it
-    for (int i = 0; i < n; i++) ioBuffer_[(size_t)i] = buf[i];
+    std::memcpy(ioBuffer_.data(), buf, (size_t)n * sizeof(float));
     runBlock(n);
-    for (int i = 0; i < n; i++) buf[i] = ioBuffer_[(size_t)i];
+    std::memcpy(buf, ioBuffer_.data(), (size_t)n * sizeof(float));
 }
 
 // Faust's lv2.cpp architecture (mangle(), see faust/share/faust/lv2.cpp)

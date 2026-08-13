@@ -180,7 +180,11 @@ public:
                     _advanceEnv(vo.ampPhase, vo.ampLevel, vo.ampAttackStep, vo.ampDecayStep, vo.ampSustainLevel, vo.ampReleaseStep);
                     if (m_filterEngaged) {
                         _advanceEnv(vo.filterPhase, vo.filterLevel, vo.filterAttackStep, vo.filterDecayStep, vo.filterSustainLevel, vo.filterReleaseStep);
-                        float alpha = _filterAlpha(_filterCutoffHz(vo.filterLevel));
+                        if (vo.filterLevel != vo.filterAlphaLevel) {
+                            vo.filterAlpha = _filterAlpha(_filterCutoffHz(vo.filterLevel));
+                            vo.filterAlphaLevel = vo.filterLevel;
+                        }
+                        float alpha = vo.filterAlpha;
                         vo.lpState += alpha * (sm - vo.lpState);
                         sm = vo.lpState;
                     }
@@ -307,6 +311,8 @@ private:
         float   filterSustainLevel;
         float   filterReleaseStep;
         float   lpState;
+        float   filterAlpha;
+        float   filterAlphaLevel;
     };
 
     struct Grain {
@@ -522,7 +528,11 @@ private:
             }
 
             if (chrom && m_filterEngaged) {
-                float alpha = _filterAlpha(_filterCutoffHz(vo.filterLevel));
+                if (vo.filterLevel != vo.filterAlphaLevel) {
+                    vo.filterAlpha = _filterAlpha(_filterCutoffHz(vo.filterLevel));
+                    vo.filterAlphaLevel = vo.filterLevel;
+                }
+                float alpha = vo.filterAlpha;
                 vo.lpState += alpha * (mixed - vo.lpState);
                 mixed = vo.lpState;
             }
@@ -646,6 +656,8 @@ private:
             vo.filterSustainLevel = m_filterSustainLevel;
             vo.filterReleaseStep  = _msToStep(m_filterReleaseMs);
             vo.lpState = 0.0f;
+            vo.filterAlpha = 0.0f;
+            vo.filterAlphaLevel = -1.0f;
         }
         return slot;
     }
