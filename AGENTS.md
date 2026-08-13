@@ -3630,6 +3630,178 @@ algorithmic latency while engaged... is not covered by [the never-add-
 audio-path-latency] rule" carve-out (see Working Rules above), matching
 `ef.transpose`'s window latency and Resonode's engaged-only cost.
 
+## `soladSnacOctaver.h`: `EngineSoladSnac`, the solad+McLeod-SNAC pitch shifter -- architecture and debugging history
+
+The `-12` live pitch engine `pitch_ffi.h` bridges into Faust (ADR-004).
+References: Katja Vetter, "low latency pitch shifting" (katjaas.nl/pitchshiftlowlatency)
+and "helmholtz finds the pitch" (katjaas.nl/helmholtz); McLeod & Wyvill,
+"A Smarter Way to Find Pitch" (the Tartini paper).
+
+**Three parts**: (1) a SNAC pitch tracker on a 1024-sample sliding window
+(`2*r[k]/norm[k]`, parabolic-interpolated peak for sub-sample period
+accuracy, gated by a fidelity threshold); (2) a solad delay-line shifter —
+one circular buffer read at the scale rate, which drifts by construction
+(PSOLA's whole point: the lag between write and read pointer IS the pitch
+shift) and periodically resplices by an INTEGER MULTIPLE of the detected
+period to stay phase-coherent, never a bare jump; (3) a transient
+detector overlay, currently DISABLED (see below).
+
+**Latency budget, the load-bearing numbers**: algorithmic delay =
+`INITIAL_READ_OFFSET_DEFAULT = 64` samples (1.3ms), reduced from a prior
+192 (which was 128 samples of redundant headroom stacked on top of the
+irreducible PSOLA reader lag). `m_respliceFrac = 1.0` (resplice once the
+reader drifts ~1 period past target — the PSOLA minimum, gap held at
+offset + <=1 period, host-measured 3.6-7.4ms across 82-330Hz). This was
+briefly raised to 8 to cut a ~55/s amplitude-dip buzz on real (noisy) Pi
+input, which traded the ~4ms budget away for a 22-53ms regression; once
+the splice search below was fixed to be simultaneously frequency-neutral
+AND seamless, the buzz's real cause was gone and `frac` was restored to 1
+to reclaim the latency budget.
+
+**Splice search — seamless AND frequency-neutral, the two constraints
+that used to fight each other.** A displacement must be an exact integer
+number of periods (else the splice measurably biases pitch on real
+input — a low-note flat-detune bug this project already hit) AND must
+land where the waveform's value+slope match the current read point (else
+every splice clicks on real, non-synthetic input). The earlier design did
+value/slope matching via a continuous ±period/2 slide, THEN snapped the
+result to the nearest whole period — discarding the match and landing the
+crossfade back on a raw integer-period position, which clicked on every
+splice (reported as "lots of little clicks"). Fixed by searching the
+value/slope match ONLY among already-integer-period candidates
+(`n·per` from the active reader, `±3` periods around the target `n`) —
+every candidate is frequency-neutral by construction, so picking the
+best-matching one among them satisfies both constraints at once.
+
+**Splice storm / "16s gurgle" root cause and fix.** A single-period jump
+whenever drift exceeded the trigger left the gap still above trigger
+whenever drift exceeded roughly one period, so it re-fired every block —
+a multi-second >100/s splice storm heard as a gurgle. Fixed two ways
+together: `triggerSpliceByPeriod` jumps forward by AS MANY whole periods
+as needed to clear the entire accumulated drift in one splice (not just
+one period), and a `per*0.9`-sample cooldown (`m_spliceCooldown`) hard-caps
+the splice rate afterward, converting a runaway storm into single clean
+catch-up splices with real hysteresis.
+
+**SNAC's own compute is chunked to avoid a real-time deadline overrun.**
+The full `O(SNAC_WIN*MAX_PERIOD)` autocorrelation (~820k multiplies) run
+in one block overran the Core 1 audio deadline on the Pi, stalling the
+chain and triggering USB IN-ring resyncs that corrupted the engine's own
+input — destroying the -12 output. `snacBegin()`/`detectPitchStep()` split
+the sweep across blocks (`LAGS_PER_STEP=48` lags/block, ~49k mul/block,
+flat, no spike; a full `MAX_PERIOD=800` sweep finishes over ~17 blocks,
+~23ms — far faster than real pitch changes). `SNAC_HOP=2048` (43ms) throttles
+how often a fresh sweep is armed at all, so the heavy autocorrelation runs
+~23/sec rather than per-splice (~100/sec); the resplice path between
+refreshes reuses the cached period. A momentary peak-pick miss no longer
+drops lock immediately — `m_lockMiss` requires 3 consecutive misses before
+`m_periodValid` clears, since a single miss on an otherwise-sustained tone
+was destabilizing the resplice into more of the same gurgle class.
+
+**`reengage()` seeds a period BEFORE SNAC's first lock, and the seed
+value matters.** Without a seed, the gap-bounding resplice cannot fire
+until SNAC locks for the first time; on the Pi that lock was
+intermittent, so the gap ran up to the emergency escape every cycle,
+heard as detune/wobble right after every re-engage. `kReengageSeedPeriod
+= 600.0f` (~80Hz, below guitar low-E's 82Hz) is deliberately a LONG seed:
+a seed period longer than any real note can never bias that note toward
+a half-period (octave) splice error, and SNAC refines up to the true
+period once it locks. A shorter seed (218, ~220Hz) was tried and made a
+real 110Hz note lock to its own half-period — a flat-detuned octave
+error introduced by the seed itself, not by SNAC.
+
+**Sinc-kernel DC-gain ripple was a real, measured tremolo source (~20%
+envelope modulation at -12), fixed by per-phase normalization.** The raw
+windowed-sinc kernel's coefficient sum varies ~9.9% across the 256
+precomputed fractional phases; as the read pointer drifts through phases
+during a pitch shift, that gain ripple modulates output amplitude
+audibly. Both `initSincTable()`'s main table and `readPre`'s (now-removed)
+8-tap kernel normalized each phase row to unity DC gain at the source.
+
+**Crossfade must be EQUAL-GAIN LINEAR, never equal-power cosine.** The two
+readers a splice crossfades between are one period apart on a
+quasi-periodic signal — CORRELATED, not independent — so an equal-power
+(sum-of-squares=1) cosine fade sums to up to +3dB mid-fade on correlated
+grains, and since the per-splice phase error varies splice-to-splice the
+bump magnitude varies too, producing periodic amplitude modulation
+(audible tremolo). A linear, constant-sum (`wActive+wPassive==1.0`
+exactly) fade holds summed amplitude flat when the grains are
+phase-aligned — the actual PSOLA invariant.
+
+**Double-transient bug and the currently-DISABLED transient detector.**
+A resplice jumps the reader BACK by whole periods, reusing already-played
+audio; if that fires while an attack is passing through the reader, the
+attack plays twice (audible at non-octave ratios like -5, where the
+resplice cadence doesn't line up to a clean sub-multiple the way the -12
+octave does). Fixed with `m_transientHold`, holding off resplicing for
+~2 grains after a detected transient so the attack passes through once
+cleanly. Separately, the SNAP-TO-LIVE transient response itself (jumping
+the reader forward to the write pointer on a detected attack, restoring
+near-zero latency briefly) is disabled in the shipped code — a real
+host A/B showed it introduces a 150-sigma spike at attacks, worse than
+the smearing it was meant to fix; re-enabling needs a proper short-time
+spectral-flux detector and a bridge crossfade rather than a hard splice.
+
+**Emergency escape only fires as a last resort, and is suppressed
+specifically on quiet input to avoid an inter-note click.** The stale-
+period resplice keeps the drift-gap bounded in normal sustained use, so
+the hard-escape (buffer-wrap protection, `gap > DL-64` or `gap <
+SINC_HALF+2`) should never fire there. On the silence tail after a note,
+though, there is no real fundamental — SNAC can peak on a spurious long
+lag and the gap can run to the wrap bound, which used to fire an
+unaligned reset that was inaudible during the silence itself but left the
+reader off-phase for the NEXT note's onset (a click between notes). While
+quiet (`m_envSlow < 0.004`), the engine instead just clamps the reader to
+a safe distance behind the writer with no splice, coasting cleanly into
+the next note.
+
+**`DL=32768` (0.68s @48k) was deliberately downsized from a prior 131072**
+(512KB/channel) — that size bloated the class's single `new` allocation to
+multi-MB and corrupted on the Pi's `AARCH=32` build; 32768 (128KB/channel,
+256KB stereo) keeps `RubberBandWrapper` heap-safe there. The stale-period
+resplice above keeps the read/write gap bounded well inside this, so the
+smaller buffer does not make the emergency-escape path more likely to
+fire in normal use.
+
+**A whole pre-resample formant-warp stage was designed, built, and
+abandoned — removed entirely rather than left `#if 0`'d out.** An earlier
+design tried shifting formants BEFORE the main -12 pitch stage (a
+WSOLA-style pre-resample warp on a second ring buffer, `readPre`'s own
+8-tap sinc, its own splice/crossfade machinery). It could not shift
+formants independently of pitch — the warp and the -12 stage's own shift
+cancelled against each other, producing only doubling artifacts — and was
+superseded by the current architecture: `grainFormant.h`'s POST-stage
+grain-playback-speed formant path (see below), crossfaded against the
+clean continuous -12 reader by `setFormantDepth`'s deadband+ramp mapping.
+The dead code (guarded by a bare `#if 0`, never enabled by any build
+configuration) and its associated telemetry accessors
+(`preEffRateNow`/`preSplicePhaseErrNow`/`preTargetRateNow`/
+`preSpliceCountNow`/`setPreResampleBypass`) had zero callers anywhere in
+the tree — confirmed via a full-repo grep before removal — so deleting
+them is a pure, zero-behavior-change cleanup that also frees the
+8192-float (32KB) `m_preBuf` ring and its supporting state that could
+never execute.
+
+**The formant crossfade's deadband+ramp mapping is duplicated across two
+call sites, and only ONE is live.** `setFormantDepth` (called from the
+control thread) computes a `m_grainMixTarget` via a `DEAD=0.35`/
+`MIXCAP=0.6` deadband+ramp over `|d|`, but `processBlock` (the audio
+thread, Core 1) independently recomputes essentially the same mapping
+(`DEAD=0.27`/`MIXCAP=0.6` over `dev=|grainFactor-1|`) from the grain
+factor that is ACTUALLY in effect on this core — because the
+Core-2-written `m_grainMixTarget` read stale on the audio thread, leaving
+the mix silently pinned at 0 (formant inaudible) despite the knob moving.
+The `processBlock`-local computation is the real, live control path; the
+`setFormantDepth`-side computation is effectively dead weight now (kept
+for its own `m_grainMixTarget` telemetry field, read by `grainMixTargetNow()`).
+Both use the same shape (100% clean continuous-reader -12 until `|dev|`
+clears the deadband, then a capped linear ramp into the grain path) so
+that even at full formant depth the clean fundamental stays >=40% present
+— avoiding a thin/choppy collapse a naive full 0->1 ramp produced.
+`m_scale > 1.02` (any up-shift) force-selects the grain path regardless of
+formant, since the continuous reader garbles on up-shift (it advances
+faster than the writer and overruns it, doubling/garbling transients).
+
 ## `grainFormant.h`: a -12 octaver with independent formant via grain playback-speed
 
 Part of `EngineSoladSnac` (ADR-004), linked exactly as `../looper` ships it.
