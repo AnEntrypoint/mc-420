@@ -115,7 +115,7 @@ async function mirrorRepoTreeIntoCompilerFs(compiler, repoRootUrl, fs) {
     "filters.dsp", "delay.dsp", "reverb.dsp", "microrepeat.dsp",
     "multitranspose.dsp", "resonode_synth.dsp", "guitar_lofi_fx.dsp",
     "flanger.dsp", "tremolo.dsp", "phaser.dsp", "compressor.dsp",
-    "bitcrush.dsp", "vinyl.dsp", "flutter.dsp", "samplerate.dsp",
+    "bitcrush.dsp", "vinyl.dsp", "flutter.dsp",
     "chain.dsp",
   ];
   fs.mkdirTree("/aloop-src/dsp");

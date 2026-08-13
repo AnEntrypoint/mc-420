@@ -1240,7 +1240,7 @@ make self-evident without narration.
 
 Every file in `effects/home/faust/` (`delay.dsp`, `reverb.dsp`, `phaser.dsp`,
 `tremolo.dsp`, `chain.dsp`, `filters.dsp`, `flutter.dsp`,
-`guitar_lofi_fx.dsp`, `samplerate.dsp`, `vinyl.dsp`) has since had the same
+`guitar_lofi_fx.dsp`, `vinyl.dsp`) has since had the same
 full-file sweep applied; `flanger.dsp` and `pitch.dsp` already had zero
 comments. Every sweep was confirmed byte-identical generated C++ (both the
 standalone file and the whole `dsp/aloop.dsp` aggregate build) before
@@ -3581,6 +3581,19 @@ Its final `(ival*THRU + oval*LOOP*GATE) * MIX` hard-clip is already covered by
 
 `chain.dsp` is NOT dead despite not being imported by the live chain —
 `build-lv2.yml`'s `home-fx-lv2` job builds it as a packaging-reproducibility check.
+
+`effects/home/faust/samplerate.dsp` (a standalone SRRAMT-driven sample-and-hold
+stutter effect, unrelated to `guitar_lofi_fx.dsp`'s own since-removed
+`SRRAMT`/`samplerateStage` — see the Three-page 8-knob control surface section)
+was removed — a genuinely orphaned file, confirmed via a full-repo grep for
+`import("samplerate.dsp")` and the bare filename returning zero hits in the real
+DSP compile graph (`dsp/aloop.dsp`/`loop.dsp`/`effects_runtime.dsp`, every
+`effects/home/faust/*.dsp`). Unlike `chain.dsp`, it had no CI packaging-check
+reference either. Its only real reference was `docs/demo/faust-engine.js`'s
+browser-demo file-mirroring list, which unconditionally bundled every file that
+existed in `effects/home/faust/` at the time it was written rather than only the
+files the demo's actual compile graph needs — removed from that list in the same
+change.
 
 `rawGlitchTap` was removed from `effects_runtime.dsp`/`aloop.dsp`/`audio_thread.cpp`
 (`fouts[4]` → `fouts[3]`) as a confirmed-dead output.
