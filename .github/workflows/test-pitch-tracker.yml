@@ -22,11 +22,20 @@ jobs:
           pip install --upgrade pip
           pip install dawdreamer numpy
 
-      - name: Run high-octave transient pitch-tracker check
+      - name: Run interval-harmonizer onset accuracy check
         run: python3 test/pitch-tracker-transient/verify_highoctave_transient.py
 
-      - name: Run plosive/mid-sustain-burst pitch-tracker check
+      - name: Run plosive/mid-sustain-burst regression check
         run: python3 test/pitch-tracker-transient/verify_plosive_transient.py
+
+      - name: Run chord correctness + voice-steal click-safety check
+        run: python3 test/pitch-tracker-transient/verify_chord_and_voice_steal.py
+
+      - name: Run formant vocal-morph control check
+        run: python3 test/pitch-tracker-transient/verify_formant_morph.py
+
+      - name: Run voice-as-bass diagnostic (non-blocking)
+        run: python3 test/pitch-tracker-transient/verify_voice_as_bass.py
 
       - name: Run pitchtracker_ac.dsp steady-state accuracy check
         run: python3 test/pitch-tracker-transient/verify_ac_tracker_steadystate_bias.py
