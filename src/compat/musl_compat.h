@@ -1,6 +1,3 @@
-// musl compatibility shim. musl (Alpine) does not define htonll/ntohll (they are
-// nonstandard BSD/glibc extensions), but Ableton Link's byte-stream serializer
-// uses them. Provide them here; force-included before Link on the musl build.
 #ifndef ALOOP_MUSL_COMPAT_H
 #define ALOOP_MUSL_COMPAT_H
 #include <stdint.h>

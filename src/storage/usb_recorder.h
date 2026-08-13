@@ -51,5 +51,5 @@ private:
     uint64_t m_chunkSamplesWritten = 0;
 };
 
-} // namespace aloop
-#endif // ALOOP_USB_RECORDER_H
+}
+#endif
