@@ -78,13 +78,16 @@ with {
 
 formantXfSkew(formant) = pow(4.0, formant * (1.0/3.0));
 
+winFreezeDelayMs = 60.0;
+winFreezeDelaySamples = winFreezeDelayMs * 0.001 * ma.SR;
+
 rootNote = 60.0;
 normalGlidePole = ba.tau2pole(0.008);
 
-voiceOut(sig, winSamples, xfSamples, targetNote, gate) = wet
+voiceOut(sig, winSamples, xfSamples, bendSemis, targetNote, gate) = wet
 with {
     attackEdge = gate > (gate : mem);
-    shiftTarget = targetNote - rootNote;
+    shiftTarget = targetNote - rootNote + bendSemis;
     shiftStep(prev) = ba.if(attackEdge, shiftTarget,
                        prev * normalGlidePole + shiftTarget * (1.0 - normalGlidePole));
     shiftAmount = shiftStep ~ _;
@@ -92,10 +95,10 @@ with {
     wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * 0.6;
 };
 
-harmonySum(sig, winSamples, xfSamples, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
-    voiceOut(sig,winSamples,xfSamples,n0,g0) + voiceOut(sig,winSamples,xfSamples,n1,g1)
-  + voiceOut(sig,winSamples,xfSamples,n2,g2) + voiceOut(sig,winSamples,xfSamples,n3,g3)
-  + voiceOut(sig,winSamples,xfSamples,n4,g4) + voiceOut(sig,winSamples,xfSamples,n5,g5);
+harmonySum(sig, winSamples, xfSamples, bendSemis, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
+    voiceOut(sig,winSamples,xfSamples,bendSemis,n0,g0) + voiceOut(sig,winSamples,xfSamples,bendSemis,n1,g1)
+  + voiceOut(sig,winSamples,xfSamples,bendSemis,n2,g2) + voiceOut(sig,winSamples,xfSamples,bendSemis,n3,g3)
+  + voiceOut(sig,winSamples,xfSamples,bendSemis,n4,g4) + voiceOut(sig,winSamples,xfSamples,bendSemis,n5,g5);
 
 formantTiltDb(formant) = formant * 2.5;
 
@@ -103,7 +106,7 @@ formantTilt(formant, sig) = sig
     : fi.low_shelf(0.0 - formantTiltDb(formant), 400.0)
     : fi.high_shelf(formantTiltDb(formant), 3000.0);
 
-process(dry, loopSum, free, formant, extFreqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
+process(dry, loopSum, free, formant, extFreqDet, bendSemis, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
 with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
@@ -118,12 +121,15 @@ with {
               | (g3 > 0.5) & (g3 : mem < 0.5)
               | (g4 > 0.5) & (g4 : mem < 0.5)
               | (g5 > 0.5) & (g5 : mem < 0.5);
-    winFrozenStep(prev) = ba.if(anyRising, winSamplesRaw, prev);
+    sinceRiseStep(prev) = ba.if(anyRising, 0.0, prev + 1.0);
+    sinceRise = sinceRiseStep ~ _;
+    inWinWarmup = sinceRise < winFreezeDelaySamples;
+    winFrozenStep(prev) = ba.if(inWinWarmup, winSamplesRaw, prev);
     winSamples = max(64, int(winFrozenStep ~ _));
-    xfFrozenStep(prev) = ba.if(anyRising, xfSamplesRaw, prev);
+    xfFrozenStep(prev) = ba.if(inWinWarmup, xfSamplesRaw, prev);
     xfSamples = max(32, int(xfFrozenStep ~ _));
     wetRaw = harmonySum(
-        sigIn, winSamples, xfSamples,
+        sigIn, winSamples, xfSamples, bendSemis,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5
     ) : ma.tanh;
     wet = formantTilt(formant, wetRaw);

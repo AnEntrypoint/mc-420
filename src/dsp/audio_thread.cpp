@@ -148,6 +148,7 @@ static std::string targetToZone(const std::string& target) {
     if (target == "fx/bank")    return "fx/bank";
     if (target.rfind("fx/dubgate/", 0) == 0) return target;
     if (target.rfind("fx/dublfo/", 0) == 0) return target;
+    if (target.rfind("fx/keys/", 0) == 0) return target;
     if (isResonodeLv2ControlTarget(target)) return "";
     return "";
 }

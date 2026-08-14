@@ -48,7 +48,7 @@ def make_inputs(n, dry, target_note, gate_start_samp):
     gate[gate_start_samp:] = 1.0
     return np.stack(
         [
-            dry, zero, zero, zero, zero,
+            dry, zero, zero, zero, zero, zero,
             target_note * ones, gate,
             zero, zero, zero, zero, zero, zero, zero, zero, zero, zero,
         ],
