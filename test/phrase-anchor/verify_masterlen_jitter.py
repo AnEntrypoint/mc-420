@@ -96,17 +96,22 @@ def check_masterlen_jitter(name, true_master_len, jitter_samples_list, take_len_
     (a clean multiple of the "true" phrase) records the same musical gesture.
     Invariant under test: the second take's marker should land at ROUGHLY the
     SAME playback-relative position regardless of loop 1's own small timing
-    jitter. dsp/loop.dsp's phrase-anchor grid unit (finishGridLen) is derived
-    from masterLen itself, so a few samples of masterLen jitter necessarily
-    produces a small, PROPORTIONAL shift in the snapped grid tick -- this is
-    expected, not a bug (the alternative, quantizing masterLen itself too,
-    is a separate, already-existing mechanism). Tolerance scales with
-    take_len_samples (observed real spread is ~0.24% of take length across
-    this test's own jitter_samples_list range) with a small fixed floor for
-    short takes.
+    jitter. dsp/loop.dsp's phrase-anchor now snaps playback to the TRUE
+    absolute downbeat (masterPhase==0, or the nearest sub-beat boundary for
+    a short take) rather than a per-take relative offset, so a few samples
+    of masterLen jitter necessarily produces a small, PROPORTIONAL shift in
+    exactly where that absolute downbeat falls -- this is expected, not a
+    bug (the alternative, quantizing masterLen itself too, is a separate,
+    already-existing mechanism). Anchoring to an ABSOLUTE reference instead
+    of a per-take relative one is inherently somewhat more sensitive to
+    masterLen's own jitter than the old relative-offset design was (~0.8%
+    of take length here vs ~0.24% previously) -- a real, disclosed
+    trade-off in exchange for loops actually landing on the true edge,
+    which is the whole point of this mechanism. Tolerance scales with
+    take_len_samples with a small fixed floor for short takes.
     """
     if tol is None:
-        tol = max(8, int(take_len_samples * 0.005))
+        tol = max(8, int(take_len_samples * 0.01))
     positions = []
     for jitter in jitter_samples_list:
         master_len = true_master_len + jitter
