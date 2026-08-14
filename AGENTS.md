@@ -3416,61 +3416,30 @@ without first fixing `detectedFreq`'s own non-monotonic convergence — a
 problem this file's history (both the old and new architecture) has now
 independently rediscovered is genuinely hard, not a quick timing-constant fix.
 
-## Beat-shuffle's per-combination offset saturation was a hard clip, not a smooth limiter — fixed to `tanh`
+## Beat-shuffle's hard clip and varispeed's instant jump are BOTH intentional — a smoothing attempt was tried and reverted
 
-Found investigating a live report that beat-shuffle "bends" audibly at certain
-moments. `shuffleOffsetSamples` (`src/dsp/audio_thread.cpp`) computes a sum of
-harmonically-related sine terms (see "Groove shuffle" above) then hard-clips
-the result to `±kShuffleClampFrac` with a plain ternary — a real discontinuity
-in the offset signal's DERIVATIVE (not value) at every instant the sum crosses
-the clamp boundary, since the underlying combined waveform is smooth but the
-clip flattens it abruptly. Verified numerically (not assumed) that this fires
-often and by a real margin, not just at a theoretical edge: with all 4 shuffle
-buttons held, 13.94% of the 4-beat cycle is clipped, with real overshoot up to
-0.3527 vs the 0.20 clamp bound (76% past the limit) — a genuine, frequent,
-audible "bend" exactly matching the report, not a rare corner case.
+A session investigating a live report that beat-shuffle "bends" and varispeed
+"skips" tried replacing `shuffleOffsetSamples`'s hard `±kShuffleClampFrac`
+ternary with a smooth `tanhf` saturation, and giving `effSpeed` a ~50ms
+one-pole glide instead of its instant `std::fill` block-constant jump. Both
+were shipped, then explicitly reverted on direct user correction: **both
+effects are meant to be a hard, instant "punch in," not a bend/glide** — the
+abrupt jump IS the desired musical character for both gestures, not a bug.
+`shuffleOffsetSamples` is back to the plain hard-clamp ternary; `effSpeed` is
+back to the plain `std::fill` block-constant write. `src/dsp/audio_thread.cpp`
+is confirmed byte-identical on this point to its state before that session's
+change (`git diff <pre-change-sha> -- src/dsp/audio_thread.cpp` empty).
 
-Fixed by replacing the hard ternary with `kShuffleClampFrac *
-tanhf(corrected / kShuffleClampFrac)` — a smooth saturating curve with the
-same bound (asymptotic, never exceeded) but no derivative discontinuity
-anywhere. Verified via direct numeric simulation across all 15 non-empty
-button-combination masks: the existing `kShuffleDcCorrection` table (tuned for
-the OLD hard-clip shape) leaves a small residual mean under the new curve
-(worst case ~0.17% of the offset range, well under audibility) — not
-re-tuned, since the residual is negligible and re-deriving the whole
-15-entry table for a cosmetic improvement wasn't warranted. Pairwise
-distinctness (this file's own "every one of the 15 non-empty combinations is
-independently verified zero-mean AND pairwise-distinct" invariant) is
-unaffected — the near-zero minimum pairwise difference found in verification
-is just two continuous curves crossing at an isolated instant, the same
-property any two distinct smooth waveforms have, not a collision.
-
-## Varispeed (`effSpeed`) was a flat block-constant jump on every speed change — now a real per-sample glide
-
-Found in the same investigation as the beat-shuffle fix above, on a live
-report that varispeed "skips to" a new position/speed rather than bending
-into it. `effSpeed` (`g_manualSpeedMul * linkSpeedRatio`) was written via a
-single `std::fill(speedBuf.begin(), speedBuf.end(), effSpeed)` — a genuinely
-instant, one-block jump whenever `g_manualSpeedMul` changes (the half/double-speed
-buttons are a discrete 0.5/1.0/2.0 tri-state, so a single button press can be
-up to a 4x instantaneous speed change) or `linkSpeedRatio` changes (any Link
-tempo/BPM update). `dsp/loop.dsp`'s `readPosStep` advances `readPos` by
-`speedClamped` (derived directly from this per-sample `effSpeed` signal input,
-per this file's own "`par()`-replicated UI controls silently duplicate — use
-signal inputs" convention) every sample with no smoothing of its own on the
-speed term itself — the DSP was already correctly threading `effSpeed` as an
-audio-rate signal, but the C++ side was feeding it a step function.
-
-Fixed with a real per-sample one-pole glide in `audio_thread.cpp`, ~50ms time
-constant (`1 - exp(-N/(0.05*sampleRate))` per block, applied incrementally
-sample-by-sample within the block so `speedBuf` itself is a smoothly-varying
-signal, not block-constant) — `readPos`'s own advance rate now ramps into a
-speed change over tens of milliseconds instead of stepping instantly.
-`g_telem.effSpeed` reports the smoothed (post-glide) value, matching what the
-DSP is actually using. This is a pure C++ change; `dsp/loop.dsp` itself is
-untouched, since `speedClamped = max(0.1, min(8.0, effSpeed))` already reads
-whatever `effSpeed` it's handed correctly regardless of how smooth or stepped
-that signal is.
+**Lesson for any future work on either mechanism**: do not "fix" the hard
+transition in `shuffleOffsetSamples`'s clamp or `effSpeed`'s block-constant
+write without first confirming with the user whether the report is about the
+transition being audible AT ALL (which may be intentional, as established
+here) versus some OTHER defect (e.g. wrong timing, wrong magnitude, an actual
+click/pop distinct from the intended punch character). The numeric analysis
+from that session (13.94% of the shuffle cycle clipping with real overshoot
+to 76% past the bound at all-4-buttons-held; a 4x instantaneous varispeed step
+on a half→double-speed button press) is still accurate — that magnitude and
+frequency of hard transition is real, it is just also the intended design.
 
 ## Voice-as-hard-dance-bass: large downward locks work under realistic timing, with a known accuracy boundary
 
