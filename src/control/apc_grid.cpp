@@ -26,6 +26,8 @@ void ApcGrid::bindAll(ParamStore& ps) {
     }
     ps.bind("fx/pitchbend");
     ps.bind("fx/pitchbend_engaged");
+    ps.bind("fx/keys/multimode", 0.0f);
+    ps.bind("fx/keys/bend", 0.0f);
     char xposeName[24];
     for (int v = 0; v < kTransposeVoices; v++) {
         snprintf(xposeName, sizeof xposeName, "fx/xpose%d/note", v);
@@ -417,8 +419,17 @@ void ApcGrid::applyPreset(int p, ParamStore& ps) {
 }
 
 void ApcGrid::onModWheel(uint8_t data2, ParamStore& ps) {
-    if (!m_liveEngaged) { ps.setByName("fx/pitchbend_engaged", 0.0f); ps.setByName("fx/pitchbend", 0.0f); return; }
     bool inDeadzone = (data2 >= 59 && data2 <= 69);
+    if (m_keysMode == KeysMode::MultiKey) {
+        if (inDeadzone) {
+            ps.setByName("fx/keys/bend", 0.0f);
+        } else {
+            float semis = ((float)((int)data2 - 64)) * 24.0f / 63.0f;
+            ps.setByName("fx/keys/bend", semis);
+        }
+        return;
+    }
+    if (!m_liveEngaged) { ps.setByName("fx/pitchbend_engaged", 0.0f); ps.setByName("fx/pitchbend", 0.0f); return; }
     if (inDeadzone) {
         ps.setByName("fx/pitchbend_engaged", 0.0f);
         ps.setByName("fx/pitchbend", 0.0f);
@@ -429,12 +440,33 @@ void ApcGrid::onModWheel(uint8_t data2, ParamStore& ps) {
     }
 }
 void ApcGrid::onAbsolutePitch(uint8_t data2, ParamStore& ps) {
+    if (m_keysMode == KeysMode::MultiKey) {
+        float semis = (data2 / 127.0f) * 48.0f - 24.0f;
+        ps.setByName("fx/keys/bend", semis);
+        return;
+    }
     if (!m_liveEngaged) { ps.setByName("fx/pitchbend_engaged", 0.0f); ps.setByName("fx/pitchbend", 0.0f); return; }
     float semis = (data2 / 127.0f) * 24.0f - 12.0f;
     ps.setByName("fx/pitchbend", semis);
     ps.setByName("fx/pitchbend_engaged", 1.0f);
 }
 void ApcGrid::onLiveEngageToggle(ParamStore& ps) {
+    if (m_shift) {
+        m_keysMode = (m_keysMode == KeysMode::MultiKey) ? KeysMode::Normal : KeysMode::MultiKey;
+        ps.setByName("fx/keys/multimode", m_keysMode == KeysMode::MultiKey ? 1.0f : 0.0f);
+        ps.setByName("fx/keys/bend", 0.0f);
+        if (m_liveEngaged) {
+            m_liveEngaged = false;
+            ps.setByName("fx/pitchbend", 0.0f);
+            ps.setByName("fx/pitchbend_engaged", 0.0f);
+        }
+        return;
+    }
+    if (m_keysMode == KeysMode::MultiKey) {
+        m_keysMode = KeysMode::Normal;
+        ps.setByName("fx/keys/multimode", 0.0f);
+        ps.setByName("fx/keys/bend", 0.0f);
+    }
     m_liveEngaged = !m_liveEngaged;
     if (!m_liveEngaged) {
         ps.setByName("fx/pitchbend", 0.0f);

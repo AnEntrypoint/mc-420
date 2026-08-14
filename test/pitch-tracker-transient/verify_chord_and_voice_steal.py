@@ -57,7 +57,7 @@ def check_disabled_silent(text):
     dur = 0.3
     n = int(dur * SAMPLE_RATE)
     dry = sine(n, 220.0)
-    inputs = np.zeros((17, n), dtype=np.float64)
+    inputs = np.zeros((18, n), dtype=np.float64)
     inputs[0] = dry
     audio = run(text, inputs, dur)
     peak = float(np.max(np.abs(audio)))
@@ -74,7 +74,7 @@ def check_chord(text):
     gate[gate_start:] = 1.0
     zero = np.zeros(n)
     shifts = [0.0, 4.0, 7.0]
-    inputs_rows = [dry, zero, zero, zero, zero]
+    inputs_rows = [dry, zero, zero, zero, zero, zero]
     for shift in shifts:
         inputs_rows += [np.full(n, ROOT_NOTE + shift), gate]
     for _ in range(3):
@@ -126,7 +126,7 @@ def check_voice_steal(text):
     steal_sample = int(0.3 * SAMPLE_RATE)
     note[steal_sample:] = ROOT_NOTE + 12.0
     zero = np.zeros(n)
-    inputs_rows = [dry, zero, zero, zero, zero, note, gate]
+    inputs_rows = [dry, zero, zero, zero, zero, zero, note, gate]
     for _ in range(5):
         inputs_rows += [zero, zero]
     inputs = np.stack(inputs_rows, axis=0)

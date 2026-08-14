@@ -46,7 +46,7 @@ def make_inputs(n, dry, formant, target_note, gate):
     ones = np.ones(n)
     return np.stack(
         [
-            dry, zero, zero, formant * ones, zero,
+            dry, zero, zero, formant * ones, zero, zero,
             target_note * ones, gate,
             zero, zero, zero, zero, zero, zero, zero, zero, zero, zero,
         ],

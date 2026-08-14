@@ -66,6 +66,7 @@ public:
 
     void onLiveEngageToggle(ParamStore& ps);
     bool liveEngaged() const { return m_liveEngaged; }
+    bool keysMultiMode() const { return m_keysMode == KeysMode::MultiKey; }
 
     void onKeybedNoteOn(int note, int vel, ParamStore& ps, Sampler* sampler);
     void onKeybedNoteOff(int note, ParamStore& ps, Sampler* sampler);
@@ -141,6 +142,9 @@ private:
     bool m_shift = false;
     bool m_liveEngaged = false;
     bool m_drumRecordMode = false;
+
+    enum class KeysMode : uint8_t { Normal = 0, MultiKey = 1 };
+    KeysMode m_keysMode = KeysMode::Normal;
 
     int m_transposeVoiceNote[kTransposeVoices] = {-1, -1, -1, -1, -1, -1};
     uint32_t m_transposeVoiceOrder[kTransposeVoices] = {};

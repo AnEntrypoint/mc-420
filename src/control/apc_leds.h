@@ -55,7 +55,11 @@ public:
             }
         }
         sendCoalesced(kApcBtnPlay, grid.shiftHeld() ? kLedYellow : kLedOff, write);
-        sendCoalesced(kApcLiveLedNote, liveEngaged ? 127 : 0, write);
+        sendCoalesced(kApcLiveLedNote,
+            grid.keysMultiMode() ? kLedYellowBlink :
+            liveEngaged          ? 127 :
+                                    kLedOff,
+            write);
         {
             bool flash = grid.bankFlashActive();
             FxBank which = grid.bankFlashWhich();
