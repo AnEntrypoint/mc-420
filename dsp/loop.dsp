@@ -57,9 +57,7 @@ with {
     snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, roundedBeats * oneBeat);
     recordStartMasterPhaseStep(prev) = ba.if(finishEdge, armMasterPhase, prev);
     recordStartMasterPhase = recordStartMasterPhaseStep ~ _;
-    downbeatGridLen = ba.if(snappedWrapLen < masterLen, snappedWrapLen, masterLen);
-    nearestDownbeat = floor(recordStartMasterPhase / downbeatGridLen + 0.5) * downbeatGridLen;
-    ringOffset = ba.if(masterLen < 0.5, 0.0, wrapAbs(nearestDownbeat, masterLen));
+    ringOffset = ba.if(masterLen < 0.5, 0.0, recordStartMasterPhase);
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
     cycleOffsetStep(prev) = ba.if(armEdge, 0.0,
