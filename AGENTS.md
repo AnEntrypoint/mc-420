@@ -666,6 +666,45 @@ a jam's tempo when joining". Audit any Link change against it.
   snapshot. If it fails, the levers are a shorter publish interval or explicit
   output-latency compensation — never added buffering.
 
+## `pinLinkThreadsToControlCore`: a witnessed ~30-37ms/1Hz audio stall traced to Link's own internal threads
+
+WITNESSED live on a real Pi 4: a new ~30-37ms stall on the audio thread's
+per-block read, firing at almost exactly a 1.000-second period (wall-clock
+`[diag-gap]` log lines: t=26.037, 27.037, 28.037... — a real, consistent
+period, not jitter). Confirmed absent in the pre-LOFI baseline, so a
+regression from that session's own work, not a pre-existing hardware limit.
+
+`ableton::Link` spawns its OWN internal threads ("Link Main" and "Link
+Dispatcher", named by the library itself) the moment `ableton::Link(...)` is
+constructed in `LinkBridge::start()` — this codebase has never had any
+control over their scheduling, since Link's public API exposes no
+thread-affinity hook. `ps`/`/proc/<tid>/stat` showed both threads'
+cumulative kernel time growing in lockstep, consistent with Link's own
+peer-discovery protocol sending gateway/session-sync messages on
+~second-scale intervals — a real candidate for periodically contending with
+the isolated audio cores (1, 3), since nothing had ever excluded them.
+
+Fix: `main.cpp`'s `pinLinkThreadsToControlCore` walks `/proc/self/task`,
+matches threads by `comm` name ("Link Main"/"Link Dispatcher" — the only
+host-visible handle Link gives us), and `sched_setaffinity`s them onto the
+control core (`kControlCore = 2`, matching `kernel/rt-tune.sh`'s
+`CONTROL_CORE` — both must be kept in sync if that ever changes). This adds
+no audio-path latency (the hard constraint for this investigation) — it
+only steers two pre-existing background threads' CPU affinity, matching
+`kernel/rt-tune.sh`'s existing "steer non-audio work off the isolated cores"
+strategy for IRQs, applied here to these two specific threads by name.
+
+## `[link] enabled` was silently ignored for a while — parse as a word, not `%d`
+
+`aloop.conf`'s `[link] enabled = true` was previously parsed NOWHERE while
+`link.start()` got a hardcoded `true`, so the key was a silent decoy — an
+operator disabling Link via config had no actual effect. Fixed by parsing
+it in `loadConfig`, but as a WORD (`%199s`), not `%d`: the shipped value is
+the literal text `true`, and `sscanf(line, " enabled = %d", &v)` returns 0
+matches against that (verified) — an int-typed parse would have shipped a
+second, differently-shaped decoy. `cfg.linkEnabled` accepts `true`/`1`/
+`yes`/`on`, matching `usb_record`'s own boolean-parsing convention.
+
 ## Unproven: AP-mode multicast forwarding on the Pi
 
 Whether Link's multicast crosses between the Pi's own AP and its associated
@@ -747,6 +786,19 @@ soundcard while the DSP stays mono internally. Runs at boot from `/etc/local.d`
 after `libcomposite` loads. The kernel's `f_uac2` lays out isochronous microframes
 correctly by construction, eliminating the buzz/crackle/-4608 corruption class the
 bare-metal looper had to fix by hand (ADR-008).
+
+## `main.cpp` declares `AudioThread` before starting the MIDI thread on purpose
+
+`aloop::AudioThread audio;` is declared, and its address handed to
+`runMidiLoop` (so LED VU-meter coloring can read live per-looper level
+telemetry), BEFORE `audio.start()` runs — the MIDI thread may begin running
+before `audio.start()` completes. This is safe only because
+`AudioThread::snapshotTelemetry()` is safe to call before `start()`: it
+returns the default-constructed, all-zero `Telemetry` rather than reading
+uninitialized state, so there is no ordering hazard. Any future change to
+`AudioThread`'s construction must preserve this default-safe-snapshot
+property or `runMidiLoop`'s LED-coloring read needs its own explicit
+readiness gate.
 
 ## Flush-to-zero must be set explicitly on the audio thread
 
@@ -1188,7 +1240,7 @@ make self-evident without narration.
 
 Every file in `effects/home/faust/` (`delay.dsp`, `reverb.dsp`, `phaser.dsp`,
 `tremolo.dsp`, `chain.dsp`, `filters.dsp`, `flutter.dsp`,
-`guitar_lofi_fx.dsp`, `samplerate.dsp`, `vinyl.dsp`) has since had the same
+`guitar_lofi_fx.dsp`, `vinyl.dsp`) has since had the same
 full-file sweep applied; `flanger.dsp` and `pitch.dsp` already had zero
 comments. Every sweep was confirmed byte-identical generated C++ (both the
 standalone file and the whole `dsp/aloop.dsp` aggregate build) before
@@ -3530,6 +3582,19 @@ Its final `(ival*THRU + oval*LOOP*GATE) * MIX` hard-clip is already covered by
 `chain.dsp` is NOT dead despite not being imported by the live chain —
 `build-lv2.yml`'s `home-fx-lv2` job builds it as a packaging-reproducibility check.
 
+`effects/home/faust/samplerate.dsp` (a standalone SRRAMT-driven sample-and-hold
+stutter effect, unrelated to `guitar_lofi_fx.dsp`'s own since-removed
+`SRRAMT`/`samplerateStage` — see the Three-page 8-knob control surface section)
+was removed — a genuinely orphaned file, confirmed via a full-repo grep for
+`import("samplerate.dsp")` and the bare filename returning zero hits in the real
+DSP compile graph (`dsp/aloop.dsp`/`loop.dsp`/`effects_runtime.dsp`, every
+`effects/home/faust/*.dsp`). Unlike `chain.dsp`, it had no CI packaging-check
+reference either. Its only real reference was `docs/demo/faust-engine.js`'s
+browser-demo file-mirroring list, which unconditionally bundled every file that
+existed in `effects/home/faust/` at the time it was written rather than only the
+files the demo's actual compile graph needs — removed from that list in the same
+change.
+
 `rawGlitchTap` was removed from `effects_runtime.dsp`/`aloop.dsp`/`audio_thread.cpp`
 (`fouts[4]` → `fouts[3]`) as a confirmed-dead output.
 
@@ -3548,6 +3613,235 @@ sample forces every call to be genuinely per-sample.
 This is why the stage is bit-identical to `../looper`'s `EngineSoladSnac`: the
 pitched sample is produced by that real C++ engine via the ffunction bridge, not
 a Faust-side approximation of it.
+
+## `pitch_ffi.h`'s `dubfx_pitch_tick` has a hidden 1-block (64-sample) latency, matching the SNAC engine's own block cadence
+
+`EngineSoladSnac`'s SNAC cadence tracks state by BLOCK SIZE directly
+(`m_sinceDetect += n` inside `soladSnacOctaver.h`'s `processBlock`), so
+calling `processBlock(...,1)` once per sample would drift from the
+looper's own `processBlock(...,64)` cadence — the engine's internal pitch
+detection is tuned against 64-sample blocks specifically, not the
+per-sample cadence Faust's `ffunction` bridge would naively suggest.
+
+Fix: `dubfx_pitch_tick` buffers exactly `DUBFX_BS=64` input samples and
+calls `processBlock(buf, out, 64)` once per block, EXACTLY as the looper
+does, then serves the 64 outputs one tick at a time. Faust runs `-bs 64`
+in lockstep, so `tick()` fires 64 times per block in the same order. This
+introduces a real, permanent 1-block (64-sample, ~1.333ms) latency: the
+input sample of block `k` is buffered and processed only once the block
+fills, with its output served across the NEXT 64 tick calls — so
+`dubfx_pitch_tick` at any given call returns the output of the block
+processed one block ago, not the current one. Any C++ reference harness
+comparing this stage's output against the real engine must apply the
+identical 1-block delay before diffing, or the comparison silently
+misaligns by one full block.
+
+This latency is the pitch stage's own algorithmic cost while engaged (the
+SNAC engine's real block-cadence dependency), not an addition to the fixed
+dry-path block chain — it falls under this file's own "a wet effect's own
+algorithmic latency while engaged... is not covered by [the never-add-
+audio-path-latency] rule" carve-out (see Working Rules above), matching
+`ef.transpose`'s window latency and Resonode's engaged-only cost.
+
+## `soladSnacOctaver.h`: `EngineSoladSnac`, the solad+McLeod-SNAC pitch shifter -- architecture and debugging history
+
+The `-12` live pitch engine `pitch_ffi.h` bridges into Faust (ADR-004).
+References: Katja Vetter, "low latency pitch shifting" (katjaas.nl/pitchshiftlowlatency)
+and "helmholtz finds the pitch" (katjaas.nl/helmholtz); McLeod & Wyvill,
+"A Smarter Way to Find Pitch" (the Tartini paper).
+
+**Three parts**: (1) a SNAC pitch tracker on a 1024-sample sliding window
+(`2*r[k]/norm[k]`, parabolic-interpolated peak for sub-sample period
+accuracy, gated by a fidelity threshold); (2) a solad delay-line shifter —
+one circular buffer read at the scale rate, which drifts by construction
+(PSOLA's whole point: the lag between write and read pointer IS the pitch
+shift) and periodically resplices by an INTEGER MULTIPLE of the detected
+period to stay phase-coherent, never a bare jump; (3) a transient
+detector overlay, currently DISABLED (see below).
+
+**Latency budget, the load-bearing numbers**: algorithmic delay =
+`INITIAL_READ_OFFSET_DEFAULT = 64` samples (1.3ms), reduced from a prior
+192 (which was 128 samples of redundant headroom stacked on top of the
+irreducible PSOLA reader lag). `m_respliceFrac = 1.0` (resplice once the
+reader drifts ~1 period past target — the PSOLA minimum, gap held at
+offset + <=1 period, host-measured 3.6-7.4ms across 82-330Hz). This was
+briefly raised to 8 to cut a ~55/s amplitude-dip buzz on real (noisy) Pi
+input, which traded the ~4ms budget away for a 22-53ms regression; once
+the splice search below was fixed to be simultaneously frequency-neutral
+AND seamless, the buzz's real cause was gone and `frac` was restored to 1
+to reclaim the latency budget.
+
+**Splice search — seamless AND frequency-neutral, the two constraints
+that used to fight each other.** A displacement must be an exact integer
+number of periods (else the splice measurably biases pitch on real
+input — a low-note flat-detune bug this project already hit) AND must
+land where the waveform's value+slope match the current read point (else
+every splice clicks on real, non-synthetic input). The earlier design did
+value/slope matching via a continuous ±period/2 slide, THEN snapped the
+result to the nearest whole period — discarding the match and landing the
+crossfade back on a raw integer-period position, which clicked on every
+splice (reported as "lots of little clicks"). Fixed by searching the
+value/slope match ONLY among already-integer-period candidates
+(`n·per` from the active reader, `±3` periods around the target `n`) —
+every candidate is frequency-neutral by construction, so picking the
+best-matching one among them satisfies both constraints at once.
+
+**Splice storm / "16s gurgle" root cause and fix.** A single-period jump
+whenever drift exceeded the trigger left the gap still above trigger
+whenever drift exceeded roughly one period, so it re-fired every block —
+a multi-second >100/s splice storm heard as a gurgle. Fixed two ways
+together: `triggerSpliceByPeriod` jumps forward by AS MANY whole periods
+as needed to clear the entire accumulated drift in one splice (not just
+one period), and a `per*0.9`-sample cooldown (`m_spliceCooldown`) hard-caps
+the splice rate afterward, converting a runaway storm into single clean
+catch-up splices with real hysteresis.
+
+**SNAC's own compute is chunked to avoid a real-time deadline overrun.**
+The full `O(SNAC_WIN*MAX_PERIOD)` autocorrelation (~820k multiplies) run
+in one block overran the Core 1 audio deadline on the Pi, stalling the
+chain and triggering USB IN-ring resyncs that corrupted the engine's own
+input — destroying the -12 output. `snacBegin()`/`detectPitchStep()` split
+the sweep across blocks (`LAGS_PER_STEP=48` lags/block, ~49k mul/block,
+flat, no spike; a full `MAX_PERIOD=800` sweep finishes over ~17 blocks,
+~23ms — far faster than real pitch changes). `SNAC_HOP=2048` (43ms) throttles
+how often a fresh sweep is armed at all, so the heavy autocorrelation runs
+~23/sec rather than per-splice (~100/sec); the resplice path between
+refreshes reuses the cached period. A momentary peak-pick miss no longer
+drops lock immediately — `m_lockMiss` requires 3 consecutive misses before
+`m_periodValid` clears, since a single miss on an otherwise-sustained tone
+was destabilizing the resplice into more of the same gurgle class.
+
+**`reengage()` seeds a period BEFORE SNAC's first lock, and the seed
+value matters.** Without a seed, the gap-bounding resplice cannot fire
+until SNAC locks for the first time; on the Pi that lock was
+intermittent, so the gap ran up to the emergency escape every cycle,
+heard as detune/wobble right after every re-engage. `kReengageSeedPeriod
+= 600.0f` (~80Hz, below guitar low-E's 82Hz) is deliberately a LONG seed:
+a seed period longer than any real note can never bias that note toward
+a half-period (octave) splice error, and SNAC refines up to the true
+period once it locks. A shorter seed (218, ~220Hz) was tried and made a
+real 110Hz note lock to its own half-period — a flat-detuned octave
+error introduced by the seed itself, not by SNAC.
+
+**Sinc-kernel DC-gain ripple was a real, measured tremolo source (~20%
+envelope modulation at -12), fixed by per-phase normalization.** The raw
+windowed-sinc kernel's coefficient sum varies ~9.9% across the 256
+precomputed fractional phases; as the read pointer drifts through phases
+during a pitch shift, that gain ripple modulates output amplitude
+audibly. Both `initSincTable()`'s main table and `readPre`'s (now-removed)
+8-tap kernel normalized each phase row to unity DC gain at the source.
+
+**Crossfade must be EQUAL-GAIN LINEAR, never equal-power cosine.** The two
+readers a splice crossfades between are one period apart on a
+quasi-periodic signal — CORRELATED, not independent — so an equal-power
+(sum-of-squares=1) cosine fade sums to up to +3dB mid-fade on correlated
+grains, and since the per-splice phase error varies splice-to-splice the
+bump magnitude varies too, producing periodic amplitude modulation
+(audible tremolo). A linear, constant-sum (`wActive+wPassive==1.0`
+exactly) fade holds summed amplitude flat when the grains are
+phase-aligned — the actual PSOLA invariant.
+
+**Double-transient bug and the currently-DISABLED transient detector.**
+A resplice jumps the reader BACK by whole periods, reusing already-played
+audio; if that fires while an attack is passing through the reader, the
+attack plays twice (audible at non-octave ratios like -5, where the
+resplice cadence doesn't line up to a clean sub-multiple the way the -12
+octave does). Fixed with `m_transientHold`, holding off resplicing for
+~2 grains after a detected transient so the attack passes through once
+cleanly. Separately, the SNAP-TO-LIVE transient response itself (jumping
+the reader forward to the write pointer on a detected attack, restoring
+near-zero latency briefly) is disabled in the shipped code — a real
+host A/B showed it introduces a 150-sigma spike at attacks, worse than
+the smearing it was meant to fix; re-enabling needs a proper short-time
+spectral-flux detector and a bridge crossfade rather than a hard splice.
+
+**Emergency escape only fires as a last resort, and is suppressed
+specifically on quiet input to avoid an inter-note click.** The stale-
+period resplice keeps the drift-gap bounded in normal sustained use, so
+the hard-escape (buffer-wrap protection, `gap > DL-64` or `gap <
+SINC_HALF+2`) should never fire there. On the silence tail after a note,
+though, there is no real fundamental — SNAC can peak on a spurious long
+lag and the gap can run to the wrap bound, which used to fire an
+unaligned reset that was inaudible during the silence itself but left the
+reader off-phase for the NEXT note's onset (a click between notes). While
+quiet (`m_envSlow < 0.004`), the engine instead just clamps the reader to
+a safe distance behind the writer with no splice, coasting cleanly into
+the next note.
+
+**`DL=32768` (0.68s @48k) was deliberately downsized from a prior 131072**
+(512KB/channel) — that size bloated the class's single `new` allocation to
+multi-MB and corrupted on the Pi's `AARCH=32` build; 32768 (128KB/channel,
+256KB stereo) keeps `RubberBandWrapper` heap-safe there. The stale-period
+resplice above keeps the read/write gap bounded well inside this, so the
+smaller buffer does not make the emergency-escape path more likely to
+fire in normal use.
+
+**A whole pre-resample formant-warp stage was designed, built, and
+abandoned — removed entirely rather than left `#if 0`'d out.** An earlier
+design tried shifting formants BEFORE the main -12 pitch stage (a
+WSOLA-style pre-resample warp on a second ring buffer, `readPre`'s own
+8-tap sinc, its own splice/crossfade machinery). It could not shift
+formants independently of pitch — the warp and the -12 stage's own shift
+cancelled against each other, producing only doubling artifacts — and was
+superseded by the current architecture: `grainFormant.h`'s POST-stage
+grain-playback-speed formant path (see below), crossfaded against the
+clean continuous -12 reader by `setFormantDepth`'s deadband+ramp mapping.
+The dead code (guarded by a bare `#if 0`, never enabled by any build
+configuration) and its associated telemetry accessors
+(`preEffRateNow`/`preSplicePhaseErrNow`/`preTargetRateNow`/
+`preSpliceCountNow`/`setPreResampleBypass`) had zero callers anywhere in
+the tree — confirmed via a full-repo grep before removal — so deleting
+them is a pure, zero-behavior-change cleanup that also frees the
+8192-float (32KB) `m_preBuf` ring and its supporting state that could
+never execute.
+
+**The formant crossfade's deadband+ramp mapping is duplicated across two
+call sites, and only ONE is live.** `setFormantDepth` (called from the
+control thread) computes a `m_grainMixTarget` via a `DEAD=0.35`/
+`MIXCAP=0.6` deadband+ramp over `|d|`, but `processBlock` (the audio
+thread, Core 1) independently recomputes essentially the same mapping
+(`DEAD=0.27`/`MIXCAP=0.6` over `dev=|grainFactor-1|`) from the grain
+factor that is ACTUALLY in effect on this core — because the
+Core-2-written `m_grainMixTarget` read stale on the audio thread, leaving
+the mix silently pinned at 0 (formant inaudible) despite the knob moving.
+The `processBlock`-local computation is the real, live control path; the
+`setFormantDepth`-side computation is effectively dead weight now (kept
+for its own `m_grainMixTarget` telemetry field, read by `grainMixTargetNow()`).
+Both use the same shape (100% clean continuous-reader -12 until `|dev|`
+clears the deadband, then a capped linear ramp into the grain path) so
+that even at full formant depth the clean fundamental stays >=40% present
+— avoiding a thin/choppy collapse a naive full 0->1 ramp produced.
+`m_scale > 1.02` (any up-shift) force-selects the grain path regardless of
+formant, since the continuous reader garbles on up-shift (it advances
+faster than the writer and overruns it, doubling/garbling transients).
+
+## `grainFormant.h`: a -12 octaver with independent formant via grain playback-speed
+
+Part of `EngineSoladSnac` (ADR-004), linked exactly as `../looper` ships it.
+Reads the dry input at THREE independent rates: output-epoch spacing =
+`Tin/scale` (sets the -12 pitch), input-epoch advance = `Tin` per emission
+(consumes input at `scale`), grain CONTENT read = `fm` (formant) — at
+`fm==1` formants ride with pitch (a natural -12); grains are overlapping
+Hann-windowed 2-period windows for click-free crossfades.
+
+**Streaming gap-bound, the part an offline prototype (`proto-grain-formant.cpp`)
+didn't need**: the input epoch lags the writer by the -12 lag and advances at
+only `~scale`/sample, so left unbounded it walks off the ring. When the lag
+drifts too far from `targetLag`, `read()` RESPLICES — jumps the epoch forward
+by a WHOLE number of input periods (pitch-neutral, matching the main
+`soladSnacOctaver.h` engine's own splice) rather than an arbitrary offset,
+since a whole-period jump preserves phase (hence pitch) and the Hann overlap
+hides the splice point.
+
+**The resplice deadband is deliberately wide (`kRespliceDeadbandPeriods =
+5.0`, was `2.0`).** Each resplice snaps the grain source to a DIFFERENT
+moment of past audio; on real (non-synthetic) input the period estimate
+jitters, so a tight deadband triggers frequent snaps, audible as the
+texture "jumping in and out of different moments" — closer to two
+overlapping voices than one continuous grain stream. Widening the deadband
+makes snaps rare (only on genuine large drift), keeping the grain stream on
+one continuous stretch of source audio far longer; the extra lag drift this
+permits is a few milliseconds, inaudible.
 
 ## DawDreamer verification harness
 
