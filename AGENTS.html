@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d1cc16448abb7c71a7f7c883c327436870184bf2">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=13448f1289865bedf7d743eade3af91b31fa6b1c">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -80,7 +80,11 @@ or the image/netboot scripts.</p>
 
 <h1 id="working-rules">Working rules</h1>
 
-<h2 id="no-comments-in-code-ever">No comments in code, ever</h2>
+<p>Anchors below name established engineering disciplines this project follows;
+each replaces what would otherwise be a paragraph of restated rationale — treat
+the anchor name as shorthand for the full technique, not decoration.</p>
+
+<h2 id="no-comments-in-code-ever--self-documenting-code-martin-clean-code">No comments in code, ever — Self-Documenting Code (Martin, <em>Clean Code</em>)</h2>
 
 <p>No inline, block, or doc comments anywhere (C++, Faust <code class="language-plaintext highlighter-rouge">.dsp</code>, JS, shell, YAML,
 config). A name, a function boundary, an extracted variable, or a small type IS
@@ -89,33 +93,40 @@ comment is the same violation at higher volume; explaining a “why” is not an
 exemption.</p>
 
 <p>Hardware quirks, root-causes, and design rationale belong in THIS file or
-<code class="language-plaintext highlighter-rouge">.wfgy/lessons.md</code>, never inline.</p>
+<code class="language-plaintext highlighter-rouge">.wfgy/lessons.md</code>, never inline — durable knowledge lives in one place (SSOT),
+not scattered across call sites.</p>
 
 <p>A comment encountered anywhere — pre-existing, vendored, another session’s — is
 converted to self-explanatory code the same turn: read it, fix the root cause it
-was compensating for, delete it. One sighting spawns a full sweep of that file.</p>
+was compensating for, delete it (Boy Scout Rule / Broken Windows). One sighting
+spawns a full sweep of that file.</p>
 
-<h2 id="never-add-audio-path-latency">Never add audio-path latency</h2>
+<h2 id="never-add-audio-path-latency--fitness-function-invariant-ford-et-al">Never add audio-path latency — Fitness-Function Invariant (Ford et al.,</h2>
+<p><em>Building Evolutionary Architectures</em>); Chesterton’s Fence</p>
 
 <p>The existing ~7ms block latency must never grow — not temporarily, not to work
 around an unrelated bug. If a fix seems to need a bigger ALSA buffer/period, more
-block lag, or any added buffering stage, stop and ask first. Any audio glitch is a
-regression to root-cause, not a hardware limit to negotiate around.</p>
+block lag, or any added buffering stage, stop and ask first (one-way door, see
+gm Section 4). Any audio glitch is a regression to root-cause (Five Whys), not a
+hardware limit to negotiate around.</p>
 
 <p>A wet effect’s own algorithmic latency while engaged (e.g. <code class="language-plaintext highlighter-rouge">ef.transpose</code>’s
 window, the SNAC engine’s engaged-only latency) is not covered by this rule — it
 is additive on top of an always-instant dry path, not part of the fixed block
 chain.</p>
 
-<h2 id="never-trust-an-in-repo-comment-as-ground-truth">Never trust an in-repo comment as ground truth</h2>
+<h2 id="never-trust-an-in-repo-comment-as-ground-truth--hyrums-law-inverted-popper">Never trust an in-repo comment as ground truth — Hyrum’s Law inverted; Popper</h2>
+<p>(falsifiability)</p>
 
 <p>Comments in this tree have been confidently wrong about current intent (loop
 quantization spec), about performance (“already alloc-free” when it allocated per
 block), and about numeric guarantees (“byte-exact passthrough” that measured
-1.5e-05). Read what the code does; for spec questions, grill the user for the
-current requirement rather than assuming either code or comment is right.</p>
+1.5e-05). Read what the code does (ground truth is execution, not prose); for
+spec questions, grill the user for the current requirement rather than assuming
+either code or comment is right.</p>
 
-<h2 id="real-hardware-over-asking-the-user-to-reproduce-input">Real hardware over asking the user to reproduce input</h2>
+<h2 id="real-hardware-over-asking-the-user-to-reproduce-input--characterization-by">Real hardware over asking the user to reproduce input — Characterization by</h2>
+<p>Live Witness (Feathers, adapted); Least-Interruption Principle</p>
 
 <p>Prefer byte-level MIDI injection (<code class="language-plaintext highlighter-rouge">tcp/9401</code>, <code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>) or
 SSH-based log/state inspection over asking the user to press buttons. Reserve
@@ -123,7 +134,8 @@ SSH-based log/state inspection over asking the user to press buttons. Reserve
 impossible for that bug class (audible sound quality, real analog behavior) or the
 user has said they want to verify by ear.</p>
 
-<h2 id="stay-grounded-in-what-this-system-is">Stay grounded in what this system is</h2>
+<h2 id="stay-grounded-in-what-this-system-is--cargo-cult-science-feynman">Stay grounded in what this system is — Cargo Cult Science (Feynman);</h2>
+<p>First Principles</p>
 
 <p>A real-time C++/Faust audio looper on real ALSA hardware, a real Pi 4, real USB
 devices, real MIDI gestures. Abstract “formal verification”/”proof
@@ -131,7 +143,9 @@ assistant”/”dependent types” framings do not apply and must not be adopted
 the concrete bug with the concrete tools this project uses: static reading, real
 device logs, byte-level MIDI injection, CI-verified builds, DawDreamer renders.</p>
 
-<h2 id="compiling-clean-proves-nothing-about-runtime-safety">Compiling clean proves nothing about runtime safety</h2>
+<h2 id="compiling-clean-proves-nothing-about-runtime-safety--fallacies-of">Compiling clean proves nothing about runtime safety — Fallacies of</h2>
+<p>Distributed/Cross-Target Computing (Deutsch, adapted); Popper (unfalsified ≠
+verified)</p>
 
 <p>Repeatedly true here: a synthetic x86_64 A/B passed while real aarch64 codegen
 SIGSEGV’d (<code class="language-plaintext highlighter-rouge">-mapp</code>); a JIT <code class="language-plaintext highlighter-rouge">compile()</code> reported success and crashed at <code class="language-plaintext highlighter-rouge">render()</code>
@@ -139,7 +153,8 @@ SIGSEGV’d (<code class="language-plaintext highlighter-rouge">-mapp</code>); a
 numeric-approximation or codegen flag needs a real-target, real-signal test before
 shipping.</p>
 
-<h2 id="diagnostic-logging-must-carry-wall-clock-timestamps">Diagnostic logging must carry wall-clock timestamps</h2>
+<h2 id="diagnostic-logging-must-carry-wall-clock-timestamps--observability-over">Diagnostic logging must carry wall-clock timestamps — Observability over</h2>
+<p>Inference (Shewhart/statistical process control, adapted)</p>
 
 <p>A threshold-triggered log line’s line-count density is not a proxy for elapsed
 time. Always log <code class="language-plaintext highlighter-rouge">clock_gettime(CLOCK_MONOTONIC, ...)</code> as <code class="language-plaintext highlighter-rouge">t=&lt;sec&gt;.&lt;ms&gt;</code> alongside

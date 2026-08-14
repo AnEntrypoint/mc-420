@@ -21,7 +21,11 @@ or the image/netboot scripts.
 
 # Working rules
 
-## No comments in code, ever
+Anchors below name established engineering disciplines this project follows;
+each replaces what would otherwise be a paragraph of restated rationale — treat
+the anchor name as shorthand for the full technique, not decoration.
+
+## No comments in code, ever — Self-Documenting Code (Martin, *Clean Code*)
 
 No inline, block, or doc comments anywhere (C++, Faust `.dsp`, JS, shell, YAML,
 config). A name, a function boundary, an extracted variable, or a small type IS
@@ -30,33 +34,40 @@ comment is the same violation at higher volume; explaining a "why" is not an
 exemption.
 
 Hardware quirks, root-causes, and design rationale belong in THIS file or
-`.wfgy/lessons.md`, never inline.
+`.wfgy/lessons.md`, never inline — durable knowledge lives in one place (SSOT),
+not scattered across call sites.
 
 A comment encountered anywhere — pre-existing, vendored, another session's — is
 converted to self-explanatory code the same turn: read it, fix the root cause it
-was compensating for, delete it. One sighting spawns a full sweep of that file.
+was compensating for, delete it (Boy Scout Rule / Broken Windows). One sighting
+spawns a full sweep of that file.
 
-## Never add audio-path latency
+## Never add audio-path latency — Fitness-Function Invariant (Ford et al.,
+*Building Evolutionary Architectures*); Chesterton's Fence
 
 The existing ~7ms block latency must never grow — not temporarily, not to work
 around an unrelated bug. If a fix seems to need a bigger ALSA buffer/period, more
-block lag, or any added buffering stage, stop and ask first. Any audio glitch is a
-regression to root-cause, not a hardware limit to negotiate around.
+block lag, or any added buffering stage, stop and ask first (one-way door, see
+gm Section 4). Any audio glitch is a regression to root-cause (Five Whys), not a
+hardware limit to negotiate around.
 
 A wet effect's own algorithmic latency while engaged (e.g. `ef.transpose`'s
 window, the SNAC engine's engaged-only latency) is not covered by this rule — it
 is additive on top of an always-instant dry path, not part of the fixed block
 chain.
 
-## Never trust an in-repo comment as ground truth
+## Never trust an in-repo comment as ground truth — Hyrum's Law inverted; Popper
+(falsifiability)
 
 Comments in this tree have been confidently wrong about current intent (loop
 quantization spec), about performance ("already alloc-free" when it allocated per
 block), and about numeric guarantees ("byte-exact passthrough" that measured
-1.5e-05). Read what the code does; for spec questions, grill the user for the
-current requirement rather than assuming either code or comment is right.
+1.5e-05). Read what the code does (ground truth is execution, not prose); for
+spec questions, grill the user for the current requirement rather than assuming
+either code or comment is right.
 
-## Real hardware over asking the user to reproduce input
+## Real hardware over asking the user to reproduce input — Characterization by
+Live Witness (Feathers, adapted); Least-Interruption Principle
 
 Prefer byte-level MIDI injection (`tcp/9401`, `src/control/midi.cpp`) or
 SSH-based log/state inspection over asking the user to press buttons. Reserve
@@ -64,7 +75,8 @@ SSH-based log/state inspection over asking the user to press buttons. Reserve
 impossible for that bug class (audible sound quality, real analog behavior) or the
 user has said they want to verify by ear.
 
-## Stay grounded in what this system is
+## Stay grounded in what this system is — Cargo Cult Science (Feynman);
+First Principles
 
 A real-time C++/Faust audio looper on real ALSA hardware, a real Pi 4, real USB
 devices, real MIDI gestures. Abstract "formal verification"/"proof
@@ -72,7 +84,9 @@ assistant"/"dependent types" framings do not apply and must not be adopted. Work
 the concrete bug with the concrete tools this project uses: static reading, real
 device logs, byte-level MIDI injection, CI-verified builds, DawDreamer renders.
 
-## Compiling clean proves nothing about runtime safety
+## Compiling clean proves nothing about runtime safety — Fallacies of
+Distributed/Cross-Target Computing (Deutsch, adapted); Popper (unfalsified ≠
+verified)
 
 Repeatedly true here: a synthetic x86_64 A/B passed while real aarch64 codegen
 SIGSEGV'd (`-mapp`); a JIT `compile()` reported success and crashed at `render()`
@@ -80,7 +94,8 @@ SIGSEGV'd (`-mapp`); a JIT `compile()` reported success and crashed at `render()
 numeric-approximation or codegen flag needs a real-target, real-signal test before
 shipping.
 
-## Diagnostic logging must carry wall-clock timestamps
+## Diagnostic logging must carry wall-clock timestamps — Observability over
+Inference (Shewhart/statistical process control, adapted)
 
 A threshold-triggered log line's line-count density is not a proxy for elapsed
 time. Always log `clock_gettime(CLOCK_MONOTONIC, ...)` as `t=<sec>.<ms>` alongside
