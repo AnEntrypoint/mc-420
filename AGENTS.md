@@ -3320,6 +3320,158 @@ newly introduced by it — the shifter's own extreme-ratio behavior was
 always there, just previously invisible under the old design's much
 larger absolute-lock-onset errors.
 
+## `multitranspose.dsp` reverted from interval-harmonizer back to true absolute pitch-lock, on explicit user direction
+
+A later session, on a direct live user report ("the vocoder is good but it has no
+pitch tracking, making it a harmonizer, we wanted it to pitch lock as fast as
+possible"), reverted the interval-harmonizer design documented immediately above
+back to genuine absolute pitch-lock: `shiftAmount = targetNote - heldDetNote`
+(`heldDetNote` = `ba.hz2midikey(freqDet)`, sampled once per voice at `attackEdge`
+and held for the whole sustain — never re-tracked continuously mid-note, so a
+mid-sustain plosive/burst cannot perturb an already-locked note, matching the
+already-verified `test/pitch-tracker-transient/verify_plosive_transient.py`
+protection this design still passes). `rootNote`/`KEYSBEND`
+(`fx/keys/bend`, the mod-wheel/absolute-pitch-controller bend gesture in MultiKey
+mode) were both removed — dead under absolute lock, since the target pitch IS
+the held key, not a bend-adjustable offset from a fixed root. `onModWheel`/
+`onAbsolutePitch` are now plain no-ops while `KeysMode::MultiKey` is active.
+
+**`applyFormantCC` (`src/control/apc_grid.cpp`) is now gated on
+`(m_liveEngaged || m_keysMode==KeysMode::MultiKey)`** — the formant knob is a
+genuine no-op (does not call `ps.setByName`) unless either the mono SNAC
+pitch-shift (`ENGAGED`) or the polyphonic pitch-lock (`MultiKey`) is active,
+satisfying the direct requirement that "when its off pitch shift and formant
+should be unavailable." Verified safe: neither `multitranspose.dsp`'s
+`formantTilt` nor `EngineSoladSnac::setFormantDepth`'s own internal
+deadband+glide smoothing depends on `fx/formant` continuing to be written while
+disengaged — both only smooth VALUE changes while engaged, so simply not writing
+the zone while disengaged introduces no click risk.
+
+**Root cause of the internal zero-crossing tracker's inaccuracy for note
+selection under absolute lock, fully traced this session (not guessed):** a
+long chain of debug probes (each verified independently, isolating one variable
+at a time — `detectedFreq` alone, `freqDet`+`ba.hz2midikey` inside the real
+`process()`, `winSamples`/`xfSamples`, `xpose()` alone given known-correct
+inputs, and finally `shiftAmount`'s own sample-by-sample time trace right at
+`attackEdge`) found that EVERY piece of the new pitch-lock machinery is
+individually correct — the bug is entirely in `detectedFreq`'s own convergence.
+Sample-by-sample trace at 82Hz with a full 400ms lead-in: `92.19Hz` at the
+literal attack sample, `90.29Hz` at +20ms, `87.51Hz` at +50ms, `83.07Hz` at
++100ms — still 12%+ off a full 400ms after the tone started, i.e. genuinely NOT
+converged despite a lead-in this file's own onset-transient tests treat as
+"realistic performance, tracker already converged" for WINDOW-SIZING purposes.
+This is the same "steady-state tuning jitter... a KNOWN HARD PROBLEM" already
+named elsewhere in this file for this exact tracker (`trackPitchHzAndHp`/
+`an.zcr`), now shown to also compromise the tracker's use for absolute pitch
+target selection, not just its previously-documented steady-state jitter.
+
+**A two-stage fix (instant snap at `attackEdge`, plus a second re-snap of
+`heldDetNote` after a fixed settle delay) was tried and explicitly REVERTED
+after real measurement showed it made things WORSE, not better.** At
+`heldSettleMs=15`, most cases improved (82Hz: 213c→28c error) but several
+plateaued at a still-wrong value past 75-100ms with no further correction. Widening to
+`heldSettleMs=120` was tried next and made SEVERAL PREVIOUSLY-PASSING cases
+regress (e.g. 220Hz: stable -12.7c through 100ms, then jumped to -51.7c the instant
+the 120ms re-latch fired) — direct evidence the tracker's drift is not
+monotonically converging toward the true value, it can wander further away
+after appearing to settle. No fixed re-latch delay can be correct against a
+tracker whose own convergence isn't monotonic. **Lesson for any future
+attempt at fixing this**: do not try to compensate for `detectedFreq`'s
+convergence behavior with a timing-based heuristic in `multitranspose.dsp`
+itself — this is the same class of "the tracker's own dynamics are the real
+problem, not anything downstream" lesson this file's much longer history
+(the plosive/octave-search saga) already learned the hard way for the OLD
+tracker-dependent design, now re-confirmed for the internal tracker specifically
+used in the NEW absolute-lock design too.
+
+**Verified, via the same probe methodology with `fx/extfreqdet` fed the true
+input frequency directly (simulating `pitchtracker.lv2` genuinely loaded — the
+real, intended on-device configuration): pitch-lock is near-instant and
+near-exact.** 7 of 10 tested frequency/shift combinations landed within ~6
+cents at BOTH the 10ms onset window and the 250ms steady-state window — no
+onset slide, no convergence delay, matching this file's own already-extensive
+verification history for `pitchtracker_ac.dsp`
+(clean floor-fallback on noise, no octave-search, fast recovery). The remaining
+3 failing cases (880/1046.5/1318.5Hz) are the ALREADY-documented, unrelated
+`xpose` high-frequency short-window limitation (see "the shifter's own
+extreme-ratio behavior" above), not a tracking accuracy issue.
+
+**Conclusion and current shipped state**: absolute pitch-lock is genuinely
+fast and accurate when `pitchtracker.lv2` is loaded (the intended, documented
+on-device configuration — see "`serve-netboot-win.js` was silently missing
+the `pitchtracker-lv2` artifact fetch" above for its deploy wiring). The
+internal zero-crossing fallback tracker (`extFreqDet<=0.5`, i.e. no
+`pitchtracker.lv2` loaded) has a real, disclosed, UNRESOLVED limitation for
+note-selection specifically — it can take well over 400ms to converge, and can
+drift non-monotonically rather than settle — distinct from its already-fine,
+already-verified use for `xpose`'s window/crossfade SIZING (a wrong window
+only costs naturalness, never a wrong note, so that use was never affected).
+`test/pitch-tracker-transient/verify_highoctave_transient.py` was restructured
+to reflect this honestly: its primary, CI-blocking gate feeds `extFreqDet`
+(the real on-device path) with tight tolerances (60c onset / 30c steady,
+matching the measured near-instant-lock numbers); the internal-tracker-only
+path is run and reported as a diagnostic only, never gating CI, with its own
+clear docstring explaining why. Do not tighten the diagnostic into a hard gate
+without first fixing `detectedFreq`'s own non-monotonic convergence — a
+problem this file's history (both the old and new architecture) has now
+independently rediscovered is genuinely hard, not a quick timing-constant fix.
+
+## Beat-shuffle's per-combination offset saturation was a hard clip, not a smooth limiter — fixed to `tanh`
+
+Found investigating a live report that beat-shuffle "bends" audibly at certain
+moments. `shuffleOffsetSamples` (`src/dsp/audio_thread.cpp`) computes a sum of
+harmonically-related sine terms (see "Groove shuffle" above) then hard-clips
+the result to `±kShuffleClampFrac` with a plain ternary — a real discontinuity
+in the offset signal's DERIVATIVE (not value) at every instant the sum crosses
+the clamp boundary, since the underlying combined waveform is smooth but the
+clip flattens it abruptly. Verified numerically (not assumed) that this fires
+often and by a real margin, not just at a theoretical edge: with all 4 shuffle
+buttons held, 13.94% of the 4-beat cycle is clipped, with real overshoot up to
+0.3527 vs the 0.20 clamp bound (76% past the limit) — a genuine, frequent,
+audible "bend" exactly matching the report, not a rare corner case.
+
+Fixed by replacing the hard ternary with `kShuffleClampFrac *
+tanhf(corrected / kShuffleClampFrac)` — a smooth saturating curve with the
+same bound (asymptotic, never exceeded) but no derivative discontinuity
+anywhere. Verified via direct numeric simulation across all 15 non-empty
+button-combination masks: the existing `kShuffleDcCorrection` table (tuned for
+the OLD hard-clip shape) leaves a small residual mean under the new curve
+(worst case ~0.17% of the offset range, well under audibility) — not
+re-tuned, since the residual is negligible and re-deriving the whole
+15-entry table for a cosmetic improvement wasn't warranted. Pairwise
+distinctness (this file's own "every one of the 15 non-empty combinations is
+independently verified zero-mean AND pairwise-distinct" invariant) is
+unaffected — the near-zero minimum pairwise difference found in verification
+is just two continuous curves crossing at an isolated instant, the same
+property any two distinct smooth waveforms have, not a collision.
+
+## Varispeed (`effSpeed`) was a flat block-constant jump on every speed change — now a real per-sample glide
+
+Found in the same investigation as the beat-shuffle fix above, on a live
+report that varispeed "skips to" a new position/speed rather than bending
+into it. `effSpeed` (`g_manualSpeedMul * linkSpeedRatio`) was written via a
+single `std::fill(speedBuf.begin(), speedBuf.end(), effSpeed)` — a genuinely
+instant, one-block jump whenever `g_manualSpeedMul` changes (the half/double-speed
+buttons are a discrete 0.5/1.0/2.0 tri-state, so a single button press can be
+up to a 4x instantaneous speed change) or `linkSpeedRatio` changes (any Link
+tempo/BPM update). `dsp/loop.dsp`'s `readPosStep` advances `readPos` by
+`speedClamped` (derived directly from this per-sample `effSpeed` signal input,
+per this file's own "`par()`-replicated UI controls silently duplicate — use
+signal inputs" convention) every sample with no smoothing of its own on the
+speed term itself — the DSP was already correctly threading `effSpeed` as an
+audio-rate signal, but the C++ side was feeding it a step function.
+
+Fixed with a real per-sample one-pole glide in `audio_thread.cpp`, ~50ms time
+constant (`1 - exp(-N/(0.05*sampleRate))` per block, applied incrementally
+sample-by-sample within the block so `speedBuf` itself is a smoothly-varying
+signal, not block-constant) — `readPos`'s own advance rate now ramps into a
+speed change over tens of milliseconds instead of stepping instantly.
+`g_telem.effSpeed` reports the smoothed (post-glide) value, matching what the
+DSP is actually using. This is a pure C++ change; `dsp/loop.dsp` itself is
+untouched, since `speedClamped = max(0.1, min(8.0, effSpeed))` already reads
+whatever `effSpeed` it's handed correctly regardless of how smooth or stepped
+that signal is.
+
 ## Voice-as-hard-dance-bass: large downward locks work under realistic timing, with a known accuracy boundary
 
 `test/pitch-tracker-transient/verify_voice_as_bass.py` (new, diagnostic not a
