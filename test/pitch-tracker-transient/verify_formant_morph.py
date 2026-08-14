@@ -48,7 +48,7 @@ def render(text, formant_val, freq_hz=220.0, semitone_shift=7.0, dur=0.5):
     ones = np.ones(n)
     note = np.full(n, ROOT_NOTE + semitone_shift)
     formant = np.full(n, formant_val)
-    inputs_rows = [dry, zero, zero, formant, zero, note, gate]
+    inputs_rows = [dry, zero, zero, formant, zero, zero, note, gate]
     for _ in range(5):
         inputs_rows += [zero, zero]
     inputs = np.stack(inputs_rows, axis=0)
