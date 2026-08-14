@@ -5210,6 +5210,46 @@ in `bindAll`. Any future internal (non-MIDI-mapped) C++ flag that reaches Faust 
 before trusting a new flag "should just work" because `targetToZone` has a case for
 it.
 
+**Same bug class, hit a second time, for `cmd/halfspeed`/`cmd/doublespeed`.** Direct
+user report: "half/double-speed buttons ... seem to be overridden by something,
+they're not shuffling and halving and doubling speed more like making momentary
+speed wobbles." Traced to the exact same root cause: `config/controls.conf` (the
+config-driven `note70`/`note71`-to-`cmd/halfspeed`/`cmd/doublespeed` remappable
+binding, still live and loaded via `midi.cpp`'s generic `map.find(key)` fallback at
+the end of `runMidiLoop`) correctly calls `ps.setByName("cmd/halfspeed", val)` on
+every note-on/note-off — but `bindAll` never called `ps.bind("cmd/halfspeed", ...)`
+or `ps.bind("cmd/doublespeed", ...)`, so both writes were permanent silent no-ops.
+`audio_thread.cpp`'s `halfSpeedSlot`/`doubleSpeedSlot` (`g_params->getSlot(...)`)
+therefore stayed `-1` forever, and `getBySlot(-1, 0.0f)` always returns the default
+`0.0f` — `manualSpeedMul` could never leave `1.0f`, making the two buttons
+completely inert on real hardware (not a crash, not garbage — a clean, silent
+no-op, indistinguishable from "nothing is wired here" without tracing the exact
+`setByName`→`bind` gap). The reported "momentary speed wobbles" were `linkSpeedRatio`
+(a genuinely separate, always-live mechanism recalculating `effSpeed` every block
+from `recordedBpm/linkSnap.bpm` while following a Link peer) being misattributed to
+the dead buttons, since nothing about the buttons themselves could ever produce
+audible change to confirm or rule out.
+
+Fix: `ps.bind("cmd/halfspeed", 0.0f)` / `ps.bind("cmd/doublespeed", 0.0f)` added to
+`bindAll`. Both are already correctly MOMENTARY by design — `audio_thread.cpp`
+recomputes `manualSpeedMul` fresh every block with no latching (`if (getBySlot(half)
+> 0.5f) manualSpeedMul = 0.5f; if (getBySlot(double) > 0.5f) manualSpeedMul = 2.0f;`
+else stays `1.0f`), so a note-off correctly reverts speed to normal "as if never
+pressed" the very next block, no separate release-handling code needed — this was
+purely a missing-bind bug, not a design gap.
+
+**Lesson, generalizable beyond these two specific incidents**: `config/controls.conf`
+represents a real, still-loaded, still-live binding surface (the generic
+`map.find(key)` fallback at the bottom of `runMidiLoop`, distinct from the
+hardcoded `kApcBtn*`/`d1 == N` branches earlier in the same function) — a control
+target only reachable through THAT path is easy to miss when auditing `bindAll`
+against `setByName` call sites in `apc_grid.cpp`/`midi.cpp`'s hardcoded branches
+alone, since the generic path's own `ps.setByName(it->second, val)` call site
+doesn't literally contain the string `"cmd/halfspeed"` anywhere in the C++ source —
+the target name only exists in the config file. Any future audit of this class of
+bug must also check `config/controls.conf`'s own target list (`awk '{print $2}'
+config/controls.conf`) against `bindAll`, not just `grep setByName`.
+
 ## Resonode gained `collision` (bounded per-voice waveshape) and pitch-mod (impact-deformation onset bend)
 
 Both additions were scoped from researching how other physically-modeled

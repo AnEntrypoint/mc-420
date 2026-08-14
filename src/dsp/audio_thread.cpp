@@ -642,11 +642,8 @@ static void* worker(void*) {
                 if (shuffleMaskSlot < 0 && g_params) shuffleMaskSlot = g_params->getSlot("fx/shuffle/mask");
                 int shuffleMaskNow = shuffleMaskSlot >= 0 && g_params
                     ? (int)g_params->getBySlot(shuffleMaskSlot) : 0;
-                const float kShuffleGainStep = 1.0f / 24.0f;
                 for (int b = 0; b < 4; b++) {
-                    float target = (shuffleMaskNow & (1 << b)) ? 1.0f : 0.0f;
-                    if (shuffleGain[b] < target) { shuffleGain[b] += kShuffleGainStep; if (shuffleGain[b] > target) shuffleGain[b] = target; }
-                    else if (shuffleGain[b] > target) { shuffleGain[b] -= kShuffleGainStep; if (shuffleGain[b] < target) shuffleGain[b] = target; }
+                    shuffleGain[b] = (shuffleMaskNow & (1 << b)) ? 1.0f : 0.0f;
                 }
 
                 float masterLen = masterLenVal;
