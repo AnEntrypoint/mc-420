@@ -22,11 +22,11 @@ WARM_LEADIN_RATIO_TOLERANCE = 0.08
 def debug_tap_source():
     text = DSP_PATH.read_text()
     pattern = re.compile(
-        r"process\(dry, loopSum, free, formant, extFreqDet, bendSemis, "
+        r"process\(dry, loopSum, free, formant, extFreqDet, "
         r"n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5\) = dryWet, loopWet\n"
     )
     replacement = (
-        "process(dry, loopSum, free, formant, extFreqDet, bendSemis, "
+        "process(dry, loopSum, free, formant, extFreqDet, "
         "n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = "
         "dryWet, loopWet, winSamples, xfSamples\n"
     )
@@ -56,7 +56,7 @@ def make_inputs(n, dry, target_note, gate_start_samp):
     gate[gate_start_samp:] = 1.0
     return np.stack(
         [
-            dry, zero, zero, zero, zero, zero,
+            dry, zero, zero, zero, zero,
             target_note * ones, gate,
             zero, zero, zero, zero, zero, zero, zero, zero, zero, zero,
         ],

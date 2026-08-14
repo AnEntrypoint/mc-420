@@ -20,6 +20,10 @@ STEAL_CLICK_RATIO_LIMIT = 6.0
 SILENT_LIMIT = 1e-6
 
 
+def midi_to_hz(m):
+    return 440.0 * (2.0 ** ((m - 69.0) / 12.0))
+
+
 def compile_processor(engine, dsp_text, name):
     faust = engine.make_faust_processor(name)
     faust.set_dsp_string(dsp_text)
@@ -57,7 +61,7 @@ def check_disabled_silent(text):
     dur = 0.3
     n = int(dur * SAMPLE_RATE)
     dry = sine(n, 220.0)
-    inputs = np.zeros((18, n), dtype=np.float64)
+    inputs = np.zeros((17, n), dtype=np.float64)
     inputs[0] = dry
     audio = run(text, inputs, dur)
     peak = float(np.max(np.abs(audio)))
@@ -73,10 +77,14 @@ def check_chord(text):
     gate = np.zeros(n)
     gate[gate_start:] = 1.0
     zero = np.zeros(n)
-    shifts = [0.0, 4.0, 7.0]
-    inputs_rows = [dry, zero, zero, zero, zero, zero]
-    for shift in shifts:
-        inputs_rows += [np.full(n, ROOT_NOTE + shift), gate]
+    # Absolute pitch-lock: each voice's target is the KEY itself, independent
+    # of the 220Hz dry input -- unison/major-3rd/5th expressed as target MIDI
+    # notes relative to ROOT_NOTE, not as shift amounts from the input pitch.
+    target_notes = [ROOT_NOTE, ROOT_NOTE + 4.0, ROOT_NOTE + 7.0]
+    # dry, loopSum, free, formant, extFreqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5 (17 total)
+    inputs_rows = [dry, zero, zero, zero, zero]
+    for note in target_notes:
+        inputs_rows += [np.full(n, note), gate]
     for _ in range(3):
         inputs_rows += [zero, zero]
     inputs = np.stack(inputs_rows, axis=0)
@@ -87,8 +95,9 @@ def check_chord(text):
     freqs = np.fft.rfftfreq(len(seg), 1.0 / SAMPLE_RATE)
     worst = 0.0
     results = []
-    for shift in shifts:
-        expected_hz = 220.0 * (2 ** (shift / 12.0))
+    for note in target_notes:
+        shift = note - ROOT_NOTE
+        expected_hz = midi_to_hz(note)
         band = (freqs > expected_hz * 0.85) & (freqs < expected_hz * 1.15)
         if not np.any(band):
             results.append((shift, expected_hz, None, float("nan")))
@@ -126,7 +135,7 @@ def check_voice_steal(text):
     steal_sample = int(0.3 * SAMPLE_RATE)
     note[steal_sample:] = ROOT_NOTE + 12.0
     zero = np.zeros(n)
-    inputs_rows = [dry, zero, zero, zero, zero, zero, note, gate]
+    inputs_rows = [dry, zero, zero, zero, zero, note, gate]
     for _ in range(5):
         inputs_rows += [zero, zero]
     inputs = np.stack(inputs_rows, axis=0)

@@ -218,8 +218,7 @@ static inline float shuffleOffsetSamples(float phaseNorm, const float gain[4], f
     int mask = (gain[0] > 0.0f ? 1 : 0) | (gain[1] > 0.0f ? 2 : 0) |
                (gain[2] > 0.0f ? 4 : 0) | (gain[3] > 0.0f ? 8 : 0);
     float corrected = combined - kShuffleDcCorrection[mask];
-    float clamped = corrected > kShuffleClampFrac ? kShuffleClampFrac
-                   : (corrected < -kShuffleClampFrac ? -kShuffleClampFrac : corrected);
+    float clamped = kShuffleClampFrac * tanhf(corrected / kShuffleClampFrac);
     return clamped * stepLen;
 }
 
@@ -628,9 +627,14 @@ static void* worker(void*) {
                 }
             }
             {
-                float effSpeed = g_manualSpeedMul * linkSpeedRatio;
-                std::fill(speedBuf.begin(), speedBuf.end(), effSpeed);
-                g_telem.effSpeed = effSpeed;
+                static float smoothedSpeed = 1.0f;
+                float targetSpeed = g_manualSpeedMul * linkSpeedRatio;
+                const float speedGlideCoeff = 1.0f - std::exp(-(float)N / (0.05f * g_cfg.sampleRate));
+                for (int i = 0; i < N; i++) {
+                    smoothedSpeed += (targetSpeed - smoothedSpeed) * speedGlideCoeff / (float)N;
+                    speedBuf[(size_t)i] = smoothedSpeed;
+                }
+                g_telem.effSpeed = smoothedSpeed;
             }
             {
                 static double masterPhaseSamples = 0.0;

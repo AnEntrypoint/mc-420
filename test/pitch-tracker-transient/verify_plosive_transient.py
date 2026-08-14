@@ -18,6 +18,10 @@ ROOT_NOTE = 60.0
 MAX_DEVIATION_CENTS_LIMIT = 60.0
 
 
+def midi_to_hz(m):
+    return 440.0 * (2.0 ** ((m - 69.0) / 12.0))
+
+
 def compile_processor(engine, dsp_text, name):
     faust = engine.make_faust_processor(name)
     faust.set_dsp_string(dsp_text)
@@ -49,7 +53,7 @@ def make_inputs(n, dry, target_note, gate_start_samp):
     gate[gate_start_samp:] = 1.0
     return np.stack(
         [
-            dry, zero, zero, zero, zero, zero,
+            dry, zero, zero, zero, zero,
             target_note * ones, gate,
             zero, zero, zero, zero, zero, zero, zero, zero, zero, zero,
         ],
@@ -79,7 +83,7 @@ def cents_error(measured_hz, target_hz):
 def check_plosive_mid_sustain(freq_hz, semitone_shift, burst_start_ms=550):
     text = DSP_PATH.read_text()
     target_note = ROOT_NOTE + semitone_shift
-    expected_hz = freq_hz * (2 ** (semitone_shift / 12.0))
+    expected_hz = midi_to_hz(target_note)
     dur = burst_start_ms / 1000 + 0.4
     audio = render(text, freq_hz, target_note, burst_start_ms, dur)
 
@@ -106,16 +110,17 @@ def check_plosive_mid_sustain(freq_hz, semitone_shift, burst_start_ms=550):
 
 
 def main():
-    print("multitranspose.dsp plosive/transient-mid-sustain regression check (interval-harmonizer architecture)")
+    print("multitranspose.dsp plosive/transient-mid-sustain regression check (absolute-pitch-lock architecture)")
     print(f"DSP: {DSP_PATH}")
     print("This bug class (a broadband burst mid-sustained-note causing an octave-search in the shifted")
-    print("output) was, across many prior sessions, structurally impossible to fully fix in the old")
-    print("absolute-pitch-lock design -- see AGENTS.md's extensive history. In the interval-harmonizer")
-    print("architecture shiftAmount never depends on live-tracked input pitch at all, so a burst can only")
-    print("ever perturb window-sizing quality, never which note comes out. This test's job is now to")
-    print("PROVE that structural guarantee holds, with a gate tight enough to catch any future regression")
-    print(f"that reintroduces a tracker dependency: worst |cents| deviation must stay under {MAX_DEVIATION_CENTS_LIMIT:.0f}c "
-          f"through and immediately after the burst.")
+    print("output) was, across many prior sessions, extensively documented for a design that RE-TRACKS")
+    print("pitch continuously through the whole sustain -- see AGENTS.md's history. This file's current")
+    print("design instead LATCHES freqDet into heldDetNote once, at attackEdge, and holds it for the")
+    print("voice's whole sustain (voiceOut's heldDetNoteStep) -- shiftAmount therefore cannot be perturbed")
+    print("by anything happening mid-sustain, including a plosive burst well after attack. This test's job")
+    print("is to PROVE that structural guarantee holds, with a gate tight enough to catch any future")
+    print("regression that reintroduces continuous mid-sustain tracking: worst |cents| deviation must stay")
+    print(f"under {MAX_DEVIATION_CENTS_LIMIT:.0f}c through and immediately after the burst.")
 
     failures = []
     for freq_hz, semitone_shift in ((110.0, 12.0), (164.8, -7.0), (220.0, 0.0), (440.0, -19.0)):

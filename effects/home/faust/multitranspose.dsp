@@ -1,7 +1,7 @@
 declare name "MultiKeyTranspose";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Polyphonic interval harmonizer: each held voice's shift is a fixed (targetNote - rootNote) semitone interval, snapped instantly on note-on and glided on any live retune (steal). This is deliberately NOT the prior absolute-pitch-lock design (shiftAmount derived from a live-tracked input frequency) -- that design's correctness depended on a pitch tracker's convergence time, which is why every prior session's onset/plosive/octave-search bug lived in this file (see AGENTS.md). An interval harmonizer needs no live tracking to know which note to produce, so onset latency and octave-search failure classes are structurally impossible here, matching how real hardware Whammy/Manipulator-style harmonizers work. The autocorrelation-derived freqDet (fx/extfreqdet, falling back to an internal zero-crossing tracker) is retained ONLY to size xpose's pitch-synchronous window/crossfade for natural, formant-preserving shifting (PSOLA-style: a window sized to the input's own true period preserves timbre at any shift ratio) -- a wrong window costs a little naturalness, never a wrong note. formant additionally detunes the window/period ratio and applies a light spectral tilt for a real, continuously controllable vocal-character control, exact identity at formant=0.";
+declare description "Polyphonic pitch-lock: each held voice's shift is derived from (targetNote - the live-tracked input pitch at that voice's own note-on instant), snapped instantly on attack and glided on any live retune (steal), so the output always lands on the held key's absolute pitch regardless of what pitch is actually being played/sung -- an Auto-Tune-hard-lock-style harmonizer, not a fixed-interval Whammy-style one. The live-tracked freqDet (fx/extfreqdet/pitchtracker.lv2, falling back to an internal zero-crossing tracker) is sampled ONCE per voice at attackEdge into heldDetNote and held for that voice's whole sustain -- this deliberately does not re-track continuously mid-note, both to avoid the steady-state jitter/harmonic-lock-on issues the internal zero-crossing tracker has (see AGENTS.md's extensive history of that tracker's failure modes) and because a real hard-lock effect should not wander once the target has been captured. freqDet is ALSO used, independently, to size xpose's pitch-synchronous window/crossfade for natural, formant-preserving shifting (PSOLA-style: a window sized to the input's own true period preserves timbre at any shift ratio) -- a wrong window costs a little naturalness, never a wrong note, and this window sizing already has its own onset-freeze protection (winFreezeDelayMs) independent of any per-voice heldDetNote latching. formant additionally detunes the window/period ratio and applies a light spectral tilt for a real, continuously controllable vocal-character control, exact identity at formant=0.";
 
 import("stdfaust.lib");
 
@@ -81,13 +81,14 @@ formantXfSkew(formant) = pow(4.0, formant * (1.0/3.0));
 winFreezeDelayMs = 60.0;
 winFreezeDelaySamples = winFreezeDelayMs * 0.001 * ma.SR;
 
-rootNote = 60.0;
 normalGlidePole = ba.tau2pole(0.008);
 
-voiceOut(sig, winSamples, xfSamples, bendSemis, targetNote, gate) = wet
+voiceOut(sig, winSamples, xfSamples, freqDet, targetNote, gate) = wet
 with {
     attackEdge = gate > (gate : mem);
-    shiftTarget = targetNote - rootNote + bendSemis;
+    heldDetNoteStep(prev) = ba.if(attackEdge, ba.hz2midikey(freqDet), prev);
+    heldDetNote = heldDetNoteStep ~ _;
+    shiftTarget = targetNote - heldDetNote;
     shiftStep(prev) = ba.if(attackEdge, shiftTarget,
                        prev * normalGlidePole + shiftTarget * (1.0 - normalGlidePole));
     shiftAmount = shiftStep ~ _;
@@ -95,10 +96,10 @@ with {
     wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * 0.6;
 };
 
-harmonySum(sig, winSamples, xfSamples, bendSemis, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
-    voiceOut(sig,winSamples,xfSamples,bendSemis,n0,g0) + voiceOut(sig,winSamples,xfSamples,bendSemis,n1,g1)
-  + voiceOut(sig,winSamples,xfSamples,bendSemis,n2,g2) + voiceOut(sig,winSamples,xfSamples,bendSemis,n3,g3)
-  + voiceOut(sig,winSamples,xfSamples,bendSemis,n4,g4) + voiceOut(sig,winSamples,xfSamples,bendSemis,n5,g5);
+harmonySum(sig, winSamples, xfSamples, freqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
+    voiceOut(sig,winSamples,xfSamples,freqDet,n0,g0) + voiceOut(sig,winSamples,xfSamples,freqDet,n1,g1)
+  + voiceOut(sig,winSamples,xfSamples,freqDet,n2,g2) + voiceOut(sig,winSamples,xfSamples,freqDet,n3,g3)
+  + voiceOut(sig,winSamples,xfSamples,freqDet,n4,g4) + voiceOut(sig,winSamples,xfSamples,freqDet,n5,g5);
 
 formantTiltDb(formant) = formant * 2.5;
 
@@ -106,7 +107,7 @@ formantTilt(formant, sig) = sig
     : fi.low_shelf(0.0 - formantTiltDb(formant), 400.0)
     : fi.high_shelf(formantTiltDb(formant), 3000.0);
 
-process(dry, loopSum, free, formant, extFreqDet, bendSemis, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
+process(dry, loopSum, free, formant, extFreqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
 with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
@@ -129,7 +130,7 @@ with {
     xfFrozenStep(prev) = ba.if(inWinWarmup, xfSamplesRaw, prev);
     xfSamples = max(32, int(xfFrozenStep ~ _));
     wetRaw = harmonySum(
-        sigIn, winSamples, xfSamples, bendSemis,
+        sigIn, winSamples, xfSamples, freqDet,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5
     ) : ma.tanh;
     wet = formantTilt(formant, wetRaw);
