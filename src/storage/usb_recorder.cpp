@@ -43,7 +43,7 @@ void writeU16LE(uint8_t* p, uint16_t v) {
     p[1] = (uint8_t)((v >> 8) & 0xFF);
 }
 
-} // namespace
+}
 
 UsbRecorder::UsbRecorder(std::string mountPoint, int sampleRate, int chunkMinutes, int chunkCount)
     : m_mountPoint(std::move(mountPoint)),
@@ -104,18 +104,22 @@ int UsbRecorder::effectiveChunkCount() const {
 }
 
 void UsbRecorder::writeWavHeader(int fd, uint32_t dataBytes) const {
+    constexpr uint16_t kWavFormatPcm = 1;
+    constexpr uint16_t kNumChannelsMono = 1;
+    constexpr uint16_t kBlockAlignBytes = sizeof(int16_t);
+    constexpr uint16_t kBitsPerSample = 16;
     uint8_t hdr[44];
     memcpy(hdr, "RIFF", 4);
     writeU32LE(hdr + 4, 36 + dataBytes);
     memcpy(hdr + 8, "WAVE", 4);
     memcpy(hdr + 12, "fmt ", 4);
     writeU32LE(hdr + 16, 16);
-    writeU16LE(hdr + 20, 1);              // PCM
-    writeU16LE(hdr + 22, 1);              // mono
+    writeU16LE(hdr + 20, kWavFormatPcm);
+    writeU16LE(hdr + 22, kNumChannelsMono);
     writeU32LE(hdr + 24, (uint32_t)m_sampleRate);
-    writeU32LE(hdr + 28, (uint32_t)m_sampleRate * 2);
-    writeU16LE(hdr + 32, 2);              // block align
-    writeU16LE(hdr + 34, 16);             // bits per sample
+    writeU32LE(hdr + 28, (uint32_t)m_sampleRate * kBlockAlignBytes);
+    writeU16LE(hdr + 32, kBlockAlignBytes);
+    writeU16LE(hdr + 34, kBitsPerSample);
     memcpy(hdr + 36, "data", 4);
     writeU32LE(hdr + 40, dataBytes);
     lseek(fd, 0, SEEK_SET);
@@ -210,4 +214,4 @@ void UsbRecorder::poll() {
     }
 }
 
-} // namespace aloop
+}

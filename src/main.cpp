@@ -1,13 +1,3 @@
-// aloop — process entry point.
-//
-// Wires the whole runtime together in the order docs/BOOT.md describes:
-//   parse config -> mlockall -> start audio (RT threads pinned) -> load LV2s ->
-//   start Link + telemetry on the control thread -> run until stopped.
-//
-// This is the top-level composition; each subsystem's behavior lives in its own
-// translation unit (audio_thread.cpp, lv2_host.cpp, link_bridge.cpp,
-// telemetry.cpp). Keeping main.cpp a thin wiring layer keeps the spine flat.
-
 #include "dsp/audio_thread.h"
 #include "link/link_bridge.h"
 #include "control/telemetry.h"
@@ -34,36 +24,9 @@ namespace {
 std::atomic<bool> g_run{true};
 void onSignal(int) { g_run.store(false); }
 
-// WITNESSED live on a real Pi 4 (this session): a genuinely NEW ~30-37ms
-// stall on the audio thread's per-block read, firing at almost exactly a
-// 1.000-second period (measured directly via wall-clock-timestamped
-// [diag-gap] log lines: t=26.037, 27.037, 28.037, 29.036, 30.036, 31.036...
-// -- a real, consistent period, not jitter). Confirmed absent in the
-// pre-LOFI baseline (100% hitch-free), so this is a regression from this
-// session's own work, not a pre-existing hardware limit.
-//
-// Ableton Link (third-party, vendored ableton::Link) spawns its OWN internal
-// threads (named "Link Main" and "Link Dispatcher" by the library itself,
-// not by aloop) the moment `ableton::Link(...)` is constructed in
-// LinkBridge::start() -- this codebase has never had any control over their
-// scheduling, since Link's own public API exposes no thread-affinity hook.
-// `ps`/`/proc/<tid>/stat` on the live device showed both threads' cumulative
-// kernel time growing in lockstep, consistent with Link's own known
-// multicast-peer-discovery protocol timing (its "gateway"/session-sync
-// messages are commonly sent on ~second-scale intervals) -- a real
-// candidate for periodically waking on or otherwise contending with the
-// isolated audio cores (1, 3), since nothing has ever excluded them.
-//
-// This does NOT add any audio-path latency (the explicit, hard constraint
-// for this investigation) -- it only steers two pre-existing background
-// threads' CPU affinity onto the control core (2), matching
-// kernel/rt-tune.sh's existing "steer non-audio work off the isolated
-// cores" strategy for IRQs, applied here to these two specific threads by
-// name since Link creates them internally with no host-visible handle.
-// Bounded wait for `iface` to have an IPv4 address. Returns true if it got one.
-// Polls getifaddrs once a second rather than blocking on a netlink event: this
-// runs once at startup on the control path, so simplicity beats precision, and
-// a miss is non-fatal (Link still starts and keeps discovering).
+constexpr int kControlCore = 2;
+constexpr int kControlLoopHz = 5;
+
 bool waitForNetworkInterface(const char* iface, int maxSeconds) {
     for (int elapsed = 0; elapsed <= maxSeconds; elapsed++) {
         struct ifaddrs* ifa = nullptr;
@@ -124,10 +87,8 @@ void pinLinkThreadsToControlCore(int controlCore) {
     if (!pinned) fprintf(stderr, "[link] warning: no Link Main/Dispatcher threads found to pin yet (may not have spawned)\n");
 }
 
-// Minimal config load: reads /etc/aloop.conf key=value under [sections]. Missing
-// file / keys fall back to documented defaults (DEGRADED-MODES: config missing).
 aloop::AudioConfig loadConfig(const char* path) {
-    aloop::AudioConfig cfg;   // defaults from the struct
+    aloop::AudioConfig cfg;
     FILE* f = fopen(path, "r");
     if (!f) { fprintf(stderr, "[aloop] no config at %s — using defaults\n", path); return cfg; }
     char line[256];
@@ -139,21 +100,13 @@ aloop::AudioConfig loadConfig(const char* path) {
         else if (sscanf(line, " block_size = %d", &v) == 1) cfg.blockSize = v;
         else if (sscanf(line, " sample_rate = %d", &v) == 1) cfg.sampleRate = v;
         else if (sscanf(line, " channels = %d", &v) == 1) cfg.channels = v;
-        // effect bundle dirs ([effects] home_dir / user_dir). Strip a trailing
-        // inline comment / whitespace so the path is clean.
         else if (sscanf(line, " home_dir = %199s", s) == 1) cfg.homeDir = s;
         else if (sscanf(line, " user_dir = %199s", s) == 1) cfg.userDir = s;
         else if (sscanf(line, " resonode_dir = %199s", s) == 1) cfg.resonodeDir = s;
         else if (sscanf(line, " pitchtracker_dir = %199s", s) == 1) cfg.pitchTrackerDir = s;
-        // DIAGNOSTIC ONLY, see AudioConfig::disableCore3Lv2's own comment --
-        // skips both homeFx/userFx.process() every block entirely, to
-        // isolate the live ~1Hz stall investigation without a rebuild.
         else if (sscanf(line, " disable_core3_lv2 = %d", &v) == 1) cfg.disableCore3Lv2 = (v != 0);
-        // optional explicit MIDI device (else "auto" scans hw:0..7).
         else if (sscanf(line, " midi_device = %199s", s) == 1) cfg.midiDevice = s;
-        // wire audio device (else the f_uac2 gadget's stable-named hw device).
         else if (sscanf(line, " audio_device = %199s", s) == 1) cfg.audioDevice = s;
-        // the real USB audio interface an instrument/mic plugs into (else hw:0,0).
         else if (sscanf(line, " instrument_device = %199s", s) == 1) cfg.instrumentDevice = s;
         else if (sscanf(line, " instrument_device_match = %199[^\n\r]", s) == 1) {
             std::string m(s);
@@ -162,21 +115,13 @@ aloop::AudioConfig loadConfig(const char* path) {
             while (!m.empty() && (m.back() == ' ' || m.back() == '\t')) m.pop_back();
             cfg.instrumentDeviceMatch = m;
         }
-        // remote-control shared secret ([remote] token=); unset = listener disabled.
         else if (sscanf(line, " token = %199s", s) == 1) cfg.remoteToken = s;
-        // [link] enabled. Previously parsed NOWHERE while link.start() got a
-        // hardcoded true, so the key was a silent decoy. Parsed as a WORD, not
-        // %d: the shipped value is `true`, and sscanf("%d") returns 0 against
-        // that (verified) -- so an int parse would have left it a decoy still.
         else if (sscanf(line, " enabled = %199s", s) == 1) {
             cfg.linkEnabled = (strcmp(s, "true") == 0 || strcmp(s, "1") == 0 ||
                                strcmp(s, "yes") == 0  || strcmp(s, "on") == 0);
         }
-        // [link] iface / iface_wait_sec: which interface Link's multicast rides
-        // on, and the bounded startup wait for it to carry an address.
         else if (sscanf(line, " iface = %199s", s) == 1) cfg.linkIface = s;
         else if (sscanf(line, " iface_wait_sec = %d", &v) == 1) cfg.linkIfaceWaitSec = v;
-        // [storage] usb_record / usb_mount_point / usb_chunk_minutes / usb_chunk_count.
         else if (sscanf(line, " usb_record = %199s", s) == 1) {
             cfg.usbRecordEnabled = (strcmp(s, "true") == 0 || strcmp(s, "1") == 0 ||
                                      strcmp(s, "yes") == 0  || strcmp(s, "on") == 0);
@@ -188,7 +133,7 @@ aloop::AudioConfig loadConfig(const char* path) {
     fclose(f);
     return cfg;
 }
-} // namespace
+}
 
 int main(int argc, char** argv) {
     const char* configPath = "/etc/aloop.conf";
@@ -202,89 +147,39 @@ int main(int argc, char** argv) {
     printf("[aloop] %d Hz, %d-sample block, home-FX core %d, user-FX core %d, rtprio %d\n",
            cfg.sampleRate, cfg.blockSize, cfg.homeFxCore, cfg.userFxCore, cfg.rtPriority);
 
-    // Lock all memory into RAM — the audio path must never page-fault (RT-TUNING).
     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0)
         fprintf(stderr, "[aloop] warning: mlockall failed (need CAP_IPC_LOCK / rtprio limits)\n");
 
-    // NOTE on the effects topology (see docs/ARCHITECTURE.md):
-    //   · HOME effects are NOT a separately-loaded LV2 here — they are the Faust
-    //     home stack (dsp/aloop.dsp = loop engine : effects_runtime), compiled INTO
-    //     the aloop binary and run by the audio thread's `faustHome`. (The
-    //     build-lv2 `aloop.lv2` bundle is the alternative hot-swap packaging of that
-    //     same stack; the binary runs the compiled-in version directly.)
-    //   · USER effects ARE dynamic LV2s: the audio thread loads them from userDir on
-    //     the free core via its own in-process host (audio_thread.cpp).
-    // So there is no top-level Lv2Host here — the audio thread owns the only host,
-    // and we hand it the user-effects dir + core through the config.
-
-    // Ableton Link on the control thread (never the audio cores). Telemetry is
-    // started AFTER the audio thread below so it can read the live snapshot.
-    //
-    // Wait (bounded) for the WiFi interface to actually carry an address before
-    // constructing Link. Link opens its UDP multicast socket during enable(), and
-    // an interface with no address yet means that socket binds against a
-    // not-ready netif -- ../esp-idf-link hit exactly this and defends with a
-    // settle delay plus a repeated IGMP re-join, its own comment noting that a
-    // single join at GOT_IP can race netif readiness so the membership does not
-    // stick. The aloop service is now also ordered `after autoap`, but autoap
-    // backgrounds immediately and association takes seconds, so ordering alone
-    // is not enough. Never fatal: if the interface never comes up we start Link
-    // anyway and let its own periodic peer discovery sort it out.
     if (cfg.linkEnabled) waitForNetworkInterface(cfg.linkIface.c_str(), cfg.linkIfaceWaitSec);
     aloop::LinkBridge link;
     link.start((double)cfg.sampleRate, cfg.linkEnabled);
-    // See pinLinkThreadsToControlCore's own comment: steers Link's internal
-    // threads off the isolated audio cores (1, 3) onto the control core (2),
-    // matching kernel/rt-tune.sh's CONTROL_CORE. Core 2 is currently hardcoded
-    // here and in rt-tune.sh (not read from AudioConfig) -- both must be kept
-    // in sync if that ever changes.
-    pinLinkThreadsToControlCore(2);
+    pinLinkThreadsToControlCore(kControlCore);
 
-    // aloop::AudioThread is declared before the MIDI thread launches (but
-    // started after) so runMidiLoop can hold a pointer to it for reading live
-    // per-looper level telemetry (LED VU-meter coloring) — snapshotTelemetry()
-    // is safe to call before start() (returns the default-constructed
-    // all-zero Telemetry), so there's no ordering hazard even though the MIDI
-    // thread may begin running before audio.start() completes below.
     aloop::AudioThread audio;
 
-    // MIDI control on its own thread (the control surface — the APC knobs/commands).
-    // It writes the shared param store; the audio thread reads it. Runs on the
-    // control core alongside Link. A missing controller is fine (params hold).
     aloop::ParamStore params;
     std::thread midiThread([&, dev = cfg.midiDevice]{ aloop::runMidiLoop(params, dev.c_str(), &audio, &link); });
     midiThread.detach();
 
-    // Start the RT audio pipeline (opens the ALSA/f_uac2 PCM, spawns the pinned
-    // SCHED_FIFO worker that runs DSP -> host.runBlock() -> PCM each block).
-    if (!audio.start(cfg, &params, &link)) {   // audio reads the control store + Link (varispeed)
+    if (!audio.start(cfg, &params, &link)) {
         fprintf(stderr, "[aloop] fatal: could not start audio pipeline\n");
         return 1;
     }
 
-    // Telemetry now that audio is running — it serves the audio thread's live
-    // atomic snapshot (core load, xruns, Link sync/bpm) on udp/4445 + status file.
     aloop::Telemetry telem;
-    telem.start(/*udpPort=*/4445, &audio);
+    telem.start(4445, &audio);
 
-    // Remote control (reboot + log-tail, dev-tooling parity with looper's UDP
-    // REBOOT/syslog mechanisms — see docs/REMOTE-CONTROL.md). Own port (4446,
-    // not 4445) so telemetry's query-response semantics never conflate with a
-    // destructive verb. Inert unless aloop.conf sets [remote] token=.
     aloop::RemoteControl remote;
-    remote.start(/*udpPort=*/4446, cfg.remoteToken);
+    remote.start(4446, cfg.remoteToken);
 
     printf("[aloop] ready.\n");
 
-    // Control loop: pump Link + telemetry + remote-control ~ a few Hz. The audio
-    // runs independently on its own cores; this thread never touches the audio
-    // hot path.
     while (g_run.load()) {
         link.controlTick();
         telem.publish();
         remote.poll();
         if (audio.usbRecorder()) audio.usbRecorder()->poll();
-        usleep(200 * 1000);   // 5 Hz
+        usleep(1000000 / kControlLoopHz);
     }
 
     printf("[aloop] shutting down.\n");

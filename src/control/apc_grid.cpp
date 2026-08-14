@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+#include <array>
 
 namespace aloop {
 
@@ -56,6 +57,7 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("cmd/master_len", 0.0f);
     ps.bind("cmd/recorded_bpm", 0.0f);
     ps.bind("cmd/recorded_beats", 0.0f);
+    ps.bind("cmd/clearall", 0.0f);
 
     ps.bind("fx/reverb",  0.0f);
     ps.bind("fx/delay",   0.0f);
@@ -158,6 +160,11 @@ void ApcGrid::publishTransport(LinkBridge* link) {
     link->setTransportPlaying(anyPlaying);
 }
 
+int ApcGrid::monitorFoldSlot(ParamStore& ps) {
+    if (m_monitorFoldSlot < 0) m_monitorFoldSlot = ps.getSlot("fx/monitorfold");
+    return m_monitorFoldSlot;
+}
+
 void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
     if (m_looperRecording[looper]) {
         setLooper(ps, looper, "rec", 0.0f);
@@ -182,7 +189,6 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             ps.setByName("cmd/master_len", (float)m_masterLenSamples);
             double recordedSeconds = (double)m_masterLenSamples / (double)kSampleRate;
             TempoSolveResult solved = deriveTempoQuant(recordedSeconds);
-            ps.setByName("cmd/master_len", (float)m_masterLenSamples);
             ps.setByName("cmd/recorded_bpm", (float)solved.bpm);
             ps.setByName("cmd/recorded_beats", (float)solved.beats);
             if (link) {
@@ -236,7 +242,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
         setLooper(ps, looper, "rec", 1.0f);
         m_looperRecording[looper] = true;
         m_recordStartMs[looper] = now_ms;
-        m_looperShiftHeldDuringTake[looper] = ps.get("fx/monitorfold", 0.0f) > 0.5f;
+        m_looperShiftHeldDuringTake[looper] = ps.getBySlot(monitorFoldSlot(ps), 0.0f) > 0.5f;
     } else if (m_looperPlaying[looper]) {
         setLooper(ps, looper, "play", 0.0f);
         m_looperPlaying[looper] = false;
@@ -335,7 +341,7 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
         }
     }
     applyRemoteTransport(ps, link);
-    bool shiftHeldNow = ps.get("fx/monitorfold", 0.0f) > 0.5f;
+    bool shiftHeldNow = ps.getBySlot(monitorFoldSlot(ps), 0.0f) > 0.5f;
     if (shiftHeldNow) {
         for (int looper = 0; looper < kLooperCount; looper++) {
             if (m_looperRecording[looper]) m_looperShiftHeldDuringTake[looper] = true;
@@ -654,7 +660,7 @@ void ApcGrid::applyFormantCC(uint8_t data2, ParamStore& ps) {
 static const int kFxKnobCcNumbers[kFxKnobCount] = { 48, 49, 50, 51, 54, 55, 57, 53 };
 
 static const FxKnobTarget kDubTargets[kFxKnobCount] = {
-    { FxKnobKind::FaustZone, "fx/reverb" },
+    { FxKnobKind::FaustZone, "fx/reverb", 2.0f },
     { FxKnobKind::FaustZone, "fx/delay"  },
     { FxKnobKind::FaustZone, "fx/time"   },
     { FxKnobKind::FaustZone, "fx/hp"     },
@@ -805,7 +811,7 @@ static void applySamplerFxKnob(FxKnobKind kind, float v01, Sampler* sampler) {
 
 static void applyFxKnobTarget(const FxKnobTarget& t, float v01, ParamStore& ps, Sampler* sampler, Lv2Host* homeFx) {
     if (t.kind == FxKnobKind::Unused) return;
-    float v = (t.name && strcmp(t.name, "fx/reverb") == 0) ? (v01 * 2.0f) : v01;
+    float v = v01 * t.scale;
     switch (t.kind) {
         case FxKnobKind::FaustZone:  ps.setByName(t.name, v); break;
         case FxKnobKind::Lv2Control: if (homeFx) homeFx->setControl(t.name, v); break;
@@ -818,14 +824,21 @@ void ApcGrid::onFxKnobCC(int ccNumber, uint8_t data2, ParamStore& ps, Sampler* s
         applyFormantCC(data2, ps);
         return;
     }
-    int knobIdx = -1;
-    for (int k = 0; k < kFxKnobCount; k++) {
-        if (kFxKnobCcNumbers[k] == ccNumber) { knobIdx = k; break; }
-    }
+    static const std::array<int8_t, 128> ccToKnobIdx = [] {
+        std::array<int8_t, 128> t{};
+        t.fill(-1);
+        for (int k = 0; k < kFxKnobCount; k++) {
+            if (kFxKnobCcNumbers[k] >= 0 && kFxKnobCcNumbers[k] < 128) t[kFxKnobCcNumbers[k]] = (int8_t)k;
+        }
+        return t;
+    }();
+    int knobIdx = (ccNumber >= 0 && ccNumber < 128) ? ccToKnobIdx[ccNumber] : -1;
     if (knobIdx < 0) return;
     float v = (float)data2 / 127.0f;
-    m_fxBankValues[(int)m_activeBank][knobIdx] = v;
     if (m_activeBank == FxBank::LofiFx && knobIdx > 0) {
+        if (m_lofiFxKnobTouched[knobIdx] && m_fxBankValues[(int)m_activeBank][knobIdx] == v) return;
+        m_lofiFxKnobTouched[knobIdx] = true;
+        m_fxBankValues[(int)m_activeBank][knobIdx] = v;
         if (m_resonodeEngaged) {
             if (knobIdx <= kResonodePatchCount) applyResonodePatchMorph(ps);
             else applyResonodeDirectKnob(knobIdx, v, ps);
@@ -834,6 +847,7 @@ void ApcGrid::onFxKnobCC(int ccNumber, uint8_t data2, ParamStore& ps, Sampler* s
         }
         return;
     }
+    m_fxBankValues[(int)m_activeBank][knobIdx] = v;
     const FxKnobTarget* targets =
         m_activeBank == FxBank::Dub ? (m_shift ? kDubShiftTargets : kDubTargets) :
         m_activeBank == FxBank::Guitar ? (m_shift ? kGuitarShiftTargets : kGuitarTargets) : kLofiFxTargets;

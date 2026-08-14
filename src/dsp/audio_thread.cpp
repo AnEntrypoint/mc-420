@@ -270,11 +270,32 @@ static void* worker(void*) {
     };
     int sidechainSrcSlot[AudioThread::Telemetry::kLoopers];
     for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) sidechainSrcSlot[lp] = -1;
+    int clearAllSlot = -1;
+    int halfSpeedSlot = -1;
+    int doubleSpeedSlot = -1;
+    int stopAllSlot = -1;
+    int monitorFoldSlot = -1;
+    int pitchSlot = -1;
+    int pitchbendEngagedSlot = -1;
+    int pitchbendSlot = -1;
+    int microrepeatDivSlot = -1;
+    int masterLenSlot = -1;
+    int recordedBpmSlot = -1;
+    const float kFoldStepPerSample = (1.0f / 16.0f) / (float)N;
     struct ResolvedControl { int slot; float* zone; };
     std::vector<ResolvedControl> resolvedControls;
     int resolvedControlsForCount = -1;
     struct LooperTelemetryZones { float* rec=nullptr; float* play=nullptr; float* vol=nullptr; float* level=nullptr; float* writeidx=nullptr; float* wraplen=nullptr; float* readpos=nullptr; };
     LooperTelemetryZones looperTelemetryZones[AudioThread::Telemetry::kLoopers];
+    float* looperLenZone[AudioThread::Telemetry::kLoopers] = {nullptr};
+    float* mlbZone = nullptr;
+    float* semisZone = nullptr;
+    float* engagedZone = nullptr;
+    float* divZone = nullptr;
+    float* monitorFoldFaustZone = nullptr;
+    float* glitchFoldFaustZone = nullptr;
+    float* resonodeEngagedZone = nullptr;
+    float* extFreqDetZone = nullptr;
     {
         char z[32];
         auto resolveZone = [&]() -> float* {
@@ -297,6 +318,18 @@ static void* worker(void*) {
             snprintf(z, sizeof z, "looper%2d/wraplen", lp);      tz.wraplen  = resolveZone();
             snprintf(z, sizeof z, "looper%2d/readposdiag2", lp); tz.readpos  = resolveZone();
         }
+        for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) {
+            snprintf(z, sizeof z, "looper%2d/len", lp);
+            looperLenZone[lp] = resolveZone();
+        }
+        snprintf(z, sizeof z, "MLB");                 mlbZone              = resolveZone();
+        snprintf(z, sizeof z, "SEMIS");                semisZone            = resolveZone();
+        snprintf(z, sizeof z, "ENGAGED");              engagedZone          = resolveZone();
+        snprintf(z, sizeof z, "DIV");                  divZone              = resolveZone();
+        snprintf(z, sizeof z, "MONITORFOLD");          monitorFoldFaustZone = resolveZone();
+        snprintf(z, sizeof z, "GLITCHFOLD");           glitchFoldFaustZone  = resolveZone();
+        snprintf(z, sizeof z, "fx/resonode/engaged");  resonodeEngagedZone  = resolveZone();
+        snprintf(z, sizeof z, "fx/extfreqdet");        extFreqDetZone       = resolveZone();
     }
     int xposeNoteSlot[kTransposeVoices];
     int xposeGateSlot[kTransposeVoices];
@@ -309,7 +342,7 @@ static void* worker(void*) {
             xposeGateSlot[v] = g_params ? g_params->getSlot(z) : -1;
         }
     }
-    struct ResonodeParamSlot { int slot; std::string lv2Symbol; };
+    struct ResonodeParamSlot { int slot; std::string lv2Symbol; float lastValue; bool hasValue; };
     std::vector<ResonodeParamSlot> resonodeParamSlots;
     int resonodeEngagedSlot = -1;
     int resonodeParamSlotsForCount = -1;
@@ -328,6 +361,7 @@ static void* worker(void*) {
     homeFx.loadDir(g_cfg.homeDir, g_cfg.userFxCore);
     homeFx.connect(N, ch);
     g_homeFx = &homeFx;
+    Lv2Host::ControlHandle gatePhaseHandle = homeFx.resolveControl("fx2/GATEPHASE");
 
     Lv2Host userFx;
     userFx.loadDir(g_cfg.userDir, g_cfg.userFxCore);
@@ -454,6 +488,10 @@ static void* worker(void*) {
             if (r < 0) { g_telem.xruns++; snd_pcm_recover(cap, (int)r, 1); continue; }
 
 #ifdef ALOOP_HAVE_FAUST_LOOP
+            float monitorFoldVal = 0.0f;
+            float microrepeatDivVal = 0.0f;
+            float masterLenVal = 0.0f;
+            float recordedBpmVal = 0.0f;
             if (g_params) {
                 if (resolvedControlsForCount != g_params->count) {
                     resolvedControls.clear();
@@ -487,38 +525,56 @@ static void* worker(void*) {
                     resonodeParamSlotsForCount = g_params->count;
                 }
                 for (auto& rp : resonodeParamSlots) {
-                    resonodeFx.setControl(rp.lv2Symbol, g_params->getBySlot(rp.slot));
+                    float v = g_params->getBySlot(rp.slot);
+                    if (!rp.hasValue || v != rp.lastValue) {
+                        resonodeFx.setControl(rp.lv2Symbol, v);
+                        rp.lastValue = v;
+                        rp.hasValue = true;
+                    }
                 }
-                bool clearAllHeld = g_params->get("cmd/clearall") > 0.5f;
+                if (clearAllSlot < 0) clearAllSlot = g_params->getSlot("cmd/clearall");
+                if (halfSpeedSlot < 0) halfSpeedSlot = g_params->getSlot("cmd/halfspeed");
+                if (doubleSpeedSlot < 0) doubleSpeedSlot = g_params->getSlot("cmd/doublespeed");
+                if (stopAllSlot < 0) stopAllSlot = g_params->getSlot("cmd/stopall");
+                if (monitorFoldSlot < 0) monitorFoldSlot = g_params->getSlot("fx/monitorfold");
+                if (pitchSlot < 0) pitchSlot = g_params->getSlot("fx/pitch");
+                if (pitchbendEngagedSlot < 0) pitchbendEngagedSlot = g_params->getSlot("fx/pitchbend_engaged");
+                if (pitchbendSlot < 0) pitchbendSlot = g_params->getSlot("fx/pitchbend");
+                if (microrepeatDivSlot < 0) microrepeatDivSlot = g_params->getSlot("fx/microrepeat_div");
+                if (masterLenSlot < 0) masterLenSlot = g_params->getSlot("cmd/master_len");
+                if (recordedBpmSlot < 0) recordedBpmSlot = g_params->getSlot("cmd/recorded_bpm");
+                bool clearAllHeld = g_params->getBySlot(clearAllSlot) > 0.5f;
                 std::fill(clearBuf.begin(), clearBuf.end(), clearAllHeld ? 1.0f : 0.0f);
                 if (clearAllHeld) {
                     g_params->setByName("cmd/master_len", 0.0f);
                     g_params->setByName("cmd/recorded_bpm", 0.0f);
                 }
+                monitorFoldVal = g_params->getBySlot(monitorFoldSlot);
+                microrepeatDivVal = g_params->getBySlot(microrepeatDivSlot);
+                masterLenVal = g_params->getBySlot(masterLenSlot);
+                recordedBpmVal = g_params->getBySlot(recordedBpmSlot);
                 float manualSpeedMul = 1.0f;
-                if (g_params->get("cmd/halfspeed")   > 0.5f) manualSpeedMul = 0.5f;
-                if (g_params->get("cmd/doublespeed") > 0.5f) manualSpeedMul = 2.0f;
+                if (g_params->getBySlot(halfSpeedSlot)   > 0.5f) manualSpeedMul = 0.5f;
+                if (g_params->getBySlot(doubleSpeedSlot) > 0.5f) manualSpeedMul = 2.0f;
                 g_manualSpeedMul = manualSpeedMul;
-                if (g_params->get("cmd/stopall") > 0.5f) {
-                    char z[32];
+                if (g_params->getBySlot(stopAllSlot) > 0.5f) {
                     for (int lp = 0; lp < 20; lp++) {
-                        snprintf(z, sizeof z, "looper%2d/play", lp);
-                        fui.set(z, 0.0f);
+                        if (looperTelemetryZones[lp].play) *looperTelemetryZones[lp].play = 0.0f;
                     }
                 }
                 for (int v = 0; v < kTransposeVoices; v++) {
                     std::fill(xposeNoteBuf[v].begin(), xposeNoteBuf[v].end(), g_params->getBySlot(xposeNoteSlot[v]));
                     std::fill(xposeGateBuf[v].begin(), xposeGateBuf[v].end(), g_params->getBySlot(xposeGateSlot[v]));
                 }
-                std::fill(freeXposeBuf.begin(), freeXposeBuf.end(), g_params->get("fx/monitorfold") > 0.5f ? 1.0f : 0.0f);
-                float staticSemis = g_params->get("fx/pitch");
-                if (g_params->get("fx/pitchbend_engaged") > 0.5f) {
-                    fui.set("SEMIS", staticSemis + g_params->get("fx/pitchbend"));
-                    fui.set("ENGAGED", 1.0f);
+                std::fill(freeXposeBuf.begin(), freeXposeBuf.end(), monitorFoldVal > 0.5f ? 1.0f : 0.0f);
+                float staticSemis = g_params->getBySlot(pitchSlot);
+                if (g_params->getBySlot(pitchbendEngagedSlot) > 0.5f) {
+                    if (semisZone) *semisZone = staticSemis + g_params->getBySlot(pitchbendSlot);
+                    if (engagedZone) *engagedZone = 1.0f;
                 } else {
-                    fui.set("SEMIS", staticSemis);
+                    if (semisZone) *semisZone = staticSemis;
                 }
-                fui.set("DIV", g_params->get("fx/microrepeat_div"));
+                if (divZone) *divZone = microrepeatDivVal;
             }
             {
                 for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) {
@@ -532,44 +588,42 @@ static void* worker(void*) {
                     g_telem.looperReadPos[lp]  = tz.readpos  ? *tz.readpos : 0.0f;
                 }
             }
-            g_telem.monitorMode = g_params && g_params->get("fx/monitorfold") > 0.5f;
-            g_telem.glitchEngaged = g_params && g_params->get("fx/microrepeat_div") > 0.5f;
+            g_telem.monitorMode = g_params && monitorFoldVal > 0.5f;
+            g_telem.glitchEngaged = g_params && microrepeatDivVal > 0.5f;
             bool linkDrivingLength = false;
+            LinkSnapshot linkSnap{};
             if (g_link) {
-                LinkSnapshot ls = g_link->audioRead();
-                g_telem.linkSynced = ls.synced;
-                g_telem.bpm = ls.bpm;
-                g_telem.linkPeers = ls.peerCount;
-                g_telem.linkPlaying = ls.isPlaying;
-                if (ls.synced && ls.bpm > 1.0) {
+                linkSnap = g_link->audioRead();
+                g_telem.linkSynced = linkSnap.synced;
+                g_telem.bpm = linkSnap.bpm;
+                g_telem.linkPeers = linkSnap.peerCount;
+                g_telem.linkPlaying = linkSnap.isPlaying;
+                if (linkSnap.synced && linkSnap.bpm > 1.0) {
                     linkDrivingLength = true;
                     double beatsPerBar = 4.0;
-                    double samplesPerBeat = (g_cfg.sampleRate * 60.0) / ls.bpm;
+                    double samplesPerBeat = (g_cfg.sampleRate * 60.0) / linkSnap.bpm;
                     double lenSamples = samplesPerBeat * beatsPerBar;
-                    char z[32];
                     for (int lp = 0; lp < 20; lp++) {
-                        snprintf(z, sizeof z, "looper%2d/len", lp);
-                        fui.set(z, (float)lenSamples);
+                        if (looperLenZone[lp]) *looperLenZone[lp] = (float)lenSamples;
                     }
-                    fui.set("MLB", (float)(lenSamples / N));
+                    if (mlbZone) *mlbZone = (float)(lenSamples / N);
                 }
             }
             if (!linkDrivingLength && g_params) {
                 static float frozenMasterLen = 0.0f;
-                float masterLen = g_params->get("cmd/master_len", 0.0f);
+                float masterLen = masterLenVal;
                 if (masterLen <= 0.0f) {
                     frozenMasterLen = 0.0f;
                 } else if (frozenMasterLen <= 0.0f) {
                     frozenMasterLen = masterLen;
                 }
-                fui.set("MLB", frozenMasterLen > 0.0f ? (frozenMasterLen / (float)N) : 0.0f);
+                if (mlbZone) *mlbZone = frozenMasterLen > 0.0f ? (frozenMasterLen / (float)N) : 0.0f;
             }
             float linkSpeedRatio = 1.0f;
             if (linkDrivingLength && g_params && g_link) {
-                float recordedBpm = g_params->get("cmd/recorded_bpm", 0.0f);
-                LinkSnapshot ls2 = g_link->audioRead();
-                if (!ls2.weOwnTempo && recordedBpm > 1.0f && ls2.bpm > 1.0) {
-                    linkSpeedRatio = recordedBpm / (float)ls2.bpm;
+                float recordedBpm = recordedBpmVal;
+                if (!linkSnap.weOwnTempo && recordedBpm > 1.0f && linkSnap.bpm > 1.0) {
+                    linkSpeedRatio = recordedBpm / (float)linkSnap.bpm;
                 }
             }
             {
@@ -594,7 +648,7 @@ static void* worker(void*) {
                     else if (shuffleGain[b] > target) { shuffleGain[b] -= kShuffleGainStep; if (shuffleGain[b] < target) shuffleGain[b] = target; }
                 }
 
-                float masterLen = g_params ? g_params->get("cmd/master_len", 0.0f) : 0.0f;
+                float masterLen = masterLenVal;
                 float recordedBeatsShared = g_params ? g_params->get("cmd/recorded_beats", 16.0f) : 16.0f;
                 if (recordedBeatsShared < 1.0f) recordedBeatsShared = 16.0f;
                 double beatLenSamplesShared = masterLen > 0.0f
@@ -605,12 +659,11 @@ static void* worker(void*) {
 
                 if (masterLen > 0.0f) {
                     if (linkDrivingLength && g_link) {
-                        LinkSnapshot ls3 = g_link->audioRead();
-                        bool freshSnapshot = ls3.phaseValid && ls3.quantumMicroBeats > 0 &&
-                                              ls3.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
+                        bool freshSnapshot = linkSnap.phaseValid && linkSnap.quantumMicroBeats > 0 &&
+                                              linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
                         if (freshSnapshot) {
-                            lastLinkPhaseMicroBeats = ls3.beatPhaseMicroBeats;
-                            double linkPhaseFrac = (double)ls3.beatPhaseMicroBeats / (double)ls3.quantumMicroBeats;
+                            lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
+                            double linkPhaseFrac = (double)linkSnap.beatPhaseMicroBeats / (double)linkSnap.quantumMicroBeats;
                             if (linkPhaseFrac < 0.0) linkPhaseFrac = 0.0;
                             if (linkPhaseFrac >= 1.0) linkPhaseFrac = 0.0;
                             masterPhaseSamples = linkPhaseFrac * (double)masterLen;
@@ -624,7 +677,7 @@ static void* worker(void*) {
                     masterPhaseSamples = std::fmod(masterPhaseSamples, (double)masterLen);
                     if (masterPhaseSamples < 0.0) masterPhaseSamples += masterLen;
 
-                    float recordedBpmForQuantum = g_params ? g_params->get("cmd/recorded_bpm", 0.0f) : 0.0f;
+                    float recordedBpmForQuantum = recordedBpmVal;
                     if (recordedBpmForQuantum > 1.0f) {
                         double quantumSamples = (g_cfg.sampleRate * 60.0 / (double)recordedBpmForQuantum) * 16.0;
                         standaloneQuantumPhaseSamples += (double)N;
@@ -647,7 +700,7 @@ static void* worker(void*) {
                     double gatePhase01 = shuffleClockStart / fourBeatLenShared;
                     if (gatePhase01 < 0.0) gatePhase01 = 0.0;
                     if (gatePhase01 >= 1.0) gatePhase01 = 0.0;
-                    homeFx.setControl("fx2/GATEPHASE", (float)gatePhase01);
+                    Lv2Host::setControlFast(gatePhaseHandle, (float)gatePhase01);
                     fui.set("fx/dubgate/clockphase", (float)gatePhase01);
                 }
 
@@ -693,9 +746,8 @@ static void* worker(void*) {
                 std::fill(masterLenBuf.begin(), masterLenBuf.end(), masterLen);
                 std::fill(recordedBeatsBuf.begin(), recordedBeatsBuf.end(), recordedBeatsShared);
                 if (linkDrivingLength && g_link) {
-                    LinkSnapshot lsBeat = g_link->audioRead();
-                    if (lsBeat.phaseValid && lsBeat.quantumMicroBeats > 0) {
-                        double frac = (double)lsBeat.beatPhaseMicroBeats / (double)lsBeat.quantumMicroBeats;
+                    if (linkSnap.phaseValid && linkSnap.quantumMicroBeats > 0) {
+                        double frac = (double)linkSnap.beatPhaseMicroBeats / (double)linkSnap.quantumMicroBeats;
                         if (frac < 0.0) frac = 0.0;
                         if (frac >= 1.0) frac = 0.0;
                         int idx = (int)(frac * 16.0);
@@ -706,7 +758,7 @@ static void* worker(void*) {
                         g_telem.gridBeatIndex = -1;
                     }
                 } else if (masterLen > 0.0f) {
-                    float recordedBpmForQuantum = g_params ? g_params->get("cmd/recorded_bpm", 0.0f) : 0.0f;
+                    float recordedBpmForQuantum = recordedBpmVal;
                     double quantumSamples = recordedBpmForQuantum > 1.0f
                         ? (g_cfg.sampleRate * 60.0 / (double)recordedBpmForQuantum) * 16.0
                         : (double)masterLen;
@@ -737,12 +789,10 @@ static void* worker(void*) {
                 for (int v = 0; v < kTransposeVoices; v++) {
                     if (g_params->getBySlot(xposeGateSlot[v]) > 0.5f) { anyXposeVoiceGatedNow = true; break; }
                 }
-                bool shiftHeldNow = g_params->get("fx/monitorfold") > 0.5f;
+                bool shiftHeldNow = monitorFoldVal > 0.5f;
                 float foldTarget = (shiftHeldNow && !anyXposeVoiceGatedNow) ? 1.0f : 0.0f;
-                const float kFoldStep = 1.0f / 16.0f;
-                const float kFoldStepPerSample = kFoldStep / (float)N;
                 static float glitchFoldGain = 0.0f;
-                float glitchFoldTarget = g_params->get("fx/microrepeat_div") > 0.5f ? 1.0f : 0.0f;
+                float glitchFoldTarget = microrepeatDivVal > 0.5f ? 1.0f : 0.0f;
                 for (int i = 0; i < N; i++) {
                     if (foldGain < foldTarget)      { foldGain += kFoldStepPerSample; if (foldGain > foldTarget) foldGain = foldTarget; }
                     else if (foldGain > foldTarget) { foldGain -= kFoldStepPerSample; if (foldGain < foldTarget) foldGain = foldTarget; }
@@ -752,8 +802,8 @@ static void* worker(void*) {
                     if (combinedFold > 1.0f) combinedFold = 1.0f;
                     fin[i] += prevLoopSum[i] * combinedFold;
                 }
-                fui.set("MONITORFOLD", foldGain);
-                fui.set("GLITCHFOLD", glitchFoldGain);
+                if (monitorFoldFaustZone) *monitorFoldFaustZone = foldGain;
+                if (glitchFoldFaustZone) *glitchFoldFaustZone = glitchFoldGain;
             }
             for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = (int32_t)(prevFiltOut[i] * 32768.0f);
             g_sampler->captureBlock(samplerBuf.data(), N);
@@ -785,7 +835,7 @@ static void* worker(void*) {
             }
             bool resonodeEngagedNow = g_params && resonodeEngagedSlot >= 0 &&
                                        g_params->getBySlot(resonodeEngagedSlot) > 0.5f;
-            fui.set("fx/resonode/engaged", resonodeEngagedNow ? 1.0f : 0.0f);
+            if (resonodeEngagedZone) *resonodeEngagedZone = resonodeEngagedNow ? 1.0f : 0.0f;
             if (resonodeEngagedNow && resonodeFx.hasPlugins()) {
                 std::copy(fin.begin(), fin.end(), resonodeInBuf.begin());
                 resonodeFx.process(resonodeInBuf.data(), N);
@@ -795,7 +845,7 @@ static void* worker(void*) {
             if (pitchTrackerFx.hasPlugins()) {
                 std::copy(fin.begin(), fin.end(), pitchTrackerBuf.begin());
                 pitchTrackerFx.process(pitchTrackerBuf.data(), N);
-                fui.set("fx/extfreqdet", pitchTrackerBuf[N - 1]);
+                if (extFreqDetZone) *extFreqDetZone = pitchTrackerBuf[N - 1];
             }
             faustHome.compute(N, fins, fouts);
             prevLoopSum = rawLoopSum;
