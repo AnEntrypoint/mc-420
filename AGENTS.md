@@ -4449,6 +4449,36 @@ real-hardware/by-ear tuning question rather than a correctness bug -- left
 disclosed here rather than guessed at blind, matching this session's
 standing discipline for this exact class of finding.
 
+**Extended to percussive material (marimba) on both engines, closing the
+last real-audio-coverage gap between the two named target categories
+("percussive and vocal") for the formant control specifically** --
+pitch-lock accuracy on percussive material was already verified earlier
+this session, but neither engine's formant control had been run against
+a percussive attack-transient timbre before, only sustained
+piano/violin/vocal/clarinet tones.
+
+`EngineSoladSnac` (free transpose), `Marimba.yarn.ff.C4.stereo.aif`:
+spectral centroid 132.1-207.8Hz across the depth sweep, brightening
+concentrated on the positive side (132.2->201.3Hz at +0.8, matching the
+already-documented asymmetric-deadband mapping) with the negative side
+comparatively flat (132.6-133.8Hz) -- the same shape already established
+for sustained tones, now confirmed on a struck/decaying attack envelope
+too. RMS peaked at formant=0 and fell off both directions
+(0.114/0.045/0.016Hz across the three measurement windows at formant=0,
+tracking the mallet strike's own natural decay -- not a defect, the
+expected envelope of a struck idiophone). Zero NaN/Inf.
+
+`multitranspose.dsp`, same file, real on-device (`extFreqDet`-fed)
+config: spectral centroid 345.6-397.2Hz (52Hz spread) across the -3..+3
+sweep, RMS declining from 0.0858 to 0.0258 -- both figures consistent
+with the shape and magnitude already measured across the other 5 files
+in this same battery, not an outlier. Zero NaN/Inf.
+
+This closes the last identified real-audio-coverage gap: both engines'
+formant controls are now measured against every category this file's
+own standing goal names (percussive AND vocal material, both engines),
+not just sustained tonal instruments.
+
 ## SHIFT routing through the transpose engine
 
 `free` (a signal input fed from `fx/monitorfold`, `audio_thread.cpp`'s
