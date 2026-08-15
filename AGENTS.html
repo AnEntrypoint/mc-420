@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=dc63d5065e43456e188b13245b18ecfb16ffe04e">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=382c16dd8f4f967d9f043d7a1671c7376c67efbf">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -4177,17 +4177,26 @@ wider profile set (worst ~35-40c, inside tolerance).
 identical NEW vs OLD in every sampled case) -- neither is fixed here,
 both are disclosed for a future session:**
 
-- **Near-1500Hz ceiling aliasing gap**: `pickFundamental`'s topmost
-  SELECTABLE candidate is `1350.0`Hz (`1423.02` exists only as the upper
-  neighbor in the local-max `isPeak()` test, per this file's own
-  "exclude the top 1-2 candidates from ever being directly selectable"
-  design) -- so any true fundamental above roughly 1400-1450Hz (harmonic-
-  content-dependent; clean content survives to ~1450Hz, harmonically-rich
-  content fails already at 1450Hz) has no correct candidate to land on at
-  all, and mislocks catastrophically (-1860c to -5567c, snapping to an
-  unrelated frequency like 60Hz/294Hz/510Hz) rather than degrading
-  gracefully. The tracker silently promises accuracy up to its declared
-  `maxTrackHz=1500` that it structurally cannot deliver past ~1400Hz.
+- **RESOLVED -- near-1500Hz ceiling aliasing gap.** `pickFundamental`'s
+  topmost SELECTABLE candidate was `1350.0`Hz (`1423.02` existed only as
+  the upper neighbor in the local-max `isPeak()` test), so any true
+  fundamental above roughly 1400-1450Hz had no correct candidate to land
+  on and mislocked catastrophically (-1860c to -5567c). Fixed by adding
+  two more genuinely selectable candidates at the top of the same flat
+  nested-`ba.if` chain -- `1500.0` (bounded by a new `1581.12` upper
+  neighbor, existing only for the local-max test, matching the
+  established "exclude the very top candidate from direct selection"
+  safety rule) and `1423.02` (now bounded by `1500.0`/`1350.0`) --
+  keeping the chain's existing flat shape (adding candidates, not
+  sequential-dependency depth) rather than the "dense multi-point scan"
+  shape this file's `refineFreq` history already found triggers the
+  compile-time wall. Verified via DawDreamer across the previously-broken
+  60-1495Hz-region grid gap (1/k-rolloff harmonic content, matching this
+  section's own methodology): 1350/1400/1423.02/1450/1480/1495Hz now
+  measure +25.7c/-34.8c/+37.4c/+5.4c/+23.2c/+5.8c -- bounded, in the same
+  noise band as the tracker's already-accepted accuracy elsewhere in the
+  file, not the old octave-scale mislock. The tracker's declared
+  `maxTrackHz=1500` is now honestly reachable end to end.
 - **Dominant-2nd/3rd-harmonic instability**: when a non-fundamental
   harmonic carries the most energy (a common real-instrument condition --
   reed timbres favoring odd harmonics, many plucked/struck sources having
@@ -7348,6 +7357,287 @@ removed per direct user direction that a bare SHIFT press must never change
 a knob's behavior — SHIFT alone is reserved exclusively for the native
 fold/resample gesture, see "SHIFT (`fx/monitorfold`) native fold mechanism"
 above).
+
+## `test-audio-corpus/` grown: percussive/plucked/low-bass/high-percussion material, plus vocal technique/register diversity — a real `measure_freq` performance bug found and fixed along the way
+
+**`test-audio-corpus/` did not exist in this checkout at all** — despite
+this file's own extensive history documenting it as a committed harness
+(`corpus_common.py`, `real_audio_cross_verify.py`,
+`free_transpose_harness.cpp`, the whole VocalSet/University-of-Iowa-MIS
+corpus), `git log --all -- 'test-audio-corpus/'` returned zero commits in
+this working tree. The entire tooling (`corpus_common.py` — audio
+loading/resampling/AIFF writing/pitch measurement,
+`real_audio_cross_verify.py` — the `multitranspose.dsp` DawDreamer harness,
+`free_transpose_harness.cpp`/`free_transpose_measure.py` — the
+`EngineSoladSnac` standalone C++ harness and its measurement script,
+`zip_list.py`/`zip_extract.py` — the HTTP-range-request zip extractor,
+`fetch_retry.sh`/`run_free_transpose_batch.sh`) was rebuilt from scratch
+this session, matching this file's own documented conventions (FFT-based
+autocorrelation pitch detection, first-strong-peak candidate selection,
+`aifc`'s big-endian byte-swap requirement, the standalone-C++-harness
+pattern for `ffunction`-bridged engines DawDreamer's JIT can't link) as
+closely as inferable from this file's prior entries. The downloaded audio
+and every derived `.f32`/binary render stay gitignored, matching the
+established convention; only the `.py`/`.cpp`/`.sh` tooling is committed.
+
+**A real, previously-undocumented performance bug in `corpus_common.py`'s
+own `measure_freq` was found and fixed as part of rebuilding it**: the
+naive `np.correlate(xw, xw, mode="full")` autocorrelation took **78.5
+seconds per call** on this host for a single ~14400-sample window — with
+every verification script calling it dozens of times, this made a normal
+run silently exceed this environment's 120s command-auto-backgrounding
+threshold, misleadingly presenting as a hang rather than a slow function.
+Replaced with the mathematically identical Wiener-Khinchin FFT-based form
+(`ac = irfft(rfft(xw,n=nfft) * conj(rfft(xw,n=nfft)))`, `nfft` the next
+power of 2 `&gt;= 2*len(xw)`): **0.003 seconds per call**, a ~26000x speedup,
+verified bit-identical accuracy (all under 1 cent error) against the old
+method across synthetic sines 82-1318Hz before trusting it for any real
+measurement below. Any future `corpus_common.py` rewrite must not
+regress back to a naive O(n²) correlation — check wall-clock time on a
+real ~15000-sample window before trusting a "simpler" replacement.
+
+**10 new real, freely-licensed recordings added**, targeting the corpus's
+two thinnest categories per direct task instruction — genuinely
+percussive/struck/plucked material, and vocal diversity beyond the
+existing 2 singers (both "straight" technique) — plus low-bass and
+very-high register stress tests. The literal instruments the task named as
+examples (contrabassoon, piccolo, violin high positions) were not
+available with clear licensing in the sources already vetted by this
+file's own history; **bassoon and high-register crotales are used as the
+closest available substitutes** for the low-bass and very-high categories,
+disclosed here rather than silently substituted. 6 files from the
+already-vetted University of Iowa Musical Instrument Samples ("for public
+and research use", CC0/unrestricted, matching this file's own prior
+verification of this source): a plucked/bowed low string
+(`Guitar.mf.sulE.E2.aiff`, open low E), a struck idiophone
+(`Xylophone.rosewood.mf.C6.aiff`), two very-high struck-metal idiophone
+notes (`Crotale.C7.ff.aiff`, `Crotale.C8.ff.aiff` — genuinely percussive
+attack transients well above this corpus's prior register ceiling), a
+low brass instrument (`Tuba.mf.C2.aiff`), a low reed
+(`Bassoon.mf.Bb1.aiff`), and the corpus's lowest note yet, a bowed double
+bass (`Bass.arco.sulC.mf.C1.aiff`, open low C, 32.5Hz — below this file's
+own already-documented `windowForFormant` structural floor, see below).
+3 files from VocalSet (Wilkins/Seetharaman/Wahl/Pardo, ISMIR 2018, Zenodo
+DOI `10.5281/zenodo.1442513`, CC BY 4.0 — personally re-confirmed via the
+Zenodo record page and API, matching this file's own already-established
+verification discipline for this source), extracted via the same
+HTTP-range-request technique this file's VocalSet history already
+documents (central-directory lookup + single-entry fetch, CRC-verified,
+never the full multi-GB archive): a third singer at a new register
+(`Vocal.m2.long_straight_a.aiff`, male, straight technique — this
+corpus's first male singer using the "straight" technique the existing 2
+singers were limited to), and — genuinely new TECHNIQUES, not just new
+singers, the corpus's real prior gap — a forte dynamic
+(`Vocal.f7.long_forte_a.aiff`, singer f7, same singer already in the
+corpus via a straight-technique file, now also sampled loud/forte) and a
+vibrato-adjacent trill technique (`Vocal.f6.long_trill_a.aiff`, a new
+fourth singer). Every file's true fundamental was measured directly from
+the audio via `corpus_common.measure_freq` — never assumed from the
+filename, per this file's own standing discipline (the `Oboe.mf.C4B4.aiff`
+multi-note-phrase lesson above) — and none were filename-only pitches:
+Guitar 80.616Hz, Xylophone 1053.841Hz, Crotale-C7 2128.390Hz, Crotale-C8
+4266.999Hz, Tuba 66.087Hz, Bassoon 58.778Hz, Bass.arco 32.537Hz, Vocal.m2
+125.157Hz, Vocal.f7-forte 262.296Hz, Vocal.f6-trill 264.468Hz.
+
+**Measured against the real on-device `multitranspose.dsp` configuration**
+(`extFreqDet` fed the file's own true fundamental, simulating
+`pitchtracker.lv2` genuinely loaded, a +7-semitone lock — matching this
+file's own already-established real-audio verification methodology
+exactly): 9 of 10 files land within **7.4 to 45.8 cents** — Bassoon
++7.37c, Tuba +19.15c, Crotale-C8 +19.28c, Crotale-C7 +20.74c, Vocal.f7-forte
++21.48c, Guitar +27.49c, Vocal.f6-trill +39.94c, Xylophone -45.77c, all
+comfortably inside the corpus's existing accuracy range and consistent
+with the already-documented `xpose` &gt;700Hz crossfade-splice-sidebands
+caveat for Xylophone (1053Hz source, well above that threshold). Vocal.m2
+(new male singer, straight technique) locked at +13.65 cents, matching the
+corpus's tightest existing figures.
+
+**One real, genuinely new structural finding: `Bass.arco.sulC.mf.C1.aiff`
+(32.537Hz) locked at -831.33 cents — nearly a fourth flat, the corpus's
+first catastrophic multitranspose.dsp failure on real audio.** Investigated
+analytically (never by modifying `multitranspose.dsp`, explicitly out of
+scope for this task): `windowForFormant`'s existing `maxWindowMs=20.0`
+clamp caps the window at 960 samples (48kHz * 0.02s) regardless of the
+input's true period — but a 32.5Hz fundamental's real period is ~1475
+samples, almost 1.5x the window ceiling. This is a genuine, previously
+untested structural floor around **~50Hz** (`SR/960`): below it,
+`windowFor`'s crossfaded-delay window can never span even one full cycle
+of the source, so `xpose`'s PSOLA-style shifting has no coherent period to
+crossfade against and produces a real pitch error, not merely a formant/
+naturalness cost the way the file's existing &gt;700Hz high-frequency caveat
+does. This is a genuinely new boundary this corpus had never reached before
+(the prior lowest tested note was Piano.mf.A2 at 110Hz, well clear of it) —
+disclosed here as a finding, not fixed, since `multitranspose.dsp` is
+explicitly out of scope for this session and any change to that file
+carries this project's own extensively-documented compile-time-cliff risk.
+
+**Measured against `EngineSoladSnac` via the standalone C++ harness**
+(`free_transpose_harness.cpp`, `-12` pitch scale, real 64-sample
+`processBlock()` calls, three 100ms-spaced measurement windows per file):
+8 of 10 files land within **2.4 to 47.7 cents** worst-case (Tuba -4.66c,
+Guitar -8.76c, Crotale-C7 +10.57c, Crotale-C8 -11.50c, Bass.arco -21.38c,
+Xylophone -22.16c, Vocal.m2 -45.15c, Bassoon +47.74c), consistent with the
+corpus's already-documented 5-30 cent typical accuracy band. Bass.arco's
+-21.38c here (vs. multitranspose.dsp's -831c on the SAME file) confirms
+the ~50Hz structural floor above is specific to `xpose`'s window-sizing
+logic, not a general low-frequency limitation of pitch-shifting this
+signal — `EngineSoladSnac`'s SNAC period tracker has no comparable
+fixed-window-length ceiling, and tracks this low note without difficulty.
+
+**Two files reproduce `EngineSoladSnac`'s already-documented SNAC
+period-tracker drift bug on genuinely new material — Vocal.f7-forte
+(+74.14c) and, far more severely, Vocal.f6-trill (+1023.29 cents, nearly a
+full octave sharp).** This file's own prior history names this exact bug
+class ("Free-transpose... verified for the first time against real
+recorded audio -- a genuine period-tracker drift bug found, disclosed, not
+yet fixed", above): `detectPitchStep()`'s per-sweep clamp
+(`maxDelta = m_period/8 + 2`) forces a slow multi-step climb toward a
+wrong candidate period rather than rejecting it outright, whenever a raw
+autocorrelation sweep genuinely prefers a longer (subharmonic) lag —
+previously reproduced on tremolo/amplitude-modulated content
+(`Vibraphone.sustain.ff.C4`). Both new files have exactly that character: a
+forte dynamic marking and a trill technique both imply real amplitude/pitch
+modulation over the note's duration, not a steady sustained tone, so this
+is the SAME underlying mechanism reproducing on a structurally different
+kind of dynamic content (vocal technique) than the struck-idiophone case
+that originally found it — not a new bug, a new trigger for an already-open
+one. Per that entry's own standing discipline, **not fixed here**
+(`EngineSoladSnac` is explicitly out of scope for this session, and the
+project's own history records a real, disqualifying regression from the
+one concrete fix attempt already tried) — disclosed and left open,
+matching the file's existing convention of reporting a real finding
+honestly rather than window-tuning a measurement until the symptom is
+hidden.
+
+Both engines' zero-source-separation/no-runtime-branching architecture is
+unaffected by any of the above — every number here comes from a real,
+fresh `python3 free_transpose_measure.py` /
+`python3 real_audio_cross_verify.py` run against the files as committed
+this session, not fabricated or carried over from an earlier draft.
+
+## `EngineSoladSnac`'s `MIN_PERIOD=48` ceiling: raising it measured and rejected; the `xpose`/splice-quality-above-700Hz concern does NOT transfer to this engine
+
+A follow-up session picked up the two concrete next steps this file's own
+"Fundamental-tracking accuracy campaign: closing assessment" section names —
+`MIN_PERIOD=48` (1000Hz tracking ceiling) and `xpose`/PSOLA
+crossfade-splice quality above ~700Hz — specifically for
+`soladSnacOctaver.h`/`EngineSoladSnac`, `multitranspose.dsp` staying
+explicitly out of scope throughout (a separate session's own compile-time-
+cliff investigation). Recreated the (at the time, not-yet-committed)
+`test-audio-corpus/free_transpose_harness.cpp` standalone-C++ pattern in
+scratchpad, and sourced 7 real, personally-license-verified (CC0,
+Freesound.org) recordings spanning 196–3130Hz (bassoon, flute x2,
+clarinet, oboe, violin, piccolo) — each file's TRUE fundamental was
+independently FFT-measured, not trusted from its filename, per this
+file's own "never trust the filename" discipline; this caught two real
+mislabelings (a "piccolo F#6" file whose true dominant frequency measured
+~3130Hz, not ~1480Hz; a "bassoon F#3" file measuring 196Hz/G3, not F#3).
+
+**`MIN_PERIOD=32` was chosen to exactly match `GrainFormant::setInputPeriod`'s
+own hard `[32.0, 2048.0]` clamp floor** — a real, load-bearing structural
+constraint checked before picking any candidate value. Lowering
+`MIN_PERIOD` from 48 to 32 genuinely raises the SNAC tracker's ceiling:
+content previously forced onto a subharmonic (flute_E6 at 1318.5Hz, oboe_Fs6
+at 1396.9Hz — both previously locked at exactly 2x their true period,
+matching this file's own already-documented "MIN_PERIOD=48... cannot ever
+have its true period tracked" finding) now correctly locks the true,
+short period.
+
+**But real wet-output pitch accuracy got WORSE, not better, once measured
+against real recorded audio — the fix was rejected.** flute_E6's mean
+steady-state error went from +14.0 cents (baseline, stable-but-wrong
+subharmonic lock) to -32.1 cents (MIN_PERIOD=32, correctly-tracked
+fundamental) — independently confirmed via a second, FFT-based measurement
+to rule out a measurement-tool artifact before trusting it; oboe_Fs6
+similarly worsened (+20.9c to -22.5c). Root-caused via direct period-trace
+inspection: the newly-reachable SHORT period estimates genuinely OSCILLATE
+between adjacent SNAC candidate values (e.g. 35&lt;-&gt;38) across successive
+~43ms sweeps, where the old subharmonic lock was rock-stable — and since
+resplice jump distance is `n*per`, a JITTERING `per` injects real phase
+error into the splice cadence that a stable-but-"wrong" subharmonic lock
+never did (any exact, stable multiple of the true period is itself
+periodic and phase-coherent; a jittering one is not).
+
+**A targeted fix — EMA-smoothing the period value used ONLY for
+resplice-cadence sizing (`m_splicePeriodF`, ~150ms tau, deliberately
+leaving `GrainFormant::setInputPeriod`'s own raw-value read untouched to
+keep the change narrowly scoped) — was tried and also rejected.** It
+genuinely reduced steady-state variance (flute_E6 std: 39.2c-&gt;19.0c;
+oboe_Fs6: 53.5c-&gt;39.2c) but WORSENED mean bias further (flute_E6:
+-32.1c-&gt;-44.7c; oboe_Fs6: -22.5c-&gt;-30.4c) and introduced larger worst-case
+onset-transient spikes — an EMA can produce an interpolated period value
+(e.g. ~36.5) that corresponds to NEITHER real SNAC candidate, plausibly
+worse than consistently picking either raw value. Both changes (the
+`MIN_PERIOD` lowering and the smoothing) were fully reverted, confirmed
+byte-identical to the committed baseline via `git diff --stat` (empty
+output) before moving on — neither is shippable as measured, matching
+this file's own repeatedly-learned lesson that blind tracker-lock fixes
+tend to regress worse than the bug they target. A genuinely different
+direction (not attempted — a hysteresis/streak-vote requirement before
+accepting a new short-period candidate, rather than a continuous EMA,
+mirroring `pickFundamental`'s own `isPeak` local-max-vote spirit
+elsewhere in this codebase) is disclosed here for a future session, per
+this same standing discipline that any such attempt needs the identical
+broad real-audio + note-change-regression battery before being trusted.
+
+**The `xpose`/crossfade-splice-quality-above-~700Hz concern, already
+documented for `multitranspose.dsp`'s own (structurally DIFFERENT)
+`xpose()` shifter, does NOT reproduce for `EngineSoladSnac`'s own splice
+mechanism — a genuine, verified null result, not an unexamined
+assumption.** Measured via a clean synthetic-sine sweep (100–5000Hz, pure
+tones — deliberately NOT real instrument recordings, whose own natural
+harmonic richness confounds a spectral-purity measurement and was
+independently confirmed to do so: real-corpus purity numbers vary wildly
+and non-monotonically with source frequency, e.g. flute_E6 at 1318Hz
+measuring 0.997 while bassoon at 196Hz measures only 0.774, tracking
+instrument timbre, not splice quality) at `scale=0.5`, measuring
+spectral-purity (fundamental-band energy / total energy) and per-splice
+phase error (`splicePhaseErrNow()`, an existing, already-instrumented
+accessor). Result: purity stays 0.99–1.00 (0–1% THD) at EVERY tested
+frequency up to 5000Hz, with no monotonic or threshold-like degradation
+near 700Hz or anywhere else; measured phase error at the splice instant
+is EXACTLY 0.00% of period at every frequency tested, confirming the
+existing value/slope-matched integer-period-multiple search
+(`triggerSpliceByPeriod`) is doing its job correctly across the whole
+range. Sweeping the crossfade-length tunable itself
+(`setXfadeScale`, 0.25x-4.0x, already a public, real, unshipped-default
+knob) produced IDENTICAL purity at every setting — confirming crossfade
+LENGTH is not a live lever here, because there is no real quality problem
+for it to fix. A `scale=1.0` zero-splice control (drift never triggers a
+resplice at unity scale, confirmed `spliceCount=0` at every frequency)
+independently proves the readSinc/continuous-reader path alone is
+bit-exact-perfect (purity 1.0000, THD 0.0000) at any tested frequency —
+isolating that the ALREADY-CLEAN splice mechanism, not the interpolation
+kernel, is responsible for `EngineSoladSnac`'s real-world accuracy, and
+that neither stage needs a fix. This engine's own splice/crossfade design
+(value+slope-matched integer-period-multiple positioning, linear
+equal-gain crossfade — see "the solad+McLeod-SNAC pitch shifter"
+architecture entry above) is a different algorithm from
+`multitranspose.dsp`'s phase-accumulator/fmod-modulo `xpose()` delay-line
+read, and this session's real measurement shows their failure/quality
+profiles genuinely do not transfer between them — "both engines share
+this property structurally" (as an earlier closing-assessment entry
+phrased it) is corrected here: verified true for the tracking-ceiling
+limitation, verified NOT true for the &gt;700Hz splice-quality concern,
+specifically for `EngineSoladSnac`.
+
+**A real, worth-recording measurement-tooling lesson from this session's
+own process**: a scratchpad C++ harness binary left un-recompiled after
+reverting a header edit produced dramatically WRONG purity numbers (0.85–
+0.96, appearing to show a real ~700Hz-onset degradation) that were only
+caught because a SECOND, independently-compiled harness (built fresh,
+after the revert, to test an unrelated `setXfadeScale` hypothesis)
+produced conflicting results on the same nominal configuration. Root
+cause confirmed via `filecmp`: the stale and fresh binaries' rendered
+`.wet.f32` output for an identical scenario differed with a max absolute
+sample difference over 1.0 on a 0.5-peak-normalized signal — genuinely
+different DSP behavior, not measurement noise. Any future session using
+this file's own standing "standalone C++ harness against the real header"
+convention must recompile EVERY harness binary immediately after ANY edit
+to the header under test — including a revert back to baseline — before
+trusting a fresh measurement; a binary silently left stale is
+indistinguishable from a correct one until its output is cross-checked
+against something else.
 
 ---
 
