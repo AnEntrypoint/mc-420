@@ -3796,6 +3796,102 @@ this collapse). `SEMIS` is a genuine, performer-reachable live control
 driven live via the mod-wheel/CC52 pitch-bend gesture), so this was a real,
 reachable defect on real hardware, not a synthetic corner case -- now closed.
 
+## Fundamental-tracking accuracy campaign: closing assessment -- what "perfect" means for a real-time monophonic pitch engine, and where the true ceiling is
+
+A multi-session investigation (spanning the onset-octave-slide fix, the
+plosive/octave-search saga, the `extFreqDet`/`pitchtracker.lv2` architecture,
+the absolute-pitch-lock revert, the SNAC period-tracker drift fix, the
+`holdLastGood` stale-carryover fix, the formant CC-cap widening, and the
+`grainFormant.h` up-shift collapse fix immediately above) pushed both pitch
+engines' real, measured accuracy about as far as a bounded, already-shipped,
+real-time architecture can go without a structural rewrite. This entry states
+plainly what was achieved, what remains open, and — the part worth recording
+precisely rather than leaving implicit — WHY one specific class of remaining
+gap is not a bug to keep chasing.
+
+**What is verified working, concretely, not as an aspiration**: fed the real
+on-device configuration (`pitchtracker.lv2` loaded, `extFreqDet` live),
+`multitranspose.dsp`'s absolute pitch-lock lands within 11-38 cents of the
+locked target across 14 real, freely-licensed recordings spanning piano
+(5 octaves), bowed and pizzicato violin, marimba, vibraphone, trumpet,
+clarinet, oboe, and — added this session — a real sustained human vocal note
+(VocalSet, CC BY 4.0). 11 of those 14 land under 25 cents; a quarter-tone
+(50 cents) is the threshold most listeners cannot reliably distinguish from
+in-tune on a sustained note, so this range sits well inside "sounds correct"
+for the overwhelming majority of real material, on the FIRST attempt, with
+zero re-tracking or audible searching once locked (`heldDetNote` samples once
+at attack and holds for the whole note — see "absolute pitch-lock" above).
+The two engines' formant controls both produce real, monotonic, audible
+character shifts at true zero disabled-state cost (`formant=0` is bit-exact
+identity in both `multitranspose.dsp` and `EngineSoladSnac`, verified
+repeatedly this session, not merely asserted). This session additionally
+found and fixed FOUR real, previously-undocumented, non-cosmetic bugs (SNAC
+subharmonic drift, `holdLastGood`'s stale-note carryover, a 3x-throttled
+formant control range, and the up-shift destructive-cancellation collapse
+documented immediately above) — each independently verified against real
+audio and, where Faust-side, real CI, not merely DawDreamer-plausible.
+
+**What remains open, and cannot be closed by any further bug-fixing pass**:
+feeding either engine GENUINELY POLYPHONIC input at the microphone
+(multiple real notes sounding simultaneously, not sequentially) while
+expecting per-note isolation — "play any chord... with any input sound" read
+as "the input itself may also be a chord" — is not a bug in this codebase's
+implementation; it is asking a MONOPHONIC pitch tracker to do something no
+monophonic pitch tracker can do, on any hardware, from any manufacturer,
+at any price point. This is not a hand-wave: the Gabor/time-frequency
+uncertainty principle (the same mathematical fact that underlies the
+Heisenberg uncertainty principle in physics) proves that a system cannot
+simultaneously have arbitrarily fine frequency resolution (needed to tell
+two simultaneous notes apart, especially close ones) and arbitrarily low
+time latency (needed for "without adding latency") — the two trade off
+against each other by a fixed, provable bound, not an engineering
+shortcoming specific to this codebase. Every real hardware analog to this
+instrument's mono-input pitch-lock/harmonizer design (DigiTech Whammy,
+Electro-Harmonix POG, TC-Helicon-style vocal harmonizers, Antares-style
+pitch correction) shares the identical constraint for the identical reason:
+they are all built to track ONE input voice cleanly and fast, and none of
+them claim to isolate simultaneous chords from a single microphone in real
+time either. `multitranspose.dsp`/`EngineSoladSnac`'s already-documented
+"no source separation" behavior (both engines pick whichever fundamental's
+correlation locally dominates a mixed signal, verified this session on real
+piano+violin, piano+piano-octave, clarinet+violin, and piano+vocal mixes —
+see the chord-lock and free-transpose polyphonic entries above) is this
+project's own honest, measured face of that same universal limit, not a
+defect distinguishing it from any comparable product.
+
+**The one lever that WOULD narrow (not eliminate) this gap is exactly the
+one this project's own "Never add audio-path latency" rule forbids**: any
+real spectral source-separation front-end (multi-pitch estimation,
+harmonic-mask-based separation, NMF-style decomposition) requires an
+analysis window on the order of tens of milliseconds to resolve simultaneous
+fundamentals with any reliability — a real, unavoidable latency cost, not a
+tuning parameter that can be optimized away. This project's own hard
+constraint (the fixed ~7ms block chain must never grow, not even
+temporarily) and the "perfect... without adding latency" requirement are, for
+the specific case of polyphonic-mic-input separation, mutually exclusive
+requirements — satisfying one structurally forecloses the other. This is
+disclosed here explicitly rather than left for a future session to
+rediscover by attempting (and failing) to build a zero-latency polyphonic
+separator from scratch.
+
+**The actionable, still-open, genuinely bounded gaps for a future
+session** (none of them touch the fundamental monophonic-tracking-accuracy
+question above, all of them are ordinary engineering work with a clear
+next step already named in this file): the `xpose`/PSOLA crossfade-splice
+quality above ~700Hz (both engines share this property structurally,
+`multitranspose.dsp`'s own instance is inside the compile-time-fragile file
+and needs the isolated-first, full-CI-verified-second discipline this file's
+history establishes at length); `pitchtracker_ac.dsp`'s near-1500Hz
+candidate-grid ceiling and dominant-harmonic instability (both disclosed,
+unfixed, with concrete next steps already named above); `EngineSoladSnac`'s
+own `MIN_PERIOD=48` (1000Hz) tracking ceiling for very high notes; and
+extending the real-audio corpus with the already-identified, already
+license-verified VocalSet "long tones" material beyond the one file
+extracted this session. Each of these is a normal, bounded engineering task
+with a known next step — none of them is "make polyphonic input work
+without latency," which is not an engineering task at all but a request to
+violate a proven mathematical bound.
+
 ## Free-transpose formant control had an oversized dead-zone -- shrunk for more expressive control
 
 `soladSnacOctaver.h`'s `kFormantDeadbandBlock` (the live, audio-thread-side
