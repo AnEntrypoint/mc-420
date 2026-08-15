@@ -3699,6 +3699,96 @@ signals throughout. The test lives at
 directory (downloaded audio is not committed); re-run it locally to extend
 the corpus with additional real recordings.
 
+## `grainFormant.h` destructively cancels on real up-shift (SEMIS +6..+12) -- root-caused, NOT fixed blind, disclosed for a future session
+
+While investigating the formant loudness cost documented below, a follow-up
+measurement found something far more serious: the mono SNAC "pedal ride"
+engine's real, production up-shift path (`SEMIS` from `dsp/effects_runtime.dsp`
+-> `scale = pow(2, SEMIS/12)` -> `EngineSoladSnac::setPitchScale`) collapses
+toward near-silence as the shift approaches +1 octave. `soladSnacOctaver.h`
+line 213 (`if (m_scale > 1.02f) mixTgt = 1.0f;`) forces ANY up-shift beyond a
+hair past unison through `grainFormant.h`'s grain path exclusively -- the
+continuous reader is deliberately never used up-shift (documented above: "the
+continuous reader garbles on up-shift... doubling/garbling transients") -- so
+this is not a rare corner case, it is the ENTIRE up-shift signal path.
+
+**Measured directly against the real `EngineSoladSnac`** (a standalone C++
+harness driving `processBlock()` in real 64-sample chunks exactly like
+production, sweeping `SEMIS` -12..+12 against a synthetic 220Hz tone, `formant=0`
+so only the forced-grain up-shift path is exercised): output/input RMS ratio
+stays a healthy ~1.0 through SEMIS 0, rises slightly to ~1.09 around +3
+(a real but modest and previously-undocumented peaking), then falls
+increasingly steeply from +6 (0.89) through +8 (0.59, already a real ~4.5dB
+loss) to +12 (0.0168 -- a ~35dB loss, functionally silent). The DOWN-shift
+side (SEMIS -12..0, `scale` 0.5..1.0, matching the octave-down engine this
+file documents most extensively) is completely unaffected -- ratio stays
+within 0.06% of unity across the whole tested range.
+
+**Root cause, isolated via a debug-instrumented copy of `GrainFormant`
+exposing per-sample active-voice count and window-envelope sum (never the
+real repo file)**: `glen` (each grain's window length, `2.0*Tin`) is a FIXED
+function of the input's own detected period, completely independent of
+`scale` -- but `outHop` (how often a new grain is spawned, `Tin/scale`) DOES
+depend on scale. At `scale=1.0` this pair happens to land exactly on the
+textbook 50%-overlap Hann/COLA condition (`outHop = glen/2`), which is why
+formant/no-shift behavior has always measured clean. At `scale=2.0`,
+`outHop = Tin/2` while `glen` stays `2*Tin` -- 4x the "should-be" overlap for
+COLA at that hop -- and because each grain's own `k`-indexed read walks
+through content at the SAME 1x rate (`fm=1` at formant=0) while grains are
+spawned MORE OFTEN than one content-period apart, the several simultaneously-
+active grains end up sampling the input's periodic content at NON-integer-
+period phase offsets from each other (traced directly: at `scale=2.0`, two
+dominant overlapping grains read content exactly `Tin/2` apart -- 180 degrees
+out of phase for a periodic tone) despite each grain's own window ENVELOPE
+being perfectly healthy and additive (window-sum traced as clean and stable,
+scaling smoothly with overlap count: 0.50/1.00/1.20/1.50/1.70/1.90/2.00
+across scale 0.5/1.0/1.2/1.5/1.7/1.9/2.0 -- matching theory exactly). The
+window machinery is not broken; the CONTENT the windows are summing is
+destructively interfering. Confirmed frequency-independent (identical curve
+shape at 220Hz and 440Hz probe tones) and confirmed to involve zero voice
+starvation (`VOICES=6` never exceeded, zero stolen-voice events at any scale
+tested) -- ruling out both of the other obvious hypotheses before accepting
+the phase-cancellation explanation.
+
+**No fix was attempted, on purpose.** The textbook-correct fix for a
+Hann-windowed granular time-scaler is scale-adaptive grain sizing --
+`glen = 2*outHop` (preserving 50% overlap, hence COLA, at every scale) instead
+of the current fixed `2*Tin`. This is a real, well-understood direction, but
+applying it changes `glen` at EVERY scale, including `scale=0.5` (the
+octave-DOWN engine this whole file's history centers on, and the exact
+configuration this session's own real-audio formant investigation just
+finished extensively verifying against 14 real instrument/vocal timbres) --
+at `scale=0.5`, `glen` would DOUBLE (872 vs the current 436), a substantial
+change to already-shipped, already-CI-green, already-real-audio-verified
+behavior. Shipping that blind, in the time remaining this session, without
+re-running the full real-audio formant battery (`formant_realaudio_harness.cpp`
++ `measure_formant_centroid.py`, both in scratch) against the changed grain
+sizing, risks regressing verified behavior to fix unverified behavior --
+exactly the failure mode this project's own history (`jumpGuard`/`slowRef`,
+the plosive/octave-search saga, the SNAC period-tracker margin-check
+regression earlier this session) has repeatedly warned against. A gain-only
+patch was also explicitly rejected: boosting the output in the collapsed
+region would amplify whatever residual interpolation noise survives
+destructive cancellation, not recover the true signal -- confirmed
+unsafe by the same measurement (winSum stays healthy while outRms goes to
+0.0000, meaning there is no coherent signal left to boost back up).
+
+**Practically bounded, not universal**: the badly-broken region is roughly
+SEMIS > +8 (more than ~4.5dB loss), worsening sharply toward +12; SEMIS 0
+through +6 shows only modest, gradual degradation (a real, separate, much
+smaller loudness-taper effect, not this collapse). `SEMIS` is a genuine,
+performer-reachable live control (`dsp/effects_runtime.dsp`'s
+`hslider("SEMIS", 0.0, -12.0, 12.0, 0.001)`, driven live via the mod-wheel/
+CC52 pitch-bend gesture per this file's own Ableton-Link-adjacent control
+docs), so this is real-world reachable, not a synthetic corner case --
+disclosed here rather than silently left for a future session to
+rediscover from scratch. Concrete next step for whoever picks this up:
+implement scale-adaptive `glen` (or an equivalent COLA-preserving grain
+redesign), then re-run the FULL real-audio formant verification battery
+(both instruments, all 5 depths, all 3 measurement windows) before trusting
+it, matching this file's own standing discipline for any change to this
+shared, already-verified engine.
+
 ## Free-transpose formant control had an oversized dead-zone -- shrunk for more expressive control
 
 `soladSnacOctaver.h`'s `kFormantDeadbandBlock` (the live, audio-thread-side
