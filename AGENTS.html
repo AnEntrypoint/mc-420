@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8860bd86df177c3dcc04a03e77657d97b96bafce">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e8d9229559854d9cf4da3f5d73d0998d41571b65">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -5768,50 +5768,49 @@ the generic `onPadPress`/`onPadRelease` dispatch and routes them to
 rule above). No LED behavior changed — the existing beat-flash colors are
 untouched; the buttons are audio-only feedback, like SHIFT-fold.
 
-**The offset math lives entirely in C++** (`audio_thread.cpp`, static helpers
-`kShuffleStep0..kShuffleStep3`/`shuffleOffsetSamples` right before `worker()`),
-added directly into the existing `masterPhaseBuf` per-sample fill loop —
-deliberately NOT a Faust change, both to avoid any risk of
-`multitranspose.dsp`'s compile-time wall (see above) and because
-`masterPhaseBuf` is already filled per-sample in C++ and Faust already treats
-it as an opaque external read-position input (`dsp/loop.dsp`'s own
-"`masterPhaseBuf` must ramp per-sample within the block" rule, unaffected —
-the shuffle is one more per-sample computation feeding the same buffer, still
-updated per-sample, never a block-constant fill).
+**The offset math lives entirely in C++** (`audio_thread.cpp`,
+`kShuffleReorderTables` right before `worker()`), added directly into the
+existing `masterPhaseBuf` per-sample fill loop — deliberately NOT a Faust
+change, both to avoid any risk of `multitranspose.dsp`'s compile-time wall
+(see above) and because `masterPhaseBuf` is already filled per-sample in C++
+and Faust already treats it as an opaque external read-position input
+(`dsp/loop.dsp`'s own "`masterPhaseBuf` must ramp per-sample within the
+block" rule, unaffected).
 
-**Redesigned from a smooth continuous perturbation to a hard-jump, 16-step
-groovebox-style shuffle** — the original design (4 sine-sum waveforms,
-crossfaded in/out over ~32ms, summed and soft-clamped) was WITNESSED live as
-an unwanted continuous "wobble," directly contradicting the intended
-character: real groovebox/505-style shuffle is an INSTANT step-function jump
-in playback position at each 16th-note boundary, with the exact same
-punch-in character as varispeed and the microrepeat glitch effect, never a
-ramp. The FIRST attempt at this redesign was itself WITNESSED as "too small,
-not really shuffling much" — its step tables were sparse (long flat runs of
-`0` between occasional nonzero entries, e.g. one nonzero step in every 3-4)
-and its clamp bound was tight (`±8` steps), so most of the 16-step cycle
-produced no audible offset at all. Fixed by making every table entry nonzero
-(no flat stretches) and doubling the clamp headroom to `±16` steps, so a
-single held button alone is clearly audible (measured ~70-90ms of real
-swing at the recorded tempo used for verification) and combinations scale up
-from there rather than being crushed by the clamp. Each of the 4 buttons
-selects a distinct fixed 16-entry step table (`kShuffleStep0`: classic
-swing, alternating steps delayed hard; `kShuffleStep1`: dotted/triplet
-gallop, every 3rd step pulled back hard against a slight forward push on the
-rest; `kShuffleStep2`: push/drag, alternating ahead/behind on EVERY 16th
-note, the sharpest single-button amount; `kShuffleStep3`: broken/polymetric,
-a 5-step-over-16 displacement moving every single step), each entry a fixed
-offset in units of `stepLen/16` (one 16th-note's worth of samples divided
-into 16 sub-steps). `shuffleOffsetSamples` looks up the CURRENT 16th-note
-step from `phaseNorm` and sums the step values of every currently-held
-button (`shuffleGain[b] &gt; 0.0f`, already an instant 0/1 snap per the
-button-fade fix
-above, not a partial blend) — the result changes ONLY at step boundaries and
-is applied with zero interpolation, clamped to `±kShuffleClampSteps` (16) to
-bound worst-case combined excursion. Verified numerically: all 15 non-empty
-button combinations produce genuinely distinct 16-step patterns (no two
-combinations collapse to the same table), and the clamp bound holds exactly
-at the worst case tested.
+**Redesigned twice before landing on a true retrigger/reorder mechanism.**
+The original design (4 sine-sum waveforms, crossfaded and soft-clamped) was
+WITNESSED live as an unwanted continuous "wobble." A first hard-jump
+redesign (16-step-per-16th-note offset tables) fixed the wobble but was then
+WITNESSED as a "double-tap": several tables alternated sign between
+adjacent steps, so at roughly half the step boundaries the offset jumped
+BACKWARD relative to the previous step, making `masterPhaseBuf` re-read loop
+content it had just played — an inherent flaw of perturbing a CONTINUOUS
+read position with a non-monotonic pattern, not fixable by retuning
+magnitudes. Direct user clarification: this project's "beat shuffle" is not
+swing/groove-offset at all, it means true retrigger/reorder — like
+`microrepeat.dsp`'s existing safe capture-and-replay glitch effect, which
+never has this failure mode because it only ever replays already-captured,
+already-valid audio.
+
+**Current design: one beat = one slice, 4-beat cycle, per-bitmask reorder
+tables.** Rather than perturbing the read position continuously,
+`kShuffleReorderTables[shuffleMaskNow]` (indexed directly 0-15 by the raw
+4-bit held-button bitmask, no per-button composition — see the table's own
+comment for why composing 4 base tables at runtime produced 3 real
+collisions among stutter/skip patterns) gives each of the 15 non-empty
+combinations its own hand-verified-distinct 4-entry sequence: `table[N]`
+says which of the loop's own 4 beat-positions' content should play during
+beat position `N` of the current 4-beat cycle. The applied offset is always
+a WHOLE number of beats (`(srcBeat - curBeat) * beatLenSamplesShared`),
+constant for the entire beat and only ever recomputed at beat boundaries —
+so within any beat, playback always reads forward through that beat's own
+already-recorded content, structurally eliminating the double-tap failure
+mode regardless of which beat gets remapped to which. Most patterns are
+pure permutations (every beat played exactly once, rearranged); several
+allow a repeat+skip for a stutter character, per direct spec. Button
+press/release changes `fx/shuffle/mask` (hence which table is active)
+instantly, matching the punch-in character of varispeed and microrepeat —
+no gain ramp anywhere in this path.
 
 **The shuffle clock is independent of any looper's own length.** `masterLen`
 is quantized to powers-of-2 of whatever the performer actually played (see
