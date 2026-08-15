@@ -53,7 +53,9 @@ letrec {
 
 sharedExciteIn(exciteIn) = exciteIn : fi.lowpass(2, tone);
 
-exciteFor(sharedIn, note, gate, vel) = sharedIn * (en.asr(0.02, 1.0, 0.3, xgate) * velGain(vel))
+exciteBandpass(freqHz, x) = x : fi.resonbp(freqHz, 2.0, 1.0);
+
+exciteFor(sharedIn, note, gate, vel) = exciteBandpass(ba.midikey2hz(note), sharedIn) * (en.asr(0.02, 1.0, 0.3, xgate) * velGain(vel))
 with {
     xgate = retriggerGate(note, gate);
 };

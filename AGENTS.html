@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=382c16dd8f4f967d9f043d7a1671c7376c67efbf">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f7514689133ba8cf797e6fcf5c6f0597a8309288">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -7348,6 +7348,85 @@ reconsidering `exciteFor`'s `en.asr(0.02, 1.0, 0.3, xgate)` sustain stage
 (currently 0.3, meaning a held note's exciter tail sits at only 30% of the
 live mic signal) — neither attempted this pass, both real, disclosed next
 steps rather than guessed-at further changes.
+
+## Resonode still sounded like tinted mic passthrough after the bandwidth-floor fix — the real leak was unfiltered broadband excitation, not the resonator itself
+
+WITNESSED by direct user report after the bandwidth-floor + tanh-ordering
+fix above shipped and was confirmed audible on real hardware: "spilling
+too much of the actual mic into the output and not modifying it enough,
+the different patches aren't differentiated enough (we can't find the
+dance bass) and it doesn't sound like resonode yet." This is a real,
+distinct problem from the earlier quietness bug — the signal was now
+audible, but still read as "filtered noise" rather than "a resonant
+object," and all 4 named patches sounded similar.
+
+**Root-caused via DawDreamer, not guessed.** First ruled out the two
+obvious suspects: (1) `resonode_synth.dsp`'s own `voice()` output is
+ENTIRELY `bank()` (the resonator) — there is no dry/exciter term summed in
+anywhere inside the file, confirmed by measuring near-zero input/output
+correlation (0.006) on a raw DSP render; (2) `effects_runtime.dsp`'s
+`preChain` crossfade (`(...)*(1-resonodeEngageGate) + resonodeIn*resonodeEngageGate`)
+is structurally correct and zeroes the dry/harmony term exactly at
+`resonodeEngageGate=1`. Neither is where the leak was.
+
+**The real cause: `bank()`'s 6 mode filters, while individually selective
+(~18dB rejection at 30% pitch offset, confirmed via impulse-response
+measurement), were fed completely UNFILTERED broadband excitation
+(`sharedExciteIn` only lowpasses at `tone`, ~6kHz default — no highpass,
+no bandpass tracking the actual played note).** Summed across 6
+simultaneously-resonant modes spanning a wide frequency spread (the
+fundamental plus 5 `stretchRatio`-scaled harmonics), broadband noise
+excites all of them at least partially at once, and the combined
+off-resonance leakage reads as "tinted noise" rather than "a clean pitched
+tone." Measured directly: only 71.5% of a held voice's output spectral
+energy sat within ±15% of its own target frequency — the remaining ~28%
+was broadband leakage riding through the sum.
+
+**Fix: bandpass the excitation to each voice's own note BEFORE it reaches
+the resonator**, not just constrain it in the resonator. `exciteBandpass
+(freqHz, x) = x : fi.resonbp(freqHz, 2.0, 1.0)` (Q=2, applied per-voice at
+`ba.midikey2hz(note)`) inserted into `exciteFor` right before the existing
+envelope gate. This concentrates the excitation's own limited energy where
+the resonator can actually use it, rather than wasting most of it on
+frequencies the resonator was going to reject anyway. Verified via
+DawDreamer: energy-in-band rose from 71.5% to 96.4% on the SAME broadband
+excitation, and — counterintuitively but consistent with "less energy
+wasted, not just filtered away" — measured output RMS actually INCREASED
+(0.031 -&gt; 0.055) rather than dropping, since the resonator itself still
+determines final gain; the bandpass just stops excitation energy that was
+never going to survive the mode filters from being computed and discarded
+in the first place.
+
+**Patch differentiation was a consequence of the same fix, not a separate
+change.** Re-measured all 4 shipped named patches under the new bandpass
+excitation at the shipped `outLevel=25` default: Percussive and Dance Bass
+(both `collision&gt;=0.3`) now read clearly LOUDER (RMS 0.11/0.14) than
+Metal/Glass and Strings (both `collision&lt;=0.15`, RMS 0.02/0.01) — a real,
+audible ~5-10x loudness spread between patches that did not exist before
+(pre-fix, all 4 patches were within a similar narrow, quiet range,
+explaining "can't find the dance bass" — it was there, just not
+distinguishable from the others). `collision`'s existing per-patch tuning
+(see "Resonode named sweetspot patches" above) was already the intended
+differentiator; it just couldn't express itself clearly while every
+patch's total signal was dominated by unfiltered broadband leakage rather
+than the resonator's own actual output.
+
+Verified safe across the full register (notes 28-100, broadband noise,
+peak 0.15-0.19, all finite, no regression vs the pre-bandpass numbers —
+actually louder throughout), a 4-voice Dance Bass chord (peak 0.83,
+finite, no clipping), and a voice-steal mid-ring scenario (peak 0.19, max
+sample-to-sample derivative 0.014, no runaway/click). Compiles cleanly via
+the box-compile path — a single new `fi.resonbp` call reusing the
+already-computed `note` signal, not a new UI primitive or cross-scope
+reference, so this carries none of the compile-time-cliff risk this file's
+own history warns about for structural changes near `freqDet`/tracker
+internals (this fix touches only the exciter, never the tracker or
+`octaveCorrect`/`jumpGuard` machinery from that unrelated investigation).
+
+`outLevel`'s default (`25.0`, from the prior fix) was re-verified rather
+than re-tuned — the bandpass fix increases output for a given level rather
+than decreasing it, so the existing default remains a safe, audible
+starting point; no further change needed there this pass.
 
 ## CC53 formant constants
 
