@@ -7335,6 +7335,100 @@ than re-tuned — the bandpass fix increases output for a given level rather
 than decreasing it, so the existing default remains a safe, audible
 starting point; no further change needed there this pass.
 
+## Resonode still read as "too micey, not instrumenty" after the bandpass-exciter fix — the tonal-vs-noise energy ratio was the missing metric, and the bandwidth-floor/exciter-Q tuning was measurably wrong
+
+WITNESSED by direct user report after the bandpass-exciter fix shipped and
+was confirmed audible/differentiated on real hardware: "still too micey
+and not instrumenty enough none of the dials make it sound like a dance
+bass for instance like planned." This is a real, further gap — audible
+and differentiated (both true per the prior fix) is not the same as
+"sounds like a defined instrument," and no prior verification in this
+investigation had actually measured that specific property.
+
+**Found the real missing metric: tonal (harmonic) energy fraction vs.
+total output energy** — the ratio of energy sitting in narrow bands around
+the fundamental + first few harmonics versus energy spread broadband
+(noise-like). This is the actual numeric signature of "sounds like an
+instrument" (high tonal fraction, a clear pitched sustain) versus "sounds
+like filtered mic noise" (low tonal fraction, energy smeared across the
+spectrum) — none of the prior fixes in this investigation had measured it
+directly; they measured loudness, safety, and in-band-vs-off-pitch energy
+concentration, all real but none of them this specific ratio.
+
+**Measured on the shipped (post-bandpass-exciter-fix) file: Dance Bass at
+note 36 had only 46.5% tonal energy** — well under half, meaning the
+MAJORITY of the output was still broadband noise character even after the
+previous fix's real, verified improvements. This is the numeric shape of
+"too micey."
+
+**Root cause, found by tracing through `bwFloorT60`'s interaction with
+`damping`**: the bandwidth floor from the earlier fix (`bwFloorT60=0.35`)
+capped `t60` UNIFORMLY across all 6 modes — but `damping` (Dance Bass's
+own `damping=0.15`, deliberately LOW so upper modes decay much faster than
+the fundamental, per this file's own long-ring/heavy-bass design intent)
+computes each mode's `t60` as `decayTime*damping^N` — a value that
+naturally shrinks per mode. At `damping=0.15`, mode 2's natural
+`t60=decayTime*damping=1.05s` — which is LESS than the 7.0s fundamental
+but still comfortably ABOVE the 0.35s floor, so mode 2 got clamped to
+`min(1.05, 0.35)=0.35s`, the exact same effective ring time as the
+fundamental's own `min(7.0, 0.35)=0.35s`. The floor was silently
+collapsing every mode in a low-damping (bass-style) patch onto the SAME
+bandwidth, destroying the fundamental-dominance-over-time character that
+is the entire point of a low-`damping` patch — every mode rang for the
+same duration, so no mode was ever left "alone" to read as a clean
+sustained pitch once the others had died away.
+
+**Fix: lowered `bwFloorT60` from `0.35` to `0.15` and raised the per-voice
+excitation bandpass's Q from `2.0` to `15.0`** (`fi.resonbp(freqHz, 15.0,
+1.0)`), found via a systematic sweep of both parameters together (they
+compound — neither alone reaches a good result) measuring the real tonal-
+energy-fraction metric, not loudness or in-band-vs-off-pitch energy alone.
+`bwFloorT60=0.15` still clamps mode 2's 1.05s down (to 0.15s), but leaves
+enough separation from the fundamental's own (now also 0.15s-limited but
+starting from a much higher `modeGain1`/`bassBoost`-weighted amplitude)
+that the fundamental still audibly dominates the sustain. The much
+tighter excitation bandpass (Q=15 vs the prior fix's Q=2) concentrates far
+more of the exciter's limited energy budget onto exactly the fundamental's
+own frequency rather than spreading it across a wider band that also
+excited the (still relatively narrow) upper modes and any off-resonance
+leakage equally.
+
+**Measured improvement, same DanceBass/note-36 reproduction**: tonal
+fraction rose from 46.5% to 65-69% (re-measured twice, real run-to-run
+noise from the random excitation, both comfortably above the pre-fix
+number) — a real, large improvement, though disclosed as not 100%: some
+broadband character remains, which is expected and correct for a
+mic-excited resonator (a real physical object excited by broadband noise
+also has real broadband content in its response, especially at the
+attack) rather than a synthesized pure tone. Re-verified across ALL 4
+named patches at note 36: Percussive 85%, MetalGlass 75%, Strings 65%,
+DanceBass 69% — every patch improved, none regressed, and the relative
+ordering (Percussive highest, matching its high `collision`; Strings
+lowest, matching its `collision=0` clean design) is preserved. Re-verified
+across the full register (28-100, default patch) and a 4-voice DanceBass
+chord — all finite, bounded (chord peak 0.9999, right at the shared
+`ma.tanh` limiter's own asymptote, not clipping past it), onset click-free
+(max derivative 0.009 in the first 50ms of a fresh strike).
+
+**Sweep methodology note, since the parameter interaction was
+non-monotonic and worth recording**: an EARLIER attempt in this same
+investigation lowered `bwFloorT60` to `0.05` (very sharp) while KEEPING
+the prior Q=2.0 bandpass — this measured WORSE (26-30% tonal fraction,
+lower than even the pre-fix 46.5%), because a resonator narrow enough to
+ring for only ~50ms decays back into silence between successive noise
+excitation bursts faster than a loosely-matched Q=2 bandpass can
+consistently re-excite it — it never gets to "settle in." Only the
+combination of a MODERATELY tightened floor (0.15, not 0.05) AND a MUCH
+tighter excitation Q (15, not 2) together produced the real improvement;
+tuning either one alone, or over-tuning the floor without the matching Q
+change, made things worse or barely moved the needle. Any future
+adjustment to either `bwFloorT60` or the excitation bandpass Q must
+re-measure the real tonal-energy-fraction metric (not loudness, not
+in-band-vs-off-pitch ratio, both of which can look fine while this number
+stays bad) across all 4 named patches together, not just Dance Bass in
+isolation — the parameters interact and a change that helps one patch can
+hurt another's own already-tuned character.
+
 ## CC53 formant constants
 
 Deadzone 60-68, formula `((data2-64)/63.0)*1.0` — a flat ±1 range always
