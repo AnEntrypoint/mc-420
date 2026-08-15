@@ -166,6 +166,8 @@ private:
     unsigned m_bankFlashReleaseAt = 0;
     FxBank m_bankFlashWhich = FxBank::Dub;
     static constexpr unsigned kBankFlashMs = 150;
+    bool m_dubShiftMode = false;
+    bool m_guitarShiftMode = false;
 
     bool m_granulatorHeld = false;
     bool m_granulatorLatched = false;

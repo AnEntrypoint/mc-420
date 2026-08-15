@@ -671,8 +671,7 @@ void ApcGrid::applyFormantCC(uint8_t data2, ParamStore& ps) {
     if (!m_liveEngaged && m_keysMode != KeysMode::MultiKey) return;
     const bool inDeadzone = (data2 >= 60 && data2 <= 68);
     if (inDeadzone) { ps.setByName("fx/formant", 0.0f); return; }
-    const float range = m_shift ? 3.0f : 1.0f;
-    float v = (((float)(int)data2 - 64.0f) / 63.0f) * range;
+    float v = (((float)(int)data2 - 64.0f) / 63.0f) * 1.0f;
     if (v > 3.0f) v = 3.0f; else if (v < -3.0f) v = -3.0f;
     ps.setByName("fx/formant", v);
 }
@@ -869,8 +868,8 @@ void ApcGrid::onFxKnobCC(int ccNumber, uint8_t data2, ParamStore& ps, Sampler* s
     }
     m_fxBankValues[(int)m_activeBank][knobIdx] = v;
     const FxKnobTarget* targets =
-        m_activeBank == FxBank::Dub ? (m_shift ? kDubShiftTargets : kDubTargets) :
-        m_activeBank == FxBank::Guitar ? (m_shift ? kGuitarShiftTargets : kGuitarTargets) : kLofiFxTargets;
+        m_activeBank == FxBank::Dub ? (m_dubShiftMode ? kDubShiftTargets : kDubTargets) :
+        m_activeBank == FxBank::Guitar ? (m_guitarShiftMode ? kGuitarShiftTargets : kGuitarTargets) : kLofiFxTargets;
     applyFxKnobTarget(targets[knobIdx], v, ps, sampler, homeFx);
 }
 
@@ -881,6 +880,7 @@ static unsigned nonZeroDeadline(unsigned now_ms, unsigned windowMs) {
 
 void ApcGrid::onDubFxPress(unsigned now_ms, ParamStore&) {
     m_activeBank = FxBank::Dub;
+    m_dubShiftMode = m_shift;
     m_bankFlashWhich = FxBank::Dub;
     m_bankFlashReleaseAt = nonZeroDeadline(now_ms, kBankFlashMs);
 }
@@ -916,6 +916,7 @@ void ApcGrid::onLofiFxRelease(unsigned, ParamStore&, Sampler*) {
 }
 void ApcGrid::onGuitarFxPress(unsigned now_ms, ParamStore&) {
     m_activeBank = FxBank::Guitar;
+    m_guitarShiftMode = m_shift;
     m_bankFlashWhich = FxBank::Guitar;
     m_bankFlashReleaseAt = nonZeroDeadline(now_ms, kBankFlashMs);
     m_guitarFxHeld = true;
