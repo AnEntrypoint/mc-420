@@ -189,26 +189,27 @@ static void setFlushToZero() {
 // bounded) rather than crossfading, so each combination produces a genuinely
 // different, still-hard pattern.
 //
-// f0: classic swing -- every 2nd 16th note (off-beats) delayed by a fixed amount.
-// f1: dotted/triplet feel -- 3-step grouping, the 3rd of each group pulled back.
-// f2: push/drag -- alternating ahead/behind on 8th-note pairs, sharper amount.
-// f3: broken/polymetric -- a 5-step-over-16 displacement, off-grid character.
+// f0: classic swing -- every 2nd 16th note (off-beats) delayed hard.
+// f1: dotted/triplet feel -- every 3rd step pulled back hard, others pushed
+//     slightly ahead so the whole pattern reads as an audible lopsided gallop.
+// f2: push/drag -- alternating ahead/behind on EVERY 16th note, sharpest amount.
+// f3: broken/polymetric -- a 5-step-over-16 displacement, every step moved.
 static constexpr float kShuffleStep0[16] = {
-    0,  6, 0,  6, 0,  6, 0,  6, 0,  6, 0,  6, 0,  6, 0,  6,
+    0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10,
 };
 static constexpr float kShuffleStep1[16] = {
-    0, 0, -4, 0, 0, -4, 0, 0, -4, 0, 0, -4, 0, 0, -4, 0,
+    3, 3, -9, 3, 3, -9, 3, 3, -9, 3, 3, -9, 3, 3, -9, 3,
 };
 static constexpr float kShuffleStep2[16] = {
-    5, -5, 5, -5, 5, -5, 5, -5, 5, -5, 5, -5, 5, -5, 5, -5,
+    9, -9, 9, -9, 9, -9, 9, -9, 9, -9, 9, -9, 9, -9, 9, -9,
 };
 static constexpr float kShuffleStep3[16] = {
-    0, 0, 0, 3, 0, 0, 3, 0, 0, 0, 3, 0, 0, 3, 0, 0,
+    -6, 2, 4, -8, 6, -6, 2, 4, -8, 6, -6, 2, 4, -8, 6, 0,
 };
 static constexpr const float* kShuffleStepTables[4] = {
     kShuffleStep0, kShuffleStep1, kShuffleStep2, kShuffleStep3,
 };
-static constexpr float kShuffleClampSteps = 8.0f;
+static constexpr float kShuffleClampSteps = 16.0f;
 
 static inline float shuffleOffsetSamples(float phaseNorm, const float gain[4], float stepLen) {
     int step = (int)(phaseNorm * 16.0f);
