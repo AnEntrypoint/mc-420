@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e8d9229559854d9cf4da3f5d73d0998d41571b65">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0d870439217b23fdcc7e408500f5c63da6d82e4a">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -5821,6 +5821,90 @@ multiple of a 4-beat cycle, so the shuffle uses its OWN free-running
 masterLen/recordedBeats` when a loop exists or a nominal half-second beat
 otherwise) rather than `masterPhaseSamples` — the offset it produces is
 ADDED on top of the real `masterPhaseSamples + i` ramp, never replacing it.
+
+## LofiFx bank must latch permanently on press, matching Dub/Guitar — the old hold-then-revert was the root cause of "granulator/bitcrusher controls don't lock"
+
+`onDubFxPress`/`onGuitarFxPress` latch `m_activeBank` and their own
+`m_{dub,guitar}ShiftMode` PERMANENTLY on press — the bank stays selected,
+and its knobs stay live, until a different FX button is pressed, matching
+"we select it and the knobs are usable" (direct user spec). `onLofiFxPress`/
+`onLofiFxRelease` did NOT follow this pattern: pressing LofiFx latched
+`m_activeBank = FxBank::LofiFx` only for the DURATION of the physical hold,
+then `onLofiFxRelease` unconditionally reverted `m_activeBank` back to
+`m_bankBeforeGranulatorHold` (whatever bank was active before LofiFx was
+touched) the instant the button came up. WITNESSED as "granulator controls
+don't engage when it's latched, making bitcrusher only adjustable during
+resonode" — turning a granulator-patch knob AFTER releasing the LofiFx
+button routed straight through whatever bank the surface had reverted to
+(usually Dub), not LofiFx's own knob table, so the granulator/bitcrusher
+appeared unresponsive except in the narrow window the button was physically
+held down.
+
+Fixed to the same permanent-latch shape as Dub/Guitar: `onLofiFxPress` sets
+`m_activeBank = FxBank::LofiFx` and `m_lofiShiftMode = m_shift` with no
+revert logic in `onLofiFxRelease` at all (it only clears the momentary
+`m_granulatorHeld` retrigger-guard, per "Real APC Key25 hardware re-sends
+note-on for an already-held pad" above). `m_bankBeforeGranulatorHold` is
+removed entirely — its only two consumers (`onLofiFxPress`/`onLofiFxRelease`
+themselves, and `onClearAll`'s Resonode-disengage path) never needed a
+restore target once bank selection stopped being tied to how long a button
+was physically held.
+
+**`m_lofiShiftMode` now also selects which of LofiFx's two knob pages is
+live**, mirroring `m_dubShiftMode`/`m_guitarShiftMode` exactly: plain
+LofiFx press (`m_lofiShiftMode=false`) is the granulator page (knob0
+`fx2/BITCRUSHAMT`, knobs1-6 the 6 named granulator-patch blend weights via
+`applyGranulatorMorph`); SHIFT+LofiFx press (`m_lofiShiftMode=true`) is the
+Resonode page (knob0 still bitcrusher, knobs1-4 the 4 named Resonode-patch
+blend weights via `applyResonodePatchMorph`, knobs5-6 Resonode's own direct
+tone/level dials via `applyResonodeDirectKnob`) — replacing the prior
+routing, which switched on LIVE `m_resonodeEngaged` rather than the latched
+shift-mode flag. SHIFT+press still ALSO toggles Resonode engage/disengage
+(`toggleResonodeEngage`, unchanged, an orthogonal one-shot action from which
+knob page is selected) and plain press still ALSO toggles the granulator
+latch — those two toggle actions and the page-select latch fire together on
+the same press, matching "every mode, and secondary mode of all 3 effects
+setups, must latch their knob controls... we select it and the knobs are
+usable."
+
+## Resonode's default output level was too quiet to be practically audible after the gain-normalization fix
+
+WITNESSED by direct user report: "resonode is way too soft making it mostly
+inaudible." This is the disclosed, known consequence of "Resonode's modal
+filter had no gain normalization" (above) — that fix correctly changed each
+mode filter from an unbounded, permanently-tanh-saturating gain (up to
+~55600x at long decay times) to a properly unity-normalized-at-resonance
+biquad, and its own writeup explicitly flagged "further loudness/patch
+balancing is a by-ear task on real hardware... not something to guess
+further" as an open item. Because each of the 6 per-voice mode filters is
+narrowband and normalized only at its own exact resonant frequency, and the
+mic excitation is a broadband/transient signal (not a pure tone locked to
+that frequency), only a slice of the excitation's energy actually couples
+into any one mode — correct, physically expected resonator behavior, but
+quiet in absolute terms once combined with `voiceGain=0.5` and the old
+`outLevel` default of `0.8`.
+
+Fixed by raising `fx/resonode/level`'s default from `0.8` to `3.5` (range
+widened `0.0..1.5` -&gt; `0.0..6.0` to give real headroom above the new
+default) in `resonode_synth.dsp`. Safe from clipping: `outLevel` multiplies
+AFTER the 4-voice sum has already passed through `ma.tanh` (bounded to
+±1.0), so peak output is bounded to `outLevel` itself (3.5 at default,
+6.0 at the knob's new ceiling) — well inside the existing int32 hard-clamp
+in `audio_thread.cpp`'s final write path, same headroom margin every other
+stage in this chain already relies on. `applyResonodeDirectKnob`'s
+`kResonodeDirectKnobRanges` level-knob range in `apc_grid.cpp` was updated
+to match (`0.5..6.0`, linear taper, unchanged from before). Verified via
+the local DawDreamer JIT compile check (`boxFromDSP`-equivalent
+`set_dsp_string`/`compile()`) — a pure hslider-default/range change, no new
+signal-graph shape, so this carries none of the real-CLI compile-time-cliff
+risk `multitranspose.dsp`/this file's own history warns about for
+structural changes. Real hardware confirmation of the new default's actual
+loudness balance against the rest of the mix is still a by-ear task for a
+future session, per this file's own standing "Real hardware over asking the
+user to reproduce input" discipline — `3.5` is a deliberate, disclosed
+starting point (roughly the makeup gain needed to bring a single
+mode-filter's typical narrowband coupling back up to the old
+before-normalization loudness ballpark), not a final tuned value.
 
 ## CC53 formant constants
 
