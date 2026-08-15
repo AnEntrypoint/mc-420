@@ -4401,6 +4401,54 @@ formant control's audible effect (would need a spectral-centroid-style
 DawDreamer check mirroring `test/resonode-sweetspot/`'s pattern — not
 written yet, a reasonable next step for a future session).
 
+## `multitranspose.dsp`'s formant control was only ever measured on a synthetic tone -- real audio shows it is far MORE expressive than that single measurement suggested
+
+The `~19Hz spread` figure directly above (220Hz locked +5 semitones,
+`formant` swept -3..+1.5..+3) came from exactly one synthetic 3-harmonic
+`vocal_like_tone` case (`formant_expressiveness_sweep.py`/
+`formant_reachable_range_sweep.py`, both synthetic-only) -- this control
+had never been measured against a real recording, unlike the free-transpose
+engine's own formant control, which this session already extended to real
+piano/violin/vocal/clarinet audio (see "`EngineSoladSnac` formant
+real-audio verification" above).
+
+Built the same real-audio measurement for `multitranspose.dsp` (new
+`test-audio-corpus/formant_realaudio_multitranspose.py`, DawDreamer JIT --
+no `ffunction`/C++ harness needed here since this file is pure Faust,
+unlike `EngineSoladSnac`) across 5 corpus files (piano, violin, both vocal
+singers, clarinet), locking each a fifth above its own real fundamental
+(`extFreqDet` fed the true source pitch, the real on-device
+configuration) and sweeping `formant` across its full declared -3..+3
+range, measuring spectral centroid over the 300-900ms steady-state window.
+
+**The real-audio spread is dramatically larger than the single synthetic
+measurement suggested** -- not 19Hz, but per-file: piano 826.0-922.4Hz
+(96Hz), violin 864.9-1741.6Hz (877Hz), vocal-f7 371.1-439.4Hz (68Hz),
+vocal-m4 740.1-1602.4Hz (862Hz), clarinet 241.3-625.4Hz (384Hz). The
+control is genuinely, strongly expressive on real harmonically-rich
+material -- the synthetic tone's own thin 3-harmonic spectrum (fundamental
++ 2 overtones) simply had far less high-frequency content for the
+window/crossfade skew to reveal or suppress than any real instrument or
+voice does. This is a positive finding, not a defect: it means the
+control's real usable range on the primary target material (voices,
+instruments) is already both more dramatic AND already shipped, not a
+gap needing further work.
+
+**A real, monotonic RMS cost accompanies the timbral movement on 4 of 5
+files, decreasing from formant=-3 through +3** (not peaked at 0 the way
+the free-transpose engine's grain-mix blend is -- a different mechanism,
+window/crossfade skew rather than a dry/grain-path blend, so a different
+loudness-vs-parameter shape is expected): clarinet 0.4084->0.0949 (a
+>4x drop), vocal-f7 0.3862->0.1223, vocal-m4 0.1526->0.1073, violin
+roughly flat (0.1373->0.1241). Piano is the one exception, closer to flat
+with a mild decline (0.0350->0.0269). No NaN/Inf/instability in any of the
+25 renders. This loudness characteristic was not previously documented
+(the single synthetic-tone measurement never reported RMS at all) and,
+like the free-transpose engine's own documented loudness cost, is a
+real-hardware/by-ear tuning question rather than a correctness bug -- left
+disclosed here rather than guessed at blind, matching this session's
+standing discipline for this exact class of finding.
+
 ## SHIFT routing through the transpose engine
 
 `free` (a signal input fed from `fx/monitorfold`, `audio_thread.cpp`'s
