@@ -671,7 +671,7 @@ void ApcGrid::applyFormantCC(uint8_t data2, ParamStore& ps) {
     if (!m_liveEngaged && m_keysMode != KeysMode::MultiKey) return;
     const bool inDeadzone = (data2 >= 60 && data2 <= 68);
     if (inDeadzone) { ps.setByName("fx/formant", 0.0f); return; }
-    float v = (((float)(int)data2 - 64.0f) / 63.0f) * 1.0f;
+    float v = (((float)(int)data2 - 64.0f) / 63.0f) * 1.5f;
     if (v > 3.0f) v = 3.0f; else if (v < -3.0f) v = -3.0f;
     ps.setByName("fx/formant", v);
 }

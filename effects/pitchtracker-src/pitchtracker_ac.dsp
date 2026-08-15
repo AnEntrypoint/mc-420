@@ -137,7 +137,8 @@ with {
 
 holdLastGood(freqHz, gate) = out
 with {
-    heldStep(prev) = ba.if(gate, freqHz, prev);
+    fallingEdge = (gate:mem) * (1.0 - gate);
+    heldStep(prev) = ba.if(gate, freqHz, ba.if(fallingEdge > 0.5, 0.0, prev));
     out = heldStep ~ _;
 };
 
