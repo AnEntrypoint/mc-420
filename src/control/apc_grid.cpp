@@ -519,7 +519,6 @@ void ApcGrid::onClearAll(bool held, ParamStore& ps, LinkBridge* link) {
         m_resonodeLatched = false;
         m_resonodeEngaged = false;
         ps.setByName("fx/resonode/engaged", 0.0f);
-        if (!m_granulatorHeld) m_activeBank = m_bankBeforeGranulatorHold;
     }
     publishTransport(link);
 }
@@ -755,7 +754,7 @@ struct ResonodeDirectKnobRange { const char* zone; float lo; float hi; bool logT
 constexpr int kResonodeDirectKnobCount = 2;
 static const ResonodeDirectKnobRange kResonodeDirectKnobRanges[kResonodeDirectKnobCount] = {
     { "fx/resonode/tone",  200.0f, 18000.0f, true },
-    { "fx/resonode/level", 0.0f, 1.5f, false },
+    { "fx/resonode/level", 0.5f, 6.0f, false },
 };
 static void applyResonodeDirectKnob(int knobIdx, float v01, ParamStore& ps) {
     int i = knobIdx - 1 - kResonodePatchCount;
@@ -858,7 +857,7 @@ void ApcGrid::onFxKnobCC(int ccNumber, uint8_t data2, ParamStore& ps, Sampler* s
         if (m_lofiFxKnobTouched[knobIdx] && m_fxBankValues[(int)m_activeBank][knobIdx] == v) return;
         m_lofiFxKnobTouched[knobIdx] = true;
         m_fxBankValues[(int)m_activeBank][knobIdx] = v;
-        if (m_resonodeEngaged) {
+        if (m_lofiShiftMode) {
             if (knobIdx <= kResonodePatchCount) applyResonodePatchMorph(ps);
             else applyResonodeDirectKnob(knobIdx, v, ps);
         } else {
@@ -898,8 +897,8 @@ void ApcGrid::toggleResonodeEngage(ParamStore& ps, AudioThread* audio) {
 
 void ApcGrid::onLofiFxPress(unsigned now_ms, ParamStore& ps, Sampler* sampler, AudioThread* audio) {
     if (m_granulatorHeld) return;
-    if (!m_resonodeEngaged) m_bankBeforeGranulatorHold = m_activeBank;
     m_activeBank = FxBank::LofiFx;
+    m_lofiShiftMode = m_shift;
     m_bankFlashWhich = FxBank::LofiFx;
     m_bankFlashReleaseAt = nonZeroDeadline(now_ms, kBankFlashMs);
     m_granulatorHeld = true;
@@ -912,7 +911,6 @@ void ApcGrid::onLofiFxPress(unsigned now_ms, ParamStore& ps, Sampler* sampler, A
 }
 void ApcGrid::onLofiFxRelease(unsigned, ParamStore&, Sampler*) {
     m_granulatorHeld = false;
-    if (!m_resonodeEngaged) m_activeBank = m_bankBeforeGranulatorHold;
 }
 void ApcGrid::onGuitarFxPress(unsigned now_ms, ParamStore&) {
     m_activeBank = FxBank::Guitar;

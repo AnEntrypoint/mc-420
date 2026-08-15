@@ -18,7 +18,7 @@ decayTime = hslider("fx/resonode/decay", 1.2, 0.05, 8.0, 0.001) : morphGlide;
 damping   = hslider("fx/resonode/damping", 0.85, 0.05, 1.0, 0.001) : morphGlide;
 stretch   = hslider("fx/resonode/stretch", 0.0, -0.5, 1.5, 0.001) : morphGlide;
 collision = hslider("fx/resonode/collision", 0.0, 0.0, 1.0, 0.001) : morphGlide;
-outLevel  = hslider("fx/resonode/level", 0.8, 0.0, 1.5, 0.001) : morphGlide;
+outLevel  = hslider("fx/resonode/level", 3.5, 0.0, 6.0, 0.001) : morphGlide;
 
 note0 = hslider("fx/resonodevoice0/note", -1.0, -1.0, 127.0, 1.0);
 gate0 = hslider("fx/resonodevoice0/gate", 0.0, 0.0, 1.0, 1.0);

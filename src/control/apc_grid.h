@@ -168,10 +168,10 @@ private:
     static constexpr unsigned kBankFlashMs = 150;
     bool m_dubShiftMode = false;
     bool m_guitarShiftMode = false;
+    bool m_lofiShiftMode = false;
 
     bool m_granulatorHeld = false;
     bool m_granulatorLatched = false;
-    FxBank m_bankBeforeGranulatorHold = FxBank::Dub;
     void applyGranulatorMorph(Sampler* sampler);
 
     bool m_resonodeEngaged = false;
