@@ -256,7 +256,7 @@ private:
     static constexpr float kReengageSeedPeriod = 600.0f;
     static constexpr float kFormantGlideInvSamples = 1.0f / 480.0f;
     static constexpr float kFormantDeadbandSetter = 0.35f;
-    static constexpr float kFormantDeadbandBlock = 0.27f;
+    static constexpr float kFormantDeadbandBlock = 0.04f;
     static constexpr float kFormantMixCap = 0.6f;
     static constexpr float kSpliceCooldownFrac = 0.9f;
 

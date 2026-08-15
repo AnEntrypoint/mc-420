@@ -96,10 +96,27 @@ with {
     refinedFreq = ma.SR / max(1.0, refinedLag);
 };
 
-detectedFreq(x) = refineFreq(xh, coarse)
+subharmDominanceMargin = 0.03;
+
+subharmonicPromote(x, coarseFreq) = promoted
+with {
+    cCoarse = corrAtLagVar(x, int(ma.SR / coarseFreq));
+    freq2 = coarseFreq * 2.0;
+    freq3 = coarseFreq * 3.0;
+    c2 = corrAtLagVar(x, int(ma.SR / freq2));
+    c3 = corrAtLagVar(x, int(ma.SR / freq3));
+    reachable2 = freq2 <= maxTrackHz;
+    reachable3 = freq3 <= maxTrackHz;
+    dominant3 = reachable3 & (c3 >= corrThresh) & (c3 > cCoarse + subharmDominanceMargin) & (c3 >= c2);
+    dominant2 = reachable2 & (c2 >= corrThresh) & (c2 > cCoarse + subharmDominanceMargin);
+    promoted = ba.if(dominant3, freq3, ba.if(dominant2, freq2, coarseFreq));
+};
+
+detectedFreq(x) = refineFreq(xh, corrected)
 with {
     xh = xHp(x);
     coarse = pickFundamental(xh);
+    corrected = subharmonicPromote(xh, coarse);
 };
 
 onsetHoldMs = 35.0;
