@@ -5675,39 +5675,40 @@ the generic `onPadPress`/`onPadRelease` dispatch and routes them to
 rule above). No LED behavior changed — the existing beat-flash colors are
 untouched; the buttons are audio-only feedback, like SHIFT-fold.
 
-**The offset math lives entirely in C++** (`audio_thread.cpp`, new static
-helpers `shuffleF0Raw..shuffleF3Raw`/`shuffleOffsetSamples` right before
-`worker()`), added directly into the existing `masterPhaseBuf` per-sample fill
-loop — deliberately NOT a Faust change, both to avoid any risk of
+**The offset math lives entirely in C++** (`audio_thread.cpp`, static helpers
+`kShuffleStep0..kShuffleStep3`/`shuffleOffsetSamples` right before `worker()`),
+added directly into the existing `masterPhaseBuf` per-sample fill loop —
+deliberately NOT a Faust change, both to avoid any risk of
 `multitranspose.dsp`'s compile-time wall (see above) and because
 `masterPhaseBuf` is already filled per-sample in C++ and Faust already treats
 it as an opaque external read-position input (`dsp/loop.dsp`'s own
 "`masterPhaseBuf` must ramp per-sample within the block" rule, unaffected —
 the shuffle is one more per-sample computation feeding the same buffer, still
-a real ramp, never a block-constant fill).
+updated per-sample, never a block-constant fill).
 
-**Design** (numerically verified by a dedicated agent, both in pure Python
-math and via DawDreamer against the real `dsp/loop.dsp`, before being
-transcribed to C++ — see the git history for the full verification report):
-4 base offset functions (`f0`: classic swing, `f1`: dotted/triplet shuffle,
-`f2`: push/drag, `f3`: broken/polymetric), each a pure sum of integer-harmonic
-`sin()` terms over a shared 4-beat cycle — this makes periodicity, C∞
-smoothness at the cycle wrap, and exact zero time-average all hold by
-construction (still verified numerically to float64 noise floor, not just
-asserted). Each is normalized to a peak of exactly `kShuffleAmpFrac
-(0.12) * stepLen` (`stepLen` = 1/16 of the 4-beat cycle, i.e. one 16th-note).
-Held buttons contribute via a per-button smoothed gain (`shuffleGain[4]`,
-ramped over ~32ms on press/release, `kShuffleGainStep = 1/24` per block —
-same shape as `kFoldStep`'s existing ramp), summed, then clamped to
-`kShuffleClampFrac (0.20) * stepLen` so no combination of held buttons can
-ever exceed a bounded excursion regardless of how many are held. Clamping a
-sum of zero-mean sinusoids reintroduces a small nonzero DC per combination
-(verified worst case ~0.9% of the clamp bound) — `kShuffleDcCorrection[16]`,
-one constant per bitmask, subtracts it back out before the final clamp, so
-every one of the 15 non-empty combinations is independently verified
-zero-mean AND pairwise-distinct (minimum pairwise difference 0.118*stepLen
-across the full cycle — no two combos are audibly degenerate copies of each
-other).
+**Redesigned from a smooth continuous perturbation to a hard-jump, 16-step
+groovebox-style shuffle** — the original design (4 sine-sum waveforms,
+crossfaded in/out over ~32ms, summed and soft-clamped) was WITNESSED live as
+an unwanted continuous "wobble," directly contradicting the intended
+character: real groovebox/505-style shuffle is an INSTANT step-function jump
+in playback position at each 16th-note boundary, with the exact same
+punch-in character as varispeed and the microrepeat glitch effect, never a
+ramp. Each of the 4 buttons now selects a distinct fixed 16-entry step table
+(`kShuffleStep0`: classic swing, delays every 2nd 16th note; `kShuffleStep1`:
+dotted/triplet feel, pulls back the 3rd step of each 3-step group;
+`kShuffleStep2`: push/drag, alternating ahead/behind on 8th-note pairs;
+`kShuffleStep3`: broken/polymetric, a 5-step-over-16 displacement), each
+entry a fixed offset in units of `stepLen/16` (one 16th-note's worth of
+samples divided into 16 sub-steps, giving ~20-60ms of real swing at typical
+tempos). `shuffleOffsetSamples` looks up the CURRENT 16th-note step from
+`phaseNorm` and sums the step values of every currently-held button
+(`shuffleGain[b] > 0.0f`, already an instant 0/1 snap per the button-fade fix
+above, not a partial blend) — the result changes ONLY at step boundaries and
+is applied with zero interpolation, clamped to `±kShuffleClampSteps` (8) to
+bound worst-case combined excursion. Verified numerically: all 15 non-empty
+button combinations produce genuinely distinct 16-step patterns (no two
+combinations collapse to the same table), and the clamp bound holds exactly
+at the worst case tested.
 
 **The shuffle clock is independent of any looper's own length.** `masterLen`
 is quantized to powers-of-2 of whatever the performer actually played (see
@@ -5717,25 +5718,16 @@ multiple of a 4-beat cycle, so the shuffle uses its OWN free-running
 `fourBeatLenShared = 4 * beatLenSamplesShared`, `beatLenSamplesShared =
 masterLen/recordedBeats` when a loop exists or a nominal half-second beat
 otherwise) rather than `masterPhaseSamples` — the offset it produces is
-ADDED on top of the real `masterPhaseSamples + i` ramp, never replacing it,
-so the shuffle is a bounded, periodic perturbation of the canonical clock,
-not a new source of long-term drift (average speed over one full 4-beat
-cycle is exactly 1.0 by the zero-mean property above).
+ADDED on top of the real `masterPhaseSamples + i` ramp, never replacing it.
 
-**Disclosed, verified characteristic, not a defect**: combinations including
-`f2` (push/drag) plus at least one other pattern can locally exceed a
-derivative magnitude of 1.0 (up to ~1.45x at all-four-held) — meaning the
-read position can briefly move backward by up to a few hundred samples
-during the most aggressive combos. This is smooth and click-free (verified,
-not just asserted) and is a deliberate, disclosed consequence of stacking the
-steepest harmonic pattern at full amplitude — consistent with "broken/glitch"
-being one of the 4 base characters, not a bug. The other 8 masks (every
-combo not containing `f2`, plus `f2` alone) never reverse.
+## CC53 formant constants
 
-## CC53 formant constants (must match `../looper` exactly)
-
-Deadzone 60-68, range ±1 unshifted / ±3 shifted, formula
-`((data2-64)/63.0)*range`. (Not 62-65, not ±1.5, not `/63.5`.)
+Deadzone 60-68, formula `((data2-64)/63.0)*1.0` — a flat ±1 range always
+(previously ±1 unshifted / ±3 shifted; the shift-dependent widening was
+removed per direct user direction that a bare SHIFT press must never change
+a knob's behavior — SHIFT alone is reserved exclusively for the native
+fold/resample gesture, see "SHIFT (`fx/monitorfold`) native fold mechanism"
+above).
 
 ---
 
