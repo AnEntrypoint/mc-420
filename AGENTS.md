@@ -7422,6 +7422,130 @@ fresh `python3 free_transpose_measure.py` /
 `python3 real_audio_cross_verify.py` run against the files as committed
 this session, not fabricated or carried over from an earlier draft.
 
+## `EngineSoladSnac`'s `MIN_PERIOD=48` ceiling: raising it measured and rejected; the `xpose`/splice-quality-above-700Hz concern does NOT transfer to this engine
+
+A follow-up session picked up the two concrete next steps this file's own
+"Fundamental-tracking accuracy campaign: closing assessment" section names —
+`MIN_PERIOD=48` (1000Hz tracking ceiling) and `xpose`/PSOLA
+crossfade-splice quality above ~700Hz — specifically for
+`soladSnacOctaver.h`/`EngineSoladSnac`, `multitranspose.dsp` staying
+explicitly out of scope throughout (a separate session's own compile-time-
+cliff investigation). Recreated the (at the time, not-yet-committed)
+`test-audio-corpus/free_transpose_harness.cpp` standalone-C++ pattern in
+scratchpad, and sourced 7 real, personally-license-verified (CC0,
+Freesound.org) recordings spanning 196–3130Hz (bassoon, flute x2,
+clarinet, oboe, violin, piccolo) — each file's TRUE fundamental was
+independently FFT-measured, not trusted from its filename, per this
+file's own "never trust the filename" discipline; this caught two real
+mislabelings (a "piccolo F#6" file whose true dominant frequency measured
+~3130Hz, not ~1480Hz; a "bassoon F#3" file measuring 196Hz/G3, not F#3).
+
+**`MIN_PERIOD=32` was chosen to exactly match `GrainFormant::setInputPeriod`'s
+own hard `[32.0, 2048.0]` clamp floor** — a real, load-bearing structural
+constraint checked before picking any candidate value. Lowering
+`MIN_PERIOD` from 48 to 32 genuinely raises the SNAC tracker's ceiling:
+content previously forced onto a subharmonic (flute_E6 at 1318.5Hz, oboe_Fs6
+at 1396.9Hz — both previously locked at exactly 2x their true period,
+matching this file's own already-documented "MIN_PERIOD=48... cannot ever
+have its true period tracked" finding) now correctly locks the true,
+short period.
+
+**But real wet-output pitch accuracy got WORSE, not better, once measured
+against real recorded audio — the fix was rejected.** flute_E6's mean
+steady-state error went from +14.0 cents (baseline, stable-but-wrong
+subharmonic lock) to -32.1 cents (MIN_PERIOD=32, correctly-tracked
+fundamental) — independently confirmed via a second, FFT-based measurement
+to rule out a measurement-tool artifact before trusting it; oboe_Fs6
+similarly worsened (+20.9c to -22.5c). Root-caused via direct period-trace
+inspection: the newly-reachable SHORT period estimates genuinely OSCILLATE
+between adjacent SNAC candidate values (e.g. 35<->38) across successive
+~43ms sweeps, where the old subharmonic lock was rock-stable — and since
+resplice jump distance is `n*per`, a JITTERING `per` injects real phase
+error into the splice cadence that a stable-but-"wrong" subharmonic lock
+never did (any exact, stable multiple of the true period is itself
+periodic and phase-coherent; a jittering one is not).
+
+**A targeted fix — EMA-smoothing the period value used ONLY for
+resplice-cadence sizing (`m_splicePeriodF`, ~150ms tau, deliberately
+leaving `GrainFormant::setInputPeriod`'s own raw-value read untouched to
+keep the change narrowly scoped) — was tried and also rejected.** It
+genuinely reduced steady-state variance (flute_E6 std: 39.2c->19.0c;
+oboe_Fs6: 53.5c->39.2c) but WORSENED mean bias further (flute_E6:
+-32.1c->-44.7c; oboe_Fs6: -22.5c->-30.4c) and introduced larger worst-case
+onset-transient spikes — an EMA can produce an interpolated period value
+(e.g. ~36.5) that corresponds to NEITHER real SNAC candidate, plausibly
+worse than consistently picking either raw value. Both changes (the
+`MIN_PERIOD` lowering and the smoothing) were fully reverted, confirmed
+byte-identical to the committed baseline via `git diff --stat` (empty
+output) before moving on — neither is shippable as measured, matching
+this file's own repeatedly-learned lesson that blind tracker-lock fixes
+tend to regress worse than the bug they target. A genuinely different
+direction (not attempted — a hysteresis/streak-vote requirement before
+accepting a new short-period candidate, rather than a continuous EMA,
+mirroring `pickFundamental`'s own `isPeak` local-max-vote spirit
+elsewhere in this codebase) is disclosed here for a future session, per
+this same standing discipline that any such attempt needs the identical
+broad real-audio + note-change-regression battery before being trusted.
+
+**The `xpose`/crossfade-splice-quality-above-~700Hz concern, already
+documented for `multitranspose.dsp`'s own (structurally DIFFERENT)
+`xpose()` shifter, does NOT reproduce for `EngineSoladSnac`'s own splice
+mechanism — a genuine, verified null result, not an unexamined
+assumption.** Measured via a clean synthetic-sine sweep (100–5000Hz, pure
+tones — deliberately NOT real instrument recordings, whose own natural
+harmonic richness confounds a spectral-purity measurement and was
+independently confirmed to do so: real-corpus purity numbers vary wildly
+and non-monotonically with source frequency, e.g. flute_E6 at 1318Hz
+measuring 0.997 while bassoon at 196Hz measures only 0.774, tracking
+instrument timbre, not splice quality) at `scale=0.5`, measuring
+spectral-purity (fundamental-band energy / total energy) and per-splice
+phase error (`splicePhaseErrNow()`, an existing, already-instrumented
+accessor). Result: purity stays 0.99–1.00 (0–1% THD) at EVERY tested
+frequency up to 5000Hz, with no monotonic or threshold-like degradation
+near 700Hz or anywhere else; measured phase error at the splice instant
+is EXACTLY 0.00% of period at every frequency tested, confirming the
+existing value/slope-matched integer-period-multiple search
+(`triggerSpliceByPeriod`) is doing its job correctly across the whole
+range. Sweeping the crossfade-length tunable itself
+(`setXfadeScale`, 0.25x-4.0x, already a public, real, unshipped-default
+knob) produced IDENTICAL purity at every setting — confirming crossfade
+LENGTH is not a live lever here, because there is no real quality problem
+for it to fix. A `scale=1.0` zero-splice control (drift never triggers a
+resplice at unity scale, confirmed `spliceCount=0` at every frequency)
+independently proves the readSinc/continuous-reader path alone is
+bit-exact-perfect (purity 1.0000, THD 0.0000) at any tested frequency —
+isolating that the ALREADY-CLEAN splice mechanism, not the interpolation
+kernel, is responsible for `EngineSoladSnac`'s real-world accuracy, and
+that neither stage needs a fix. This engine's own splice/crossfade design
+(value+slope-matched integer-period-multiple positioning, linear
+equal-gain crossfade — see "the solad+McLeod-SNAC pitch shifter"
+architecture entry above) is a different algorithm from
+`multitranspose.dsp`'s phase-accumulator/fmod-modulo `xpose()` delay-line
+read, and this session's real measurement shows their failure/quality
+profiles genuinely do not transfer between them — "both engines share
+this property structurally" (as an earlier closing-assessment entry
+phrased it) is corrected here: verified true for the tracking-ceiling
+limitation, verified NOT true for the >700Hz splice-quality concern,
+specifically for `EngineSoladSnac`.
+
+**A real, worth-recording measurement-tooling lesson from this session's
+own process**: a scratchpad C++ harness binary left un-recompiled after
+reverting a header edit produced dramatically WRONG purity numbers (0.85–
+0.96, appearing to show a real ~700Hz-onset degradation) that were only
+caught because a SECOND, independently-compiled harness (built fresh,
+after the revert, to test an unrelated `setXfadeScale` hypothesis)
+produced conflicting results on the same nominal configuration. Root
+cause confirmed via `filecmp`: the stale and fresh binaries' rendered
+`.wet.f32` output for an identical scenario differed with a max absolute
+sample difference over 1.0 on a 0.5-peak-normalized signal — genuinely
+different DSP behavior, not measurement noise. Any future session using
+this file's own standing "standalone C++ harness against the real header"
+convention must recompile EVERY harness binary immediately after ANY edit
+to the header under test — including a revert back to baseline — before
+trusting a fresh measurement; a binary silently left stale is
+indistinguishable from a correct one until its output is cross-checked
+against something else.
+
 ---
 
 # Storage: continuous USB-drive ring recording
