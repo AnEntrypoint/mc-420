@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0d870439217b23fdcc7e408500f5c63da6d82e4a">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=2df5dbe26d408bd65133a9c6032fcc4f8f0604dc">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -5905,6 +5905,100 @@ user to reproduce input" discipline — `3.5` is a deliberate, disclosed
 starting point (roughly the makeup gain needed to bring a single
 mode-filter's typical narrowband coupling back up to the old
 before-normalization loudness ballpark), not a final tuned value.
+
+## Resonode's real quietness root cause: sub-2Hz modal bandwidth plus a tanh-before-gain ordering bug — the earlier level-default bump was necessary but nowhere near sufficient
+
+WITNESSED live, after the `outLevel` 0.8-&gt;3.5 bump above shipped and the
+device was tested by ear with genuine mic input (tapping/talking near the
+mic while holding a key, not silence): "not really sounding like object
+hard to get any sound from it." The level bump alone was real but far too
+small — investigation via DawDreamer found TWO compounding root causes,
+neither previously identified:
+
+**1. `modeR(t60) = pow(0.001, 1.0/(t60*ma.SR))` has no bandwidth floor.**
+At the shipped default `decayTime=1.2s`, mode 1's resonance bandwidth
+(`SR*(1-r)/pi`) is only **~1.8Hz**; at the "sustained" named patches'
+`decay=7.0s` (Metal/Glass, Strings, Dance Bass), it collapses to **~0.3Hz**.
+A resonator this narrow only responds strongly to excitation whose energy
+sits within that sliver — a locked, exact-frequency sine. Real excitation
+(a tap, a voice, room noise) is never that precisely tuned, so the
+resonator was structurally starved by design, not merely under-amplified.
+Measured via DawDreamer (a synthetic voice-like excitation — fundamental +
+2 harmonics + noise — held for 2s against a single voice at note 60): RMS
+output for excitation matched EXACTLY to the resonant frequency was 100x+
+louder than the SAME excitation shifted +30% off-pitch (0.049 vs 0.0005) —
+a gap no amount of flat output gain can close, since it scales both cases
+identically.
+
+**2. `ma.tanh` was applied BEFORE `outLevel`, not after — so raising
+`outLevel` bypassed the only safety limiter in the chain instead of driving
+it.** `process()` was `(...) : ma.tanh : *(outLevel)` — the 4-voice sum is
+bounded to ±1 by `ma.tanh` and THEN scaled by `outLevel`, so a large
+`outLevel` (needed to make a starved narrowband resonator audible) produces
+literal, uncapped clipping risk (peak 1.51 measured at `outLevel=8` on a
+4-note off-pitch chord) rather than graceful saturation. This is why the
+first fix (raising the default to 3.5, still pre-this-fix ordering) could
+never have been pushed further without real clipping risk, even though the
+underlying bandwidth problem alone needed a much larger number to fix.
+
+**Fix, both parts, verified together via DawDreamer**:
+
+- `bwFloorT60 = 0.35` caps the T60 fed into `modeR` (`min(t60, bwFloorT60)`)
+  — bounds every mode's minimum bandwidth to ~3.7Hz regardless of the
+  `decay` knob's own 0.05-8.0s range. This trades away the most extreme
+  tail of "very long, very narrow ring" character (the shipped Metal/Glass/
+  Strings patches' `decay=7.0` no longer produces a near-DC-tone,
+  can't-hear-it-unless-you-hit-it-exactly resonance) for a resonator that
+  responds to realistic, imperfectly-pitched excitation the way a real
+  physical object does. `decay` still controls audible sustain/ring-out
+  length above this floor — only the FLOOR moved, not the whole range.
+- `process()` reordered to `(...) : *(outLevel) : ma.tanh` — `outLevel` now
+  drives INTO the limiter rather than scaling past it, so raising it
+  produces graceful saturation (a real, intentional drive/character
+  control) instead of unbounded peaks.
+- `outLevel`'s default raised from `0.8` (pre-first-fix) all the way to
+  `25.0` (range widened `0.0..1.5` -&gt; `0.0..60.0`), re-derived from the
+  REALISTIC off-pitch-excitation case, not the unrealistically-favorable
+  on-pitch case the first fix's `3.5` was accidentally validated against.
+  Verified via DawDreamer sweep: `level=25` gives a single off-pitch voice
+  RMS 0.078/peak 0.168 (clearly audible, ~90x louder than the original
+  pre-either-fix 0.00085), an on-pitch single voice never exceeds
+  peak 0.997 (tanh's own asymptote, no hard digital clipping), and a
+  4-note off-pitch chord holds at RMS 0.47/peak 0.77 (loud, controlled, no
+  clipping). Re-verified across all 4 shipped named patches (Percussive/
+  Metal-Glass/Strings/Dance Bass) under the same off-pitch-tap
+  reproduction: all finite, all clearly audible (peak 0.10-0.70,
+  Metal-Glass/Strings intentionally quieter since their own `collision`
+  stays near 0 for a cleaner character), and across the note range
+  28-100 under broadband-noise excitation alone (peak 0.086-0.126,
+  finite, no clipping at any tested register).
+- `applyResonodeDirectKnob`'s `kResonodeDirectKnobRanges` level-knob range
+  in `apc_grid.cpp` updated to match (`2.0..60.0`) and switched to
+  `logTaper=true` — the range now spans 30x, so a linear taper would
+  compress nearly every useful setting into a sliver of the knob, the
+  exact failure shape "Resonode's `tone` knob needs a logarithmic taper"
+  above already documents and fixed for a different control on this same
+  file. `bindAll`'s initial bound value for `fx/resonode/level` updated to
+  `25.0` to match the new Faust-side default.
+
+**Honestly disclosed, not fully closed**: even with both fixes, an
+off-pitch excitation is still measurably quieter than an on-pitch one (by
+design — that asymmetry is what makes it read as a TUNED resonator rather
+than a flat filter, the actual "sounds like an object" character being
+asked for) — `collision` (tested separately, still at its own per-patch
+default) adds real broadband grit/audibility on top of both fixes (~7x
+RMS increase off-pitch at `collision=1.0` vs `0.0`) but was deliberately
+NOT changed as a global default, since each named patch already hand-tunes
+its own `collision` value (see "Resonode named sweetspot patches" above)
+and a blanket default change would silently drift every patch's own
+already-measured character. If real hardware listening still finds it
+under-excited by realistic playing (as opposed to synthetic DawDreamer
+excitation), the next lever is raising `bwFloorT60`'s target bandwidth
+further (a genuine sustain-vs-excitability tradeoff, not a free lunch) or
+reconsidering `exciteFor`'s `en.asr(0.02, 1.0, 0.3, xgate)` sustain stage
+(currently 0.3, meaning a held note's exciter tail sits at only 30% of the
+live mic signal) — neither attempted this pass, both real, disclosed next
+steps rather than guessed-at further changes.
 
 ## CC53 formant constants
 

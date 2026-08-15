@@ -18,7 +18,7 @@ decayTime = hslider("fx/resonode/decay", 1.2, 0.05, 8.0, 0.001) : morphGlide;
 damping   = hslider("fx/resonode/damping", 0.85, 0.05, 1.0, 0.001) : morphGlide;
 stretch   = hslider("fx/resonode/stretch", 0.0, -0.5, 1.5, 0.001) : morphGlide;
 collision = hslider("fx/resonode/collision", 0.0, 0.0, 1.0, 0.001) : morphGlide;
-outLevel  = hslider("fx/resonode/level", 3.5, 0.0, 6.0, 0.001) : morphGlide;
+outLevel  = hslider("fx/resonode/level", 25.0, 0.0, 60.0, 0.001) : morphGlide;
 
 note0 = hslider("fx/resonodevoice0/note", -1.0, -1.0, 127.0, 1.0);
 gate0 = hslider("fx/resonodevoice0/gate", 0.0, 0.0, 1.0, 1.0);
@@ -93,7 +93,8 @@ dampCube = dampSq*damping;
 dampQuad = dampCube*damping;
 dampQuin = dampQuad*damping;
 
-modeR(t60) = pow(0.001, 1.0/(t60*ma.SR));
+bwFloorT60 = 0.35;
+modeR(t60) = pow(0.001, 1.0/(min(t60, bwFloorT60)*ma.SR));
 r1 = modeR(decayTime);
 r2 = modeR(decayTime*damping);
 r3 = modeR(decayTime*dampSq);
@@ -126,7 +127,7 @@ with {
 voice(sharedIn, note, gate, vel) = collisionDrive(bank(freqGlide(note, gate, vel), exciteFor(sharedIn, note, gate, vel))) * voiceGain;
 
 process(exciteIn) =
-    (voice(sharedIn,note0,gate0,vel0) + voice(sharedIn,note1,gate1,vel1) + voice(sharedIn,note2,gate2,vel2) + voice(sharedIn,note3,gate3,vel3)) : ma.tanh : *(outLevel)
+    (voice(sharedIn,note0,gate0,vel0) + voice(sharedIn,note1,gate1,vel1) + voice(sharedIn,note2,gate2,vel2) + voice(sharedIn,note3,gate3,vel3)) : *(outLevel) : ma.tanh
 with {
     sharedIn = sharedExciteIn(exciteIn);
 };
