@@ -4550,24 +4550,81 @@ UI could not be scripted to browse deeper pages reliably from here. RAVDESS
 and NUS-48E surfaced in search but their license pages were not personally
 checked this session, so neither is recommended nor ruled out.
 
-Not yet added to the corpus (this investigation was search-and-verify
-only, per its own scope). **A real, checked constraint for whoever attempts
-this next**: Zenodo serves the dataset as exactly two archives
-(`VocalSet1-2.zip`, ~5.99GB; `VocalSet11.zip`, ~2.08GB), confirmed via the
-record's own file API -- there is no individual-file download endpoint.
-Pulling either whole archive just to extract one representative "long
-tones" WAV is disproportionate to a normal session's disk/bandwidth budget
-and was deliberately NOT attempted here for that reason. The concrete next
-step is an HTTP range-request read of the zip's own central directory
-(standard zip format supports this without downloading the whole archive)
-to locate and extract a single target file, run this corpus's own
-pitch-detection methodology on it to establish a labeled target frequency,
-and add it to `test-audio-corpus/real_audio_cross_verify.py`'s
-`REAL_FILES` with an explicit CC BY 4.0 attribution note (this corpus's
-downloaded audio is gitignored/not committed, matching the existing
-convention, but the attribution requirement still applies to any
-distribution of the raw file itself, so keep the credit line in the
-harness source, not just in this doc).
+**A follow-up same-session step actually added and verified a real vocal
+file, closing this gap for the first time in this file's whole history.**
+Zenodo serves the dataset as exactly two archives (`VocalSet1-2.zip`,
+~5.99GB; `VocalSet11.zip`, ~2.08GB), confirmed via the record's own file
+API -- there is no individual-file download endpoint, and pulling either
+whole archive just to extract one representative file is disproportionate
+to a normal session's disk/bandwidth budget. Instead: a plain HTTP
+range-request read of the zip's own End-Of-Central-Directory record, then
+its central directory (standard zip format, ~561KB for this archive's
+5227-entry index, fetched with two range requests totalling well under
+1MB), located `FULL/female7/long_tones/straight/f7_long_straight_u.wav`
+(smallest available "long_tones/straight" entry, a genuinely sustained,
+non-vibrato single note, singer f7, vowel u); a third range request
+fetched just that entry's local header + 397,730 bytes of deflate-
+compressed data (from the central directory's own, authoritative size --
+the local header's own size/CRC fields read zero, since this zip uses the
+streaming/data-descriptor flag) and `zlib.decompress` (raw deflate, `-15`
+window) reproduced the file byte-for-byte, CRC-verified against the
+central directory's own stored checksum (match confirmed). Total data
+transferred: under 1MB, out of a 2.08GB archive.
+
+Pitch-measured directly (this corpus's own `measure_freq`, 50ms windows):
+stable at 269.4Hz +/-2.2Hz standard deviation across a 1.4-second sustained
+region (t=0.3-1.7s; onset breath noise before it, natural release after)
+-- a real, non-tempered human pitch, exactly the kind of "natural" test
+signal a piano/violin/marimba-only corpus can never provide. Converted to
+big-endian 16-bit AIFF (matching this corpus's existing file convention;
+`aifc`'s write path does NOT auto-byte-swap, so samples were explicitly
+converted to `>i2` before writing -- confirmed by round-tripping through
+this corpus's own `load_aiff_mono` loader and re-measuring an identical
+~269Hz before trusting it) and added to
+`test-audio-corpus/real_audio_cross_verify.py`'s `REAL_FILES` as
+`Vocal.f7.long_straight_u.aiff: 269.40`.
+
+**Verified against the real `multitranspose.dsp` absolute-pitch-lock gate,
+the same battery every other corpus file passes through**: with the real
+on-device `extFreqDet` configuration (simulating `pitchtracker.lv2`
+genuinely loaded), locked a fifth above source measured at 407.7Hz against
+a 404.1Hz target, **+15.5 cents** -- comfortably inside the existing 60-cent
+gate, in the same range as this corpus's piano/violin/clarinet figures
+(13.9-22.4c), not an outlier. The internal zero-crossing-tracker-only
+diagnostic path (not gated, `pitchtracker.lv2` absent) also tracked it
+cleanly at +7.5c -- notably one of the BEST diagnostic-path readings in the
+whole corpus (every instrument file's diagnostic-path reading is
+hundreds to thousands of cents off; the vocal note's smooth, harmonically
+simple, vibrato-free "straight" content is evidently easy for the
+fallback tracker too). Full 14-file corpus run: PASSED.
+
+Source: **VocalSet: A Singing Voice Dataset** (Wilkins/Seetharaman/Wahl/
+Pardo, ISMIR 2018), `zenodo.org/records/1442513`, DOI
+`10.5281/zenodo.1442513`, licensed CC BY 4.0 -- this specific file
+(`FULL/female7/long_tones/straight/f7_long_straight_u.wav`) requires
+attribution to the original authors/ISMIR 2018 wherever used or
+redistributed; the raw audio itself stays gitignored/not committed here,
+matching this corpus's existing convention for every other file, but this
+credit line is the attribution record for the one file that does carry a
+real license obligation (every other corpus file is CC0/unrestricted).
+
+The same range-request extraction technique remains available, cheaply,
+for adding further VocalSet singers/vowels/techniques (percussive vocal
+techniques like `spoken`/`vocal_fry`, or other vowels/singers) in a future
+session without ever downloading the full archive.
+
+**Also verified through `EngineSoladSnac` (free transpose)**, via the same
+standalone C++ harness used for the SNAC drift fix above: `m_period`
+converges to and holds 175-182 samples through the sustained region
+(matching the file's own real measured ~269Hz source period -- `m_period`
+always tracks the raw INPUT's period, independent of the -12 shift ratio,
+since SNAC analysis runs on the pre-shift buffer; this is the same
+behavior every other corpus file already shows, not vocal-specific). Wet
+output measured against the -12-shifted 134.7Hz target: -8.0c to +12.7c
+across five 200ms-spaced windows through the sustained region -- among the
+tightest accuracy figures in the whole corpus, better than most instrument
+files, consistent with the vocal note's smooth, vibrato-free, harmonically
+simple content.
 
 ## `pitch.dsp` re-applies its params every sample instead of calling them separately
 
