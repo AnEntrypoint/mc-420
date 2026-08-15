@@ -3699,7 +3699,7 @@ signals throughout. The test lives at
 directory (downloaded audio is not committed); re-run it locally to extend
 the corpus with additional real recordings.
 
-## `grainFormant.h` destructively cancels on real up-shift (SEMIS +6..+12) -- root-caused, NOT fixed blind, disclosed for a future session
+## `grainFormant.h` destructively canceled on real up-shift (SEMIS +6..+12) -- root-caused and FIXED, verified bit-exact-safe for the down-shift path
 
 While investigating the formant loudness cost documented below, a follow-up
 measurement found something far more serious: the mono SNAC "pedal ride"
@@ -3750,44 +3750,51 @@ starvation (`VOICES=6` never exceeded, zero stolen-voice events at any scale
 tested) -- ruling out both of the other obvious hypotheses before accepting
 the phase-cancellation explanation.
 
-**No fix was attempted, on purpose.** The textbook-correct fix for a
-Hann-windowed granular time-scaler is scale-adaptive grain sizing --
-`glen = 2*outHop` (preserving 50% overlap, hence COLA, at every scale) instead
-of the current fixed `2*Tin`. This is a real, well-understood direction, but
-applying it changes `glen` at EVERY scale, including `scale=0.5` (the
-octave-DOWN engine this whole file's history centers on, and the exact
-configuration this session's own real-audio formant investigation just
-finished extensively verifying against 14 real instrument/vocal timbres) --
-at `scale=0.5`, `glen` would DOUBLE (872 vs the current 436), a substantial
-change to already-shipped, already-CI-green, already-real-audio-verified
-behavior. Shipping that blind, in the time remaining this session, without
-re-running the full real-audio formant battery (`formant_realaudio_harness.cpp`
-+ `measure_formant_centroid.py`, both in scratch) against the changed grain
-sizing, risks regressing verified behavior to fix unverified behavior --
-exactly the failure mode this project's own history (`jumpGuard`/`slowRef`,
-the plosive/octave-search saga, the SNAC period-tracker margin-check
-regression earlier this session) has repeatedly warned against. A gain-only
-patch was also explicitly rejected: boosting the output in the collapsed
-region would amplify whatever residual interpolation noise survives
-destructive cancellation, not recover the true signal -- confirmed
-unsafe by the same measurement (winSum stays healthy while outRms goes to
-0.0000, meaning there is no coherent signal left to boost back up).
+**Fix, deliberately scoped to touch ONLY the broken region**: rather than the
+textbook-correct general fix (scale-adaptive `glen = 2*outHop` at every scale,
+which would also change `glen` at `scale=0.5` -- the exact octave-down
+configuration this session's own real-audio formant investigation had just
+finished extensively verifying against 14 timbres, and which this file's own
+history repeatedly warns against touching blind), `grainFormant.h`'s `read()`
+now branches: `glenD = (m_scale > 1.0f) ? (2.0*outHop) : (2.0*Tin)`. At
+`scale<=1.0` (unison and every down-shift) this is EXACTLY the original
+formula, byte-for-byte -- the branch is continuous at `scale=1.0` (both sides
+equal `2*Tin` there), so there is no discontinuity/click risk at the boundary
+either. Only `scale>1.0` (up-shift) gets the COLA-preserving adaptive sizing.
 
-**Practically bounded, not universal**: the badly-broken region is roughly
-SEMIS > +8 (more than ~4.5dB loss), worsening sharply toward +12; SEMIS 0
-through +6 shows only modest, gradual degradation (a real, separate, much
-smaller loudness-taper effect, not this collapse). `SEMIS` is a genuine,
-performer-reachable live control (`dsp/effects_runtime.dsp`'s
-`hslider("SEMIS", 0.0, -12.0, 12.0, 0.001)`, driven live via the mod-wheel/
-CC52 pitch-bend gesture per this file's own Ableton-Link-adjacent control
-docs), so this is real-world reachable, not a synthetic corner case --
-disclosed here rather than silently left for a future session to
-rediscover from scratch. Concrete next step for whoever picks this up:
-implement scale-adaptive `glen` (or an equivalent COLA-preserving grain
-redesign), then re-run the FULL real-audio formant verification battery
-(both instruments, all 5 depths, all 3 measurement windows) before trusting
-it, matching this file's own standing discipline for any change to this
-shared, already-verified engine.
+**Verified in three layers before trusting it**:
+1. **Down-shift path is bit-exact identical, not just "close."** A real A/B
+   (the pre-fix `grainFormant.h` from git HEAD vs. the post-fix file, both
+   compiled against the unmodified `formant_realaudio_harness.cpp`, run
+   against real `Piano.mf.A4.aiff` at `scale=0.5` across all 5 previously-
+   tested formant depths) produced byte-for-byte IDENTICAL `.wet.f32` output
+   files at every depth (`cmp` clean, zero diff bytes) -- the already-verified
+   real-audio formant investigation above remains valid exactly as measured,
+   unchanged by this fix.
+2. **The collapse is gone.** Re-running the exact same `EngineSoladSnac`
+   SEMIS-sweep harness that found the bug: output/input RMS at SEMIS=+12 rose
+   from 0.0168 (functionally silent) to 0.6530 -- in the same healthy range
+   this project already treats as normal (the octave-down baseline itself
+   sits at 0.61-1.0 across its own range). The whole up-shift range now stays
+   bounded between roughly 0.65 and 0.99 instead of diving toward zero; SEMIS
+   -12 and 0 measured bit-identical to the pre-fix baseline (0.9996 both
+   before and after), confirming the down-shift/unison boundary carries zero
+   behavioral change end-to-end, not just in the isolated `GrainFormant` unit.
+3. **Sanity-checked against real audio, not just a synthetic sine.** A sweep
+   of SEMIS in {1,3,6,9,12} x formant in {0, +0.5, -0.5} against real
+   `Piano.mf.A4.aiff` and `violin.arco.mf.sulA.A4B4.aiff`: zero NaN/Inf at any
+   point, peak and RMS staying in a consistently healthy, bounded range at
+   every combination on both timbres -- no case anywhere near the old
+   near-silent collapse.
+
+**Practically bounded scope, for context**: the pre-fix badly-broken region
+was roughly SEMIS > +8 (more than ~4.5dB loss, worsening sharply toward +12);
+SEMIS 0 through +6 already showed only modest, gradual degradation before
+this fix (a real, separate, much smaller loudness-taper effect, unrelated to
+this collapse). `SEMIS` is a genuine, performer-reachable live control
+(`dsp/effects_runtime.dsp`'s `hslider("SEMIS", 0.0, -12.0, 12.0, 0.001)`,
+driven live via the mod-wheel/CC52 pitch-bend gesture), so this was a real,
+reachable defect on real hardware, not a synthetic corner case -- now closed.
 
 ## Free-transpose formant control had an oversized dead-zone -- shrunk for more expressive control
 
