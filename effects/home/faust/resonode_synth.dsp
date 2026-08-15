@@ -53,7 +53,7 @@ letrec {
 
 sharedExciteIn(exciteIn) = exciteIn : fi.lowpass(2, tone);
 
-exciteBandpass(freqHz, x) = x : fi.resonbp(freqHz, 2.0, 1.0);
+exciteBandpass(freqHz, x) = x : fi.resonbp(freqHz, 15.0, 1.0);
 
 exciteFor(sharedIn, note, gate, vel) = exciteBandpass(ba.midikey2hz(note), sharedIn) * (en.asr(0.02, 1.0, 0.3, xgate) * velGain(vel))
 with {
@@ -95,7 +95,7 @@ dampCube = dampSq*damping;
 dampQuad = dampCube*damping;
 dampQuin = dampQuad*damping;
 
-bwFloorT60 = 0.35;
+bwFloorT60 = 0.15;
 modeR(t60) = pow(0.001, 1.0/(min(t60, bwFloorT60)*ma.SR));
 r1 = modeR(decayTime);
 r2 = modeR(decayTime*damping);
