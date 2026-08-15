@@ -181,46 +181,46 @@ static void setFlushToZero() {
 #endif
 }
 
-static constexpr float kShuffleTwoPi = 6.28318530717958647692f;
-
-static inline float shuffleF0Raw(float p) {
-    return sinf(kShuffleTwoPi * 4.0f * p);
-}
-static inline float shuffleF1Raw(float p) {
-    return sinf(kShuffleTwoPi * 6.0f * p) + 0.5f * sinf(kShuffleTwoPi * 12.0f * p + 1.04719755f);
-}
-static inline float shuffleF2Raw(float p) {
-    return sinf(kShuffleTwoPi * 16.0f * p - 1.04719755f) + 0.4f * sinf(kShuffleTwoPi * 32.0f * p);
-}
-static inline float shuffleF3Raw(float p) {
-    return sinf(kShuffleTwoPi * 5.0f * p) + 0.6f * sinf(kShuffleTwoPi * 7.0f * p + 0.78539816f);
-}
-
-static constexpr float kShuffleNormConst[4] = {
-    1.0f, 0.6769510745904967f, 0.7251807504553944f, 0.6263311516936046f,
+// Hard-jump groovebox-style shuffle: each of the 4 buttons selects a distinct
+// 16-step swing/offset pattern (in units of one 16th-note stepLen), applied as
+// an INSTANT step-function jump at each 16th-note boundary -- no interpolation,
+// no smoothing, matching the same punch-in character as varispeed and the
+// microrepeat glitch effect. Combining buttons sums their step offsets (still
+// bounded) rather than crossfading, so each combination produces a genuinely
+// different, still-hard pattern.
+//
+// f0: classic swing -- every 2nd 16th note (off-beats) delayed by a fixed amount.
+// f1: dotted/triplet feel -- 3-step grouping, the 3rd of each group pulled back.
+// f2: push/drag -- alternating ahead/behind on 8th-note pairs, sharper amount.
+// f3: broken/polymetric -- a 5-step-over-16 displacement, off-grid character.
+static constexpr float kShuffleStep0[16] = {
+    0,  6, 0,  6, 0,  6, 0,  6, 0,  6, 0,  6, 0,  6, 0,  6,
 };
-static constexpr float kShuffleAmpFrac = 0.12f;
-static constexpr float kShuffleClampFrac = 0.20f;
-static constexpr float kShuffleDcCorrection[16] = {
-    0.00000000f, 0.00000000f, 0.00000000f, 0.00059138f,
-    0.00000000f, 0.00126808f, 0.00060658f, -0.00011969f,
-    0.00000000f, 0.00092291f, 0.00042698f, 0.00207681f,
-    0.00026805f, 0.00119046f, 0.00079574f, -0.00005760f,
+static constexpr float kShuffleStep1[16] = {
+    0, 0, -4, 0, 0, -4, 0, 0, -4, 0, 0, -4, 0, 0, -4, 0,
 };
+static constexpr float kShuffleStep2[16] = {
+    5, -5, 5, -5, 5, -5, 5, -5, 5, -5, 5, -5, 5, -5, 5, -5,
+};
+static constexpr float kShuffleStep3[16] = {
+    0, 0, 0, 3, 0, 0, 3, 0, 0, 0, 3, 0, 0, 3, 0, 0,
+};
+static constexpr const float* kShuffleStepTables[4] = {
+    kShuffleStep0, kShuffleStep1, kShuffleStep2, kShuffleStep3,
+};
+static constexpr float kShuffleClampSteps = 8.0f;
 
 static inline float shuffleOffsetSamples(float phaseNorm, const float gain[4], float stepLen) {
-    float combined =
-          gain[0] * kShuffleNormConst[0] * shuffleF0Raw(phaseNorm)
-        + gain[1] * kShuffleNormConst[1] * shuffleF1Raw(phaseNorm)
-        + gain[2] * kShuffleNormConst[2] * shuffleF2Raw(phaseNorm)
-        + gain[3] * kShuffleNormConst[3] * shuffleF3Raw(phaseNorm);
-    combined *= kShuffleAmpFrac;
-    int mask = (gain[0] > 0.0f ? 1 : 0) | (gain[1] > 0.0f ? 2 : 0) |
-               (gain[2] > 0.0f ? 4 : 0) | (gain[3] > 0.0f ? 8 : 0);
-    float corrected = combined - kShuffleDcCorrection[mask];
-    float clamped = corrected > kShuffleClampFrac ? kShuffleClampFrac
-                   : (corrected < -kShuffleClampFrac ? -kShuffleClampFrac : corrected);
-    return clamped * stepLen;
+    int step = (int)(phaseNorm * 16.0f);
+    if (step < 0) step = 0;
+    if (step > 15) step = 15;
+    float combinedSteps = 0.0f;
+    for (int b = 0; b < 4; b++) {
+        if (gain[b] > 0.0f) combinedSteps += kShuffleStepTables[b][step];
+    }
+    if (combinedSteps > kShuffleClampSteps) combinedSteps = kShuffleClampSteps;
+    else if (combinedSteps < -kShuffleClampSteps) combinedSteps = -kShuffleClampSteps;
+    return combinedSteps * (stepLen / 16.0f);
 }
 
 static void* worker(void*) {
