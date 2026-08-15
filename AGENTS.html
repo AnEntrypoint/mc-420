@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f29c4537f6334b563b731ebc56e2e52423b51126">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8860bd86df177c3dcc04a03e77657d97b96bafce">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -5786,18 +5786,28 @@ an unwanted continuous "wobble," directly contradicting the intended
 character: real groovebox/505-style shuffle is an INSTANT step-function jump
 in playback position at each 16th-note boundary, with the exact same
 punch-in character as varispeed and the microrepeat glitch effect, never a
-ramp. Each of the 4 buttons now selects a distinct fixed 16-entry step table
-(`kShuffleStep0`: classic swing, delays every 2nd 16th note; `kShuffleStep1`:
-dotted/triplet feel, pulls back the 3rd step of each 3-step group;
-`kShuffleStep2`: push/drag, alternating ahead/behind on 8th-note pairs;
-`kShuffleStep3`: broken/polymetric, a 5-step-over-16 displacement), each
-entry a fixed offset in units of `stepLen/16` (one 16th-note's worth of
-samples divided into 16 sub-steps, giving ~20-60ms of real swing at typical
-tempos). `shuffleOffsetSamples` looks up the CURRENT 16th-note step from
-`phaseNorm` and sums the step values of every currently-held button
-(`shuffleGain[b] &gt; 0.0f`, already an instant 0/1 snap per the button-fade fix
+ramp. The FIRST attempt at this redesign was itself WITNESSED as "too small,
+not really shuffling much" — its step tables were sparse (long flat runs of
+`0` between occasional nonzero entries, e.g. one nonzero step in every 3-4)
+and its clamp bound was tight (`±8` steps), so most of the 16-step cycle
+produced no audible offset at all. Fixed by making every table entry nonzero
+(no flat stretches) and doubling the clamp headroom to `±16` steps, so a
+single held button alone is clearly audible (measured ~70-90ms of real
+swing at the recorded tempo used for verification) and combinations scale up
+from there rather than being crushed by the clamp. Each of the 4 buttons
+selects a distinct fixed 16-entry step table (`kShuffleStep0`: classic
+swing, alternating steps delayed hard; `kShuffleStep1`: dotted/triplet
+gallop, every 3rd step pulled back hard against a slight forward push on the
+rest; `kShuffleStep2`: push/drag, alternating ahead/behind on EVERY 16th
+note, the sharpest single-button amount; `kShuffleStep3`: broken/polymetric,
+a 5-step-over-16 displacement moving every single step), each entry a fixed
+offset in units of `stepLen/16` (one 16th-note's worth of samples divided
+into 16 sub-steps). `shuffleOffsetSamples` looks up the CURRENT 16th-note
+step from `phaseNorm` and sums the step values of every currently-held
+button (`shuffleGain[b] &gt; 0.0f`, already an instant 0/1 snap per the
+button-fade fix
 above, not a partial blend) — the result changes ONLY at step boundaries and
-is applied with zero interpolation, clamped to `±kShuffleClampSteps` (8) to
+is applied with zero interpolation, clamped to `±kShuffleClampSteps` (16) to
 bound worst-case combined excursion. Verified numerically: all 15 non-empty
 button combinations produce genuinely distinct 16-step patterns (no two
 combinations collapse to the same table), and the clamp bound holds exactly
