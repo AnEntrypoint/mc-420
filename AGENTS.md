@@ -4755,6 +4755,65 @@ tuning this control for musical use should budget a make-up-gain
 compensation proportional to `|d|` as a natural next step, not yet
 implemented here since this investigation was measurement-only.
 
+## The formant RMS loudness cost was root-caused and precisely measured -- a real make-up-gain fix is DEFERRED to real-hardware verification, not implemented blind
+
+Followed up on the "budget a make-up-gain compensation... not yet
+implemented here" note directly above by root-causing WHERE the loudness
+actually goes, using a debug-instrumented local copy of
+`soladSnacOctaver.h` (gitignored scratch, never the real repo file, same
+convention already established elsewhere in this file) exposing `y` (the
+clean continuous-reader output) and `gOut` (the grain-path output)
+SEPARATELY, right before `processBlock`'s existing crossfade
+(`out[i] = y*(1-m_grainMix) + gOut*m_grainMix`).
+
+**Confirmed the loudness cost is entirely `gOut`'s own amplitude, not a
+crossfade-math artifact.** Measured directly on real audio (vocal,
+clarinet) across formant depth ±0.6/±0.8: `gOut`'s RMS is consistently
+~57-73% of `y`'s RMS at the exact same instant (vocal +0.6/+0.8:
+~60-61%; vocal -0.8: ~57-59%; clarinet +0.8: ~68-73%, the widest of the
+three, harmonic-content-dependent). This is the grain path's own
+Hann-window overlap-add energy characteristic at the spacing/window
+ratio `grainFormant.h` uses when NOT in the up-shift-forced-full-mix
+case -- a real, measurable, roughly-consistent-but-not-fixed deficit
+(not a constant factor, so a single hardcoded gain cannot fully
+compensate every case), confirming the crossfade blend math itself
+(`m_grainMix`, `kFormantDeadbandBlock`/`kFormantMixCap`) is exactly
+correct and was never the source of the loudness loss this file already
+documented.
+
+**A make-up gain on `gOut` was deliberately NOT implemented, on the same
+"by-ear task on real hardware" standing rule this file already applies
+to Resonode's own loudness/patch balancing.** Two concrete reasons, both
+real and specific to this file, not a generic caution: (1) the measured
+ratio varies by content (57-73%), so any single gain constant either
+under-compensates the worst case or over-boosts the best case -- getting
+this right needs either a live-signal-adaptive gain or by-ear tuning
+against real playing, neither of which this environment can validate;
+(2) `gOut`'s SAME crossfade point is shared with the up-shift-forced
+`mixTgt=1.0` path this session's own `grainFormant.h` fix (see "destructively
+canceled on real up-shift" above) just finished stabilizing, and that
+path already showed a real, if modest, peaking around SEMIS+3
+(RMS ratio ~1.09 vs input, undocumented before this session) with no
+margin audited against a NEW multiplicative boost -- shipping an
+untested gain there risks reintroducing exactly the class of regression
+this session spent real effort fixing, on a change this environment has
+no way to confirm doesn't clip on real hardware.
+
+**What a future session WITH real hardware/ear access needs to close
+this, concretely, not vaguely**: the calibration data above (ratio
+~0.57-0.73 depending on timbre) is the starting point for either (a) a
+fixed, conservative gain (something below `1/0.73~=1.37x` to avoid
+over-boosting the best-case content) applied to `gOut` only when
+`m_scale<=1.02` (i.e. excluding the up-shift-forced path, which needs
+its own separate headroom check against the SEMIS+3 peaking finding
+before any boost is added there too), verified by ear across a real
+chord/vocal/percussive playing session on the Pi 4, watching specifically
+for the SEMIS+3 region's own existing peaking getting worse; or (b) a
+live RMS-ratio-adaptive gain (measuring `y`'s and `gOut`'s own recent
+envelopes and compensating dynamically), a larger change this
+environment's own verification tools cannot bound safely without a real
+listener.
+
 ## `EngineSoladSnac` formant real-audio verification extended to vocal and clarinet -- same character confirmed on two new timbres
 
 Extended the standalone C++ harness above (new
