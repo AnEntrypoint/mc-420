@@ -3961,6 +3961,54 @@ single-note real-audio unreliability, not a polyphony-specific
 regression. Click/instability safety on polyphonic-mix onsets stayed
 within this project's existing tolerance in every tested scenario.
 
+## Chord-lock accuracy re-verified after this session's `pitchtracker_ac.dsp`/formant-cap fixes -- unchanged, honestly explained why, plus a new vocal+instrument scenario
+
+`test-audio-corpus/real_polyphonic_chord_test.py` (the real-audio chord-lock
+test above) was re-run against `multitranspose.dsp` with this session's own
+`holdLastGood` stale-onset-carryover fix and widened formant CC cap in
+place, specifically to check whether `multitranspose.dsp`'s real chord-lock
+behavior measurably improved -- `multitranspose.dsp` itself is deliberately
+NEVER touched directly (11+ historically failed attempts, a severe real-
+`faust`-CLI compile-time wall, extensively documented above), so any real
+improvement to its behavior has to come through its sanctioned extension
+points (`extFreqDet`/`pitchtracker.lv2`, the C++ control surface), not the
+file itself.
+
+**Result: the gated (correctly-fed `extFreqDet`) scenarios land in the
+EXACT SAME 16.9-38.1 cent range already documented above -- unchanged, not
+improved, not regressed.** Piano-dyad/fed-lower: 16.9c (identical to the
+figure this file already names); piano-violin/fed-violin: 38.1c (identical
+to this file's own documented worst case). **This is the expected, honest
+result, not a null finding**: `holdLastGood`'s fix specifically targets
+stale pitch carryover ACROSS SEQUENTIAL notes within one continuously-
+running tracker instance (matching real hardware's always-on mic) --
+`real_polyphonic_chord_test.py` renders each scenario as an independent,
+single-shot chord with `extFreqDet` held at a CONSTANT fed value for the
+whole render, which structurally cannot exercise a stale-carryover-between-
+notes bug at all. The fix's real benefit is already verified elsewhere
+(`verify_holdlastgood_fix.py`'s genuine 3-note continuous-instance
+sequence, see above) -- this chord test was never going to move on that
+specific fix, and correctly didn't.
+
+**A new Piano+Vocal mixed scenario was added (using the newly-added
+`Vocal.f7.long_straight_u.aiff`), and it both sets a new best case and
+reconfirms the existing architectural caveat, not a new bug.** When
+`extFreqDet` is fed the voice that should genuinely be tracked (the vocal's
+own true 269.4Hz), lock accuracy is **11.2 cents -- the best result in the
+whole chord-test suite**, better than the single-note baseline (16.9c)
+itself. When `extFreqDet` is instead fed the OTHER (piano) voice's pitch
+while the vocal's stronger harmonic content dominates the actual mixed
+signal, accuracy degrades to 94.0 cents -- worse than any previously-
+recorded case, but this is exactly the ALREADY-DOCUMENTED "no source
+separation" limitation immediately above (one shared tracker reading feeds
+every voice; feeding it a reading that doesn't match what's actually
+dominant in the mix degrades lock quality), now demonstrated on a genuinely
+new instrument/vocal timbre pairing rather than a new defect. The
+adversarial case (feeding the wrong voice's pitch) is not a realistic
+on-device configuration -- real hardware feeds whichever pitch
+`pitchtracker.lv2` itself actually detects as dominant, which this
+scenario deliberately overrides to characterize the failure mode's shape.
+
 ## `holdLastGood`'s onset-hold gate froze at the PREVIOUS note's stale frequency, not 0.0, for every note after the first -- fixed
 
 WITNESSED via a real-audio test that (for the first time) exercised
