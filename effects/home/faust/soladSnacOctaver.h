@@ -256,9 +256,10 @@ private:
     static constexpr float kReengageSeedPeriod = 600.0f;
     static constexpr float kFormantGlideInvSamples = 1.0f / 480.0f;
     static constexpr float kFormantDeadbandSetter = 0.35f;
-    static constexpr float kFormantDeadbandBlock = 0.27f;
+    static constexpr float kFormantDeadbandBlock = 0.04f;
     static constexpr float kFormantMixCap = 0.6f;
     static constexpr float kSpliceCooldownFrac = 0.9f;
+    static constexpr float kFirstPeakRatio = 0.90f;
 
     float    m_dl[DL];
     float    m_formantDepth = 0.0f;
@@ -532,14 +533,29 @@ private:
         int maxTau = m_snacMaxTau;
         int k = 1;
         while (k < maxTau && (2.0f*m_r[k]/m_normK[k]) > (2.0f*m_r[k-1]/m_normK[k-1])) k++;
+        int kScanStart = k;
         float bestVal = -1.0f; int bestTau = -1;
-        for (; k < maxTau - 1; k++) {
+        for (k = kScanStart; k < maxTau - 1; k++) {
             if (k < MIN_PERIOD) continue;
             float v  = 2.0f*m_r[k]/m_normK[k];
             float vm = 2.0f*m_r[k-1]/m_normK[k-1];
             float vp = 2.0f*m_r[k+1]/m_normK[k+1];
             if (v > vm && v > vp && v > m_fidelityThresh) {
                 if (v > bestVal) { bestVal = v; bestTau = k; }
+            }
+        }
+        if (bestTau >= 0) {
+            float acceptFloor = bestVal * kFirstPeakRatio;
+            for (k = kScanStart; k < bestTau; k++) {
+                if (k < MIN_PERIOD) continue;
+                float v  = 2.0f*m_r[k]/m_normK[k];
+                float vm = 2.0f*m_r[k-1]/m_normK[k-1];
+                float vp = 2.0f*m_r[k+1]/m_normK[k+1];
+                if (v > vm && v > vp && v > m_fidelityThresh && v >= acceptFloor) {
+                    bestTau = k;
+                    bestVal = v;
+                    break;
+                }
             }
         }
         { float gmax=-1; int gtau=-1;
