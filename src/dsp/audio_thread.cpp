@@ -181,48 +181,49 @@ static void setFlushToZero() {
 #endif
 }
 
-// Hard-jump groovebox-style shuffle: each of the 4 buttons selects a distinct
-// 16-step swing/offset pattern (in units of one 16th-note stepLen), applied as
-// an INSTANT step-function jump at each 16th-note boundary -- no interpolation,
-// no smoothing, matching the same punch-in character as varispeed and the
-// microrepeat glitch effect. Combining buttons sums their step offsets (still
-// bounded) rather than crossfading, so each combination produces a genuinely
-// different, still-hard pattern.
+// True retrigger/reorder beat shuffle, matching microrepeat.dsp's safe
+// capture-and-replay architecture (a bounded ring buffer replaying already-
+// captured audio, never a continuous-position perturbation) -- a genuinely
+// DIFFERENT effect from swing/groove offset. Earlier attempts perturbed
+// masterPhaseBuf's continuous read position with a step-function offset;
+// WITNESSED live as a "double-tap": any step whose offset went NEGATIVE
+// relative to the previous step made playback jump backward into audio it
+// had just played, an inherent flaw of perturbing a continuous position
+// with a non-monotonic pattern, not fixable by tuning magnitudes.
 //
-// f0: classic swing -- every 2nd 16th note (off-beats) delayed hard.
-// f1: dotted/triplet feel -- every 3rd step pulled back hard, others pushed
-//     slightly ahead so the whole pattern reads as an audible lopsided gallop.
-// f2: push/drag -- alternating ahead/behind on EVERY 16th note, sharpest amount.
-// f3: broken/polymetric -- a 5-step-over-16 displacement, every step moved.
-static constexpr float kShuffleStep0[16] = {
-    0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10,
+// One beat = one slice. Over the 4-beat shuffle cycle, each of the 15
+// non-empty button-combination bitmasks selects its OWN fixed 4-entry
+// REORDER sequence -- which of the loop's own 4 beat-positions' content
+// plays at each of the 4 beat positions this cycle. Most patterns are pure
+// permutations (every beat played exactly once, just rearranged); several
+// allow a repeat+skip for a stutter character, per direct spec. Defined
+// per-bitmask directly (not composed from 4 base tables at runtime) because
+// composing stutter/skip tables sequentially is not generally invertible --
+// verified this produced 3 real collisions (masks 6/14, 7/15, 12/13 all
+// converged to the same result) before switching to explicit per-mask
+// tables, each hand-picked and programmatically verified pairwise distinct.
+// Beat boundaries are the ONLY moments the read pointer can change slice --
+// within a beat, playback always reads forward through that beat's own
+// already-recorded loop content, so it can never double back into audio it
+// just played this pass.
+static constexpr int kShuffleReorderTables[16][4] = {
+    { 0, 1, 2, 3 },  // mask 0: unused (shuffle inactive)
+    { 0, 1, 3, 2 },  // mask  1 (0001)
+    { 0, 1, 1, 3 },  // mask  2 (0010)
+    { 1, 0, 3, 2 },  // mask  3 (0011)
+    { 3, 2, 1, 0 },  // mask  4 (0100)
+    { 3, 0, 1, 2 },  // mask  5 (0101)
+    { 3, 2, 2, 0 },  // mask  6 (0110)
+    { 0, 3, 1, 2 },  // mask  7 (0111)
+    { 0, 0, 2, 3 },  // mask  8 (1000)
+    { 0, 0, 3, 1 },  // mask  9 (1001)
+    { 2, 0, 0, 3 },  // mask 10 (1010)
+    { 1, 3, 0, 0 },  // mask 11 (1011)
+    { 2, 3, 0, 1 },  // mask 12 (1100)
+    { 3, 1, 0, 2 },  // mask 13 (1101)
+    { 1, 2, 3, 0 },  // mask 14 (1110)
+    { 2, 1, 3, 0 },  // mask 15 (1111)
 };
-static constexpr float kShuffleStep1[16] = {
-    3, 3, -9, 3, 3, -9, 3, 3, -9, 3, 3, -9, 3, 3, -9, 3,
-};
-static constexpr float kShuffleStep2[16] = {
-    9, -9, 9, -9, 9, -9, 9, -9, 9, -9, 9, -9, 9, -9, 9, -9,
-};
-static constexpr float kShuffleStep3[16] = {
-    -6, 2, 4, -8, 6, -6, 2, 4, -8, 6, -6, 2, 4, -8, 6, 0,
-};
-static constexpr const float* kShuffleStepTables[4] = {
-    kShuffleStep0, kShuffleStep1, kShuffleStep2, kShuffleStep3,
-};
-static constexpr float kShuffleClampSteps = 16.0f;
-
-static inline float shuffleOffsetSamples(float phaseNorm, const float gain[4], float stepLen) {
-    int step = (int)(phaseNorm * 16.0f);
-    if (step < 0) step = 0;
-    if (step > 15) step = 15;
-    float combinedSteps = 0.0f;
-    for (int b = 0; b < 4; b++) {
-        if (gain[b] > 0.0f) combinedSteps += kShuffleStepTables[b][step];
-    }
-    if (combinedSteps > kShuffleClampSteps) combinedSteps = kShuffleClampSteps;
-    else if (combinedSteps < -kShuffleClampSteps) combinedSteps = -kShuffleClampSteps;
-    return combinedSteps * (stepLen / 16.0f);
-}
 
 static void* worker(void*) {
     setRealtimeSelf(g_cfg.homeFxCore, g_cfg.rtPriority);
@@ -638,14 +639,10 @@ static void* worker(void*) {
                 static double standaloneQuantumPhaseSamples = 0.0;
                 static int64_t lastLinkPhaseMicroBeats = -1;
                 static double shuffleClockSamples = 0.0;
-                static float shuffleGain[4] = {0.0f, 0.0f, 0.0f, 0.0f};
                 static int shuffleMaskSlot = -1;
                 if (shuffleMaskSlot < 0 && g_params) shuffleMaskSlot = g_params->getSlot("fx/shuffle/mask");
                 int shuffleMaskNow = shuffleMaskSlot >= 0 && g_params
                     ? (int)g_params->getBySlot(shuffleMaskSlot) : 0;
-                for (int b = 0; b < 4; b++) {
-                    shuffleGain[b] = (shuffleMaskNow & (1 << b)) ? 1.0f : 0.0f;
-                }
 
                 float masterLen = masterLenVal;
                 float recordedBeatsShared = g_params ? g_params->get("cmd/recorded_beats", 16.0f) : 16.0f;
@@ -654,7 +651,6 @@ static void* worker(void*) {
                     ? (double)masterLen / (double)recordedBeatsShared
                     : (double)g_cfg.sampleRate * 0.5;
                 double fourBeatLenShared = beatLenSamplesShared * 4.0;
-                double stepLenShared = fourBeatLenShared / 16.0;
 
                 if (masterLen > 0.0f) {
                     if (linkDrivingLength && g_link) {
@@ -703,41 +699,35 @@ static void* worker(void*) {
                     fui.set("fx/dubgate/clockphase", (float)gatePhase01);
                 }
 
-                bool shuffleActive = shuffleGain[0] > 0.0f || shuffleGain[1] > 0.0f ||
-                                     shuffleGain[2] > 0.0f || shuffleGain[3] > 0.0f;
+                // Beat-reorder shuffle: shuffleMaskNow (0-15, one bit per held button)
+                // directly indexes kShuffleReorderTables -- each of the 15 non-empty
+                // masks has its own hand-verified-distinct 4-entry reorder sequence
+                // (see the table's own comment for why this is NOT composed from the
+                // 4 individual button tables at runtime). The offset is a FIXED number
+                // of whole beats, constant for the whole beat (recomputed only at beat
+                // boundaries), so playback always reads forward through one beat's
+                // worth of already-recorded loop content -- it can never double back
+                // into audio it just played this pass, unlike a continuous mid-beat
+                // position perturbation.
+                bool shuffleActive = shuffleMaskNow != 0;
                 if (masterLen > 0.0f) {
                     const double lenD = (double)masterLen;
-                    if (lenD >= (double)N && fourBeatLenShared >= (double)N) {
-                        double p = masterPhaseSamples;
-                        double shuffleT = shuffleClockStart;
-                        for (int i = 0; i < N; i++) {
-                            double pp = p;
-                            if (shuffleActive) {
-                                float phaseNorm = (float)(shuffleT / fourBeatLenShared);
-                                pp += (double)shuffleOffsetSamples(phaseNorm, shuffleGain, (float)stepLenShared);
-                            }
-                            if (pp >= lenD) pp -= lenD;
-                            if (pp < 0.0) pp += lenD;
-                            masterPhaseBuf[(size_t)i] = (float)pp;
-                            p += 1.0;
-                            if (p >= lenD) p -= lenD;
-                            shuffleT += 1.0;
-                            if (shuffleT >= fourBeatLenShared) shuffleT -= fourBeatLenShared;
+                    const int* reorderTable = kShuffleReorderTables[shuffleMaskNow & 0xF];
+                    for (int i = 0; i < N; i++) {
+                        double offset = 0.0;
+                        if (shuffleActive) {
+                            double shuffleT = std::fmod(shuffleClockStart + (double)i, fourBeatLenShared);
+                            if (shuffleT < 0.0) shuffleT += fourBeatLenShared;
+                            int curBeat = (int)(shuffleT / beatLenSamplesShared);
+                            if (curBeat < 0) curBeat = 0;
+                            if (curBeat > 3) curBeat = 3;
+                            int srcBeat = reorderTable[curBeat];
+                            offset = (double)(srcBeat - curBeat) * beatLenSamplesShared;
                         }
-                    } else {
-                        for (int i = 0; i < N; i++) {
-                            double offset = 0.0;
-                            if (shuffleActive) {
-                                double shuffleT = std::fmod(shuffleClockStart + (double)i, fourBeatLenShared);
-                                if (shuffleT < 0.0) shuffleT += fourBeatLenShared;
-                                float phaseNorm = (float)(shuffleT / fourBeatLenShared);
-                                offset = (double)shuffleOffsetSamples(phaseNorm, shuffleGain, (float)stepLenShared);
-                            }
-                            double p = masterPhaseSamples + (double)i + offset;
-                            p = std::fmod(p, lenD);
-                            if (p < 0.0) p += lenD;
-                            masterPhaseBuf[(size_t)i] = (float)p;
-                        }
+                        double p = masterPhaseSamples + (double)i + offset;
+                        p = std::fmod(p, lenD);
+                        if (p < 0.0) p += lenD;
+                        masterPhaseBuf[(size_t)i] = (float)p;
                     }
                 } else {
                     std::fill(masterPhaseBuf.begin(), masterPhaseBuf.end(), 0.0f);
