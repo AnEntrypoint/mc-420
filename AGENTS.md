@@ -3707,6 +3707,44 @@ a small PERMANENT phase offset between them. Symptom: steady (non-sweeping)
 phasing/comb-filtering with 2+ loopers and a Link peer at a close-but-not-identical
 tempo; nudging the tempo clearly away fixes it; a single looper never shows it.
 
+## Manual half/double-speed punch was actively fought by the soft-resync drift correction
+
+WITNESSED live: with `cmd/halfspeed`/`cmd/doublespeed` binding fixed (see
+"`ApcGrid::bindAll` must `ps.bind()`" above) and `effSpeed` telemetry confirmed
+rock-steady at exactly `0.5` for the full duration of a held press (polled
+every ~0.4s across an 8-second hold, zero jitter), the audible result was
+still only "a short wobble" — the speed change fires, is briefly audible,
+then the loop snaps back to normal-speed playback while the button is still
+held. The bug was entirely downstream of `effSpeed`, in `readPosStep`'s
+soft-resync term (`wrapDelta(prev) * resyncCoeff`, see "soft-resync varispeed
+readPos toward the phase-locked position" above) — that mechanism was built
+to correct a genuinely SMALL, persistent mismatch between the free-running
+varispeed `readPos` and the phase-locked `absPos` while following a Link
+peer's close-but-not-identical tempo. A manual speed-multiplier button
+produces a deliberately LARGE, sustained divergence (at `effSpeed=0.5`,
+`readPos` and `absPos` diverge by `0.5` samples every sample, unboundedly,
+for as long as the button is held — that divergence growing IS the whole
+point of varispeed), and the resync term has no way to distinguish "gentle
+persistent Link drift, correct it" from "a deliberate speed change, leave it
+alone" — it corrects both identically. Numerically verified: at
+`resyncCoeff=0.0005` with no gating, a half-speed press held 500ms already
+has `readPos` dragged back to within 4% of full-speed position — the
+correction overwhelms the intended effect within a fraction of a second,
+exactly matching the reported "short wobble, that's it" symptom.
+
+Fixed by gating `resyncCoeff` to `0.0` whenever `|effSpeed - 1.0| > 0.3` —
+manual half/double-speed (`0.5`/`2.0`) is always far outside this band, while
+a genuine Link-tempo-following mismatch (`recordedBpm/linkSnap.bpm` for two
+peers playing at a similar tempo) realistically never approaches it, so this
+threshold cleanly separates the two cases with no new signal-threading
+needed. Verified numerically both directions: a manual half-speed punch held
+500ms now lands `readPos` at exactly the true half-speed position (`12000`
+of `24000` samples, vs the old behavior's `23001` — almost fully undone);
+a genuine `1.05x` Link mismatch held 10s is completely unaffected (still well
+under the `0.3` gate, resync still active). Compiles cleanly, no signal-graph
+changes to `oneLooper`'s own inputs — `manualPunchActive` is derived purely
+from the already-threaded `effSpeed` signal.
+
 ## Dead files
 
 `effects/home/faust/mixbus.dsp` was removed (zero consumers anywhere including CI).

@@ -67,7 +67,8 @@ with {
                wrapAbs(masterPhase - ringOffset + cycleOffset, wrapLen));
     speedClamped = max(0.1, min(8.0, effSpeed));
     varispeedActive = effSpeed != 1.0;
-    resyncCoeff = 0.0005;
+    manualPunchActive = abs(effSpeed - 1.0) > 0.3;
+    resyncCoeff = ba.if(manualPunchActive, 0.0, 0.0005);
     wrapDelta(prev) = wrapAbs(absPos - prev + wrapLen * 0.5, wrapLen) - wrapLen * 0.5;
     readPosStep(prev) = ba.if(armEdge | finishEdge, absPos,
                          ba.if(varispeedActive,
