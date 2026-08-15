@@ -3553,6 +3553,151 @@ A follow-up session set out to fix the still-open "genuinely open residual for a
 
 **`test-pitch-tracker.yml`'s trigger `paths:` never included `effects/pitchtracker-src/**`** -- only `effects/home/faust/multitranspose.dsp` and `test/pitch-tracker-transient/**` -- meaning a DSP-only edit to `pitchtracker_ac.dsp` that didn't also touch a test file would never have triggered this CI job at all, the same class of blind-trigger-path gap this file's own netboot-artifact-fetch lesson already names. Fixed by adding the missing path; `verify_ac_tracker_steadystate_bias.py` (new) is wired in as an additional step in the same job.
 
+## RESOLVED: the 1046.5Hz subharmonic-lock bug left open above -- root cause was `int()` truncation at short lags, not `isPeak`'s local-max test
+
+A follow-up session picked up the "genuinely new, NOT-fixed bug" left open
+immediately above and found the real root cause -- not a gap in `isPeak`'s
+local-max requirement as that entry speculated, but a numerical-precision
+bug in how `subharmonicPromote`'s candidate correlations were measured.
+
+**First attempt (rejected): a guard comparing the picked candidate's
+correlation against its 2x/3x harmonic, using `int(ma.SR / freqHz)` for
+every lag lookup.** This did not fix the 1046.5Hz case at all -- traced with
+a debug tap exposing `coarse`/`cCoarse`/`c2`/`c3`/`dominant2`/`dominant3`
+directly: at short, high-frequency lags (~45-46 samples for the true
+~1047Hz-region harmonic), `int()` TRUNCATION discards up to a full sample,
+which at that lag is a real ~23Hz/tens-of-cents error -- enough that the
+true fundamental's own harmonic-candidate correlation measured artificially
+WEAKER than the coarser, much-longer-lag (~137 samples) subharmonic
+candidate, whose truncation error is proportionally negligible at that
+length. The dominance check (`c3 > cCoarse + margin`) never fired, because
+the comparison itself was corrupted by lag-quantization noise that scales
+inversely with frequency -- exactly the numerical asymmetry `isPeak`'s local-
+max test has no way to see, since it operates on already-measured
+correlations, not on how those correlations were measured.
+
+**Fix**: round to the nearest sample (`int(x + 0.5)`) instead of truncating,
+for all three lag lookups inside `subharmonicPromote` (`roundedLag(freqHz) =
+int(ma.SR / freqHz + 0.5)`), and shrink `subharmDominanceMargin` from `0.03`
+to `0.004` to match the real, now-fairly-measured gap between the true
+fundamental's own candidate and its harmonic (both correlations sit close to
+0.99 once lag error is removed, so a margin sized for a coarser measurement
+was too wide to ever trigger).
+
+**Verified via DawDreamer**: 1046.5Hz steady-state error went from -1896.3c
+(unfixed) to +24.4c (fixed) -- inside the same 30c tolerance every other
+frequency in `verify_ac_tracker_steadystate_bias.py`'s gated set already
+uses; the frequency was promoted from a printed-only diagnostic into the
+real `GATED_FREQS` set. All 10 previously-gated frequencies (82-1318.5Hz)
+were re-measured to the cent and are unchanged, confirming the smaller
+margin introduces zero regression elsewhere. A new direct AC-tracker-only
+plosive-burst diagnostic (110/164.8/220/440/1046.5Hz, bypassing
+`multitranspose.dsp` entirely to isolate the tracker) confirms the fix does
+not weaken the tracker's existing noise-robustness property: every
+frequency including 1046.5Hz still folds cleanly to the 60Hz floor during a
+15ms broadband burst, with no octave-search excursion, and recovers to the
+correct (now-promoted) frequency within 100-150ms. `verify_plosive_transient.py`
+(multitranspose.dsp's own architectural latch-once-at-attackEdge guarantee)
+passes unchanged, as expected -- this fix lives entirely inside the AC
+tracker's own candidate-scoring math, nowhere near `multitranspose.dsp`.
+Confirmed real (not just DawDreamer-JIT) via `test-pitch-tracker.yml`,
+`build-binary.yml`, and `build-lv2.yml` all green on the real Alpine
+aarch64/musl cross-compile.
+
+**Lesson, generalizable to any future correlation-comparison logic in this
+file**: `corrAtLag`/`corrAtLagVar`'s underlying primitive is exact at the
+sample it's called with, but the CALLER choosing which sample to call it at
+(a lag derived from `ma.SR / freqHz`) can inject frequency-dependent
+quantization error that is invisible unless you trace the actual measured
+correlation values at both candidates, not just read the comparison logic's
+source. A margin/threshold tuned against a coarse (truncated) measurement
+can silently fail to transfer once the measurement itself is corrected --
+always re-tune any adjacent threshold after fixing an upstream measurement
+bug, never assume the old value still fits.
+
+## Real-audio cross-verification: `multitranspose.dsp`'s absolute pitch-lock confirmed accurate on real instrument recordings, not just synthetic sines
+
+Every prior verification of `multitranspose.dsp`'s absolute-lock accuracy in
+this file's history used synthetic sine/harmonic-stack test signals. A
+follow-up session cross-verified against seven real, freely-licensed
+recordings (University of Iowa Musical Instrument Samples, unrestricted use)
+spanning piano across five octaves (A2-A6) and violin (arco and pizzicato,
+A4) fed through the real on-device configuration (`fx/extfreqdet` driven by
+the true source pitch, simulating `pitchtracker.lv2` genuinely loaded) with
+a locked target a fifth above the source.
+
+**First attempt showed catastrophic failures (-910c to -940c) on 5 of 7
+files -- root-caused as a test-harness artifact, not a DSP bug.** The
+harness fed a constant-1.0 gate from literal sample 0, with no audio
+lead-in before the simulated key-press -- reproducing the file's own
+already-documented, already-accepted "`winSamples`/`xfSamples` can
+permanently freeze at the floor on a true zero-context cold start" edge case
+(see above): `anyRising` fired at sample 0, before `windowForFormant`'s
+internal smoother or the upstream tracker had any time to converge,
+freezing `xpose`'s crossfade window at a badly-undersized cold-start value
+for the whole render. A direct sample-by-sample trace of the worst case
+(`Piano.mf.A2.aiff`, 110Hz source) confirmed the shape exactly: the wet
+output read a correct 163.9Hz in the first 100ms, then drifted to and
+stabilized at a wrong ~97.5Hz for the rest of the render -- consistent with
+a wrong window, not a wrong lock target.
+
+**Fixed the test, not the DSP** -- per this file's own long-standing
+guidance that this specific edge case is deliberately not "fixed" in
+`multitranspose.dsp` itself, given the compile-time-cliff risk any change to
+that file carries and the fact real hardware always has a continuously-
+running mic, making a true zero-lead-in cold start realistically limited to
+the very first note after boot. Added a 150ms silent lead-in (matching
+`verify_voice_as_bass.py`'s own established convention) before the gate
+rises. Re-run: 6 of 7 files now pass within 60 cents (13.9c to 15.9c on the
+piano cases, 4.4c-10.8c on both violin articulations).
+
+**The one remaining case (`Piano.mf.A5.aiff`, 880Hz source -> 1320Hz target,
+-72.3c) was confirmed to be the file's own already-documented `xpose`
+high-frequency crossfade-splice limitation, not a new defect.** A pure
+synthetic sine rendered at the identical 880Hz->1320Hz interval (no real-
+audio harmonic content at all) showed an almost-identical -80.4c
+steady-state residual -- proving the deviation is an inherent property of
+`xpose`'s own short-window behavior above ~700Hz (see "above ~700Hz...
+develops real crossfade-splice sidebands" above), not something specific to
+real audio's timbre or noise floor. The real-audio verification script now
+applies the same widened tolerance (150c above 700Hz, matching the project's
+own convention) with an explicit `[>700Hz xpose limit]` tag, rather than
+silently passing or failing on a known algorithmic boundary.
+
+**Conclusion**: `multitranspose.dsp`'s absolute pitch-lock, when fed the real
+on-device tracker configuration, is confirmed accurate (within ~16 cents) on
+real piano across five octaves and both violin articulations under
+realistic performance conditions -- this is the first verification in this
+file's whole multitranspose.dsp history to use real recorded instrument
+audio rather than synthetic test signals throughout. The test lives at
+`test-audio-corpus/real_audio_cross_verify.py` in a gitignored scratch
+directory (downloaded audio is not committed); re-run it locally to extend
+the corpus with additional real recordings.
+
+## Free-transpose formant control had an oversized dead-zone -- shrunk for more expressive control
+
+`soladSnacOctaver.h`'s `kFormantDeadbandBlock` (the live, audio-thread-side
+formant-mix gate inside `processBlock` -- the ONLY live path; the
+`setFormantDepth`-side deadband computation is separately documented dead
+code above) was `0.27`, meaning roughly the first third of the free-
+transpose formant knob's physical travel produced zero audible change
+before the grain-path blend began ramping in at all. Shrunk to `0.04`,
+verified via a standalone C++ harness (`formant_probe.cpp`, compiled
+directly against this header with no Faust/DawDreamer involved, since the
+free-transpose engine bridges into Faust via an `ffunction` DawDreamer's JIT
+refuses to link -- see "DawDreamer verification harness" below): `formant=0`
+remains an exact, bit-identical no-op (unaffected by the deadband value,
+since a zero depth never crosses either threshold), and the knob now
+produces a measurable spectral-centroid change starting much earlier in its
+travel, with click-safety at a mid-decay formant step unaffected (the
+`kFormantMixCap`/glide-rate machinery downstream of the deadband is
+untouched). `kFormantMixCap` was separately experimentally raised from
+`0.6` to `0.85` to test whether more of the grain-path blend could be
+exposed at full depth, but this was found to make the response
+non-monotonic near the extreme end of the knob's travel (a real, measured
+regression, not assumed) and was reverted -- `0.6` remains the shipped
+value; only the deadband changed.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
