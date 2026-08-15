@@ -4317,6 +4317,84 @@ change.
 `rawGlitchTap` was removed from `effects_runtime.dsp`/`aloop.dsp`/`audio_thread.cpp`
 (`fouts[4]` → `fouts[3]`) as a confirmed-dead output.
 
+## RESOLVED: `EngineSoladSnac`'s SNAC period-tracker drift bug -- fixed via first-strong-peak selection, not the rejected single-sweep margin check
+
+Following up on "the SNAC period-tracker plausibility-gate fix regression"
+above (the single-sweep `bestVal` vs `m_r[m_period]` margin comparison that
+correctly resisted the vibraphone drift but got permanently stuck at a
+stale period through a genuine 220Hz->440Hz note change), a structurally
+different fix was tried and this time verified clean across the whole
+corpus: **`detectPitchStep()`'s peak-pick now takes the SHORTEST local-max
+correlation peak that clears `kFirstPeakRatio=0.90` of the sweep's global
+maximum, instead of unconditionally taking the global maximum itself.**
+
+This is the classic McLeod/SNAC-paper defense against subharmonic lock (a
+"clarity threshold" applied bottom-up rather than always trusting the
+tallest peak) -- not a heuristic invented for this bug, and structurally
+distinct from both previously-tried designs: it never compares against the
+CURRENTLY-LOCKED period at all (the rejected margin check's whole failure
+mode), so it carries none of that design's note-change ambiguity. The
+implementation is a second, narrower scan (`kScanStart` to `bestTau`,
+re-using the already-computed `m_r`/`m_normK` arrays -- zero new
+autocorrelation work) that stops at the first local-max peak whose value is
+`>= bestVal * kFirstPeakRatio`, falling back to the original global-max
+`bestTau` when no shorter peak clears the floor.
+
+**Verified via the standalone C++ harness** (`test-audio-corpus/
+free_transpose_harness.cpp`, `#include`ing this header directly exactly as
+production does -- no Faust/DawDreamer involved, matching this file's own
+documented `ffunction`-JIT-link limitation) against the full real-audio
+corpus plus the existing note-change regression scenario:
+
+- **Vibraphone drift (this whole investigation's original target)**: period
+  now locks at 181 within the first onset window and NEVER MOVES for the
+  entire 2s render (previously climbed 181->547, a 3.02x subharmonic, over
+  ~900ms). Measured wet-output steady-state pitch error: 4795.2c (baseline,
+  a spread comb/noise-like mistrack) -> 1.3c (fixed).
+- **Note-change regression (220Hz->440Hz->110Hz, the case that sank the
+  rejected margin-check fix)**: period trace is BYTE-IDENTICAL to the
+  unfixed baseline at every one of 1500+ traced instants (`diff` empty) --
+  the fix does not touch this case at all, since the correction only ever
+  fires when a SHORTER peak exists that the global-max scan would have
+  skipped, which a genuine note-change's own dominant new-fundamental peak
+  never triggers.
+- **Full 10-file real-audio corpus, steady-state (1.0-1.9s) worst-case
+  cents**: baseline 2856.7c (Oboe, essentially garbage) -> fixed 90.8c
+  (worst remaining case, same file). Every other file's steady-state error
+  is equal to or better than baseline; NONE regress. Concrete deltas: violin
+  arco 399.4c->19.0c, violin pizzicato 110.8c->24.8c, BbClar 483.6c->2.8c,
+  Trumpet 244.1c->4.8c, Piano A5 178.2c->22.0c, Piano A6 87.1c->73.8c.
+  Piano A2/A3/A4 and both Marimba notes are bit-identical (their raw
+  candidate scans already picked the correct global-max peak, so the new
+  narrower scan never finds a shorter one to prefer).
+- **Onset latency**: structurally unaffected -- the fix only reorders WHICH
+  already-computed candidate a completed sweep selects; it changes nothing
+  about `SNAC_HOP`/sweep cadence or the warmup period. Confirmed via
+  side-by-side early-sample traces (Piano A4, violin pizzicato): identical
+  to baseline for every sample before the first real detection.
+- **`kFirstPeakRatio` sweep (0.80/0.85/0.90/0.93/0.95/0.97)**: bit-identical
+  steady-state results at every value tested for all four stress cases
+  (vibraphone, oboe, violin arco, BbClar) -- the threshold is not sensitive
+  in this range, so 0.90 (a comfortable middle value) is shipped rather than
+  hand-tuned to one file.
+
+**Oboe's residual 90.8c is a real, disclosed, structurally DIFFERENT
+limitation from what this fix targets, confirmed via the ratio sweep
+above (zero sensitivity to `kFirstPeakRatio` rules out "the threshold picked
+the wrong peak").** Tracing shows the tracker locks stably at period=173
+(freq ~277Hz) against a true target of 130.8Hz (period ~367) -- not a clean
+octave-up alias of the target (which would be exactly period 183.5), so this
+is not simply "the 2nd harmonic won" in the way `kFirstPeakRatio` could
+fix. The true ~367-sample fundamental peak most likely never clears the
+local-max/fidelity gate at all for oboe's nasal, harmonically-dense (double-
+reed) timbre in this correlation window, matching the ALREADY-DOCUMENTED
+"dominant-2nd/3rd-harmonic instability" failure class this file names for
+`pitchtracker_ac.dsp`'s `pickFundamental` above -- the same underlying
+ambiguity showing up in a structurally different (SNAC, not table-candidate)
+tracker. This is a genuine improvement over baseline either way (stable
+90.8c beats chaotic 2856.7c), left open and disclosed rather than chased
+further blind, per this file's own standing discipline for this bug class.
+
 ## `pitch.dsp` re-applies its params every sample instead of calling them separately
 
 `pitchTick = ffunction(float dubfx_pitch_tick(float, float, float, float), ...)` takes
