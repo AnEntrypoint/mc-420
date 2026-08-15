@@ -4892,6 +4892,36 @@ envelopes and compensating dynamically), a larger change this
 environment's own verification tools cannot bound safely without a real
 listener.
 
+**The up-shift-path headroom check named above as a prerequisite for (a)
+was run.** `test-audio-corpus/upshift_headroom_audit.cpp` (new, gitignored
+scratch tooling, same standalone-C++-against-the-real-header convention as
+`free_transpose_harness.cpp`) drives the real, POST-fix `EngineSoladSnac`
+(the `grainFormant.h` destructive-cancellation fix above already shipped)
+across a 270-combination sweep: 6 real corpus timbres (piano, violin,
+both vocal singers, clarinet, marimba) x 9 SEMIS values spanning the full
+up-shift range (1-12) x 5 formant depths (0, +-0.4, +-0.8), measuring peak
+and RMS on every render.
+
+**Result: zero clipping, zero NaN/Inf, real and comfortable headroom
+margin at every one of the 270 combinations.** Worst-case peak across the
+whole sweep is 0.7287 (`Vocal.f7`, SEMIS=2, formant=-0.8) -- 2.7dB of
+margin below the 1.0 ceiling. The previously-flagged SEMIS+3 peaking
+region (RMS ratio ~1.09 vs input, noted above as unaudited) does not
+translate into a peak-headroom problem: every SEMIS value in 1-12 stays
+comfortably under 0.73 peak on the loudest tested timbre (violin, ~0.55-0.60
+peak throughout) and under 0.09-0.09 on the quietest (piano, marimba).
+
+This closes the headroom-audit prerequisite named in (a) above with a
+real, measured answer -- the up-shift path has real margin, so a future
+conservative make-up gain (the `<1.37x` figure already derived from the
+RMS-ratio calibration) would not immediately risk clipping on any tested
+real material. It does NOT implement the make-up gain itself: the
+by-ear tuning step ((a)'s own remaining requirement, "verified by ear
+across a real chord/vocal/percussive playing session on the Pi 4") still
+needs real hardware, unchanged from the reasoning above -- this measurement
+only removes one concrete unknown (peak-safety) from that future session's
+remaining work, it does not substitute for the ear-verification itself.
+
 ## `EngineSoladSnac` formant real-audio verification extended to vocal and clarinet -- same character confirmed on two new timbres
 
 Extended the standalone C++ harness above (new
