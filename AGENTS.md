@@ -4963,6 +4963,47 @@ tightest accuracy figures in the whole corpus, better than most instrument
 files, consistent with the vocal note's smooth, vibrato-free, harmonically
 simple content.
 
+## Corpus extended with a second, male voice -- both engines confirmed accurate on a genuinely different singer/register
+
+Every vocal test so far used a single singer (`female7`). Extracted a
+second VocalSet file using the identical range-request technique against
+`VocalSet11.zip`'s central directory (`FULL/male4/long_tones/straight/
+m4_long_straight_u.wav`, CRC-verified) -- a different singer, gender, and
+register than the existing corpus entry.
+
+**This specific file is a 3-note breath-separated exercise, not one
+sustained tone** (confirmed by direct measurement, not assumed from the
+filename -- the same "Oboe.mf.C4B4.aiff" lesson above already established
+this discipline is required): three clearly separated segments at
+~132/~262/~353Hz with true silence gaps between them. The middle segment
+(t=2.30-4.20s, 1.9s, mean 261.88Hz, std 3.19Hz) was trimmed out and used
+as the actual test file (`Vocal.m4.long_straight_u_seg.aiff`), matching
+this corpus's existing single-pitch-file convention rather than risking a
+wrong-assumption label on the full recording.
+
+**`multitranspose.dsp` absolute pitch-lock**: added to
+`real_audio_cross_verify.py`'s `REAL_FILES` and re-ran the full 15-file
+battery. Real on-device (`extFreqDet`-fed) accuracy: **+16.8 cents** --
+squarely inside the corpus's existing 3.7-22.4 cent range, not an
+outlier. The diagnostic-only internal-tracker path (no `pitchtracker.lv2`)
+read +194.4c, consistent with that path's own already-documented
+unreliability on real material. Full battery: PASSED.
+
+**`EngineSoladSnac` (free transpose)**: SNAC period locked at exactly 182
+samples (48000/182=263.7Hz, ~11 cents from the measured 261.88Hz true
+pitch, a normal period-quantization difference) and held with ZERO drift
+through the whole 1.9s segment -- the first-strong-peak fix's stability
+holds on this new voice too. Wet (-12-shifted) output accuracy: mean
++8.2 cents, individual 50ms windows mostly within +/-30c. Formant sweep
+(depth -0.8..+0.8): healthy peak-at-formant=0 RMS symmetry matching the
+already-established vocal/clarinet pattern, zero NaN/Inf, peaks bounded.
+
+Source: same VocalSet dataset/license as above (CC BY 4.0, attribution to
+Wilkins/Seetharaman/Wahl/Pardo, ISMIR 2018); this file
+(`FULL/male4/long_tones/straight/m4_long_straight_u.wav`) carries the
+same attribution obligation. Raw audio stays gitignored, matching
+convention.
+
 ## `pitch.dsp` re-applies its params every sample instead of calling them separately
 
 `pitchTick = ffunction(float dubfx_pitch_tick(float, float, float, float), ...)` takes
