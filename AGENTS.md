@@ -4755,6 +4755,43 @@ tuning this control for musical use should budget a make-up-gain
 compensation proportional to `|d|` as a natural next step, not yet
 implemented here since this investigation was measurement-only.
 
+## `EngineSoladSnac` formant real-audio verification extended to vocal and clarinet -- same character confirmed on two new timbres
+
+Extended the standalone C++ harness above (new
+`test-audio-corpus/free_transpose_formant_realaudio_harness.cpp`, identical
+`setPitchScale(0.5)` -> `setFormantDepth(d)` -> `reengage()` sequence, one
+fresh engine per depth) to the real vocal recording added to the corpus
+this session (`Vocal.f7.long_straight_u.aiff`, 269Hz) plus
+`BbClar.mf.D3B3.aiff` (147Hz, odd-harmonic-dominant single reed) -- both
+genuinely untested against this control before, since the original formant
+real-audio pass used only piano and violin.
+
+**Positive-formant brightening reproduces cleanly on both new timbres.**
+Spectral centroid at `formant=+0.8` vs `formant=0`: vocal 208.8Hz vs
+146.4Hz (150-250ms window), clarinet 233.0Hz vs 168.2Hz (350-450ms window)
+-- the same real, large, audible brightening already documented for
+piano/violin, now confirmed on a human voice and a different woodwind
+family than the already-tested oboe/trumpet corpus members.
+
+**RMS peaks AT formant=0 and falls off symmetrically in both
+directions** -- a sharper characterization than the existing piano/violin
+entry's "falls steadily from -0.8 through +0.8" phrasing (that data in
+fact also peaks near 0, rising -0.8->-0.4->0 before falling toward +0.8;
+this session's data makes the true shape explicit rather than just
+monotonic-looking at a glance). Measured 150-250ms RMS across
+depth -0.8/-0.4/0/+0.4/+0.8: vocal 0.0516/0.0652/0.0794/0.0652/0.0500;
+clarinet 0.2005/0.2342/0.2662/0.2168/0.1594. The loudness cost is a
+function of `|depth|`, not of sign -- confirming this is the grain-path
+mix-blend cost (`kFormantDeadbandBlock`/`kFormantMixCap`) opening
+symmetrically around center, not a directional artifact.
+
+Zero NaN/Inf across all 10 new renders (5 depths x 2 timbres), peaks
+bounded (0.485-0.600), matching the existing safety record for this
+control. New tooling (gitignored scratch, same convention as
+`free_transpose_harness.cpp`):
+`test-audio-corpus/free_transpose_formant_realaudio_harness.cpp` +
+`test-audio-corpus/measure_free_transpose_formant_centroid.py`.
+
 ## A real, verified, license-clear vocal test-material source exists for a future session: VocalSet (Zenodo, CC BY 4.0)
 
 Every prior attempt at this project's own standing gap ("no real
