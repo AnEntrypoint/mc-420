@@ -3782,6 +3782,95 @@ but any attempt needs verification against a broad real-audio battery (not
 just these 10 files) before shipping, matching this file's own standing
 discipline for this exact bug class.
 
+**A follow-up session attempted exactly the "plausibility check" direction
+named above, built a proper C++ verification harness for it, and found a
+real regression before ever shipping -- the attempt and its rejection are
+recorded here so a future session does not repeat it.** The fix: gate
+`detectPitchStep()`'s existing `m_period` update behind a plausibility
+check using data ALREADY computed in the same completed sweep (`m_r[]`/
+`m_normK[]` are populated across the full `0..MAX_PERIOD` lag range every
+sweep, so `m_r[m_period]/m_normK[m_period]` -- the correlation strength AT
+the currently-locked period, measured fresh, right now -- costs nothing
+extra to read). Only accept a new candidate (`np`) if its correlation
+(`bestVal`) clearly exceeds the current period's own freshly-measured
+correlation by a small margin (`kPeriodChangeMargin = 1.03`); otherwise
+hold at the current period and skip the existing `maxDelta` anti-jitter
+clamp entirely for that sweep. Deliberately NOT a second independent
+tracker/reference (the exact "two same-source references aren't
+independent" trap this file's own `slowRef` history warns about above) --
+it reads a single already-computed array at a different, already-known
+index.
+
+**Built `test-audio-corpus/free_transpose_harness.cpp` + `prep_pcm.py`
+(new, permanent scratch tooling -- decode the real corpus to raw 48kHz
+mono float32 once, then drive `EngineSoladSnac` directly via the real
+production `processBlock()` API in 64-sample chunks, with a per-block
+`m_period` trace) to verify.** On the exact vibraphone reproduction this
+whole investigation is about, the fix worked EXACTLY as intended: `m_period`
+locked at 181 within the first ~100ms and stayed EXACTLY at 181 for the
+entire 1.5s render -- zero drift toward the 547-sample subharmonic,
+compared to the unfixed engine's climb to 3x over ~900ms.
+
+**But a genuine note-change scenario (a real octave-related pitch change,
+220Hz -> 440Hz -> 110Hz, each note held 0.5s) exposed a real, disqualifying
+regression: the tracker got permanently stuck at the FIRST note's period
+(218 samples, ~220Hz) through the ENTIRE 440Hz note and well into the
+110Hz note, only beginning to move ~130ms after the 110Hz note started.**
+Root cause, and the generalizable lesson: autocorrelation is inherently
+strong not just at a tone's true period but at every INTEGER MULTIPLE of
+it -- a pure or harmonically-rich tone at 440Hz has real periodic energy at
+lag 218 (`2 x 109`) almost as strong as at its own true period 109, simply
+because two full cycles of a 440Hz tone look like one cycle of 220Hz. So
+when the input genuinely changes from 220Hz to 440Hz, `m_r[m_period]`
+(measured at the STALE 218-sample lock, now on the new 440Hz signal) reads
+almost as high as `bestVal` (measured at the genuinely-correct new
+109-sample candidate) -- the same "both readings are near-maximal, margin
+never clears" shape that made the fix correctly resist the vibraphone's
+spurious subharmonic pull ALSO makes it incorrectly resist a completely
+legitimate octave-related note change. **A simple "is the candidate a
+small-integer multiple of the current lock" pre-filter does not resolve
+this either**: the failure is symmetric -- a genuine downward-octave note
+change (moving to exactly double the previous period) has the identical
+old-period-still-correlates-well shape as the buggy upward-drift case, so
+any heuristic keyed on the old/new period RATIO alone cannot tell "the
+performer genuinely played an octave down" apart from "this sustained note
+is spuriously drifting toward its own subharmonic" -- both produce
+literally the same numbers from a single sweep's autocorrelation data.
+
+**This is the same fundamental ambiguity this file's own `jumpGuard`/
+`slowRef`/`onsetUntrust` history already spent many sessions learning the
+hard way for the OTHER two trackers in this codebase, now independently
+rediscovered for a THIRD, structurally different tracker in one attempt**:
+distinguishing "a real change in what's being played" from "this note's
+own tracker is second-guessing itself" is not solvable from a single
+correlation snapshot alone, in any of the three tracking algorithms this
+project has now tried. Unlike `multitranspose.dsp`'s per-voice trackers
+(which have a real MIDI gate signal marking genuine note-on events to
+anchor onset-vs-drift decisions against, the mechanism `onsetUntrust`/
+`heldDetNote` ultimately rely on), `EngineSoladSnac` is a continuously-
+engaged, note-agnostic engine with no external segmentation signal at
+all -- there is no "attackEdge" to gate against here, which is precisely
+why this class of fix is structurally harder for THIS engine than it was
+for the other two, not merely equally hard.
+
+**Reverted in full before shipping, confirmed byte-identical to the
+pre-change file via `git diff --stat`/`git status --porcelain` (both
+empty).** The vibraphone-drift bug remains open and disclosed, exactly as
+documented above -- this session's contribution is ruling out the most
+obvious single-sweep-plausibility-check fix shape via real measurement
+(not argument), and naming precisely why it fails, so a future session
+does not re-spend time on the same idea. A genuinely different direction
+worth considering next (not attempted, since it changes the mechanism's
+character, not just tunes a constant): require several CONSECUTIVE sweeps
+to agree on a new candidate before accepting it (a vote/streak
+requirement rather than a one-shot margin, mirroring `pickFundamental`'s
+own `isPeak` two-sided local-max test in spirit) -- this might distinguish
+"instantaneous marginal peak-swap" from "sustained genuine change" better
+than a single-sweep correlation-ratio comparison, but per this file's own
+standing discipline, that too needs the identical real-audio +
+note-change-regression battery this session just built before it can be
+trusted, not just the vibraphone case alone.
+
 ## `pitchtracker_ac.dsp` adversarial sweep: the subharmonic fix works as claimed, but two much larger, pre-existing (unrelated) failure classes were found and disclosed
 
 The same investigation adversarially stress-tested the shipped
