@@ -4084,17 +4084,26 @@ wider profile set (worst ~35-40c, inside tolerance).
 identical NEW vs OLD in every sampled case) -- neither is fixed here,
 both are disclosed for a future session:**
 
-- **Near-1500Hz ceiling aliasing gap**: `pickFundamental`'s topmost
-  SELECTABLE candidate is `1350.0`Hz (`1423.02` exists only as the upper
-  neighbor in the local-max `isPeak()` test, per this file's own
-  "exclude the top 1-2 candidates from ever being directly selectable"
-  design) -- so any true fundamental above roughly 1400-1450Hz (harmonic-
-  content-dependent; clean content survives to ~1450Hz, harmonically-rich
-  content fails already at 1450Hz) has no correct candidate to land on at
-  all, and mislocks catastrophically (-1860c to -5567c, snapping to an
-  unrelated frequency like 60Hz/294Hz/510Hz) rather than degrading
-  gracefully. The tracker silently promises accuracy up to its declared
-  `maxTrackHz=1500` that it structurally cannot deliver past ~1400Hz.
+- **RESOLVED -- near-1500Hz ceiling aliasing gap.** `pickFundamental`'s
+  topmost SELECTABLE candidate was `1350.0`Hz (`1423.02` existed only as
+  the upper neighbor in the local-max `isPeak()` test), so any true
+  fundamental above roughly 1400-1450Hz had no correct candidate to land
+  on and mislocked catastrophically (-1860c to -5567c). Fixed by adding
+  two more genuinely selectable candidates at the top of the same flat
+  nested-`ba.if` chain -- `1500.0` (bounded by a new `1581.12` upper
+  neighbor, existing only for the local-max test, matching the
+  established "exclude the very top candidate from direct selection"
+  safety rule) and `1423.02` (now bounded by `1500.0`/`1350.0`) --
+  keeping the chain's existing flat shape (adding candidates, not
+  sequential-dependency depth) rather than the "dense multi-point scan"
+  shape this file's `refineFreq` history already found triggers the
+  compile-time wall. Verified via DawDreamer across the previously-broken
+  60-1495Hz-region grid gap (1/k-rolloff harmonic content, matching this
+  section's own methodology): 1350/1400/1423.02/1450/1480/1495Hz now
+  measure +25.7c/-34.8c/+37.4c/+5.4c/+23.2c/+5.8c -- bounded, in the same
+  noise band as the tracker's already-accepted accuracy elsewhere in the
+  file, not the old octave-scale mislock. The tracker's declared
+  `maxTrackHz=1500` is now honestly reachable end to end.
 - **Dominant-2nd/3rd-harmonic instability**: when a non-fundamental
   harmonic carries the most energy (a common real-instrument condition --
   reed timbres favoring odd harmonics, many plucked/struck sources having
