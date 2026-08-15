@@ -4378,22 +4378,196 @@ corpus plus the existing note-change regression scenario:
   in this range, so 0.90 (a comfortable middle value) is shipped rather than
   hand-tuned to one file.
 
-**Oboe's residual 90.8c is a real, disclosed, structurally DIFFERENT
-limitation from what this fix targets, confirmed via the ratio sweep
-above (zero sensitivity to `kFirstPeakRatio` rules out "the threshold picked
-the wrong peak").** Tracing shows the tracker locks stably at period=173
-(freq ~277Hz) against a true target of 130.8Hz (period ~367) -- not a clean
-octave-up alias of the target (which would be exactly period 183.5), so this
-is not simply "the 2nd harmonic won" in the way `kFirstPeakRatio` could
-fix. The true ~367-sample fundamental peak most likely never clears the
-local-max/fidelity gate at all for oboe's nasal, harmonically-dense (double-
-reed) timbre in this correlation window, matching the ALREADY-DOCUMENTED
-"dominant-2nd/3rd-harmonic instability" failure class this file names for
-`pitchtracker_ac.dsp`'s `pickFundamental` above -- the same underlying
-ambiguity showing up in a structurally different (SNAC, not table-candidate)
-tracker. This is a genuine improvement over baseline either way (stable
-90.8c beats chaotic 2856.7c), left open and disclosed rather than chased
-further blind, per this file's own standing discipline for this bug class.
+**Oboe's originally-reported 90.8c residual was RETRACTED after a follow-up
+diagnostic -- it was a test-methodology artifact, not a real DSP limitation,
+and the first-strong-peak fix needed no further changes for this file.** A
+read-only diagnostic (a local-copy-only patched header exposing `m_r`/
+`m_normK`, never the real repo file) captured the actual sweep data at the
+t~1.0s measurement point: a strong local-max peak genuinely exists near the
+originally-assumed-target lag 370 (`corr(370)=0.9968`), but it is correctly
+OUTRANKED by the already-shorter peak at lag 185 (`corr(185)=0.9992`) --
+370 is exactly `2x185`, the octave-down subharmonic alias of the REAL
+period, not a missed fundamental. The `kFirstPeakRatio` sweep's earlier
+insensitivity (0.80-0.97 all pick tau near 185) is explained the same way:
+every ratio correctly prefers the true, shorter period.
+
+**`periodNow()` traced across the full 2s file glides smoothly (correlation
+staying 0.97-0.9996 throughout, zero instability) from ~183-186 samples
+(t<1.4s, ~260-262Hz) down to 173 samples (t>1.7s, ~277Hz) -- confirmed
+independently via a second, engine-free autocorrelation run directly on the
+raw PCM, showing the identical 185->174 trajectory.** `Oboe.mf.C4B4.aiff` is
+not a static C4 tone: the `C4B4` suffix (matching the SAME two-note-phrase
+naming convention this corpus already carries on
+`violin...A4B4`/`Trumpet...C4B4`/`BbClar...D3B3`) denotes a genuine
+pitch glide/portamento, and its true fundamental legitimately rises through
+the file's own later timestamps -- exactly the window
+`measure_free_transpose_accuracy.py`'s STEADY_WINDOWS_S (1.0-1.9s) samples.
+The tracker was correctly following real, moving pitch content the whole
+time; the 90.8-cent figure came from comparing the wet output against a
+FIXED 261.6Hz reference that wrongly assumed the whole file holds one
+static pitch.
+
+**No DSP fix was warranted or attempted** -- the candidate-selection logic
+(first-strong-peak vs. subharmonic) is working exactly as designed on this
+file, and touching `kFirstPeakRatio`/`m_fidelityThresh` further would target
+a non-bug, risking this file's own well-documented regression history for
+zero real gain. The disclosed action item for a future session, if this
+class of multi-note-phrase file is used again for steady-state accuracy
+gating, is fixing the harness -- measure against the file's own local
+instantaneous pitch, or restrict steady-state measurement to a genuinely
+static-pitch sub-window (e.g. t=0.3-1.3s for this specific file) -- not the
+tracker.
+
+## `EngineSoladSnac` (free transpose) has the same "no source separation" architectural caveat as `multitranspose.dsp`, now measured on real polyphonic audio
+
+Never previously tested on genuinely polyphonic (multi-note, real
+recorded) input -- every earlier verification of this engine used a single
+recorded note at a time. A follow-up investigation built
+`test-audio-corpus/free_transpose_poly_harness.cpp` (extends the existing
+single-file harness: sums 2-3 real corpus `.f32` files, energy-normalized
+by `1/sqrt(N)`, feeds the mix through `EngineSoladSnac` at pitch scale 0.5
+via real 64-sample `processBlock()` calls) and tested 5 real mixes: Piano
+A3(220Hz)+violin A4(440Hz, an exact octave), Piano A3+Trumpet C4(262Hz,
+non-harmonic), BbClar D3(147Hz)+violin(440Hz), Piano A3+Piano A4(octave,
+same timbre), and a 3-note piano+violin+violin triad.
+
+**Every case stayed finite, bounded, and coherently pitched** (peak
+0.44-0.73, zero NaN/Inf, `pitch_measure.measure_freq` returning a real
+periodic answer in nearly every measurement window rather than `nan`) --
+the first-strong-peak fix's stability holds on mixed input exactly as it
+does on single-note input, no case diverged into runaway drift.
+
+**Which note the tracker locks onto is content-dependent, not a fixed
+rule** (not consistently the loudest, lowest, or highest note): piano+
+trumpet locked onto trumpet; clarinet+violin locked onto clarinet;
+piano+piano(octave) locked onto the lower note immediately. The piano+
+violin octave pair showed the tracker initially lock onto piano (period
+216-219) then WALK smoothly down through 190->165->143->124->110->108 over
+~500ms before settling on violin's octave-down target -- the identical
+clamped-step "drift toward whichever fundamental is momentarily strongest"
+behavior already documented elsewhere in this file for SEQUENTIAL note
+changes, now reproduced from SIMULTANEOUS mixed content for the first
+time. The 3-note triad showed a genuine transient instability (a ~230-cent
+swing at t=0.8s) before resettling by t=1.0-1.9s. Max sample-to-sample
+derivative stayed bounded (0.04-0.29) in every case -- no explosive clicks.
+
+**Conclusion, matching the ALREADY-ACCEPTED architectural caveat this file
+documents for `multitranspose.dsp`** ("Real polyphonic (chord) real-audio
+test: absolute pitch-lock holds; a genuine architectural 'no source
+separation' caveat disclosed" above): `EngineSoladSnac` is ONE mono
+tracker with ONE delay-line read -- it cannot and structurally never will
+separate simultaneous sources. It picks whichever fundamental's
+autocorrelation locally wins (arbitrarily, by content/timbre), can take
+0.5-1s to settle on a genuinely mixed onset, and shifts only that one
+winning pitch -- any other simultaneously-played note is not separated,
+just silently absorbed/attenuated into the tracked line. This is expected
+behavior given the shipped mono architecture, not a defect to chase; a
+future session encountering "the free-transpose engine only shifts one
+note of a chord" on real hardware should recognize this, not mistake it
+for a new bug.
+
+## `EngineSoladSnac`'s formant shift verified on real recorded audio for the first time -- positive side strong and clean, negative side has a real but explained short-window non-monotonicity, and a genuine loudness cost
+
+Every prior verification of this engine's `setFormantDepth()` control
+(the dead-zone shrink documented above) used synthetic tones only. A
+follow-up investigation drove the engine directly (`#include`ing
+`soladSnacOctaver.h`, real 64-sample `processBlock()` calls matching
+`pitch_ffi.h`'s production sequence -- `setPitchScale` -> `setFormantDepth`
+-> `reengage`, one fresh engine instance per depth, no shared state) against
+real recorded piano (440Hz) and bowed violin (~440Hz) at pitch scale 0.5,
+sweeping formant depth `{-0.8, -0.4, 0, +0.4, +0.8}` and measuring
+Hann-windowed FFT magnitude-weighted spectral centroid plus RMS over three
+100ms windows (150-250ms, 300-400ms, 500-600ms) per render.
+
+**Positive-formant side is real, strong, and cleanly monotonic on real
+audio, matching (even exceeding) the synthetic expectation.** Both
+instruments show a large, consistent centroid rise as depth goes
+0 -> +0.4 -> +0.8, at every measurement window (piano: ~452 -> 573 -> 999Hz
+at 150-250ms; violin: ~1156 -> 1380 -> 2357Hz) -- far larger than the
+~19Hz spread this file documents for `multitranspose.dsp`'s UNRELATED
+formant control, a genuinely audible brightening.
+
+**Negative-formant side is flatter and non-monotonic on real audio in
+SHORT windows -- a real, explained effect, not engine instability.** -0.4
+vs -0.8 order-inverts between measurement windows on both instruments
+(e.g. violin at 150-250ms: -0.4->1178Hz, -0.8->1217Hz, reversed from the
+expected ordering; corrects itself by 500-600ms). Root cause: `dev =
+|factor-1|` where `factor=powf(2,d)` is inherently asymmetric around
+`d=0` (`2^0.8~=1.74` vs `2^-0.8~=0.574`, so `dev` is 0.74 vs 0.43 at the
+same |d|), meaning the deadband/mix-cap gate (`kFormantDeadbandBlock`,
+`kFormantMixCap`) opens roughly half as wide on the negative side -- that
+already-small negative-side movement is easily rivaled by ordinary
+harmonic-content variance in a 100ms window on real (non-stationary,
+decaying, vibrato-bearing) instrument audio, in a way a synthetic sine
+never would show. Not a bug; a real consequence of the control's own
+already-asymmetric mapping interacting with real signal variance.
+
+**A real, monotonic loudness cost accompanies the brightening on real
+audio, at every depth and window tested**: RMS falls steadily from
+formant=-0.8 through +0.8 (piano 150-250ms: 0.136 -> 0.146 -> 0.160 ->
+0.133 -> 0.100) -- more grain-path mix blend costs real windowing-driven
+energy on harmonically-rich real content, not obviously visible from a
+synthetic single-tone check. No instability anywhere: zero NaN/Inf across
+all 12 renders, peaks bounded (0.44-0.59, no clipping), `formant=0`
+byte-identical across two independent fresh-engine runs. A future session
+tuning this control for musical use should budget a make-up-gain
+compensation proportional to `|d|` as a natural next step, not yet
+implemented here since this investigation was measurement-only.
+
+## A real, verified, license-clear vocal test-material source exists for a future session: VocalSet (Zenodo, CC BY 4.0)
+
+Every prior attempt at this project's own standing gap ("no real
+human-voice sample" in the real-audio corpus, since the University of Iowa
+MIS collection has no vocal category and no other source found via casual
+web search had trustworthy-enough licensing) found nothing usable. A
+follow-up investigation, instructed to personally verify license terms
+rather than trust a third-party summary, found and confirmed one:
+**VocalSet: A Singing Voice Dataset** (Wilkins/Seetharaman/Wahl/Pardo,
+ISMIR 2018), archived at Zenodo (`zenodo.org/records/1442513`, DOI
+`10.5281/zenodo.1442513`) -- 10.1 hours of real recorded singing, 20
+professional singers (9 male, 11 female), 17 vocal techniques across all 5
+vowels, WAV/44.1kHz/mono. Its "long tones" subset (individual sustained
+single-pitch recordings) is the closest structural match to this corpus's
+existing single-note instrument files.
+
+**License, read directly off the Zenodo record page, not inferred**: CC BY
+4.0 (`creativecommons.org/licenses/by/4.0/legalcode`) -- redistribution and
+reuse are explicitly permitted, UNLIKE this corpus's existing CC0/
+unrestricted Iowa MIS files, this one requires an attribution line
+crediting the original authors/ISMIR 2018 wherever it is used or
+redistributed. Filenames (e.g. `f7_scales_c_fast_forte_i`) do not carry a
+labeled fundamental the way `Piano.mf.A4.aiff` does, so adding a file from
+this set needs a real pitch-detection pass on the audio itself (the same
+methodology this corpus's own harness already applies elsewhere) rather
+than a filename shortcut.
+
+Rejected candidates, so a future session doesn't re-try them blind:
+Freesound.org's CC0-filtered "sustained vowel singing" search returned only
+synthetic choir/VST content and a procedural drone generator's output when
+the actual results page was fetched directly -- no genuine CC0 human-vocal
+recording could be personally confirmed there this session, and its search
+UI could not be scripted to browse deeper pages reliably from here. RAVDESS
+and NUS-48E surfaced in search but their license pages were not personally
+checked this session, so neither is recommended nor ruled out.
+
+Not yet added to the corpus (this investigation was search-and-verify
+only, per its own scope). **A real, checked constraint for whoever attempts
+this next**: Zenodo serves the dataset as exactly two archives
+(`VocalSet1-2.zip`, ~5.99GB; `VocalSet11.zip`, ~2.08GB), confirmed via the
+record's own file API -- there is no individual-file download endpoint.
+Pulling either whole archive just to extract one representative "long
+tones" WAV is disproportionate to a normal session's disk/bandwidth budget
+and was deliberately NOT attempted here for that reason. The concrete next
+step is an HTTP range-request read of the zip's own central directory
+(standard zip format supports this without downloading the whole archive)
+to locate and extract a single target file, run this corpus's own
+pitch-detection methodology on it to establish a labeled target frequency,
+and add it to `test-audio-corpus/real_audio_cross_verify.py`'s
+`REAL_FILES` with an explicit CC BY 4.0 attribution note (this corpus's
+downloaded audio is gitignored/not committed, matching the existing
+convention, but the attribution requirement still applies to any
+distribution of the raw file itself, so keep the credit line in the
+harness source, not just in this doc).
 
 ## `pitch.dsp` re-applies its params every sample instead of calling them separately
 
