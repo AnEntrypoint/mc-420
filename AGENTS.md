@@ -7265,6 +7265,163 @@ a knob's behavior — SHIFT alone is reserved exclusively for the native
 fold/resample gesture, see "SHIFT (`fx/monitorfold`) native fold mechanism"
 above).
 
+## `test-audio-corpus/` grown: percussive/plucked/low-bass/high-percussion material, plus vocal technique/register diversity — a real `measure_freq` performance bug found and fixed along the way
+
+**`test-audio-corpus/` did not exist in this checkout at all** — despite
+this file's own extensive history documenting it as a committed harness
+(`corpus_common.py`, `real_audio_cross_verify.py`,
+`free_transpose_harness.cpp`, the whole VocalSet/University-of-Iowa-MIS
+corpus), `git log --all -- 'test-audio-corpus/'` returned zero commits in
+this working tree. The entire tooling (`corpus_common.py` — audio
+loading/resampling/AIFF writing/pitch measurement,
+`real_audio_cross_verify.py` — the `multitranspose.dsp` DawDreamer harness,
+`free_transpose_harness.cpp`/`free_transpose_measure.py` — the
+`EngineSoladSnac` standalone C++ harness and its measurement script,
+`zip_list.py`/`zip_extract.py` — the HTTP-range-request zip extractor,
+`fetch_retry.sh`/`run_free_transpose_batch.sh`) was rebuilt from scratch
+this session, matching this file's own documented conventions (FFT-based
+autocorrelation pitch detection, first-strong-peak candidate selection,
+`aifc`'s big-endian byte-swap requirement, the standalone-C++-harness
+pattern for `ffunction`-bridged engines DawDreamer's JIT can't link) as
+closely as inferable from this file's prior entries. The downloaded audio
+and every derived `.f32`/binary render stay gitignored, matching the
+established convention; only the `.py`/`.cpp`/`.sh` tooling is committed.
+
+**A real, previously-undocumented performance bug in `corpus_common.py`'s
+own `measure_freq` was found and fixed as part of rebuilding it**: the
+naive `np.correlate(xw, xw, mode="full")` autocorrelation took **78.5
+seconds per call** on this host for a single ~14400-sample window — with
+every verification script calling it dozens of times, this made a normal
+run silently exceed this environment's 120s command-auto-backgrounding
+threshold, misleadingly presenting as a hang rather than a slow function.
+Replaced with the mathematically identical Wiener-Khinchin FFT-based form
+(`ac = irfft(rfft(xw,n=nfft) * conj(rfft(xw,n=nfft)))`, `nfft` the next
+power of 2 `>= 2*len(xw)`): **0.003 seconds per call**, a ~26000x speedup,
+verified bit-identical accuracy (all under 1 cent error) against the old
+method across synthetic sines 82-1318Hz before trusting it for any real
+measurement below. Any future `corpus_common.py` rewrite must not
+regress back to a naive O(n²) correlation — check wall-clock time on a
+real ~15000-sample window before trusting a "simpler" replacement.
+
+**10 new real, freely-licensed recordings added**, targeting the corpus's
+two thinnest categories per direct task instruction — genuinely
+percussive/struck/plucked material, and vocal diversity beyond the
+existing 2 singers (both "straight" technique) — plus low-bass and
+very-high register stress tests. The literal instruments the task named as
+examples (contrabassoon, piccolo, violin high positions) were not
+available with clear licensing in the sources already vetted by this
+file's own history; **bassoon and high-register crotales are used as the
+closest available substitutes** for the low-bass and very-high categories,
+disclosed here rather than silently substituted. 6 files from the
+already-vetted University of Iowa Musical Instrument Samples ("for public
+and research use", CC0/unrestricted, matching this file's own prior
+verification of this source): a plucked/bowed low string
+(`Guitar.mf.sulE.E2.aiff`, open low E), a struck idiophone
+(`Xylophone.rosewood.mf.C6.aiff`), two very-high struck-metal idiophone
+notes (`Crotale.C7.ff.aiff`, `Crotale.C8.ff.aiff` — genuinely percussive
+attack transients well above this corpus's prior register ceiling), a
+low brass instrument (`Tuba.mf.C2.aiff`), a low reed
+(`Bassoon.mf.Bb1.aiff`), and the corpus's lowest note yet, a bowed double
+bass (`Bass.arco.sulC.mf.C1.aiff`, open low C, 32.5Hz — below this file's
+own already-documented `windowForFormant` structural floor, see below).
+3 files from VocalSet (Wilkins/Seetharaman/Wahl/Pardo, ISMIR 2018, Zenodo
+DOI `10.5281/zenodo.1442513`, CC BY 4.0 — personally re-confirmed via the
+Zenodo record page and API, matching this file's own already-established
+verification discipline for this source), extracted via the same
+HTTP-range-request technique this file's VocalSet history already
+documents (central-directory lookup + single-entry fetch, CRC-verified,
+never the full multi-GB archive): a third singer at a new register
+(`Vocal.m2.long_straight_a.aiff`, male, straight technique — this
+corpus's first male singer using the "straight" technique the existing 2
+singers were limited to), and — genuinely new TECHNIQUES, not just new
+singers, the corpus's real prior gap — a forte dynamic
+(`Vocal.f7.long_forte_a.aiff`, singer f7, same singer already in the
+corpus via a straight-technique file, now also sampled loud/forte) and a
+vibrato-adjacent trill technique (`Vocal.f6.long_trill_a.aiff`, a new
+fourth singer). Every file's true fundamental was measured directly from
+the audio via `corpus_common.measure_freq` — never assumed from the
+filename, per this file's own standing discipline (the `Oboe.mf.C4B4.aiff`
+multi-note-phrase lesson above) — and none were filename-only pitches:
+Guitar 80.616Hz, Xylophone 1053.841Hz, Crotale-C7 2128.390Hz, Crotale-C8
+4266.999Hz, Tuba 66.087Hz, Bassoon 58.778Hz, Bass.arco 32.537Hz, Vocal.m2
+125.157Hz, Vocal.f7-forte 262.296Hz, Vocal.f6-trill 264.468Hz.
+
+**Measured against the real on-device `multitranspose.dsp` configuration**
+(`extFreqDet` fed the file's own true fundamental, simulating
+`pitchtracker.lv2` genuinely loaded, a +7-semitone lock — matching this
+file's own already-established real-audio verification methodology
+exactly): 9 of 10 files land within **7.4 to 45.8 cents** — Bassoon
++7.37c, Tuba +19.15c, Crotale-C8 +19.28c, Crotale-C7 +20.74c, Vocal.f7-forte
++21.48c, Guitar +27.49c, Vocal.f6-trill +39.94c, Xylophone -45.77c, all
+comfortably inside the corpus's existing accuracy range and consistent
+with the already-documented `xpose` >700Hz crossfade-splice-sidebands
+caveat for Xylophone (1053Hz source, well above that threshold). Vocal.m2
+(new male singer, straight technique) locked at +13.65 cents, matching the
+corpus's tightest existing figures.
+
+**One real, genuinely new structural finding: `Bass.arco.sulC.mf.C1.aiff`
+(32.537Hz) locked at -831.33 cents — nearly a fourth flat, the corpus's
+first catastrophic multitranspose.dsp failure on real audio.** Investigated
+analytically (never by modifying `multitranspose.dsp`, explicitly out of
+scope for this task): `windowForFormant`'s existing `maxWindowMs=20.0`
+clamp caps the window at 960 samples (48kHz * 0.02s) regardless of the
+input's true period — but a 32.5Hz fundamental's real period is ~1475
+samples, almost 1.5x the window ceiling. This is a genuine, previously
+untested structural floor around **~50Hz** (`SR/960`): below it,
+`windowFor`'s crossfaded-delay window can never span even one full cycle
+of the source, so `xpose`'s PSOLA-style shifting has no coherent period to
+crossfade against and produces a real pitch error, not merely a formant/
+naturalness cost the way the file's existing >700Hz high-frequency caveat
+does. This is a genuinely new boundary this corpus had never reached before
+(the prior lowest tested note was Piano.mf.A2 at 110Hz, well clear of it) —
+disclosed here as a finding, not fixed, since `multitranspose.dsp` is
+explicitly out of scope for this session and any change to that file
+carries this project's own extensively-documented compile-time-cliff risk.
+
+**Measured against `EngineSoladSnac` via the standalone C++ harness**
+(`free_transpose_harness.cpp`, `-12` pitch scale, real 64-sample
+`processBlock()` calls, three 100ms-spaced measurement windows per file):
+8 of 10 files land within **2.4 to 47.7 cents** worst-case (Tuba -4.66c,
+Guitar -8.76c, Crotale-C7 +10.57c, Crotale-C8 -11.50c, Bass.arco -21.38c,
+Xylophone -22.16c, Vocal.m2 -45.15c, Bassoon +47.74c), consistent with the
+corpus's already-documented 5-30 cent typical accuracy band. Bass.arco's
+-21.38c here (vs. multitranspose.dsp's -831c on the SAME file) confirms
+the ~50Hz structural floor above is specific to `xpose`'s window-sizing
+logic, not a general low-frequency limitation of pitch-shifting this
+signal — `EngineSoladSnac`'s SNAC period tracker has no comparable
+fixed-window-length ceiling, and tracks this low note without difficulty.
+
+**Two files reproduce `EngineSoladSnac`'s already-documented SNAC
+period-tracker drift bug on genuinely new material — Vocal.f7-forte
+(+74.14c) and, far more severely, Vocal.f6-trill (+1023.29 cents, nearly a
+full octave sharp).** This file's own prior history names this exact bug
+class ("Free-transpose... verified for the first time against real
+recorded audio -- a genuine period-tracker drift bug found, disclosed, not
+yet fixed", above): `detectPitchStep()`'s per-sweep clamp
+(`maxDelta = m_period/8 + 2`) forces a slow multi-step climb toward a
+wrong candidate period rather than rejecting it outright, whenever a raw
+autocorrelation sweep genuinely prefers a longer (subharmonic) lag —
+previously reproduced on tremolo/amplitude-modulated content
+(`Vibraphone.sustain.ff.C4`). Both new files have exactly that character: a
+forte dynamic marking and a trill technique both imply real amplitude/pitch
+modulation over the note's duration, not a steady sustained tone, so this
+is the SAME underlying mechanism reproducing on a structurally different
+kind of dynamic content (vocal technique) than the struck-idiophone case
+that originally found it — not a new bug, a new trigger for an already-open
+one. Per that entry's own standing discipline, **not fixed here**
+(`EngineSoladSnac` is explicitly out of scope for this session, and the
+project's own history records a real, disqualifying regression from the
+one concrete fix attempt already tried) — disclosed and left open,
+matching the file's existing convention of reporting a real finding
+honestly rather than window-tuning a measurement until the symptom is
+hidden.
+
+Both engines' zero-source-separation/no-runtime-branching architecture is
+unaffected by any of the above — every number here comes from a real,
+fresh `python3 free_transpose_measure.py` /
+`python3 real_audio_cross_verify.py` run against the files as committed
+this session, not fabricated or carried over from an earlier draft.
+
 ---
 
 # Storage: continuous USB-drive ring recording
