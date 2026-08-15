@@ -35,7 +35,8 @@ public:
         m_fm += (m_targetFm - m_fm) * kFormantGlideInvSamples;
         double Tin   = m_Tin;
         double outHop = Tin / (double)m_scale;
-        int    glen   = (int)(2.0 * Tin);
+        double glenD  = (m_scale > 1.0f) ? (2.0 * outHop) : (2.0 * Tin);
+        int    glen   = (int)glenD;
         double targetLag = Tin * (3.0 + (double)m_fm);
 
         if (!m_seeded) {

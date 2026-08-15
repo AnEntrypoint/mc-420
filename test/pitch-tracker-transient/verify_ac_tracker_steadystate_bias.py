@@ -13,8 +13,7 @@ COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
 MAX_STEADY_CENTS = 30.0
 
-GATED_FREQS = (82.0, 110.0, 130.8, 164.8, 196.0, 220.0, 246.9, 440.0, 880.0, 1318.5)
-KNOWN_ISSUE_FREQ = 1046.5
+GATED_FREQS = (82.0, 110.0, 130.8, 164.8, 196.0, 220.0, 246.9, 440.0, 880.0, 1318.5, 1046.5)
 
 
 def compile_processor(engine, dsp_text, name):
@@ -70,11 +69,6 @@ def main():
         ok = abs(err) < MAX_STEADY_CENTS
         all_ok = all_ok and ok
         print(f"    {f:8.1f}Hz -> {err:+7.1f}c ({'OK' if ok else 'FAIL'})")
-
-    y_known = render_raw_detected_freq(text, KNOWN_ISSUE_FREQ)
-    err_known = steady_state_cents(y_known, KNOWN_ISSUE_FREQ)
-    print(f"    {KNOWN_ISSUE_FREQ:8.1f}Hz -> {err_known:+7.1f}c (known pre-existing subharmonic-lock "
-          f"issue on rich harmonic content, not gated -- see AGENTS.md)")
 
     print()
     if all_ok:

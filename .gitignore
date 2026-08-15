@@ -60,3 +60,5 @@ test/hardware/aloop.conf.backup.*
 __pycache__/
 
 .claude/
+
+test-audio-corpus/
