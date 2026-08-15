@@ -3723,6 +3723,292 @@ non-monotonic near the extreme end of the knob's travel (a real, measured
 regression, not assumed) and was reverted -- `0.6` remains the shipped
 value; only the deadband changed.
 
+## Free-transpose (soladSnacOctaver.h / EngineSoladSnac) verified for the first time against real recorded audio -- a genuine period-tracker drift bug found, disclosed, not yet fixed
+
+A 6-agent parallel investigation (fanned out after the real-audio corpus
+verification above shipped) built a standalone C++ harness (`g++ -O2
+-std=c++17`, `#include`ing this header directly, no Faust/DawDreamer
+involved, matching this file's own documented "the JIT refuses to link
+ffunction" limitation) that drives `EngineSoladSnac` exactly as production
+does (`setPitchScale(0.5)` then `reengage()`, `processBlock()` in real
+64-sample chunks) against all 10 files in the real-audio corpus.
+
+**Pitch-shift accuracy is good** (within ~5-30 cents, measured as the
+median of several 100ms sub-windows spanning 300-900ms) on 8 of 10 files.
+Two files exposed real, previously-undocumented issues:
+
+**A genuine period-tracker drift bug**, most clearly on
+`Vibraphone.sustain.ff.C4.stereo.aif` and to a lesser extent
+`violin.pizz.mf.sulA.A4B4.aiff`'s decay tail: the SNAC period tracker's
+internal `m_period` can drift 2-3x away from the true fundamental period
+over roughly 400ms-1s after engage/onset, confirmed independently via
+engine-internal state tracing (vibraphone: `m_period` climbing 181->547
+samples, a 3.02x subharmonic, over ~900ms) and via FFT of the wet audio
+itself (a spread comb of close-spaced sidebands 90-185Hz during 0.3-0.6s,
+instead of one clean tone near the 130.8Hz target). Root-caused to
+`detectPitchStep()`'s own per-sweep clamp `maxDelta = m_period/8 + 2`
+(existing anti-jitter code): each ~43ms SNAC re-sweep can only move the
+locked period by ~12.5%+2 samples, so when a raw autocorrelation peak-pick
+genuinely prefers a longer (subharmonic) lag on tremolo/amplitude-modulated
+content (the same "harmonic balance shift" failure class already
+documented elsewhere in this file for the unrelated `multitranspose.dsp`
+zero-crossing tracker), the clamp forces a SLOW multi-step climb toward
+that wrong value rather than rejecting it or jumping immediately, and the
+output audibly garbles during the climb itself. Once the climbing estimate
+happens to land on a value that is still phase-coherent (here, exactly
+3x), the engine recovers a correct final pitch anyway -- but there is a
+real, disclosed window of garbled output first. No NaN/Inf/crash was ever
+produced, and the emergency buffer-safety path never fired on any file.
+
+**Structural, already-precedented, now confirmed for this engine
+specifically**: `MIN_PERIOD=48` samples (1000Hz ceiling) means any input
+fundamental above ~1000Hz (reproduced on `Piano.mf.A6.aiff`, 1760Hz) cannot
+ever have its true period tracked -- the estimate is structurally forced to
+wander among subharmonics and never truly stabilizes. Audible pitch stayed
+within ~30 cents in the tested window but grew unstable later in the
+render. Matches this file's already-documented `xpose` "above ~700Hz"
+high-frequency limitation in spirit, now independently confirmed for this
+separate engine.
+
+**Not shipped -- per this project's own repeatedly-learned lesson that
+blind tracker-lock fixes tend to introduce worse regressions than the bug
+they target** (the `jumpGuard`/`slowRef` saga documented at length above
+for the OTHER two trackers in this codebase). A plausible fix direction
+(capping how far `detectPitchStep()`'s clamp is allowed to walk
+cumulatively within one detection cycle, or requiring a plausibility/
+energy-consistency check against the currently-locked period before
+accepting a longer-lag candidate) is disclosed here for a future session,
+but any attempt needs verification against a broad real-audio battery (not
+just these 10 files) before shipping, matching this file's own standing
+discipline for this exact bug class.
+
+## `pitchtracker_ac.dsp` adversarial sweep: the subharmonic fix works as claimed, but two much larger, pre-existing (unrelated) failure classes were found and disclosed
+
+The same investigation adversarially stress-tested the shipped
+`subharmonicPromote` fix (rounded lags, `subharmDominanceMargin=0.004`) via
+220 DawDreamer renders spanning 44 frequencies (60-1495Hz) x 5
+harmonic-richness profiles (pure sine, 1/k rolloff, 1/k^2 rolloff,
+dominant-2nd-harmonic, dominant-3rd-harmonic), plus a true A/B against a
+reconstructed pre-fix variant on every failing case to separate "caused by
+this session's fix" from "pre-existing."
+
+**The fix genuinely works for its target case** (1046.5Hz, 1/k-rolloff:
++24.4c fixed vs -1896.3c unfixed, matching the shipped numbers exactly) and
+does not regress any of the 10 already-CI-gated frequencies across the
+wider profile set (worst ~35-40c, inside tolerance).
+
+**Two much larger failure classes were found, confirmed via A/B to be
+100% pre-existing and completely unaffected by the shipped fix (bit-
+identical NEW vs OLD in every sampled case) -- neither is fixed here,
+both are disclosed for a future session:**
+
+- **Near-1500Hz ceiling aliasing gap**: `pickFundamental`'s topmost
+  SELECTABLE candidate is `1350.0`Hz (`1423.02` exists only as the upper
+  neighbor in the local-max `isPeak()` test, per this file's own
+  "exclude the top 1-2 candidates from ever being directly selectable"
+  design) -- so any true fundamental above roughly 1400-1450Hz (harmonic-
+  content-dependent; clean content survives to ~1450Hz, harmonically-rich
+  content fails already at 1450Hz) has no correct candidate to land on at
+  all, and mislocks catastrophically (-1860c to -5567c, snapping to an
+  unrelated frequency like 60Hz/294Hz/510Hz) rather than degrading
+  gracefully. The tracker silently promises accuracy up to its declared
+  `maxTrackHz=1500` that it structurally cannot deliver past ~1400Hz.
+- **Dominant-2nd/3rd-harmonic instability**: when a non-fundamental
+  harmonic carries the most energy (a common real-instrument condition --
+  reed timbres favoring odd harmonics, many plucked/struck sources having
+  a prominent 2nd harmonic), `pickFundamental`'s own local-max scan is not
+  robust to it, producing large (204c to nearly 1400c) AND UNSTABLE
+  (sample-to-sample-varying, not settling) errors across most of the
+  60-350Hz register -- including at frequencies that are themselves exact
+  candidate-table entries. `subharmonicPromote` cannot fix this by
+  design: the corruption happens upstream, inside `pickFundamental`'s own
+  candidate selection, before `subharmonicPromote` ever runs.
+
+Neither gap is safe to fix blind. A future session's concrete next steps
+(disclosed, not attempted): for the ceiling gap, either lower
+`maxTrackHz` to the true reachable ~1350-1400Hz ceiling or extend the
+candidate grid upward with real selectable entries; for the harmonic-
+dominance instability, investigate whether `isPeak()`'s local-maximum
+test needs strengthening against non-fundamental-dominant harmonic
+content -- a genuinely different, larger problem than the subharmonic-
+promotion gap this session's shipped fix addressed.
+
+## Real polyphonic (chord) real-audio test: absolute pitch-lock holds; a genuine architectural "no source separation" caveat disclosed
+
+No test in this codebase had ever fed `multitranspose.dsp` a genuinely
+POLYPHONIC real recording (multiple simultaneous real notes, not a single
+real note or synthetic chord of pure sines) while locking multiple voices.
+The same investigation built one: real single-note recordings from the
+corpus above summed together (Piano A3 220Hz + Piano A4 440Hz;
+cross-timbre Piano A3 + violin arco A4) fed through `multitranspose.dsp`
+with 2-3 voices absolute-pitch-locked to a chord, `fx/extfreqdet` fed the
+true pitch of just ONE of the two mixed real notes (the realistic
+on-device scenario, since one shared tracker reading feeds every held
+voice).
+
+**Chord-lock accuracy on real polyphonic input matches the already-
+verified single-real-note baseline** (worst cases 16.9-38.1 cents,
+matching the ~13-22c figures already documented above) -- no new
+degradation from genuinely polyphonic real input.
+
+**A real, previously-unverified architectural limitation, not a bug**:
+because `multitranspose.dsp` applies ONE shared multiplicative pitch ratio
+to the whole composite dry signal per voice (no spectral source
+separation -- inherent to the shipped absolute-pitch-lock design, see "
+`multitranspose.dsp` reverted from interval-harmonizer back to true
+absolute pitch-lock" above), any OTHER real note present in the mixed
+input rides along transposed by the same ratio and lands at a musically
+arbitrary (often dissonant, sometimes LOUDER than the intentionally locked
+target) frequency. Playing a real chord/dyad into the mic while holding a
+target chord on the keys will audibly produce both the intended locked
+pitches AND a transposed, uncorrected copy of whatever else was sounding.
+This is expected behavior given the shipped design, not a defect to chase
+-- a future session encountering "another pitch leaking through" live on
+hardware should recognize this, not mistake it for a new bug.
+
+The internal zero-crossing fallback tracker's behavior on polyphonic input
+(192-207c error) was confirmed to be no worse than its already-documented
+single-note real-audio unreliability, not a polyphony-specific
+regression. Click/instability safety on polyphonic-mix onsets stayed
+within this project's existing tolerance in every tested scenario.
+
+## `holdLastGood`'s onset-hold gate froze at the PREVIOUS note's stale frequency, not 0.0, for every note after the first -- fixed
+
+WITNESSED via a real-audio test that (for the first time) exercised
+`pitchtracker_ac.dsp` as a single continuously-running DSP instance across
+MULTIPLE notes with genuine silence gaps between them -- matching how the
+tracker actually runs on live hardware, which never restarts between
+notes, unlike every prior verification's own per-file-fresh-instance
+methodology.
+
+This file's own header comment (and every prior session) claimed the
+tracker "holds at 0.0 ... for the first ~35ms after any fresh onset OR
+RE-ATTACK FROM SILENCE." That claim was only ever true for the DSP
+instance's literal first-ever sample: `holdLastGood`'s recursive register
+zero-initializes exactly once, and `heldStep(prev) = ba.if(gate, freqHz,
+prev)` simply carries forward whatever was LAST COMMITTED whenever `gate`
+is false -- so once the tracker has locked onto a real nonzero value even
+once, every SUBSEQUENT not-ready period (i.e. every note after the first)
+holds at that PREVIOUS note's stale settled frequency, not 0.0. Directly
+reproduced: a 3-note real-audio sequence (piano A6, violin arco, marimba
+C4, vibraphone C4, in sequence with true silence between) showed each
+note's hold window reading the immediately-preceding note's own settled Hz
+almost exactly.
+
+This is a real, practically-relevant gap, not a cosmetic one: since
+`multitranspose.dsp`'s `heldDetNote` samples `freqDet` once at
+`attackEdge` and holds it for the whole note, a performer whose MIDI
+key-press lands within ~35ms of a fresh acoustic onset (plausible in
+ordinary or fast playing) risked the entire new note locking to the WRONG
+(previous) pitch for its full duration -- not just a brief onset click.
+
+**Fix**: detect the ready-gate's falling edge (`fallingEdge = (gate:mem) *
+(1.0 - gate)`, one new `:mem` reference, no new recursive `~` structure)
+and snap the held value to `0.0` on that edge, before resuming normal
+hold-then-track behavior:
+
+```
+holdLastGood(freqHz, gate) = out
+with {
+    fallingEdge = (gate:mem) * (1.0 - gate);
+    heldStep(prev) = ba.if(gate, freqHz, ba.if(fallingEdge > 0.5, 0.0, prev));
+    out = heldStep ~ _;
+};
+```
+
+Verified via DawDreamer: an isolated first-ever onset still holds exactly
+`0.0` through the whole ~33ms window (bit-identical to before); a 3-note
+continuous-instance sequence with genuine silence gaps now holds exactly
+`0.0` for EVERY note, not just the first; the plosive-burst structural
+safety property (an unrelated mechanism) is unaffected, still recovering
+within 150ms. The full existing regression suite
+(`verify_ac_tracker_steadystate_bias`, `verify_plosive_transient`,
+`verify_highoctave_transient`, `verify_coldstart_window_freeze`) was
+re-run and passes unchanged. Confirmed real (not just DawDreamer-JIT) via
+`test-pitch-tracker.yml`/`build-binary.yml`/`build-lv2.yml` on the real
+Alpine aarch64/musl cross-compile.
+
+**A second, related, NOT-fixed finding, disclosed for a future
+session**: `energyReady`'s readiness gate depends on the input envelope
+dropping below a fixed absolute floor (`env > 1e-6`, roughly -60dBFS on a
+0.6-peak-normalized signal) to reset and force a fresh 35ms hold on the
+next onset. A synthetic sweep found that at a realistic ~-40dB relative
+background noise floor (plausible for a continuously-running live mic
+picking up room ambience, hand noise, sympathetic ringing, or a previous
+note's own decaying tail), the envelope never drops back below the floor
+between notes, so the readiness counter never resets and `ready` stays
+permanently true after the first note -- meaning the ENTIRE onset-hold
+protection this section just fixed is silently bypassed under ordinary,
+not extreme, real-world conditions, letting the raw not-yet-converged
+tracker output reach `multitranspose.dsp` completely unprotected. This
+is architecturally a harder problem than the falling-edge fix above (a
+fixed absolute floor vs. a relative/adaptive one is a real design
+question, and this file's own history warns at length against blindly
+re-attempting the "amplitude-envelope-ratio transient detector" pattern
+this resembles -- see "Three fix designs were tried and rejected" above,
+which found that class of detector cannot cleanly separate "broadband
+noise" from "the tone's own natural envelope ripple" at the reaction
+speed this needs). Left open and disclosed rather than fixed blind.
+
+## Formant CC cap was throttled to 1/3 of the DSP's own verified-safe range -- widened
+
+The same investigation characterized `multitranspose.dsp`'s formant
+control (`winSkewMul`/`formantXfSkew`/`formantTiltDb`) far more broadly
+than the single 220Hz case previously tested: a DawDreamer sweep across 4
+source frequencies x 4 shift amounts x 5 formant values (the DSP's full
+declared -3..+3 range) found `formant=0` remains an exact bit-identical
+no-op in all 16 combinations (not just the one previously checked), and
+that the full declared range produces real spectral movement (33.8-973.8Hz
+spread, mean 245Hz) -- far more than the ~19Hz previously measured.
+
+**But that larger range was never actually reachable from real
+hardware.** `apc_grid.cpp::applyFormantCC` computed the CC53-derived
+formant value with a vestigial `* 1.0f` scale (`v = ((data2-64)/63.0) *
+1.0f`), capping the real control surface at roughly +/-1.0 even though the
+DSP it drives was built and tested across the full +/-3.0 range -- the
+function's own `if (v>3.0f)/if(v<-3.0f)` clamp could never bind. A second
+sweep restricted to the true reachable +/-1.0 range confirmed the
+previously-measured ~19Hz figure was accurate and representative (mean
+25.5Hz across the same 16 combos), not an undersampling of a much larger
+achievable range -- it was genuinely all a performer could ever reach.
+
+Analytically, the sweep found a real structural knee at `formant=+1.5`:
+`formantXfSkew(formant) = pow(4.0, formant/3)` means `xfSamples/winSamples`
+crosses exactly `1.0` at that point (`0.5*4^0.5 = 1.0`); below it,
+`xpose`'s crossfade completes cleanly within one phase-accumulator wrap
+(the blend structurally resolves); above it, the ratio inverts and the
+blend never cleanly resolves to a single-tap read -- a genuine regime
+change, not measurement noise, and it accounts for 42-100% of the entire
+measured spread across every one of the 16 combos.
+
+**Fix**: widened `applyFormantCC`'s scale from `1.0f` to `1.5f`, roughly
+1.5x today's reachable range, chosen to sit at (not past) the smooth-
+response `formant=+1.5` knee identified above rather than jump straight
+to the DSP's full declared range, which the sweep showed becomes
+non-monotonic/dramatic past that point -- a taste judgment this
+investigation could not make blind without real-hardware audition, so a
+conservative widening was chosen over the maximal one. The `if
+(v>3.0f)/if(v<-3.0f)` clamp remains as a harmless safety backstop matching
+the DSP's own declared range. A future session with real hardware/ear
+access should audition the `+1.5..+3.0` region specifically before
+considering any further widening.
+
+## Real-audio corpus further extended: brass and woodwinds
+
+Trumpet (`Trumpet.novib.mf.C4B4.aiff`, 261.63Hz), Bb clarinet
+(`BbClar.mf.D3B3.aiff`, 146.83Hz), and oboe (`Oboe.mf.C4B4.aiff`,
+261.63Hz) were added from the same University of Iowa MIS source (its
+Brass/Woodwinds categories, not previously sampled) -- a strong-harmonic
+buzz-driven brass tone, a hollow odd-harmonic-dominant single-reed tone at
+a lower register than anything else in the corpus except piano A2, and a
+nasal harmonically-dense double-reed tone, each stressing the
+autocorrelation tracker differently from the existing bowed-string and
+struck-idiophone timbres. All three pass the gated real-on-device check
+comfortably (+3.7c to +8.6c). The corpus is now 13 real files: piano (5
+octaves), violin (arco + pizzicato), marimba (2 notes), vibraphone,
+trumpet, clarinet, oboe -- still no vocal sample, per the already-disclosed
+licensing-reliability reasoning above.
+
 ## Manipulator-style formant control now reaches the polyphonic pitch-lock engine too
 
 `fx/formant` (CC53, `apc_grid.cpp::onFormantCC`) was already a live Faust
