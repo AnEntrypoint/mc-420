@@ -3664,12 +3664,37 @@ applies the same widened tolerance (150c above 700Hz, matching the project's
 own convention) with an explicit `[>700Hz xpose limit]` tag, rather than
 silently passing or failing on a known algorithmic boundary.
 
+**Corpus later extended with real pitched percussion** (Marimba yarn-mallet
+C4/C5, Vibraphone sustain C4, same University of Iowa MIS source, fetched
+from its `MIS-Pitches-2012`/`sound files/MIS Pitches - 2014` tree) to cover
+genuinely percussive attack transients alongside piano/violin's sustained
+tone. All three pass the gated real-on-device check (+17.8c to +22.4c,
+well inside tolerance, the C5 case correctly falling under the >700Hz
+looser band). **No real human-voice sample was added** -- the University of
+Iowa MIS collection has no vocal category (confirmed directly against the
+site), and no other source found via web search had licensing terms clear
+enough to trust for this kind of automated download-and-redistribute-in-
+test-fixtures use; rather than risk mis-licensed test material, this gap is
+left open and honestly disclosed. The engine's own pitch detection
+(zero-crossing/autocorrelation-based) and shifting (PSOLA-style) are
+timbre-agnostic by construction -- they operate on fundamental frequency and
+period, not on which instrument produced them -- so the piano/violin/
+percussion spread already exercises very different harmonic-richness and
+attack-transient profiles; a genuine human-voice test would mainly stress
+the DEDICATED formant-morph control path (`verify_formant_morph.py`,
+already passing) rather than the tracking/lock path this whole corpus
+targets. A future session with a confirmed-licensed vocal source (e.g. a
+purpose-recorded a cappella note, or a dataset with an unambiguous CC0/
+public-domain grant) should add it to `REAL_FILES` in
+`test-audio-corpus/real_audio_cross_verify.py`.
+
 **Conclusion**: `multitranspose.dsp`'s absolute pitch-lock, when fed the real
-on-device tracker configuration, is confirmed accurate (within ~16 cents) on
-real piano across five octaves and both violin articulations under
-realistic performance conditions -- this is the first verification in this
-file's whole multitranspose.dsp history to use real recorded instrument
-audio rather than synthetic test signals throughout. The test lives at
+on-device tracker configuration, is confirmed accurate (within ~22 cents) on
+real piano across five octaves, both violin articulations, and pitched
+percussion (marimba, vibraphone) under realistic performance conditions --
+this is the first verification in this file's whole multitranspose.dsp
+history to use real recorded instrument audio rather than synthetic test
+signals throughout. The test lives at
 `test-audio-corpus/real_audio_cross_verify.py` in a gitignored scratch
 directory (downloaded audio is not committed); re-run it locally to extend
 the corpus with additional real recordings.
