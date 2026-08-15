@@ -92,8 +92,9 @@ with {
     sinceAttackStep(prev) = ba.if(attackEdge, 0.0, prev + 1.0);
     sinceAttack = sinceAttackStep ~ _;
     inLockWarmup = sinceAttack < lockDelaySamples;
+    smoothedDetNote = ba.hz2midikey(freqDet) : si.smooth(ba.tau2pole(0.02));
     heldDetNoteStep(prev) = ba.if(attackEdge, ba.hz2midikey(freqDet),
-                             ba.if(inLockWarmup, ba.hz2midikey(freqDet), prev));
+                             ba.if(inLockWarmup, smoothedDetNote, prev));
     heldDetNote = heldDetNoteStep ~ _;
     shiftTarget = targetNote - heldDetNote;
     shiftStep(prev) = ba.if(attackEdge, shiftTarget,
