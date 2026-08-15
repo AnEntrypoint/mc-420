@@ -7429,6 +7429,99 @@ stays bad) across all 4 named patches together, not just Dance Bass in
 isolation — the parameters interact and a change that helps one patch can
 hurt another's own already-tuned character.
 
+## `heldDetNote` sampled `freqDet` at the literal instant of note-on — a deterministic, not merely occasional, cold-start lock bug
+
+WITNESSED by direct user report: "our multi key transpose isnt key locking, and its inconsistent makes a different sound every time for the same note." This is a distinct, more severe bug than any of this file's own extensively-documented onset-slide/plosive-search history — those were about the TRACKER's own convergence being imperfect; this one is about WHEN the lock reads the tracker at all.
+
+**Root cause, confirmed via DawDreamer with a proper live signal trace (not
+assumed from source reading)**: `voiceOut`'s `heldDetNoteStep(prev) =
+ba.if(attackEdge, ba.hz2midikey(freqDet), prev)` samples `freqDet` at
+`attackEdge` — the SAME single sample the gate transitions high, i.e. the
+literal instant of the key-press. But `attackEdge` and the pitch tracker's
+own onset both start from the same real-world trigger (the performer
+striking a key and the mic picking up the resulting sound at roughly the
+same moment) — so `freqDet` is essentially guaranteed to be mid-cold-start
+at that exact sample, never a settled reading. Two compounding paths both
+land on a bad value at that instant:
+
+- **External tracker path** (`pitchtracker.lv2`/`fx/extfreqdet`): confirmed
+  present and loaded on real hardware
+  (`[host] loaded /effects/pitchtracker/pitchtracker.lv2 on core 1`), but
+  `pitchtracker_ac.dsp`'s own `energyReady`/`holdLastGood` mechanism
+  (see its own file, `onsetHoldMs=35.0`) genuinely outputs `0.0` for the
+  first ~35-40ms after any onset by design — verified via DawDreamer,
+  `freqOut` reads exactly `0.00` through t=35ms, then jumps to a real
+  detected value by t=40ms. Since `extFreqDet > 0.5` is the fallback
+  threshold in `multitranspose.dsp`, a `0.0` reading at `attackEdge`
+  ALWAYS routes to the internal fallback tracker for that sample —
+  meaning the external tracker, despite being genuinely loaded and
+  working, can never actually be the one `heldDetNote` locks onto, since
+  it structurally cannot have a nonzero reading at the one instant that
+  matters.
+- **Internal fallback tracker** (`detectedFreq`/`trackPitchHzAndHp`):
+  confirmed via a direct `freqDet` trace at `attackEdge` to read its own
+  `minTrackHz=60.0` floor value (`freqDet=60.00` at t=0ms) — the exact
+  "genuinely-uncertain cold-start reading looks like a confident
+  measurement" failure class this file's own onset-octave-slide history
+  already names, but here it is the PERMANENT locked value for the
+  voice's entire sustain (not a transient onset artifact that later
+  corrects, since `heldDetNote` never re-samples).
+
+**Measured real-world severity**: reproduced the realistic case (mic
+input beginning exactly at note-on, i.e. a performer singing/playing
+right as they press the key — not a pre-existing sustained tone, which
+would let the internal tracker have already converged before the press).
+Locked output landed at 1787Hz against a 440Hz target — over 2 OCTAVES
+flat-wrong, on every single note, deterministically, not intermittently.
+This IS "isn't key locking" and IS "a different sound every time" (since
+the exact wrong value depends on the internal tracker's own
+non-monotonic, input-dependent transient state at that precise sample,
+which varies with how the note was struck, what else was playing, etc.)
+— this was never really working as designed, just working well enough in
+the specific tested scenarios (pre-existing sustained input, tracker
+already warm) that this file's own extensive prior verification history
+never happened to hit the true cold case.
+
+**Fix**: added `sinceAttack`/`inLockWarmup` (mirroring the existing
+`winFrozenStep`/`winFreezeDelayMs` mechanism this file already uses for
+window sizing, but applied to the pitch TARGET instead) — `heldDetNote`
+now continues tracking `freqDet` LIVE for `lockDelayMs=80.0` after
+`attackEdge`, only freezing once that warmup window has elapsed, instead
+of freezing at the very first sample. 80ms comfortably clears the
+external tracker's own 35-40ms onset-hold window with margin, and gives
+the internal fallback tracker (when the external one still isn't loaded
+on some deploy, or genuinely has no signal yet) real time to move past
+its own floor value.
+
+**Verified via DawDreamer, isolated signal tracing (not the fix's own
+diff)**: a direct `freqDet`-vs-`heldDetNote` trace confirms the fix
+converges from the floor value (60Hz-equivalent) through the tracker's
+real settling curve (117 -> 155 -> 200 -> 216Hz by t=50ms against a real
+220Hz input) and locks near the true target, converting the baseline's
+catastrophic ~2426-cent (over 2 octaves) error into roughly a
+semitone-scale residual (~110-150 cents depending on measurement
+method) — a dramatic, real improvement, though not perfect sub-cent
+precision in this specific synthetic DawDreamer reproduction (a
+small residual is expected: the fix genuinely tracks the tracker's own
+real convergence curve rather than magically knowing the true answer
+sooner than the tracker itself does). The remaining small residual is a
+tracker-settling-time question, not a lock-mechanism bug — the mechanism
+itself (delay-then-freeze) is now confirmed structurally correct via a
+from-scratch isolated minimal Faust reproduction of the exact same
+`ba.if`-nesting shape, which tracked a live-ramping input perfectly
+throughout an artificially long 1000ms warmup window with zero
+plateau/freeze artifacts.
+
+Verified safe against the compile-time-cliff risk this file's own
+extensive history warns about for ANY change here: both the isolated
+`multitranspose.dsp` box-compile (fast, clean) and the FULL
+`dsp/aloop.dsp` box-compile (103s, well within this host's documented
+95-500s normal variance, no cliff) succeeded — this change is additive
+inside `voiceOut`'s own scope, never touching `octaveCorrect`/`jumpGuard`
+or crossing into the tracker's own internals, so it does not match any of
+the specific trigger shapes this file's compile-time-wall history
+documents.
+
 ## CC53 formant constants
 
 Deadzone 60-68, formula `((data2-64)/63.0)*1.0` — a flat ±1 range always

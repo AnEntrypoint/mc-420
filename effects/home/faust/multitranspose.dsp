@@ -83,10 +83,17 @@ winFreezeDelaySamples = winFreezeDelayMs * 0.001 * ma.SR;
 
 normalGlidePole = ba.tau2pole(0.008);
 
+lockDelayMs = 80.0;
+lockDelaySamples = lockDelayMs * 0.001 * ma.SR;
+
 voiceOut(sig, winSamples, xfSamples, freqDet, targetNote, gate) = wet
 with {
     attackEdge = gate > (gate : mem);
-    heldDetNoteStep(prev) = ba.if(attackEdge, ba.hz2midikey(freqDet), prev);
+    sinceAttackStep(prev) = ba.if(attackEdge, 0.0, prev + 1.0);
+    sinceAttack = sinceAttackStep ~ _;
+    inLockWarmup = sinceAttack < lockDelaySamples;
+    heldDetNoteStep(prev) = ba.if(attackEdge, ba.hz2midikey(freqDet),
+                             ba.if(inLockWarmup, ba.hz2midikey(freqDet), prev));
     heldDetNote = heldDetNoteStep ~ _;
     shiftTarget = targetNote - heldDetNote;
     shiftStep(prev) = ba.if(attackEdge, shiftTarget,
