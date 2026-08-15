@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d6f669cfb2985acbce60fc492de24c91ff7fa8db">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=6631410c10e06a9dac5f2836507442d6d4d79ce1">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -7614,6 +7614,76 @@ inside `voiceOut`'s own scope, never touching `octaveCorrect`/`jumpGuard`
 or crossing into the tracker's own internals, so it does not match any of
 the specific trigger shapes this file's compile-time-wall history
 documents.
+
+## The 80ms-delay fix above was itself a real regression — real CI (`test-pitch-tracker`) caught it, and the true bug was steady-state tracker JITTER, not just cold-start convergence
+
+The 80ms-warmup fix above shipped, and its own CI run (`test-pitch-tracker`)
+FAILED for real: `verify_plosive_transient.py`'s `110.0Hz shift=+12.0st`
+case showed `pre-burst=-168.0c` — a real, wrong steady-state lock, BEFORE
+the test's own plosive burst even began. WITNESSED shortly after by direct
+user report, independently, confirming the same class of bug live:
+"the key lock transpose intermittently makes a different sound every time
+we press the key again like its training on notes inconsistenly."
+
+**Root cause of the regression, found via DawDreamer signal tracing**: the
+80ms fix continuously re-sampled RAW `freqDet` throughout the whole warmup
+window (`ba.if(inLockWarmup, ba.hz2midikey(freqDet), prev)`), correct for
+a genuinely cold-starting tracker but WRONG for an already-warmed-up one.
+Traced `freqDet` directly on a continuously-playing, already-settled
+110Hz tone (matching the CI test's own setup — the dry signal plays from
+sample 0, only the GATE rises at 400ms, so the tracker has 400ms of prior
+signal to converge before the note-on the fix's warmup window reacts to):
+`freqDet` genuinely OSCILLATES between ~100Hz and ~121Hz in a repeating
+cycle, even on a stable, non-shifting real input — a real, previously
+under-measured property of the internal zero-crossing tracker's
+steady-state behavior (a smaller-scale instance of the "steady-state
+tuning jitter... a KNOWN HARD PROBLEM" this file's own much older history
+already names, now shown to also corrupt a FRESH note-on's lock, not just
+a long-sustained note's own accuracy). The 80ms fix's raw-tracking window
+meant `heldDetNote` could freeze on ANY point in this jitter cycle
+depending on exactly when the 80ms boundary happened to land relative to
+the jitter's own phase — which varies with the exact moment the key is
+struck, matching "different sound every time" precisely: not random, but
+sensitive to a real, fast-oscillating tracker artifact that a naive
+raw-track-then-freeze design cannot filter out.
+
+**Fix**: replaced raw-tracking during the warmup window with a SMOOTHED
+version — `smoothedDetNote = ba.hz2midikey(freqDet) : si.smooth(ba.tau2pole(0.02))`
+(a ~20ms one-pole low-pass on the tracked note value itself) — and freeze
+on THAT instead of raw `freqDet`, while `attackEdge`'s own instant snap
+(the genuine cold-start case, where there is no prior smoothed history to
+lean on) is untouched. This averages across the jitter cycle rather than
+landing on an arbitrary sample within it.
+
+**Verified via the REAL CI reproduction** (not a hand-rolled
+approximation — the actual `verify_plosive_transient.py` render/measure
+pipeline, run locally against the fixed file): all 4 previously-run cases
+now PASS, including the specific failing case
+(`110.0Hz shift=+12.0st: pre-burst=+6.1c worst_dev=26.7c PASS`, versus the
+broken fix's `pre-burst=-168.0c worst_dev=169.3c FAIL`). Also re-verified
+against a broader warmed-up/steady-state sweep (110/220/164.8Hz, various
+target notes): 13.5c / -2.2c / 7.5c — all comfortably inside a 60c gate,
+none showing the raw-tracking version's octave-scale drift.
+
+**Disclosed tradeoff, not free**: the same fix measurably WORSENS true
+cold-start accuracy (mic input beginning exactly at note-on, no prior
+signal at all) — 294c and -277c residual in that specific adversarial
+scenario, versus the broken raw-tracking version's own (also imperfect,
+~110-636c depending on measurement) cold-start numbers. This is an
+expected, deliberate tradeoff: smoothing trades convergence SPEED for
+steady-state STABILITY, and the actual reported bug (both from real CI
+and from the user's own independent live report) is about
+inconsistency/wrong-lock on an already-playing or repeatedly-struck
+input, not about a slower-than-ideal true-from-silence cold start. A
+future session revisiting true cold-start accuracy should treat this as
+its own, separately-scoped problem — do not simply shorten the smoothing
+tau or the warmup window to "fix" cold-start without re-running the full
+warmed-up/steady-state battery this fix was validated against, since that
+is exactly the regression this entry documents.
+
+Re-verified the full `dsp/aloop.dsp` box-compile safety check after this
+second change (105s, same normal range, no cliff) before considering the
+fix complete.
 
 ## CC53 formant constants
 
