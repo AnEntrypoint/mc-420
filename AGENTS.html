@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=cf76e0a2e0c19494d678711fe6e7c981a8bb72c6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=45d9d48c43f90f0cf3bce69f36e0d49eff50b1f7">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -7684,6 +7684,105 @@ is exactly the regression this entry documents.
 Re-verified the full `dsp/aloop.dsp` box-compile safety check after this
 second change (105s, same normal range, no cliff) before considering the
 fix complete.
+
+## Real-device diagnostic logging plus real recorded-voice testing found two genuine, previously-hidden bugs — one shipped and fixed, one still open
+
+WITNESSED live: even after the smoothing fix above shipped and was confirmed
+CI-green, the user reported "doesn't seem to be locking the pitch on the
+device" and, after extensive back-and-forth, clarified the symptom precisely:
+"sounds different on the same pitch if trying multiple times, sounds
+different on different input pitches instead of locking, nearly impossible
+to get it to a 'certain note'." Every synthetic DawDreamer reproduction in
+this investigation (clean sine sweeps, vibrato, mid-hold note changes,
+energy dips, real device MIDI injection against ambient room noise) showed
+the lock working correctly — a genuine, confusing contradiction between
+"verified correct" and "reported broken."
+
+**Methodology pivot that broke the deadlock**: added temporary, bit-exact-
+transparent (1.9e-6 max diff, float32 rounding only) diagnostic hbargraph
+taps on voice 0's `gate`/`targetNote`/`heldDetNote`/`shiftAmount` plus the
+raw `extFreqDet` reading, logged to the device's real stderr log every
+250ms with a wall-clock timestamp (per this file's own "Diagnostic logging
+must carry wall-clock timestamps" rule). Deployed and confirmed working via
+live MIDI injection. But the decisive break came from the user pointing at
+`test-audio-corpus/` — real recorded voice/pitch material had been added to
+the repo specifically for this kind of investigation, and using ACTUAL
+recorded human voice (`cleetus.wav`) against the real DSP via DawDreamer
+immediately reproduced catastrophic, chaotic pitch errors (-2677c to
++3197c, i.e. multiple octaves, at every measured point through a 4-second
+hold) that no synthetic sine/vibrato/gap reproduction had ever come close
+to matching. **Lesson, generalizable beyond this investigation: a clean
+synthetic sine sweep is not a valid stand-in for real human voice/speech
+when testing a pitch tracker or lock mechanism — real voice has
+fundamentally different spectral/transient structure (formants, noise
+bursts, rapid onset/offset, harmonic-amplitude shifts) that a sine can
+never exercise.** `test-audio-corpus/`'s real recorded material should be
+the standard reproduction source for any future pitch-tracking work in
+this file, not synthetic tones.
+
+**Bug 1, found and FIXED: `formantTilt` was never actually an identity
+passthrough at `formant=0`, despite the file's own docstring explicitly
+claiming "exact identity at formant=0."** Isolated via a from-scratch
+minimal DawDreamer test: `fi.low_shelf(0.0, 400.0)` alone, fed a steady
+sine, differs from the raw input by up to 0.62 (over half the signal
+amplitude) even in settled steady-state — NOT merely transient ringing.
+`fi.high_shelf(0.0, 3000.0)` alone contributes a smaller but still real
+0.07 error. Neither Faust stdlib shelf filter reduces to a true bypass at
+0dB gain — a 0dB shelf still applies its full biquad computation, it does
+not skip processing. This means EVERY note through this engine was having
+its timbre measurably distorted by this "no-op" stage, which plausibly
+contributes to "sounds different every time" even independent of pitch
+accuracy, since the distortion character depends on the actual signal
+content passing through. Fixed with an explicit `select2(formant != 0.0,
+_, tilted)` gate — bypasses the filters entirely (true float-precision
+identity, 1.5e-8 max diff) when `formant==0`, and still applies real
+filtering when `formant` is genuinely nonzero (verified: 0.586 deviation
+at `formant=2.0`, expected real tilt). **Any future Faust filter believed
+to be "identity at some parameter value" must be verified with an actual
+DawDreamer A/B against a real bypass, not assumed from the gain
+parameter alone** — this is the same class of false "verified" claim this
+file's own comment-trust-and-verify history already warns about
+repeatedly, just discovered in a stdlib function rather than project code.
+
+**Bug 2, found and FIXED: `winFrozenStep`/`xfFrozenStep` (the window-size
+freeze mechanism, separate from `heldDetNote`'s own freeze) had the EXACT
+SAME raw-tracking-during-warmup vulnerability the earlier `heldDetNote` fix
+already had to correct.** Traced directly: on real voice input, `freqDet`
+(the internal zero-crossing tracker, since `extFreqDet` was 0 throughout
+this specific reproduction) genuinely oscillates between 60Hz and 1500Hz
+continuously — nearly half of all samples read above 750Hz. `winFrozenStep`
+freezes onto whatever `winSamplesRaw` (`= (SR/freqHz)*skew`, computed from
+this wildly jittery raw `freqDet`) happened to be at the exact moment the
+`winFreezeDelayMs` warmup window closed — landing on the absolute floor
+value (64 samples, `max(64,...)`) far more often than a real, sane window
+size, since a `freqDet` spike toward 1500Hz drives `SR/freqHz` down toward
+the floor. Fixed identically to the `heldDetNote` fix: `winSamplesRaw`/
+`xfSamplesRaw` are now smoothed (`si.smooth(ba.tau2pole(0.02))`, matching
+`heldDetNote`'s own smoothing time constant) during the warmup window
+before freezing, rather than raw-tracked. `winFreezeDelayMs` raised from
+60.0 to 80.0 to match `lockDelayMs`, so both freeze mechanisms now share
+the same warmup duration.
+
+**Open, disclosed, NOT yet fixed**: even with both bugs above corrected,
+re-measuring the exact same `cleetus.wav` reproduction still shows the
+output's spectral energy concentrated at the target frequency only 0-15%
+of the time through a 4-second hold — the underlying pitch-lock problem is
+NOT yet fully resolved for real voice input. Critically, this residual was
+ISOLATED via direct signal tracing to be downstream of both fixed
+mechanisms: `heldDetNote`/`shiftAmount` were independently re-verified to
+correctly lock and hold at the right value (68.40, close to the true
+target 69.0) throughout the same render that still produces chaotic
+OUTPUT — meaning `xpose()` itself, the actual PSOLA-style delay-line
+shifter, is not correctly applying a verified-correct, verified-stable
+`shiftAmount` when fed real, complex (non-sine) input. This is a
+genuinely new, distinct problem from anything the pitch-tracking side of
+this investigation (or this file's own extensive prior tracker-focused
+history) has previously found or fixed — the tracker/lock machinery is
+now confirmed working; the shifter itself is the next suspect. A future
+session should trace `xpose(w,x,s,sig)`'s own internal `d` (the delay-
+line read-position accumulator) directly against real voice input with a
+KNOWN-correct, KNOWN-stable `shiftAmount` already confirmed (as this
+session did), to find where the shift stops being correctly applied.
 
 ## CC53 formant constants
 
