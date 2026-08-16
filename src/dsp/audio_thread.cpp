@@ -299,6 +299,10 @@ static void* worker(void*) {
     float* glitchFoldFaustZone = nullptr;
     float* resonodeEngagedZone = nullptr;
     float* extFreqDetZone = nullptr;
+    float* diagHeldDetNote0Zone = nullptr;
+    float* diagShiftAmount0Zone = nullptr;
+    float* diagTargetNote0Zone = nullptr;
+    float* diagGate0Zone = nullptr;
     {
         char z[32];
         auto resolveZone = [&]() -> float* {
@@ -333,6 +337,10 @@ static void* worker(void*) {
         snprintf(z, sizeof z, "GLITCHFOLD");           glitchFoldFaustZone  = resolveZone();
         snprintf(z, sizeof z, "fx/resonode/engaged");  resonodeEngagedZone  = resolveZone();
         snprintf(z, sizeof z, "fx/extfreqdet");        extFreqDetZone       = resolveZone();
+        snprintf(z, sizeof z, "diag/helddetnote0");    diagHeldDetNote0Zone = resolveZone();
+        snprintf(z, sizeof z, "diag/shiftamount0");    diagShiftAmount0Zone = resolveZone();
+        snprintf(z, sizeof z, "diag/targetnote0");     diagTargetNote0Zone  = resolveZone();
+        snprintf(z, sizeof z, "diag/gate0");           diagGate0Zone        = resolveZone();
     }
     int xposeNoteSlot[kTransposeVoices];
     int xposeGateSlot[kTransposeVoices];
@@ -837,6 +845,21 @@ static void* worker(void*) {
                 if (extFreqDetZone) *extFreqDetZone = pitchTrackerBuf[N - 1];
             }
             faustHome.compute(N, fins, fouts);
+            {
+                static timespec lastDiagLog{0, 0};
+                timespec nowTs; clock_gettime(CLOCK_MONOTONIC, &nowTs);
+                double sinceLastS = (nowTs.tv_sec - lastDiagLog.tv_sec) + (nowTs.tv_nsec - lastDiagLog.tv_nsec) / 1e9;
+                if (sinceLastS >= 0.25) {
+                    lastDiagLog = nowTs;
+                    fprintf(stderr, "[xpose-diag] t=%ld.%03ld gate0=%.2f targetNote0=%.2f heldDetNote0=%.2f shiftAmount0=%.2f extFreqDet=%.2f\n",
+                            (long)nowTs.tv_sec, nowTs.tv_nsec / 1000000,
+                            diagGate0Zone ? *diagGate0Zone : -1.0f,
+                            diagTargetNote0Zone ? *diagTargetNote0Zone : -1.0f,
+                            diagHeldDetNote0Zone ? *diagHeldDetNote0Zone : -1.0f,
+                            diagShiftAmount0Zone ? *diagShiftAmount0Zone : -1.0f,
+                            extFreqDetZone ? *extFreqDetZone : -1.0f);
+                }
+            }
             prevLoopSum = rawLoopSum;
             prevFiltOut = rawFiltTap;
             clock_gettime(CLOCK_MONOTONIC, &t1);
