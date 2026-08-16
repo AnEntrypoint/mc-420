@@ -86,7 +86,7 @@ normalGlidePole = ba.tau2pole(0.008);
 lockDelayMs = 80.0;
 lockDelaySamples = lockDelayMs * 0.001 * ma.SR;
 
-voiceOut(sig, winSamples, xfSamples, freqDet, targetNote, gate) = wet
+voiceOut(diag, sig, winSamples, xfSamples, freqDet, targetNote, gate) = wet
 with {
     attackEdge = gate > (gate : mem);
     sinceAttackStep(prev) = ba.if(attackEdge, 0.0, prev + 1.0);
@@ -101,13 +101,23 @@ with {
                        prev * normalGlidePole + shiftTarget * (1.0 - normalGlidePole));
     shiftAmount = shiftStep ~ _;
     voiceEnv    = en.adsr(0.003, 0.03, 1, 0.05, gate);
-    wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * 0.6;
+    wetRaw = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * 0.6;
+    diagHeldDetNoteMeter = hbargraph("diag/helddetnote0", 0, 200);
+    diagShiftAmountMeter = hbargraph("diag/shiftamount0", -60, 60);
+    diagTargetNoteMeter  = hbargraph("diag/targetnote0", 0, 200);
+    diagGateMeter        = hbargraph("diag/gate0", 0, 1);
+    wet = ba.if(diag,
+             wetRaw : attach(_, heldDetNote : diagHeldDetNoteMeter)
+                    : attach(_, shiftAmount : diagShiftAmountMeter)
+                    : attach(_, targetNote : diagTargetNoteMeter)
+                    : attach(_, gate : diagGateMeter),
+             wetRaw);
 };
 
 harmonySum(sig, winSamples, xfSamples, freqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
-    voiceOut(sig,winSamples,xfSamples,freqDet,n0,g0) + voiceOut(sig,winSamples,xfSamples,freqDet,n1,g1)
-  + voiceOut(sig,winSamples,xfSamples,freqDet,n2,g2) + voiceOut(sig,winSamples,xfSamples,freqDet,n3,g3)
-  + voiceOut(sig,winSamples,xfSamples,freqDet,n4,g4) + voiceOut(sig,winSamples,xfSamples,freqDet,n5,g5);
+    voiceOut(1, sig,winSamples,xfSamples,freqDet,n0,g0) + voiceOut(0, sig,winSamples,xfSamples,freqDet,n1,g1)
+  + voiceOut(0, sig,winSamples,xfSamples,freqDet,n2,g2) + voiceOut(0, sig,winSamples,xfSamples,freqDet,n3,g3)
+  + voiceOut(0, sig,winSamples,xfSamples,freqDet,n4,g4) + voiceOut(0, sig,winSamples,xfSamples,freqDet,n5,g5);
 
 formantTiltDb(formant) = formant * 2.5;
 
