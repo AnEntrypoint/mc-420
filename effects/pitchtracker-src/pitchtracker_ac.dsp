@@ -102,7 +102,7 @@ subharmDominanceMargin = 0.004;
 
 roundedLag(freqHz) = int(ma.SR / freqHz + 0.5);
 
-subharmonicPromote(x, coarseFreq) = promoted
+subharmonicPromote(x, coarseFreq) = promoted, promotedConfidence
 with {
     cCoarse = corrAtLagVar(x, roundedLag(coarseFreq));
     freq2 = coarseFreq * 2.0;
@@ -114,13 +114,17 @@ with {
     dominant3 = reachable3 & (c3 >= corrThresh) & (c3 > cCoarse + subharmDominanceMargin) & (c3 >= c2);
     dominant2 = reachable2 & (c2 >= corrThresh) & (c2 > cCoarse + subharmDominanceMargin);
     promoted = ba.if(dominant3, freq3, ba.if(dominant2, freq2, coarseFreq));
+    promotedConfidence = ba.if(dominant3, c3, ba.if(dominant2, c2, cCoarse));
 };
 
-detectedFreq(x) = refineFreq(xh, corrected)
+detectedFreq(x) = refineFreq(xh, corrected), confident
 with {
     xh = xHp(x);
-    coarse = pickFundamental(xh);
-    corrected = subharmonicPromote(xh, coarse);
+    coarseFreq = pickFundamental(xh);
+    promotion = subharmonicPromote(xh, coarseFreq);
+    corrected = promotion : (_, !);
+    finalConfidence = promotion : (!, _);
+    confident = finalConfidence >= corrThresh;
 };
 
 onsetHoldMs = 35.0;
@@ -137,15 +141,19 @@ with {
     ready = holdCount >= onsetHoldSamples;
 };
 
-holdLastGood(freqHz, gate) = out
+holdLastGood(freqHz, ready, confident) = out
 with {
-    fallingEdge = (gate:mem) * (1.0 - gate);
-    heldStep(prev) = ba.if(gate, freqHz, ba.if(fallingEdge > 0.5, 0.0, prev));
+    fallingEdge = (ready:mem) * (1.0 - ready);
+    accept = ready & confident;
+    heldStep(prev) = ba.if(accept, freqHz, ba.if(fallingEdge > 0.5, 0.0, prev));
     out = heldStep ~ _;
 };
 
-process(sig) = holdLastGood(rawFreq, ready)
+process(sig) = holdLastGood(rawFreq, ready, confident)
 with {
-    rawFreq = detectedFreq(sig) : max(minTrackHz) : min(maxTrackHz);
+    detected = detectedFreq(sig);
+    rawFreqUnclamped = detected : (_, !);
+    confident = detected : (!, _);
+    rawFreq = rawFreqUnclamped : max(minTrackHz) : min(maxTrackHz);
     ready = energyReady(sig);
 };
