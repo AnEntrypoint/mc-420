@@ -39,7 +39,7 @@ def harmonic_tone(n, freq_hz, sr=SAMPLE_RATE, n_harmonics=6, amp=0.7, attack=200
 
 def render_raw_detected_freq(dsp_text, freq_hz, dur=1.0):
     idx = dsp_text.index("process(sig)")
-    probe_dsp = dsp_text[:idx] + "process(x) = detectedFreq(x) : max(minTrackHz) : min(maxTrackHz);\n"
+    probe_dsp = dsp_text[:idx] + "process(x) = detectedFreq(x) : (_,!) : max(minTrackHz) : min(maxTrackHz);\n"
     engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
     n = int(dur * SAMPLE_RATE)
     dry = harmonic_tone(n, freq_hz)
