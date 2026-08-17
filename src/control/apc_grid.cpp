@@ -61,6 +61,7 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("cmd/clearall", 0.0f);
     ps.bind("cmd/halfspeed", 0.0f);
     ps.bind("cmd/doublespeed", 0.0f);
+    ps.bind("cmd/sustain", 0.0f);
 
     ps.bind("fx/reverb",  0.0f);
     ps.bind("fx/delay",   0.0f);
@@ -655,6 +656,19 @@ void ApcGrid::onMicrorepeatOff(int note, ParamStore& ps) {
         m_microRepeatDiv = 0;
         ps.setByName("fx/microrepeat_div", 0.0f);
     }
+}
+
+void ApcGrid::onSustainPedal(bool down, ParamStore& ps) {
+    if (down) {
+        if (m_shift) {
+            m_sustainLatched = !m_sustainLatched;
+        } else {
+            m_sustainHeld = true;
+        }
+    } else {
+        m_sustainHeld = false;
+    }
+    ps.setByName("cmd/sustain", (m_sustainHeld || m_sustainLatched) ? 1.0f : 0.0f);
 }
 
 void ApcGrid::onShiftPress(ParamStore& ps) {

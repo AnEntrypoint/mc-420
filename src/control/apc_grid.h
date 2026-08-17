@@ -65,6 +65,7 @@ public:
     void onAbsolutePitch(uint8_t data2, ParamStore& ps);
 
     void onLiveEngageToggle(ParamStore& ps);
+    void onSustainPedal(bool down, ParamStore& ps);
     bool liveEngaged() const { return m_liveEngaged; }
     bool keysMultiMode() const { return m_keysMode == KeysMode::MultiKey; }
 
@@ -141,6 +142,8 @@ private:
     uint8_t m_microRepeatDiv = 0;
     bool m_shift = false;
     bool m_liveEngaged = false;
+    bool m_sustainHeld = false;
+    bool m_sustainLatched = false;
     bool m_drumRecordMode = false;
 
     enum class KeysMode : uint8_t { Normal = 0, MultiKey = 1 };

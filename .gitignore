@@ -66,5 +66,6 @@ test-audio-corpus/*.aif
 test-audio-corpus/*.wav
 test-audio-corpus/*.f32
 test-audio-corpus/*.pcm
+test-audio-corpus/*.mp3
 test-audio-corpus/free_transpose_harness
 test-audio-corpus/*.json

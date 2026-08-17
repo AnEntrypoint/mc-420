@@ -351,7 +351,9 @@ static void* worker(void*) {
     int resonodeParamSlotsForCount = -1;
     std::vector<float> rawLoopSum((size_t)N, 0.0f);
     std::vector<float> rawFiltTap((size_t)N, 0.0f);
-    float* fouts[3] = { fout.data(), rawLoopSum.data(), rawFiltTap.data() };
+    std::vector<float> inputFxOut((size_t)N, 0.0f);
+    float* fouts[4] = { fout.data(), rawLoopSum.data(), rawFiltTap.data(), inputFxOut.data() };
+    int sustainSlot = -1;
 #endif
 
 #ifdef ALOOP_HAVE_FAUST_LOOP
@@ -847,17 +849,35 @@ static void* worker(void*) {
                 float& slot = g_telem.coreBusyPct[g_cfg.homeFxCore & 3];
                 slot = slot * 0.9f + (float)pct * 0.1f;
             }
+            if (g_params && sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
+            static float sustainGain = 0.0f;
+            float sustainTarget = (g_params && sustainSlot >= 0 && g_params->getBySlot(sustainSlot) > 0.5f) ? 1.0f : 0.0f;
             float outPeak = 0.0f;
             for (int i = 0; i < N; i++) {
-                float v32 = fout[i] * 2147483648.0f;
-                int32_t s32 = (int32_t)(v32 > 2147483647.0f ? 2147483647 : (v32 < -2147483648.0f ? -2147483648.0f : v32));
-                float v16 = fout[i] * 32768.0f;
-                int16_t s16 = (int16_t)(v16 > 32767 ? 32767 : (v16 < -32768 ? -32768 : v16));
-                for (int c = 0; c < wireCh; c++) {
-                    buf[(size_t)i * wireCh + c] = s32;
-                    otgBuf[(size_t)i * wireCh + c] = s16;
+                if (sustainGain < sustainTarget)      { sustainGain += kFoldStepPerSample; if (sustainGain > sustainTarget) sustainGain = sustainTarget; }
+                else if (sustainGain > sustainTarget) { sustainGain -= kFoldStepPerSample; if (sustainGain < sustainTarget) sustainGain = sustainTarget; }
+                float masterSample = rawLoopSum[i] + inputFxOut[i] * sustainGain;
+                float cueSample = fout[i];
+
+                float mv32 = masterSample * 2147483648.0f;
+                int32_t ms32 = (int32_t)(mv32 > 2147483647.0f ? 2147483647 : (mv32 < -2147483648.0f ? -2147483648.0f : mv32));
+                float mv16 = masterSample * 32768.0f;
+                int16_t ms16 = (int16_t)(mv16 > 32767 ? 32767 : (mv16 < -32768 ? -32768 : mv16));
+
+                float cv32 = cueSample * 2147483648.0f;
+                int32_t cs32 = (int32_t)(cv32 > 2147483647.0f ? 2147483647 : (cv32 < -2147483648.0f ? -2147483648.0f : cv32));
+                float cv16 = cueSample * 32768.0f;
+                int16_t cs16 = (int16_t)(cv16 > 32767 ? 32767 : (cv16 < -32768 ? -32768 : cv16));
+
+                buf[(size_t)i * wireCh + 0] = ms32;
+                otgBuf[(size_t)i * wireCh + 0] = ms16;
+                buf[(size_t)i * wireCh + 1] = cs32;
+                otgBuf[(size_t)i * wireCh + 1] = cs16;
+                for (int c = 2; c < wireCh; c++) {
+                    buf[(size_t)i * wireCh + c] = cs32;
+                    otgBuf[(size_t)i * wireCh + c] = cs16;
                 }
-                float a = fout[i] < 0 ? -fout[i] : fout[i];
+                float a = cueSample < 0 ? -cueSample : cueSample;
                 if (a > outPeak) outPeak = a;
             }
             g_telem.outPeak = outPeak;

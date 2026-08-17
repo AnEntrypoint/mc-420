@@ -237,6 +237,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
                 if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onShiftRelease(ps); continue; }
             }
             if (d1 == kApcLiveLedNote && type == 0x90 && d2 > 0) { grid.onLiveEngageToggle(ps); continue; }
+            if (type == 0xB0 && d1 == 64) { grid.onSustainPedal(d2 >= 64, ps); continue; }
             if (type == 0xB0 && d1 == 1)  { grid.onModWheel(d2, ps); continue; }
             if (type == 0xB0 && d1 == 52) { grid.onAbsolutePitch(d2, ps); continue; }
             if (type == 0xB0 && (d1 == 48 || d1 == 49 || d1 == 50 || d1 == 51 || d1 == 53 || d1 == 54 || d1 == 55 || d1 == 57)) {
