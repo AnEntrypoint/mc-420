@@ -1,7 +1,7 @@
 declare name "MultiKeyTranspose";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Polyphonic pitch-lock: each held voice's shift is derived from (targetNote - the live-tracked input pitch at that voice's own note-on instant), snapped instantly on attack and glided on any live retune (steal), so the output always lands on the held key's absolute pitch regardless of what pitch is actually being played/sung -- an Auto-Tune-hard-lock-style harmonizer, not a fixed-interval Whammy-style one. The live-tracked freqDet (fx/extfreqdet/pitchtracker.lv2, falling back to an internal zero-crossing tracker) is sampled ONCE per voice at attackEdge into heldDetNote and held for that voice's whole sustain -- this deliberately does not re-track continuously mid-note, both to avoid the steady-state jitter/harmonic-lock-on issues the internal zero-crossing tracker has (see AGENTS.md's extensive history of that tracker's failure modes) and because a real hard-lock effect should not wander once the target has been captured. freqDet is ALSO used, independently, to size xpose's pitch-synchronous window/crossfade for natural, formant-preserving shifting (PSOLA-style: a window sized to the input's own true period preserves timbre at any shift ratio) -- a wrong window costs a little naturalness, never a wrong note, and this window sizing already has its own onset-freeze protection (winFreezeDelayMs) independent of any per-voice heldDetNote latching. formant additionally detunes the window/period ratio and applies a light spectral tilt for a real, continuously controllable vocal-character control, exact identity at formant=0.";
+declare description "Polyphonic pitch-lock: each held voice's shift is derived from (targetNote - the live-tracked input pitch at that voice's own note-on instant), tracked live and smoothed (20ms one-pole, snapping fresh at each attackEdge to avoid carrying a previous voice's stale state) through an 80ms warmup window before freezing into heldDetNote for the rest of that voice's sustain -- never re-tracked after freezing, so a mid-sustain plosive/burst cannot perturb an already-locked note, and never snapped raw at the literal attack sample, since a real singer's vibrato/onset transient can make one instantaneous sample an unreliable target even when the underlying tracker itself is accurate. This is an Auto-Tune-hard-lock-style harmonizer, not a fixed-interval Whammy-style one. The live-tracked freqDet (fx/extfreqdet/pitchtracker.lv2, falling back to an internal zero-crossing tracker) is ALSO used, independently, to size xpose's pitch-synchronous window/crossfade for natural, formant-preserving shifting (PSOLA-style: a window sized to the input's own true period preserves timbre at any shift ratio) -- a wrong window costs a little naturalness, never a wrong note, and this window sizing has its own separate onset-freeze protection (winFreezeDelayMs). formant additionally detunes the window/period ratio and applies a light spectral tilt for a real, continuously controllable vocal-character control, exact identity at formant=0.";
 
 import("stdfaust.lib");
 
@@ -92,9 +92,12 @@ with {
     sinceAttackStep(prev) = ba.if(attackEdge, 0.0, prev + 1.0);
     sinceAttack = sinceAttackStep ~ _;
     inLockWarmup = sinceAttack < lockDelaySamples;
-    smoothedDetNote = ba.hz2midikey(freqDet) : si.smooth(ba.tau2pole(0.02));
-    heldDetNoteStep(prev) = ba.if(attackEdge, ba.hz2midikey(freqDet),
-                             ba.if(inLockWarmup, smoothedDetNote, prev));
+    rawDetNote = ba.hz2midikey(freqDet);
+    smoothPole = ba.tau2pole(0.02);
+    smoothedDetNoteStep(prev) = ba.if(attackEdge, rawDetNote,
+                                  prev * smoothPole + rawDetNote * (1.0 - smoothPole));
+    smoothedDetNote = smoothedDetNoteStep ~ _;
+    heldDetNoteStep(prev) = ba.if(inLockWarmup, smoothedDetNote, prev);
     heldDetNote = heldDetNoteStep ~ _;
     shiftTarget = targetNote - heldDetNote;
     shiftStep(prev) = ba.if(attackEdge, shiftTarget,
