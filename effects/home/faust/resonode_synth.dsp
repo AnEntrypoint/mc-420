@@ -78,12 +78,12 @@ stretchRatio4 = pow(4.0, 1.0+stretch);
 stretchRatio5 = pow(5.0, 1.0+stretch);
 stretchRatio6 = pow(6.0, 1.0+stretch);
 
-modeGain1 = 1.00*abs(sin(ma.PI*position*1));
-modeGain2 = 0.60*abs(sin(ma.PI*position*2));
-modeGain3 = 0.40*abs(sin(ma.PI*position*3));
-modeGain4 = 0.30*abs(sin(ma.PI*position*4));
-modeGain5 = 0.22*abs(sin(ma.PI*position*5));
-modeGain6 = 0.16*abs(sin(ma.PI*position*6));
+modeGain1 = 1.00*sin(ma.PI*position*1);
+modeGain2 = 0.60*sin(ma.PI*position*2);
+modeGain3 = 0.40*sin(ma.PI*position*3);
+modeGain4 = 0.30*sin(ma.PI*position*4);
+modeGain5 = 0.22*sin(ma.PI*position*5);
+modeGain6 = 0.16*sin(ma.PI*position*6);
 
 bassBoostAmt = 0.35;
 bassCornerHz = 220.0;
@@ -95,8 +95,8 @@ dampCube = dampSq*damping;
 dampQuad = dampCube*damping;
 dampQuin = dampQuad*damping;
 
-bwFloorT60 = 0.15;
-modeR(t60) = pow(0.001, 1.0/(min(t60, bwFloorT60)*ma.SR));
+modeT60Ceiling = 8.5;
+modeR(t60) = pow(0.001, 1.0/(min(t60, modeT60Ceiling)*ma.SR));
 r1 = modeR(decayTime);
 r2 = modeR(decayTime*damping);
 r3 = modeR(decayTime*dampSq);
@@ -104,11 +104,15 @@ r4 = modeR(decayTime*dampCube);
 r5 = modeR(decayTime*dampQuad);
 r6 = modeR(decayTime*dampQuin);
 
+burstGainRefT60 = 0.15;
+burstGainRefR = modeR(burstGainRefT60);
+burstGainRefFactor = (1.0 - burstGainRefR) / (1.0 + burstGainRefR);
+
 modeFilterR(r, freq, gain) = fi.tf2(b0, 0.0, -b0, a1, a2) * gain
 with {
     a1 = -2.0*r*cos(2.0*ma.PI*freq/ma.SR);
     a2 = r*r;
-    b0 = 1.0 - r;
+    b0 = sqrt(burstGainRefFactor * (1.0 - r*r));
 };
 
 bank(freqHz, exc) = exc <: (m1, m2, m3, m4, m5, m6) :> _
