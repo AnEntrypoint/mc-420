@@ -1,0 +1,113 @@
+{
+  "description": "Real recorded instrument and vocal audio for verifying pitch-tracking/granulator/resonator DSP changes against real timbres, converted to 48kHz mono 16-bit WAV. Two source collections, both freely downloadable with no authentication or API key.",
+  "sources": [
+    {
+      "name": "University of Iowa Electronic Music Studios Musical Instrument Samples (MIS)",
+      "index_url": "https://theremin.music.uiowa.edu/MIS.html",
+      "license": "Public domain / free for any use per the University of Iowa Electronic Music Studios (no login or key required to download)"
+    },
+    {
+      "name": "Wikimedia Commons",
+      "index_url": "https://commons.wikimedia.org/",
+      "license": "Per-file, recorded in each entry below (CC0 or explicit public domain, verified via the Commons API imageinfo/extmetadata for each file used)"
+    }
+  ],
+  "files": [
+    {
+      "filename": "piano_low_A1.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.ff.A1.aiff",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Acoustic piano, single struck note A1 (~55 Hz), fortissimo, low bass register, fast percussive attack with long natural decay"
+    },
+    {
+      "filename": "piano_mid_C4.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.ff.C4.aiff",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Acoustic piano, single struck note C4 (middle C, ~262 Hz), fortissimo, mid register, percussive attack"
+    },
+    {
+      "filename": "piano_high_C7.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.ff.C7.aiff",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Acoustic piano, single struck note C7 (~2093 Hz), fortissimo, high/soprano register, bright percussive attack"
+    },
+    {
+      "filename": "violin_low_sulG_G3B3.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Strings/violin2012/Violin.arco.ff.sulG.G3B3.mono.aif",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Violin, bowed (arco) on the G string, chromatic run G3-B3, fortissimo, sustained low-mid register bowed tone"
+    },
+    {
+      "filename": "violin_high_sulE_C7E7.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Strings/violin2012/Violin.arco.ff.sulE.C7E7.mono.aif",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Violin, bowed (arco) on the E string, chromatic run C7-E7, fortissimo, sustained high/soprano register bowed tone"
+    },
+    {
+      "filename": "cello_low_sulC_A2.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS%20Pitches%20-%202014/Strings/Cello/Cello.arco.ff.sulC.A2.stereo.aif",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Cello, bowed (arco) on the C string, single note A2 (~110 Hz), fortissimo, sustained low bass bowed tone"
+    },
+    {
+      "filename": "marimba_low_C2B2.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Percussion/Marimba/Marimba.cord.ff.C2B2.aif",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Marimba, cord mallet, chromatic run C2-B2, fortissimo, low register struck percussive attack with fast decay"
+    },
+    {
+      "filename": "marimba_mid_C5B5.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Percussion/Marimba/Marimba.cord.ff.C5B5.aif",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Marimba, cord mallet, chromatic run C5-B5, fortissimo, mid register struck percussive attack"
+    },
+    {
+      "filename": "vibraphone_mid_C5B5.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Percussion/Vibraphone/Vibraphone.dampen.ff.C5B5.aif",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Vibraphone, dampened stroke, chromatic run C5-B5, fortissimo, mid register metallic struck attack with short controlled decay"
+    },
+    {
+      "filename": "trumpet_low_A3.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS%20Pitches%20-%202014/Brass/BbTrumpet/Trumpet.novib.ff.A3.stereo.aif",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Bb trumpet, no vibrato, single note A3 (~220 Hz), fortissimo, sustained low-mid register brass tone"
+    },
+    {
+      "filename": "trumpet_high_C6.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS%20Pitches%20-%202014/Brass/BbTrumpet/Trumpet.novib.ff.C6.stereo.aif",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Bb trumpet, no vibrato, single note C6 (~1047 Hz), fortissimo, sustained high register brass tone"
+    },
+    {
+      "filename": "oboe_mid_C5B5.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Woodwinds/oboe/Oboe.ff.C5B5.aiff",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Oboe, chromatic run C5-B5, fortissimo, sustained mid register reedy woodwind tone"
+    },
+    {
+      "filename": "bassoon_low_C2B2.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Woodwinds/bassoon/Bassoon.ff.C2B2.aiff",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Bassoon, chromatic run C2-B2, fortissimo, sustained low bass register woodwind tone"
+    },
+    {
+      "filename": "clarinet_high_C6B6.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Woodwinds/Bbclarinet/BbClar.ff.C6B6.aiff",
+      "license": "Public domain (University of Iowa MIS)",
+      "description": "Bb clarinet, chromatic run C6-B6, fortissimo, sustained high/soprano register woodwind tone"
+    },
+    {
+      "filename": "vocal_female_vibrato.wav",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/c/c3/Female-vibrato-1.wav",
+      "license": "CC0 1.0 Universal (Public Domain Dedication), Wikimedia Commons, uploader Beetricks, verified via Commons API extmetadata (LicenseShortName=CC0)",
+      "description": "Solo female voice, sustained chest-voice tone with vibrato, mid-high register, real a cappella recording"
+    },
+    {
+      "filename": "vocal_male_baritone_scale.wav",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/f/f9/F.Dur.ohne.und.mit.Saengerformant.ogg",
+      "license": "Public domain (self-published, PD-self), Wikimedia Commons, uploader Membeth, verified via Commons API extmetadata (License=pd)",
+      "description": "Solo male baritone voice, sung F major scale (with and without singer's formant), sustained low-mid register vocal tone, trimmed to first 12s"
+    }
+  ]
+}

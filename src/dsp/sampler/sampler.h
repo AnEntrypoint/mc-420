@@ -70,7 +70,7 @@ public:
         m_envShape       = 0.0f;
         _recomputeGrainGainComp();
         for (int g = 0; g < MAX_GRAINS; g++) m_grains[g].active = false;
-        for (int v = 0; v < VOICES; v++) m_voice[v].grainAccum = 0.0;
+        for (int v = 0; v < VOICES; v++) { m_voice[v].grainAccum = 0.0; m_voice[v].grainCount = 0; }
     }
 
     ~Sampler()
@@ -296,6 +296,8 @@ private:
         bool   granular;
         double grainAccum;
         float  velGain;
+        int    grainIdx[MAX_GRAINS];
+        int    grainCount;
 
         uint8_t ampPhase;
         float   ampLevel;
@@ -316,6 +318,8 @@ private:
     };
 
     struct Grain {
+        static const int kWindowLutSize = 129;
+
         bool   active;
         int    voiceSlot;
         const short *M;
@@ -324,7 +328,7 @@ private:
         double rate;
         int    lifeSamples;
         int    lifePos;
-        float  envShape;
+        float  win[kWindowLutSize];
     };
 
     static short _clip16(int v)
@@ -342,6 +346,36 @@ private:
         float frac = (float)(pos - (double)i0);
         if (frac < 0.0f) frac = 0.0f;
         return (float)buf[i0] * (1.0f - frac) + (float)buf[i1] * frac;
+    }
+
+    static float _readInterpCubic(const short *buf, int len, double pos)
+    {
+        if (len <= 0) return 0.0f;
+        if (pos < 0.0) pos = 0.0;
+        int i1 = (int)pos;
+        if (i1 >= len) return 0.0f;
+        int i0 = (i1 > 0) ? i1 - 1 : 0;
+        int i2 = (i1 + 1 < len) ? i1 + 1 : i1;
+        int i3 = (i1 + 2 < len) ? i1 + 2 : i2;
+        float frac = (float)(pos - (double)i1);
+        if (frac < 0.0f) frac = 0.0f;
+        float s0 = buf[i0], s1 = buf[i1], s2 = buf[i2], s3 = buf[i3];
+        float c1 = frac * (-0.5f + frac * (1.0f - 0.5f * frac));
+        float c2 = 1.0f + frac * frac * (1.5f * frac - 2.5f);
+        float c3 = frac * (0.5f + frac * (2.0f - 1.5f * frac));
+        float c4 = 0.5f * frac * frac * (frac - 1.0f);
+        return s0 * c1 + s1 * c2 + s2 * c3 + s3 * c4;
+    }
+
+    static float _lutLookup(const float *table, int size, float phase)
+    {
+        if (phase < 0.0f) phase = 0.0f;
+        if (phase > 1.0f) phase = 1.0f;
+        float idx = phase * (float)(size - 1);
+        int i0 = (int)idx;
+        int i1 = (i0 + 1 < size) ? i0 + 1 : i0;
+        float frac = idx - (float)i0;
+        return table[i0] * (1.0f - frac) + table[i1] * frac;
     }
 
     float _randBipolar()
@@ -430,6 +464,18 @@ private:
     {
         for (int g = 0; g < MAX_GRAINS; g++)
             if (m_grains[g].active && m_grains[g].voiceSlot == vSlot) m_grains[g].active = false;
+        m_voice[vSlot].grainCount = 0;
+    }
+
+    void _removeGrainIdxFromVoice(int vSlot, int grainSlot)
+    {
+        Voice &vo = m_voice[vSlot];
+        for (int i = 0; i < vo.grainCount; i++) {
+            if (vo.grainIdx[i] == grainSlot) {
+                vo.grainIdx[i] = vo.grainIdx[--vo.grainCount];
+                return;
+            }
+        }
     }
 
     void _releaseVoicesUsingBuffer(const short *buf)
@@ -450,10 +496,15 @@ private:
         if (slot < 0) slot = _stealMostFinishedGrainSlot();
 
         Grain &gr = m_grains[slot];
+        bool wasActive = gr.active;
+        int  oldOwner  = gr.voiceSlot;
         gr.active = true;
         gr.voiceSlot = vSlot;
         gr.M = vo.M;
         gr.len = vo.len;
+
+        if (wasActive) _removeGrainIdxFromVoice(oldOwner, slot);
+        vo.grainIdx[vo.grainCount++] = slot;
 
         double jitterSamples = 0.0;
         if (m_posJitterMs > 0.0f) {
@@ -474,7 +525,11 @@ private:
         if (nominalLifeSamples < 2) nominalLifeSamples = 2;
         gr.lifeSamples = _clipGrainLifeToBuffer(gr.pos, gr.rate, vo.len, nominalLifeSamples);
         gr.lifePos = 0;
-        gr.envShape = m_envShape;
+
+        for (int i = 0; i < Grain::kWindowLutSize; i++) {
+            float winPhase = (float)i / (float)(Grain::kWindowLutSize - 1);
+            gr.win[i] = _grainWindow(winPhase, m_envShape);
+        }
     }
 
     void _renderGranularVoice(int vSlot, int *inout, int n)
@@ -511,20 +566,27 @@ private:
             }
 
             float mixed = 0.0f;
-            for (int g = 0; g < MAX_GRAINS; g++) {
-                Grain &gr = m_grains[g];
-                if (!gr.active || gr.voiceSlot != vSlot) continue;
+            int gi = 0;
+            while (gi < vo.grainCount) {
+                Grain &gr = m_grains[vo.grainIdx[gi]];
 
-                float sm = _readInterp(gr.M, gr.len, gr.pos);
+                float sm = _readInterpCubic(gr.M, gr.len, gr.pos);
 
                 float phase = (float)gr.lifePos / (float)gr.lifeSamples;
-                float win = _grainWindow(phase, gr.envShape);
+                float win = _lutLookup(gr.win, Grain::kWindowLutSize, phase);
 
                 mixed += sm * win;
 
                 gr.pos += gr.rate;
                 gr.lifePos++;
-                if (gr.lifePos >= gr.lifeSamples || gr.pos < 0.0 || gr.pos >= (double)(gr.len - 1)) gr.active = false;
+
+                bool grainDone = (gr.lifePos >= gr.lifeSamples || gr.pos < 0.0 || gr.pos >= (double)(gr.len - 1));
+                if (grainDone) {
+                    gr.active = false;
+                    vo.grainIdx[gi] = vo.grainIdx[--vo.grainCount];
+                } else {
+                    gi++;
+                }
             }
 
             if (chrom && m_filterEngaged) {
