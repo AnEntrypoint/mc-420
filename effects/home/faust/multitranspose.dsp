@@ -63,17 +63,22 @@ detectedFreq(sig) = trackPitchHzAndHp(trackerHarmonics, trackerTau, sig)
 
 winSkewMul(formant) = pow(1.2, formant * (1.0/3.0));
 
+windowFloorSamples = 70;
+crossfadeFloorSamples = 35;
+
 windowForFormant(freqHz, formant) = (ma.SR / freqHz) * winSkewMul(formant)
-    : max(64) : min(maxWindowMs * 0.001 * ma.SR)
-    : si.smooth(ba.tau2pole(0.05)) : max(64) : int;
+    : max(windowFloorSamples) : min(maxWindowMs * 0.001 * ma.SR)
+    : si.smooth(ba.tau2pole(0.05)) : max(windowFloorSamples) : int;
 
 xposeMaxDelay = 2000;
 
-xpose(w, x, s, sig) = de.fdelay(xposeMaxDelay,d,sig)*ma.fmin(d/x,1) +
-    de.fdelay(xposeMaxDelay,d+w,sig)*(1-ma.fmin(d/x,1))
+xpose(w, x, s, sig) = de.fdelay(xposeMaxDelay,d,sig)*crossfadeGain +
+    de.fdelay(xposeMaxDelay,d+w,sig)*(1-crossfadeGain)
 with {
     i = 1 - pow(2, s/12);
     d = i : (+ : +(w) : fmod(_,w)) ~ _;
+    crossfadePos = ma.fmin(d/x,1);
+    crossfadeGain = crossfadePos*crossfadePos*(3-2*crossfadePos);
 };
 
 formantXfSkew(formant) = pow(4.0, formant * (1.0/3.0));
@@ -126,7 +131,7 @@ with {
     freqDet    = ba.if(extFreqDet > 0.5, extFreqDet, freqDetInternal);
     winSamplesRaw = windowForFormant(freqDet, formant);
     xfSkew     = formantXfSkew(formant);
-    xfSamplesRaw = int(winSamplesRaw * 0.5 * xfSkew) : max(32);
+    xfSamplesRaw = int(winSamplesRaw * 0.5 * xfSkew) : max(crossfadeFloorSamples);
     anyRising = (g0 > 0.5) & (g0 : mem < 0.5)
               | (g1 > 0.5) & (g1 : mem < 0.5)
               | (g2 > 0.5) & (g2 : mem < 0.5)
@@ -138,10 +143,10 @@ with {
     inWinWarmup = sinceRise < winFreezeDelaySamples;
     winSamplesSmoothed = winSamplesRaw : si.smooth(ba.tau2pole(0.02));
     winFrozenStep(prev) = ba.if(inWinWarmup, winSamplesSmoothed, prev);
-    winSamples = max(64, int(winFrozenStep ~ _));
+    winSamples = max(windowFloorSamples, int(winFrozenStep ~ _));
     xfSamplesSmoothed = xfSamplesRaw : si.smooth(ba.tau2pole(0.02));
     xfFrozenStep(prev) = ba.if(inWinWarmup, xfSamplesSmoothed, prev);
-    xfSamples = max(32, int(xfFrozenStep ~ _));
+    xfSamples = max(crossfadeFloorSamples, int(xfFrozenStep ~ _));
     wetRaw = harmonySum(
         sigIn, winSamples, xfSamples, freqDet,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5
