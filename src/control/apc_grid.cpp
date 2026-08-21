@@ -51,6 +51,7 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("fx/resonode/stretch", 0.0f);
     ps.bind("fx/resonode/collision", 0.0f);
     ps.bind("fx/resonode/level", 25.0f);
+    ps.bind("fx/resonode/couple", 0.15f);
     ps.bind("fx/microrepeat_div");
     ps.bind("fx/monitorfold");
     ps.bind("fx/formant");
@@ -765,10 +766,11 @@ static const ResonodePatch kResonodePatches[kResonodePatchCount] = {
 };
 
 struct ResonodeDirectKnobRange { const char* zone; float lo; float hi; bool logTaper; };
-constexpr int kResonodeDirectKnobCount = 2;
+constexpr int kResonodeDirectKnobCount = 3;
 static const ResonodeDirectKnobRange kResonodeDirectKnobRanges[kResonodeDirectKnobCount] = {
     { "fx/resonode/tone",  200.0f, 18000.0f, true },
     { "fx/resonode/level", 2.0f, 60.0f, true },
+    { "fx/resonode/couple", 0.0f, 1.0f, false },
 };
 static void applyResonodeDirectKnob(int knobIdx, float v01, ParamStore& ps) {
     int i = knobIdx - 1 - kResonodePatchCount;

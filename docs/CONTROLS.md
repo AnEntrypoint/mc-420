@@ -43,18 +43,19 @@ wiped.
 
 ## The LofiFx / granulator pad: two gestures on one button
 
-This pad (note 69) always switches the active knob bank to LofiFx and flips
-the granulator's latched state on press, but what happens as the press
-continues depends on how long it's held:
+This pad (note 69) always switches the active knob bank to LofiFx and always
+fires instantly on the press edge — SHIFT disambiguates which of the two
+gestures below fires, never a hold-duration timer (a prior 1000ms-hold design
+was witnessed unreliable on real hardware — real button releases interrupted
+the hold before the threshold, so Resonode never actually engaged):
 
-- **The press itself**: flips a *latched* granulator state the instant the
-  pad goes down — no need to wait for release. This turns the grain engine
-  into a persistent, backgrounded texture layered under everything else; a
-  second press flips it back off. The latch survives release regardless of
-  how long the press turns out to last.
-- **Real hold** (still held past 1 second): switches the instrument entirely
-  to **Resonode**, a 4-voice, 6-mode-per-voice modal-resonator synth in the
-  spirit of a classic hardware physical-modeling instrument. While engaged:
+- **Plain tap**: flips a *latched* granulator state the instant the pad goes
+  down. This turns the grain engine into a persistent, backgrounded texture
+  layered under everything else; a second plain tap flips it back off. The
+  latch survives release regardless of how long the press turns out to last.
+- **SHIFT + tap**: toggles the instrument entirely into/out of **Resonode**, a
+  4-voice, 6-mode-per-voice coupled modal-resonator synth in the spirit of a
+  classic hardware physical-modeling instrument. While engaged:
   - The keybed drives up to 4 Resonode voices (round-robin/oldest-steal
     allocation, same shape as the pitch-lock voice allocator below), each
     carrying its own real MIDI velocity into the exciter's gain — a harder
@@ -63,20 +64,37 @@ continues depends on how long it's held:
     **Percussive, Metal/Glass, Strings, Dance Bass** — each a full point
     in position/decay/damping/stretch/collision space, blended as a convex
     combination exactly like the granulator's own patch surface below. Knob
-    slots 5–6 are direct performative dials: **tone** (exponential-taper
-    brightness) and **level** (output loudness).
+    slots 5–7 are direct performative dials: **tone** (exponential-taper
+    brightness), **level** (output loudness), and **couple** (nearest-neighbor
+    energy exchange between adjacent modes — 0 is the original independent-
+    mode behavior, higher values let modes audibly interact/beat rather than
+    ring in isolation, the single biggest lever for making two patches feel
+    distinct from each other rather than variations on one tone).
   - Resonode is excited by the *live input signal* ("reactor mode"), not a
     synthetic oscillator — it only sounds through a voice while that voice's
-    key is held, and it fully **replaces** the dry/pitch-lock signal while
-    engaged rather than layering under it.
+    key is held (silent input still renders bit-exact silence), and it fully
+    **replaces** the dry/pitch-lock signal while engaged rather than layering
+    under it. The exciter itself is broadband (each of the 6 modes performs
+    its own frequency selection, rather than a shared note-locked filter
+    pre-narrowing what reaches the bank) and shaped by a percussive strike
+    envelope — a fast attack that decays to a low sustain floor while the key
+    stays held, so a keypress reads as a struck-object transient rather than
+    continuously re-opening a high-Q filter on whatever the mic is currently
+    picking up.
   - A harder key press also bends the pitch briefly upward on attack before
     settling to the true note — more so on "flexible" (low-dispersion)
     patches, barely at all on "stiff" (high-dispersion) ones — and
     **collision** adds a bounded per-patch soft-clip "bounce" to each voice's
     own output (0 = untouched passthrough), both scaled per named patch
-    rather than exposed as free-standing knobs.
-  - Releasing the pad releases every held Resonode voice and reverts to the
-    bank that was active before the press.
+    rather than exposed as free-standing knobs. Each voice also gets a small
+    live spectral drift (brighter right at the strike, settling back to the
+    patch's own tone over the next third of a second) and a small per-note
+    random micro-variation, so a single patch audibly evolves within a note
+    and no two strikes of the same key sound identically static.
+  - The knob bank latches on LofiFx permanently on press, matching Dub/Guitar
+    (no revert-on-release) — Resonode itself stays engaged until a further
+    SHIFT+tap toggles it back off, and disengaging releases every held
+    Resonode voice.
 
 LED feedback on the pad itself: blinking red once Resonode is actually
 engaged, blinking green during the pre-threshold granulator preview, solid
