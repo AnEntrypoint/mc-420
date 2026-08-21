@@ -9,14 +9,15 @@ glitchFold = hslider("GLITCHFOLD", 0.0, 0.0, 1.0, 1.0);
 mixAndFx(dry, loopSum, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5, resonodeIn) = filtOut, loopSum, recordTap, inputFxOut
 with {
     fxBus = (dry, loopSum, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5, resonodeIn) : fx;
-    fxOuts         = fxBus : _,!;
-    loopHarmonyWet = fxBus : !,_;
+    fxOuts         = fxBus : _,!,!;
+    loopHarmonyWet = fxBus : !,_,!;
+    masterFxOuts   = fxBus : !,!,_;
     anyVoiceGated  = min(1.0, g0+g1+g2+g3+g4+g5);
     loopDirectRaw  = 1.0 - max(max(monitorFold, glitchFold), anyVoiceGated*freeXpose);
     loopDirectGate = loopDirectRaw : si.smoo;
     filtOut = fxOuts + loopSum*loopDirectGate + loopHarmonyWet;
     recordTap = fxOuts + loopHarmonyWet;
-    inputFxOut = fxOuts + loopHarmonyWet;
+    inputFxOut = masterFxOuts + loopHarmonyWet;
 };
 
 process(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5, resonodeIn) =

@@ -19,6 +19,8 @@ RESONODE_ENGAGED = checkbox("fx/resonode/engaged");
 glitchDivisor    = nentry("DIV", 0, 0, 16, 1);
 masterLoopBlocks = nentry("MLB", 0, 0, 4096, 1);
 
+SUSTAINGATE = hslider("SUSTAINGATE", 0.0, 0.0, 1.0, 1.0);
+
 DUBGATEAMT     = hslider("fx/dubgate/amt",        0.0, 0.0, 1.0, 0.001);
 DUBGATEPATTERN = hslider("fx/dubgate/pattern",     0.0, 0.0, 1.0, 0.001);
 DUBGATECLOCK   = hslider("fx/dubgate/clockphase",  0.0, 0.0, 1.0, 0.0001);
@@ -31,12 +33,14 @@ DUBLFOPHASE    = hslider("fx/dublfo/phase",        0.0, 0.0, 1.0, 0.001);
 filterStage = component("effects/home/faust/filters.dsp")[ HPCUT=HPCUT; LPCUT=LPCUT; LPRES=LPRES; ];
 delayStage  = component("effects/home/faust/delay.dsp")[ DELAYAMT=DELAYAMT; TIME=TIME; ];
 reverbStage = component("effects/home/faust/reverb.dsp")[ REVAMT=REVAMT; TIME=TIME; ];
+delayStageMaster  = component("effects/home/faust/delay.dsp")[ DELAYAMT=DELAYAMT; TIME=TIME; ];
+reverbStageMaster = component("effects/home/faust/reverb.dsp")[ REVAMT=REVAMT; TIME=TIME; ];
 microStage  = component("effects/home/faust/microrepeat.dsp")[ DIV=glitchDivisor; MLB=masterLoopBlocks; ];
 pitchStage  = component("effects/home/faust/pitch.dsp")[ SEMIS=SEMIS; FORMANT=FORMANT; ENGAGED=ENGAGED; ];
 
 harmonize = component("effects/home/faust/multitranspose.dsp");
 
-process(dry, loopSum, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5, resonodeIn) = mainOut, loopHarmonyWet
+process(dry, loopSum, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5, resonodeIn) = mainOut, loopHarmonyWet, masterFxOut
 with {
     anyVoiceGated = min(1.0, g0+g1+g2+g3+g4+g5);
     dryGate = (1.0 - anyVoiceGated*(1.0-freeXpose)) * (1.0 - KEYSMULTIMODE) : si.smoo;
@@ -80,5 +84,9 @@ with {
 
     dubGateLfoStage = dubGateStage : dubLfoStage;
 
-    mainOut = preChain : microStage : filterStage : delayStage : reverbStage : dubGateLfoStage;
+    preFilterOut = preChain : microStage : filterStage;
+    mainOut = preFilterOut : delayStage : reverbStage : dubGateLfoStage;
+
+    masterGatedIn = preFilterOut * SUSTAINGATE;
+    masterFxOut = masterGatedIn : delayStageMaster : reverbStageMaster;
 };

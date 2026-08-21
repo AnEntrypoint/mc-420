@@ -297,6 +297,7 @@ static void* worker(void*) {
     float* divZone = nullptr;
     float* monitorFoldFaustZone = nullptr;
     float* glitchFoldFaustZone = nullptr;
+    float* sustainGateFaustZone = nullptr;
     float* resonodeEngagedZone = nullptr;
     float* extFreqDetZone = nullptr;
     {
@@ -331,6 +332,7 @@ static void* worker(void*) {
         snprintf(z, sizeof z, "DIV");                  divZone              = resolveZone();
         snprintf(z, sizeof z, "MONITORFOLD");          monitorFoldFaustZone = resolveZone();
         snprintf(z, sizeof z, "GLITCHFOLD");           glitchFoldFaustZone  = resolveZone();
+        snprintf(z, sizeof z, "SUSTAINGATE");          sustainGateFaustZone = resolveZone();
         snprintf(z, sizeof z, "fx/resonode/engaged");  resonodeEngagedZone  = resolveZone();
         snprintf(z, sizeof z, "fx/extfreqdet");        extFreqDetZone       = resolveZone();
     }
@@ -795,6 +797,9 @@ static void* worker(void*) {
                 }
                 if (monitorFoldFaustZone) *monitorFoldFaustZone = foldGain;
                 if (glitchFoldFaustZone) *glitchFoldFaustZone = glitchFoldGain;
+                if (sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
+                bool sustainHeldNow = sustainSlot >= 0 && g_params->getBySlot(sustainSlot) > 0.5f;
+                if (sustainGateFaustZone) *sustainGateFaustZone = (sustainHeldNow || shiftHeldNow) ? 1.0f : 0.0f;
             }
             for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = (int32_t)(prevFiltOut[i] * 32768.0f);
             g_sampler->captureBlock(samplerBuf.data(), N);
@@ -849,17 +854,9 @@ static void* worker(void*) {
                 float& slot = g_telem.coreBusyPct[g_cfg.homeFxCore & 3];
                 slot = slot * 0.9f + (float)pct * 0.1f;
             }
-            if (g_params && sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
-            static float sustainGain = 0.0f;
-            float sustainRaw = (g_params && sustainSlot >= 0) ? g_params->getBySlot(sustainSlot) : -1.0f;
-            bool shiftHeldForMaster = monitorFoldVal > 0.5f;
-            float sustainTarget = (sustainRaw > 0.5f || shiftHeldForMaster) ? 1.0f : 0.0f;
-            const float kSustainReleaseStepPerSample = 1.0f / (1.2f * g_cfg.sampleRate);
             float outPeak = 0.0f;
             for (int i = 0; i < N; i++) {
-                if (sustainGain < sustainTarget)      { sustainGain += kFoldStepPerSample; if (sustainGain > sustainTarget) sustainGain = sustainTarget; }
-                else if (sustainGain > sustainTarget) { sustainGain -= kSustainReleaseStepPerSample; if (sustainGain < sustainTarget) sustainGain = sustainTarget; }
-                float masterSample = rawLoopSum[i] + inputFxOut[i] * sustainGain;
+                float masterSample = rawLoopSum[i] + inputFxOut[i];
                 float cueSample = fout[i];
 
                 float mv32 = masterSample * 2147483648.0f;
