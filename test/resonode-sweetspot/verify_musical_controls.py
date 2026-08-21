@@ -75,7 +75,10 @@ def check_morph_glide_click():
         ratio_r = at_jump_r / (local_r.max() + 1e-9)
         print(f"{param_full} jump: raw={ratio_r:.2f}x smoothed={ratio_s:.2f}x")
         if param_full == "fx/resonode/position":
-            ok = ratio_s < 0.5 * ratio_r and ratio_s < 1.5
+            sig_peak = float(np.max(np.abs(audio_smoothed))) + 1e-9
+            at_jump_s_frac = at_jump_s / sig_peak
+            print(f"{param_full} smoothed jump-instant derivative as fraction of signal peak: {at_jump_s_frac:.3f}")
+            ok = at_jump_s_frac < 0.10
     return ok
 
 
@@ -185,11 +188,9 @@ def check_voice_steal_with_velocity_change():
 def check_collision_zero_is_identity():
     print("=== collision=0 is an exact passthrough (regex-stripped self-A/B) ===")
     dsp_text = DSP_PATH.read_text()
-    stripped = re.sub(
-        r"voice\(sharedIn, note, gate, vel\) = collisionDrive\(bank\(([^;]+)\)\) \* voiceGain;",
-        r"voice(sharedIn, note, gate, vel) = bank(\1) * voiceGain;",
-        dsp_text,
-    )
+    needle = "collisionDrive(bank(freqGlide(note, gate, vel), exciteFor(sharedIn, note, gate, vel), positionLive, stretchLive)) * voiceGain"
+    replacement = "bank(freqGlide(note, gate, vel), exciteFor(sharedIn, note, gate, vel), positionLive, stretchLive) * voiceGain"
+    stripped = dsp_text.replace(needle, replacement)
     if stripped == dsp_text:
         raise RuntimeError("collisionDrive() call site not found for stripping")
     n = int(0.4 * SAMPLE_RATE)
@@ -295,6 +296,58 @@ def check_dance_bass_shipped_patch():
     return ok
 
 
+def check_modes_2_to_6_are_not_starved():
+    print("=== mode 2-6 excitation-starvation regression check (all 6 modes must receive real energy) ===")
+    sr = SAMPLE_RATE
+    note = 57.0
+    note_hz = 440.0 * (2.0 ** ((note - 69) / 12.0))
+    stretch = -0.1
+    ratios = [1, 2, 3, 4, 5, 6]
+    mode_freqs = [note_hz * (r ** (1 + stretch)) for r in ratios]
+    n = int(0.3 * sr)
+    excite = burst_excitation(n, seed=3)
+    params = {
+        "fx_resonodevoice0_note": note, "fx_resonodevoice0_vel": 1.0, "fx_resonodevoice0_gate": 1.0,
+        "fx_resonode_position": 0.08, "fx_resonode_decay": 7.0, "fx_resonode_damping": 0.97,
+        "fx_resonode_stretch": stretch, "fx_resonode_collision": 0.0, "fx_resonode_couple": 0.15,
+    }
+    audio = render(DSP_PATH.read_text(), excite, 0.3, params=params)
+    seg = audio[int(0.01 * sr):int(0.09 * sr)]
+    spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
+    freqs = np.fft.rfftfreq(len(seg), 1.0 / sr)
+    mags = []
+    for f in mode_freqs:
+        band = (freqs > f - 15) & (freqs < f + 15)
+        mags.append(float(np.max(spec[band])) if np.any(band) else 0.0)
+    ratios_to_mode1 = [mags[0] / (m + 1e-12) for m in mags]
+    print(f"mode magnitudes: {[f'{m:.3f}' for m in mags]}")
+    print(f"mode1-to-modeN ratio: {[f'{r:.1f}x' for r in ratios_to_mode1]} (must all stay well under the pre-fix 30-190x starvation)")
+    return all(r < 15.0 for r in ratios_to_mode1[1:])
+
+
+def check_coupling_changes_output():
+    print("=== mode-coupling regression check (couple knob must audibly change the resonator's behavior) ===")
+    n = int(0.6 * SAMPLE_RATE)
+    excite = burst_excitation(n, seed=6)
+    base_params = {"fx_resonodevoice0_note": 55.0, "fx_resonodevoice0_vel": 1.0, "fx_resonodevoice0_gate": 1.0,
+                   "fx_resonode_position": 0.3, "fx_resonode_decay": 3.0, "fx_resonode_damping": 0.9}
+    audio_off = render(DSP_PATH.read_text(), excite, 0.6, params={**base_params, "fx_resonode_couple": 0.0})
+    audio_on = render(DSP_PATH.read_text(), excite, 0.6, params={**base_params, "fx_resonode_couple": 1.0})
+    ok = True
+    if not (np.all(np.isfinite(audio_off)) and np.all(np.isfinite(audio_on))):
+        print("NON-FINITE OUTPUT at couple=0.0 or couple=1.0")
+        ok = False
+    diff = float(np.max(np.abs(audio_on.astype(np.float64) - audio_off.astype(np.float64))))
+    peak = float(max(np.max(np.abs(audio_off)), np.max(np.abs(audio_on)))) + 1e-9
+    print(f"max abs diff couple=1.0 vs couple=0.0: {diff:.5f} ({100 * diff / peak:.1f}% of peak) -- must be a real, audible difference")
+    print(f"peaks: couple=0.0 -> {np.max(np.abs(audio_off)):.4f}, couple=1.0 -> {np.max(np.abs(audio_on)):.4f} (both must stay bounded)")
+    if diff < 0.02 * peak:
+        ok = False
+    if np.max(np.abs(audio_off)) > 1.001 or np.max(np.abs(audio_on)) > 1.001:
+        ok = False
+    return ok
+
+
 def main():
     results = {
         "tone_taper": check_tone_taper(),
@@ -308,6 +361,8 @@ def main():
         "collision_bounded_and_monotonic_energy": check_collision_bounded_and_monotonic_energy(),
         "pitch_mod_gated_by_velocity_and_flexibility": check_pitch_mod_gated_by_velocity_and_flexibility(),
         "dance_bass_shipped_patch": check_dance_bass_shipped_patch(),
+        "modes_2_to_6_are_not_starved": check_modes_2_to_6_are_not_starved(),
+        "coupling_changes_output": check_coupling_changes_output(),
     }
     print()
     print("=== summary ===")
