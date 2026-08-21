@@ -1,7 +1,7 @@
 declare name "MultiKeyTranspose";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Polyphonic pitch-lock: each held voice's shift is derived from (targetNote - the live-tracked input pitch at that voice's own note-on instant), tracked live and smoothed (20ms one-pole, snapping fresh at each attackEdge to avoid carrying a previous voice's stale state) through an 80ms warmup window before freezing into heldDetNote for the rest of that voice's sustain -- never re-tracked after freezing, so a mid-sustain plosive/burst cannot perturb an already-locked note, and never snapped raw at the literal attack sample, since a real singer's vibrato/onset transient can make one instantaneous sample an unreliable target even when the underlying tracker itself is accurate. This is an Auto-Tune-hard-lock-style harmonizer, not a fixed-interval Whammy-style one. The live-tracked freqDet (fx/extfreqdet/pitchtracker.lv2, falling back to an internal zero-crossing tracker) is ALSO used, independently, to size xpose's pitch-synchronous window/crossfade for natural, formant-preserving shifting (PSOLA-style: a window sized to the input's own true period preserves timbre at any shift ratio) -- a wrong window costs a little naturalness, never a wrong note, and this window sizing has its own separate onset-freeze protection (winFreezeDelayMs). formant additionally detunes the window/period ratio and applies a light spectral tilt for a real, continuously controllable vocal-character control, exact identity at formant=0.";
+declare description "Polyphonic pitch-lock: each held voice's shift is derived from (targetNote - the live-tracked input pitch), continuously re-tracked for the whole sustain whenever the external autocorrelation tracker (fx/extfreqdet/pitchtracker.lv2) is trusted (extFreqDet > 0.5) -- xpose() is structurally an interval shifter (it reads live input through a delay line at whatever ratio shiftAmount currently is), so a TRUE absolute-pitch lock (output always lands on the held key's pitch regardless of what's actually sung) requires the shift ratio to continuously chase (targetNote - liveDetNote), not freeze it once at attack: freezing the ratio only freezes the INTERVAL, and re-processing live input through a frozen interval still produces a different final pitch every time the input pitch changes. winSamples/xfSamples (xpose's PSOLA window/crossfade sizing) are continuously re-tracked under the same trust condition for the same reason -- a stale window size measured against the WRONG period distorts the effective shift ratio xpose actually produces, not just its naturalness. Falls back to the OLD snap-then-freeze-after-80ms-warmup behavior only when the external tracker is untrusted (extFreqDet <= 0.5, i.e. the internal zero-crossing tracker's own real jitter/convergence-time limitations make continuous tracking unsafe there) -- see AGENTS.md's disclosed limitation on that fallback tracker. smoothedDetNote still snaps fresh (not carrying a previous voice's stale smoother state) at every attackEdge in both modes. formant additionally detunes the window/period ratio and applies a light spectral tilt for a real, continuously controllable vocal-character control, exact identity at formant=0.";
 
 import("stdfaust.lib");
 
@@ -91,7 +91,7 @@ normalGlidePole = ba.tau2pole(0.008);
 lockDelayMs = 80.0;
 lockDelaySamples = lockDelayMs * 0.001 * ma.SR;
 
-voiceOut(sig, winSamples, xfSamples, freqDet, targetNote, gate) = wet
+voiceOut(sig, winSamples, xfSamples, freqDet, trustedTracker, targetNote, gate) = wet
 with {
     attackEdge = gate > (gate : mem);
     sinceAttackStep(prev) = ba.if(attackEdge, 0.0, prev + 1.0);
@@ -102,7 +102,8 @@ with {
     smoothedDetNoteStep(prev) = ba.if(attackEdge, rawDetNote,
                                   prev * smoothPole + rawDetNote * (1.0 - smoothPole));
     smoothedDetNote = smoothedDetNoteStep ~ _;
-    heldDetNoteStep(prev) = ba.if(inLockWarmup, smoothedDetNote, prev);
+    heldDetNoteStep(prev) = ba.if(trustedTracker > 0.5, smoothedDetNote,
+                             ba.if(inLockWarmup, smoothedDetNote, prev));
     heldDetNote = heldDetNoteStep ~ _;
     shiftTarget = targetNote - heldDetNote;
     shiftStep(prev) = ba.if(attackEdge, shiftTarget,
@@ -112,10 +113,10 @@ with {
     wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * 0.6;
 };
 
-harmonySum(sig, winSamples, xfSamples, freqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
-    voiceOut(sig,winSamples,xfSamples,freqDet,n0,g0) + voiceOut(sig,winSamples,xfSamples,freqDet,n1,g1)
-  + voiceOut(sig,winSamples,xfSamples,freqDet,n2,g2) + voiceOut(sig,winSamples,xfSamples,freqDet,n3,g3)
-  + voiceOut(sig,winSamples,xfSamples,freqDet,n4,g4) + voiceOut(sig,winSamples,xfSamples,freqDet,n5,g5);
+harmonySum(sig, winSamples, xfSamples, freqDet, trustedTracker, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
+    voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n0,g0) + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n1,g1)
+  + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n2,g2) + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n3,g3)
+  + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n4,g4) + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n5,g5);
 
 formantTiltDb(formant) = formant * 2.5;
 
@@ -132,6 +133,7 @@ with {
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
     freqDetInternal = detectedFreq(sigIn);
     freqDet    = ba.if(extFreqDet > 0.5, extFreqDet, freqDetInternal);
+    trustedTracker = extFreqDet > 0.5;
     winSamplesRaw = windowForFormant(freqDet, formant);
     xfSkew     = formantXfSkew(formant);
     xfSamplesRaw = int(winSamplesRaw * 0.5 * xfSkew) : max(crossfadeFloorSamples);
@@ -145,13 +147,15 @@ with {
     sinceRise = sinceRiseStep ~ _;
     inWinWarmup = sinceRise < winFreezeDelaySamples;
     winSamplesSmoothed = winSamplesRaw : si.smooth(ba.tau2pole(0.02));
-    winFrozenStep(prev) = ba.if(inWinWarmup, winSamplesSmoothed, prev);
+    winFrozenStep(prev) = ba.if(trustedTracker > 0.5, winSamplesSmoothed,
+                            ba.if(inWinWarmup, winSamplesSmoothed, prev));
     winSamples = max(windowFloorSamples, int(winFrozenStep ~ _));
     xfSamplesSmoothed = xfSamplesRaw : si.smooth(ba.tau2pole(0.02));
-    xfFrozenStep(prev) = ba.if(inWinWarmup, xfSamplesSmoothed, prev);
+    xfFrozenStep(prev) = ba.if(trustedTracker > 0.5, xfSamplesSmoothed,
+                           ba.if(inWinWarmup, xfSamplesSmoothed, prev));
     xfSamples = max(crossfadeFloorSamples, int(xfFrozenStep ~ _));
     wetRaw = harmonySum(
-        sigIn, winSamples, xfSamples, freqDet,
+        sigIn, winSamples, xfSamples, freqDet, trustedTracker,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5
     ) : ma.tanh;
     wet = formantTilt(formant, wetRaw);
