@@ -854,10 +854,11 @@ static void* worker(void*) {
             float sustainRaw = (g_params && sustainSlot >= 0) ? g_params->getBySlot(sustainSlot) : -1.0f;
             bool shiftHeldForMaster = monitorFoldVal > 0.5f;
             float sustainTarget = (sustainRaw > 0.5f || shiftHeldForMaster) ? 1.0f : 0.0f;
+            const float kSustainReleaseStepPerSample = 1.0f / (1.2f * g_cfg.sampleRate);
             float outPeak = 0.0f;
             for (int i = 0; i < N; i++) {
                 if (sustainGain < sustainTarget)      { sustainGain += kFoldStepPerSample; if (sustainGain > sustainTarget) sustainGain = sustainTarget; }
-                else if (sustainGain > sustainTarget) { sustainGain -= kFoldStepPerSample; if (sustainGain < sustainTarget) sustainGain = sustainTarget; }
+                else if (sustainGain > sustainTarget) { sustainGain -= kSustainReleaseStepPerSample; if (sustainGain < sustainTarget) sustainGain = sustainTarget; }
                 float masterSample = rawLoopSum[i] + inputFxOut[i] * sustainGain;
                 float cueSample = fout[i];
 
