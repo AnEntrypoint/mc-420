@@ -659,21 +659,29 @@ static void* worker(void*) {
                 double fourBeatLenShared = beatLenSamplesShared * 4.0;
 
                 if (masterLen > 0.0f) {
+                    masterPhaseSamples += (double)N;
                     if (linkDrivingLength && g_link) {
                         bool freshSnapshot = linkSnap.phaseValid && linkSnap.quantumMicroBeats > 0 &&
                                               linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
                         if (freshSnapshot) {
                             lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
-                            double linkPhaseFrac = (double)linkSnap.beatPhaseMicroBeats / (double)linkSnap.quantumMicroBeats;
-                            if (linkPhaseFrac < 0.0) linkPhaseFrac = 0.0;
-                            if (linkPhaseFrac >= 1.0) linkPhaseFrac = 0.0;
-                            masterPhaseSamples = linkPhaseFrac * (double)masterLen;
-                        } else {
-                            masterPhaseSamples += (double)N;
+                            double linkQuantumFrac = (double)linkSnap.beatPhaseMicroBeats / (double)linkSnap.quantumMicroBeats;
+                            if (linkQuantumFrac < 0.0) linkQuantumFrac = 0.0;
+                            if (linkQuantumFrac >= 1.0) linkQuantumFrac = 0.0;
+                            double linkBeatWithinQuantum = linkQuantumFrac * kLinkQuantum;
+                            double loopBeatPos = std::fmod(linkBeatWithinQuantum, (double)recordedBeatsShared);
+                            if (loopBeatPos < 0.0) loopBeatPos += recordedBeatsShared;
+                            double linkTargetSamples = loopBeatPos * beatLenSamplesShared;
+
+                            double halfLen = (double)masterLen * 0.5;
+                            double delta = std::fmod(linkTargetSamples - masterPhaseSamples + halfLen, (double)masterLen);
+                            if (delta < 0.0) delta += masterLen;
+                            delta -= halfLen;
+                            bool largeDrift = std::fabs(delta) > halfLen * 0.5;
+                            masterPhaseSamples += largeDrift ? delta : delta * 0.02;
                         }
                     } else {
                         lastLinkPhaseMicroBeats = -1;
-                        masterPhaseSamples += (double)N;
                     }
                     masterPhaseSamples = std::fmod(masterPhaseSamples, (double)masterLen);
                     if (masterPhaseSamples < 0.0) masterPhaseSamples += masterLen;
