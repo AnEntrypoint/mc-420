@@ -1,7 +1,7 @@
 declare name "MultiKeyTranspose";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Polyphonic pitch-lock: each held voice's shift is derived from (targetNote - the live-tracked input pitch), continuously re-tracked for the whole sustain whenever the external autocorrelation tracker (fx/extfreqdet/pitchtracker.lv2) is trusted (extFreqDet > 0.5) -- xpose() is structurally an interval shifter (it reads live input through a delay line at whatever ratio shiftAmount currently is), so a TRUE absolute-pitch lock (output always lands on the held key's pitch regardless of what's actually sung) requires the shift ratio to continuously chase (targetNote - liveDetNote), not freeze it once at attack: freezing the ratio only freezes the INTERVAL, and re-processing live input through a frozen interval still produces a different final pitch every time the input pitch changes. winSamples/xfSamples (xpose's PSOLA window/crossfade sizing) are continuously re-tracked under the same trust condition for the same reason -- a stale window size measured against the WRONG period distorts the effective shift ratio xpose actually produces, not just its naturalness. Falls back to the OLD snap-then-freeze-after-80ms-warmup behavior only when the external tracker is untrusted (extFreqDet <= 0.5, i.e. the internal zero-crossing tracker's own real jitter/convergence-time limitations make continuous tracking unsafe there) -- see AGENTS.md's disclosed limitation on that fallback tracker. smoothedDetNote still snaps fresh (not carrying a previous voice's stale smoother state) at every attackEdge in both modes. formant additionally detunes the window/period ratio and applies a light spectral tilt for a real, continuously controllable vocal-character control, exact identity at formant=0.";
+declare description "Polyphonic pitch-lock: each held voice's shift is derived from (targetNote - the live-tracked input pitch), continuously re-tracked for the whole sustain whenever the external autocorrelation tracker (fx/extfreqdet/pitchtracker.lv2) is trusted (extFreqDet > 0.5) AND stable -- xpose() is structurally an interval shifter (it reads live input through a delay line at whatever ratio shiftAmount currently is), so a TRUE absolute-pitch lock (output always lands on the held key's pitch regardless of what's actually sung) requires the shift ratio to continuously chase (targetNote - liveDetNote), not freeze it once at attack: freezing the ratio only freezes the INTERVAL, and re-processing live input through a frozen interval still produces a different final pitch every time the input pitch changes. A trusted-but-still-converging tracker reading is not accepted immediately: heldDetNote only updates once freqDet has stayed within stabilityMaxJumpSemitones (0.6st) of itself for a full stabilityWindowMs (25ms) -- real percussive onsets (verified on real marimba/vibraphone recordings) can spuriously correlate at a wrong high-octave candidate for tens of ms before the true fundamental's correlation dominates, and blindly chasing every trusted-but-transient reading during that window audibly 'searches' through wrong pitches rather than landing once, correctly, on the true note. The first time a voice's tracker reading becomes both trusted and stable, heldDetNote AND smoothedDetNote's own recursive smoother both snap directly to that settled value (not glide into it via the 20ms-tau smoother, which would itself sound like a second, slower search) -- steady-state re-locking after that snap uses the smoother normally. winSamples/xfSamples (xpose's PSOLA window/crossfade sizing) are continuously re-tracked under the same trust condition for the same reason -- a stale window size measured against the WRONG period distorts the effective shift ratio xpose actually produces, not just its naturalness. Falls back to the OLD snap-then-freeze-after-80ms-warmup behavior only when the external tracker is untrusted (extFreqDet <= 0.5, i.e. the internal zero-crossing tracker's own real jitter/convergence-time limitations make continuous tracking unsafe there) -- see AGENTS.md's disclosed limitation on that fallback tracker. formant additionally detunes the window/period ratio and applies a light spectral tilt for a real, continuously controllable vocal-character control, exact identity at formant=0.";
 
 import("stdfaust.lib");
 
@@ -91,6 +91,10 @@ normalGlidePole = ba.tau2pole(0.008);
 lockDelayMs = 80.0;
 lockDelaySamples = lockDelayMs * 0.001 * ma.SR;
 
+stabilityWindowMs = 25.0;
+stabilityWindowSamples = stabilityWindowMs * 0.001 * ma.SR;
+stabilityMaxJumpSemitones = 0.6;
+
 voiceOut(sig, winSamples, xfSamples, freqDet, trustedTracker, targetNote, gate) = wet
 with {
     attackEdge = gate > (gate : mem);
@@ -99,11 +103,22 @@ with {
     inLockWarmup = sinceAttack < lockDelaySamples;
     rawDetNote = ba.hz2midikey(freqDet);
     smoothPole = ba.tau2pole(0.02);
-    smoothedDetNoteStep(prev) = ba.if(attackEdge, rawDetNote,
+    smoothedDetNoteStep(prev) = ba.if(attackEdge | justTrustedAndStable, rawDetNote,
                                   prev * smoothPole + rawDetNote * (1.0 - smoothPole));
     smoothedDetNote = smoothedDetNoteStep ~ _;
-    heldDetNoteStep(prev) = ba.if(trustedTracker > 0.5, smoothedDetNote,
-                             ba.if(inLockWarmup, smoothedDetNote, prev));
+    jumpDetectStep(prevRef) = ba.if(attackEdge, rawDetNote,
+                               ba.if(abs(rawDetNote - prevRef) > stabilityMaxJumpSemitones, rawDetNote, prevRef));
+    stableRef = jumpDetectStep ~ _;
+    jumpNow = attackEdge | (abs(rawDetNote - stableRef) > stabilityMaxJumpSemitones);
+    sinceJumpStep(prev) = ba.if(jumpNow, 0.0, prev + 1.0);
+    sinceJump = sinceJumpStep ~ _;
+    isStable = sinceJump >= stabilityWindowSamples;
+    trustedAndStable = (trustedTracker > 0.5) & isStable;
+    justTrustedAndStable = trustedAndStable > (trustedAndStable : mem);
+    heldDetNoteStep(prev) = ba.if(attackEdge, rawDetNote,
+                             ba.if(trustedTracker > 0.5,
+                               ba.if(isStable, smoothedDetNote, prev),
+                               ba.if(inLockWarmup, smoothedDetNote, prev)));
     heldDetNote = heldDetNoteStep ~ _;
     shiftTarget = targetNote - heldDetNote;
     shiftStep(prev) = ba.if(attackEdge, shiftTarget,
