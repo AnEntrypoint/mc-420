@@ -851,12 +851,30 @@ static void* worker(void*) {
             }
             if (g_params && sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
             static float sustainGain = 0.0f;
-            float sustainTarget = (g_params && sustainSlot >= 0 && g_params->getBySlot(sustainSlot) > 0.5f) ? 1.0f : 0.0f;
+            float sustainRaw = (g_params && sustainSlot >= 0) ? g_params->getBySlot(sustainSlot) : -1.0f;
+            float sustainTarget = sustainRaw > 0.5f ? 1.0f : 0.0f;
+            {
+                static bool lastSustainState = false;
+                bool nowSustainState = sustainTarget > 0.5f;
+                if (nowSustainState != lastSustainState) {
+                    timespec dbgT; clock_gettime(CLOCK_MONOTONIC, &dbgT);
+                    fprintf(stderr, "[diag-sustain] t=%ld.%03ld slot=%d raw=%.3f target=%.1f gain=%.3f inputFxOutPeak=%.4f rawLoopSumPeak=%.4f\n",
+                            (long)dbgT.tv_sec, dbgT.tv_nsec/1000000, sustainSlot, sustainRaw, sustainTarget, sustainGain,
+                            [&]{ float p=0; for (int i=0;i<N;i++){float a=inputFxOut[i]<0?-inputFxOut[i]:inputFxOut[i]; if(a>p)p=a;} return p; }(),
+                            [&]{ float p=0; for (int i=0;i<N;i++){float a=rawLoopSum[i]<0?-rawLoopSum[i]:rawLoopSum[i]; if(a>p)p=a;} return p; }());
+                    lastSustainState = nowSustainState;
+                }
+            }
             float outPeak = 0.0f;
+            float masterPeakDbg = 0.0f;
             for (int i = 0; i < N; i++) {
                 if (sustainGain < sustainTarget)      { sustainGain += kFoldStepPerSample; if (sustainGain > sustainTarget) sustainGain = sustainTarget; }
                 else if (sustainGain > sustainTarget) { sustainGain -= kFoldStepPerSample; if (sustainGain < sustainTarget) sustainGain = sustainTarget; }
                 float masterSample = rawLoopSum[i] + inputFxOut[i] * sustainGain;
+                {
+                    float am = masterSample < 0 ? -masterSample : masterSample;
+                    if (am > masterPeakDbg) masterPeakDbg = am;
+                }
                 float cueSample = fout[i];
 
                 float mv32 = masterSample * 2147483648.0f;
@@ -881,6 +899,16 @@ static void* worker(void*) {
                 if (a > outPeak) outPeak = a;
             }
             g_telem.outPeak = outPeak;
+            if (sustainTarget > 0.5f) {
+                static double lastSustainLogT = -1e18;
+                timespec dbgT2; clock_gettime(CLOCK_MONOTONIC, &dbgT2);
+                double nowT = dbgT2.tv_sec + dbgT2.tv_nsec * 1e-9;
+                if (nowT - lastSustainLogT >= 1.0) {
+                    fprintf(stderr, "[diag-sustain-hold] t=%.3f gain=%.3f masterPeak=%.4f cuePeak=%.4f\n",
+                            nowT, sustainGain, masterPeakDbg, outPeak);
+                    lastSustainLogT = nowT;
+                }
+            }
 #endif
 
             timespec writeStartTs; clock_gettime(CLOCK_MONOTONIC, &writeStartTs);
