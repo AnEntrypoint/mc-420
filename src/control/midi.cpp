@@ -213,22 +213,14 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
             if (!realReady) continue;
             if (snd_rawmidi_read(in, &b, 1) != 1) break;
         }
-        static uint64_t noteLogCount = 0;
-        bool isNoteStatusByte = (b & 0x80) && ((b & 0xF0) == 0x80 || (b & 0xF0) == 0x90);
-        bool loggingThisMsg = isNoteStatusByte || (phase == 2 && ((st & 0xF0) == 0x80 || (st & 0xF0) == 0x90));
-        if (loggingThisMsg && noteLogCount < 500) { fprintf(stderr, "[midi] note raw byte: 0x%02x (phase=%d)\n", b, phase); noteLogCount++; }
         if (b & 0x80) { st = b; phase = 1; continue; }
         if (phase == 1) { d1 = b; phase = 2; continue; }
         d2 = b; phase = 1;
         uint8_t type = st & 0xF0;
         uint8_t channel = st & 0x0F;
         unsigned now = nowMs();
-        if ((type == 0x80 || type == 0x90) && noteLogCount < 500)
-            fprintf(stderr, "[midi] note decoded: st=0x%02x type=0x%02x ch=%d d1=%d d2=%d\n", st, type, channel, d1, d2);
-        static uint64_t ccLogCount = 0;
-        if (type == 0xB0 && ccLogCount < 500) {
-            fprintf(stderr, "[midi] cc decoded: st=0x%02x ch=%d controller=%d value=%d\n", st, channel, d1, d2);
-            ccLogCount++;
+        if (channel == 0 && d1 >= 82 && d1 <= 86 && (type == 0x80 || type == 0x90)) {
+            fprintf(stderr, "[diag-glitch] note decoded: type=0x%02x d1=%d d2=%d\n", type, d1, d2);
         }
         grid.pollHolds(now, ps, link, audio);
         {
