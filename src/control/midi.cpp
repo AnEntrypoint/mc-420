@@ -225,6 +225,11 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         unsigned now = nowMs();
         if ((type == 0x80 || type == 0x90) && noteLogCount < 500)
             fprintf(stderr, "[midi] note decoded: st=0x%02x type=0x%02x ch=%d d1=%d d2=%d\n", st, type, channel, d1, d2);
+        static uint64_t ccLogCount = 0;
+        if (type == 0xB0 && ccLogCount < 500) {
+            fprintf(stderr, "[midi] cc decoded: st=0x%02x ch=%d controller=%d value=%d\n", st, channel, d1, d2);
+            ccLogCount++;
+        }
         grid.pollHolds(now, ps, link, audio);
         {
             auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
