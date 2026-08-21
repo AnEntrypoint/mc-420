@@ -800,6 +800,16 @@ static void* worker(void*) {
                 if (sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
                 bool sustainHeldNow = sustainSlot >= 0 && g_params->getBySlot(sustainSlot) > 0.5f;
                 if (sustainGateFaustZone) *sustainGateFaustZone = (sustainHeldNow || shiftHeldNow) ? 1.0f : 0.0f;
+                {
+                    static bool prevSustainHeldNow = false;
+                    if (sustainHeldNow != prevSustainHeldNow) {
+                        timespec dts; clock_gettime(CLOCK_MONOTONIC, &dts);
+                        fprintf(stderr, "[diag-sustain2] t=%ld.%03ld sustainSlot=%d sustainHeldNow=%d shiftHeldNow=%d zonePtr=%p zoneVal=%.3f\n",
+                                (long)dts.tv_sec, dts.tv_nsec/1000000, sustainSlot, sustainHeldNow, shiftHeldNow,
+                                (void*)sustainGateFaustZone, sustainGateFaustZone ? *sustainGateFaustZone : -999.0f);
+                        prevSustainHeldNow = sustainHeldNow;
+                    }
+                }
             }
             for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = (int32_t)(prevFiltOut[i] * 32768.0f);
             g_sampler->captureBlock(samplerBuf.data(), N);
@@ -855,6 +865,24 @@ static void* worker(void*) {
                 slot = slot * 0.9f + (float)pct * 0.1f;
             }
             float outPeak = 0.0f;
+            {
+                static float peakLoopSum = 0.0f, peakInputFxOut = 0.0f;
+                static timespec lastDiagLogTs = {0, 0};
+                for (int i = 0; i < N; i++) {
+                    float a1 = rawLoopSum[i] < 0 ? -rawLoopSum[i] : rawLoopSum[i];
+                    float a2 = inputFxOut[i] < 0 ? -inputFxOut[i] : inputFxOut[i];
+                    if (a1 > peakLoopSum) peakLoopSum = a1;
+                    if (a2 > peakInputFxOut) peakInputFxOut = a2;
+                }
+                timespec dts; clock_gettime(CLOCK_MONOTONIC, &dts);
+                double elapsedMs = (dts.tv_sec - lastDiagLogTs.tv_sec) * 1000.0 + (dts.tv_nsec - lastDiagLogTs.tv_nsec) / 1e6;
+                if (elapsedMs >= 500.0) {
+                    fprintf(stderr, "[diag-master] t=%ld.%03ld peakLoopSum=%.5f peakInputFxOut=%.5f\n",
+                            (long)dts.tv_sec, dts.tv_nsec/1000000, peakLoopSum, peakInputFxOut);
+                    peakLoopSum = 0.0f; peakInputFxOut = 0.0f;
+                    lastDiagLogTs = dts;
+                }
+            }
             for (int i = 0; i < N; i++) {
                 float masterSample = rawLoopSum[i] + inputFxOut[i];
                 float cueSample = fout[i];
