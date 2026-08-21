@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=931136b0acb12adcb8d59b3d3ecb92f63b2a0531">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d9ef6260c593449ef0d6073368670c09542e96a2">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1274,42 +1274,127 @@ Resonode was engaged).
 
 **DSP mechanism (current shipped state)**: `resonode_synth.dsp` is a
 6-modes/voice, 4-voice physically-modeled resonator, excited ONLY by the
-live mic signal (`dry`, bandpassed per-voice to the played note's own
-frequency via `fi.resonbp(freqHz, 15.0, 1.0)` — a Q=15 bandpass, tightened
-from an initial Q=2 after measurement showed Q=2 let too much
-off-resonance broadband energy through, reading as "tinted mic passthrough"
-rather than a real resonant instrument). There is NO synthetic exciter
-anywhere (a held key with silent live input renders bit-exact silence) —
-keys drive voice note/gate/vel only, the mic is the only sound source.
-`modeFilterR`'s biquad has proper `(1-r)` numerator gain normalization
-(unnormalized, it was permanently `ma.tanh`-saturating regardless of
-input). `bwFloorT60 = 0.15` clamps every mode's minimum bandwidth
-(measured/tuned jointly with the exciter's bandpass Q — the two parameters
-compound and were re-derived together via a real tonal-vs-noise
-spectral-energy-fraction metric, not loudness alone). `process()` order is
-`(...) : *(outLevel) : ma.tanh` (outLevel drives INTO the limiter, not
-scaled past it). `outLevel` default `25.0` (range `0.0..60.0`,
-logarithmic-taper knob) — large because a real narrowband resonator only
-captures a small fraction of a broadband/mistuned excitation's energy by
-design; correct default was found by measuring realistic (off-pitch-tap)
-excitation, not the unrealistically-favorable on-pitch case. `bassBoost`
-gives the fundamental mode (mode 1 only) up to 1.35x gain below 220Hz,
-tapering to unity at/above 220Hz (exact identity above the corner).
-`aliasGuard` fades any mode whose real frequency crosses the top 5% of
-Nyquist to silence rather than letting it fold back as a spurious alias
-peak. `collision` (0..1, per-patch) is a bounded `ma.tanh`-based
-waveshaper on each voice's own `bank()` output before summing — exact
-identity at 0, adds real broadband grit/decay-tail energy at higher
-values. Pitch-mod (`flexibility = max(0,min(1,(0.5-stretch)))`) adds a
-small (~44 cents max), velocity- and stretch-scaled onset frequency bump
-via a one-shot exponential decay envelope, retriggered on the same
+live mic signal — there is NO synthetic exciter anywhere (a held key with
+silent live input renders bit-exact silence) — keys drive voice
+note/gate/vel only, the mic is the only sound source ("reactor mode").
+
+**The exciter is broadband, not a note-locked bandpass.** The original
+design pre-filtered the shared mic tap through a per-voice
+`fi.resonbp(freqHz, 15.0, 1.0)` — a Q=15 bandpass locked to the played
+note's fundamental, BEFORE splitting into the 6-mode bank. Measured via
+DawDreamer JIT (`test/resonode-sweetspot/`): this made modes 2-6 receive
+30-190x less excitation energy than mode 1 at the same excitation instant,
+regardless of `position`/`stretch`/`damping` — the "6-mode" bank was
+functionally a single resonant filter, which is why patches built from
+different mode-shape/stretch settings measured audibly indistinguishable
+(spectral centroid pinned to the fundamental for every patch, even ones
+documented as "bright/inharmonic") and why the instrument read as
+narrowband audio-feedback-like ringing rather than a struck object.
+`sharedExciteIn` is now a shared (not per-voice) highpass(60Hz)+lowpass(tone)
+only — each mode's own resonant filter performs 100% of the frequency
+selection, matching both Gabriel Soule's Resonarium thesis and Reason
+Studios' Objekt manual's documented architecture (exciter modules are
+deliberately broadband; the resonator bank, not the exciter, does mode
+selection). `modeFilterR`'s biquad still has the `(1-r)` numerator gain
+normalization from before (unnormalized, it was permanently
+`ma.tanh`-saturating regardless of input); `modeGain6`'s base coefficient
+was raised from `0.16` to `0.55` to close a remaining ~30x mode6 gap that
+survives the bandpass removal (a `b0`/`r`-interaction the numerator
+normalization does not fully equalize at very long T60) — this is an
+empirically-tuned constant, re-verify with `test/resonode-sweetspot/verify_musical_controls.py`'s
+`modes_2_to_6_are_not_starved` check before changing mode-gain coefficients.
+
+**The exciter envelope is a percussive strike shape, not a sustained-open
+gate.** It was `en.asr(0.02, 1.0, 0.3, xgate)` — attack 20ms then a FULL
+sustain level of 1.0 for as long as the key stayed held, meaning a
+continuously-open high-Q filter kept re-processing whatever the live mic
+was doing for the whole note — structurally the same shape as an audio
+feedback loop. It is now `en.adsr(0.004, 0.11, 0.09, 0.25, xgate)`: a 4ms
+attack, decaying to a 9%-of-peak sustain floor over 110ms, releasing over
+250ms on note-off. Measured via DawDreamer against a continuous moderate
+broadband-noise input (a stand-in for room tone/mic bleed): the settled
+long-hold RMS relative to the onset peak dropped from ~92% (old, effectively
+still wide open) to ~40% (new), with a genuine dip to ~14% in the 100-300ms
+window right after the strike — a real, measured "hit-then-settle" contour
+that did not exist before. `xgate` gating and voice-steal
+retrigger/`stealEvent` timing are unchanged.
+
+**`couple` — nearest-neighbor mode coupling** (`fx/resonode/couple`, knob
+slot 7): each mode's excitation now also receives a scaled sum of its
+immediate chain-neighbors' PREVIOUS-sample output (mode `k` couples with
+`k-1`/`k+1`, a 6-node chain, mode1 and mode6 as the two end nodes with a
+single neighbor each — implemented as one Faust `letrec` block over all 6
+mode outputs, the general mechanism for mutually-recursive signal networks;
+a scattered `x'` reference across independent `with{}` bindings does NOT
+work here — Faust's box-language evaluator hits an "endless evaluation
+cycle" trying to elaborate it, confirmed via real `faust compile()`
+failures during development). Modeled on Resonarium's "interlinked" and
+Objekt's "Coupling: On/X-Over" resonator-bank topologies — both reference
+documents independently name mode coupling as the single highest-leverage
+lever for timbral distinctiveness beyond a purely parallel bank (Resonarium:
+"coupling-mode choice... reshape[s] the timbre... moreso than any other
+exposed parameter"). A FULLY-CONNECTED coupling matrix (every mode fed by
+every other mode, `O(modes^2)`) was considered and rejected in favor of
+nearest-neighbor (`O(modes)`, 5 cross-terms/voice instead of 30) per both
+documents' own cost-vs-richness guidance. `coupleScale = 8.0` is the
+internal knob-to-coefficient multiplier (the user-facing `couple` knob is
+0..1); every per-mode filter here is inherently damped (`r&lt;1` always, no
+delay-line unity-feedback loop the way Resonarium's own coupling math
+assumes), so — unlike Resonarium's knife-edge `-2/G` lossless-junction
+coefficient — this topology cannot diverge by construction and was verified
+stable (no NaN/Inf, peak never exceeding the final `ma.tanh` ceiling) across
+`coupleScale` up to 40 and the full extreme corners of decay/damping/
+position/stretch/collision/couple. `8.0` was chosen empirically as the
+smallest value producing a clearly audible (~20% peak-sample difference,
+measurable spectral-centroid shift) effect at `couple=1.0` without
+dominating a patch's own identity — re-verify with
+`test/resonode-sweetspot/verify_musical_controls.py`'s
+`coupling_changes_output` check before retuning.
+
+**Per-voice structural modulation** (new, cheap, reuses the existing
+attack-edge envelope idiom `pitchEnv` already used for pitch-mod): `position`
+gets a small live per-voice drift, `positionDriftEnv`, that starts every
+voice brighter right at the strike (mode balance shifted toward higher
+modes) and decays back to the patch's own set `position` over ~350ms — a
+struck object's real spectral-evolution character (bright attack, darker
+sustain), and the direct fix for "a single patch sounds static/dull over
+its own decay" (Objekt's own "Bassonic" factory-patch technique: reuse an
+envelope the engine is already computing to modulate STRUCTURAL balance,
+not just amplitude). `stretch` gets a small per-note sample-and-hold random
+offset (`no.noise` through `ba.sAndH`, latched fresh at every `attackEdge`)
+so repeated strikes of the same key are not bit-identical — Resonarium's
+"chaos"-correlated random modulator and Objekt's per-note-latched
+"Random1/2" source, both cited as a cheap way to avoid "patches sound too
+similar" without adding named patches. Both are fixed internal constants
+(`positionDriftAmt = 0.16`, `stretchJitterAmt = 0.02`), not user-facing
+knobs — there was no free knob-bank slot for either without displacing an
+existing control.
+
+`bwFloorT60 = 0.15` (as `burstGainRefT60`) still clamps every mode's
+excitation-gain reference point (measured/tuned jointly with the OLD
+exciter's bandpass Q; the removal of that bandpass did not require
+re-deriving this constant — verified via the `modes_2_to_6_are_not_starved`
+regression check). `process()` order is `(...) : *(outLevel) : ma.tanh`
+(outLevel drives INTO the limiter, not scaled past it). `outLevel` default
+`25.0` (range `0.0..60.0`, logarithmic-taper knob) — large because a real
+narrowband resonator only captures a small fraction of a broadband/mistuned
+excitation's energy by design. `bassBoost` gives the fundamental mode (mode
+1 only) up to 1.35x gain below 220Hz, tapering to unity at/above 220Hz
+(exact identity above the corner). `aliasGuard` fades any mode whose real
+frequency crosses the top 5% of Nyquist to silence rather than letting it
+fold back as a spurious alias peak. `collision` (0..1, per-patch) is a
+bounded `ma.tanh`-based waveshaper on each voice's own `bank()` output
+before summing — exact identity at 0, adds real broadband grit/decay-tail
+energy at higher values. Pitch-mod (`flexibility = max(0,min(1,(0.5-stretch)))`)
+adds a small (~44 cents max), velocity- and stretch-scaled onset frequency
+bump via a one-shot exponential decay envelope, retriggered on the same
 `attackEdge`/voice-steal edge the exciter retrigger already uses — models a
 struck object's transient pitch bend, more prominent on low-`stretch`
 ("flexible") patches. All morph knobs (`position`/`decay`/`damping`/
-`stretch`/`tone`/`level`/`collision`) glide via a `letrec`-based one-pole
-that SNAPS to the true value on `ba.time==0` and glides only on later
-changes (never a naive `si.smooth`, which zero-inits and fades in from
-silence on every fresh DSP instance).
+`stretch`/`tone`/`level`/`collision`/`couple`) glide via a `letrec`-based
+one-pole that SNAPS to the true value on `ba.time==0` and glides only on
+later changes (never a naive `si.smooth`, which zero-inits and fades in
+from silence on every fresh DSP instance).
 
 **Voice-steal retrigger**: `stealEvent`/`retriggerGate` synthesizes a
 one-sample gate dip so a steal (note change while gate stays high) still
@@ -1332,10 +1417,18 @@ These were found via a real DawDreamer grid search (625 combos of
 position/decay/damping/stretch x 5 levels each) against measured features
 (decay time, transient ratio, spectral centroid, low-frequency-energy
 ratio) scored against a hand-authored target direction per voice —
-`collision` values are hand-set judgment calls, not swept. Knobs 5-6 are
-direct performative dials (`applyResonodeDirectKnob`): tone brightness
+`collision` values are hand-set judgment calls, not swept. The table's raw
+values are unchanged since the exciter/coupling fix above — they did not
+need retuning, because the OLD engine's near-total mode 2-6 starvation was
+masking the differentiation these values already encoded (measured early-
+transient spectral centroid across the 4 patches went from a flat ~220Hz/
+1.0x-fundamental for every patch, pre-fix, to a real 340-1300Hz/1.7-5.9x
+spread post-fix, with zero changes to `kResonodePatches` itself). Knobs 5-7
+are direct performative dials (`applyResonodeDirectKnob`): tone brightness
 (logarithmic taper — a linear Hz sweep compressed nearly all audible change
-into the first 10-20% of the knob's travel) and level.
+into the first 10-20% of the knob's travel), level, and `couple` (linear
+0..1, knob 7 — previously unused/`Unused`, see the coupling paragraph
+above).
 
 **`ApcGrid::bindAll` must `ps.bind()` every internal flag a C++ path later
 `setByName`s** — `ParamStore::setByName` is a silent no-op on an unbound
