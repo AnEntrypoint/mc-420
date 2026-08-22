@@ -808,6 +808,17 @@ static void* worker(void*) {
                 if (monitorFoldFaustZone) *monitorFoldFaustZone = foldGain;
                 if (glitchFoldFaustZone) *glitchFoldFaustZone = glitchFoldGain;
                 if (shiftFoldFaustZone) *shiftFoldFaustZone = std::min(1.0f, foldGain + glitchFoldGain);
+                {
+                    static bool prevGlitchHeldNow = false;
+                    bool glitchHeldNow = microrepeatDivVal > 0.5f;
+                    if (glitchHeldNow != prevGlitchHeldNow) {
+                        timespec dts; clock_gettime(CLOCK_MONOTONIC, &dts);
+                        fprintf(stderr, "[diag-glitchfold] t=%ld.%03ld glitchHeldNow=%d microrepeatDivVal=%.3f glitchFoldGain=%.3f divZonePtr=%p divZoneVal=%.3f\n",
+                                (long)dts.tv_sec, dts.tv_nsec/1000000, glitchHeldNow, microrepeatDivVal, glitchFoldGain,
+                                (void*)divZone, divZone ? *divZone : -999.0f);
+                        prevGlitchHeldNow = glitchHeldNow;
+                    }
+                }
                 if (sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
                 bool sustainHeldNow = sustainSlot >= 0 && g_params->getBySlot(sustainSlot) > 0.5f;
                 if (sustainGateFaustZone) *sustainGateFaustZone = (sustainHeldNow || shiftHeldNow) ? 1.0f : 0.0f;

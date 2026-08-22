@@ -220,7 +220,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         uint8_t channel = st & 0x0F;
         unsigned now = nowMs();
         if (channel == 0 && d1 >= 82 && d1 <= 86 && (type == 0x80 || type == 0x90)) {
-            fprintf(stderr, "[diag-glitch] note decoded: type=0x%02x d1=%d d2=%d\n", type, d1, d2);
+            fprintf(stderr, "[diag-glitch] t=%u note decoded: type=0x%02x d1=%d d2=%d\n", now, type, d1, d2);
         }
         grid.pollHolds(now, ps, link, audio);
         {
