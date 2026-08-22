@@ -81,6 +81,23 @@ awk '/brcmfmac|rtl8723bs|dwc2|mmc|xhci|eth/{gsub(":","",$1); print $1}' /proc/in
 done
 log "network/USB IRQs steered to control core $CONTROL_CORE (mask $CONTROL_MASK)"
 
+# --- Disable the kernel's RT throttle on the isolated audio cores ---
+# WHY: sched_rt_runtime_us defaults to 950000/1000000 -- any SCHED_FIFO thread
+# is capped at 95% of any 1-second window, with the remaining 5% reserved for
+# non-RT tasks so an RT thread can never fully starve the system. That safety
+# net exists for shared cores; cores 1/3 are isolcpus-removed from the general
+# scheduler and carry ONLY aloop's own pinned SCHED_FIFO audio threads -- there
+# is no other task on those cores this reservation could be protecting.
+# WITNESSED live on real Pi 4 hardware: dmesg showing recurring
+# "sched: RT throttling activated" correlating with xrun bursts, while
+# faustHome.compute() alone already measures ~1.02ms of the 1.333ms block
+# budget (~77%) -- close enough to the 95% RT cap that ordinary scheduling
+# jitter crosses it and the kernel forcibly pauses the audio thread for the
+# rest of that window, which is strictly worse than letting it run.
+echo -1 > /proc/sys/kernel/sched_rt_runtime_us 2>/dev/null \
+    && log "sched_rt_runtime_us -> unlimited (RT throttle disabled)" \
+    || log "WARNING: could not disable sched_rt_runtime_us"
+
 # --- rtprio + memlock limits so the audio process can go SCHED_FIFO + mlockall ---
 # (Also set in /etc/security/limits or the service unit; belt-and-suspenders.)
 ulimit -r 95 2>/dev/null || true      # max realtime priority
