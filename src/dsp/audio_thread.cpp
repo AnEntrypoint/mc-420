@@ -859,6 +859,27 @@ static void* worker(void*) {
                 if (extFreqDetZone) *extFreqDetZone = pitchTrackerBuf[N - 1];
             }
             faustHome.compute(N, fins, fouts);
+            {
+                static bool prevGlitchActive = false;
+                bool glitchActiveNow = microrepeatDivVal > 0.5f;
+                if (glitchActiveNow != prevGlitchActive) {
+                    float peakFout = 0.0f, peakFin = 0.0f, peakRawLoopSum = 0.0f;
+                    for (int i = 0; i < N; i++) {
+                        float a1 = fout[i] < 0 ? -fout[i] : fout[i];
+                        float a2 = fin[i] < 0 ? -fin[i] : fin[i];
+                        float a3 = rawLoopSum[i] < 0 ? -rawLoopSum[i] : rawLoopSum[i];
+                        if (a1 > peakFout) peakFout = a1;
+                        if (a2 > peakFin) peakFin = a2;
+                        if (a3 > peakRawLoopSum) peakRawLoopSum = a3;
+                    }
+                    fprintf(stderr, "[diag-glitch2] glitchActiveNow=%d microrepeatDivVal=%.3f mlbVal=%.3f divZonePtr=%p divZoneVal=%.3f mlbZonePtr=%p mlbZoneVal=%.3f peakFin=%.5f peakRawLoopSum=%.5f peakFout=%.5f\n",
+                            glitchActiveNow, microrepeatDivVal, masterLenVal,
+                            (void*)divZone, divZone ? *divZone : -999.0f,
+                            (void*)mlbZone, mlbZone ? *mlbZone : -999.0f,
+                            peakFin, peakRawLoopSum, peakFout);
+                    prevGlitchActive = glitchActiveNow;
+                }
+            }
             prevLoopSum = rawLoopSum;
             prevFiltOut = rawFiltTap;
             clock_gettime(CLOCK_MONOTONIC, &t1);
