@@ -815,6 +815,21 @@ static void* worker(void*) {
                 if (sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
                 bool sustainHeldNow = sustainSlot >= 0 && g_params->getBySlot(sustainSlot) > 0.5f;
                 if (sustainGateFaustZone) *sustainGateFaustZone = (sustainHeldNow || shiftHeldNow) ? 1.0f : 0.0f;
+                {
+                    static bool prevSustainHeldNow2 = false;
+                    static timespec lastSustainPollLog = {0, 0};
+                    timespec dts; clock_gettime(CLOCK_MONOTONIC, &dts);
+                    double elapsedMs = (dts.tv_sec - lastSustainPollLog.tv_sec) * 1000.0 + (dts.tv_nsec - lastSustainPollLog.tv_nsec) / 1e6;
+                    bool edge = sustainHeldNow != prevSustainHeldNow2;
+                    if (edge || elapsedMs >= 3000.0) {
+                        float rawSustainVal = sustainSlot >= 0 ? g_params->getBySlot(sustainSlot) : -999.0f;
+                        fprintf(stderr, "[diag-sustain3] t=%ld.%03ld sustainSlot=%d rawSustainVal=%.3f sustainHeldNow=%d shiftHeldNow=%d zoneVal=%.3f\n",
+                                (long)dts.tv_sec, dts.tv_nsec/1000000, sustainSlot, rawSustainVal, sustainHeldNow, shiftHeldNow,
+                                sustainGateFaustZone ? *sustainGateFaustZone : -999.0f);
+                        lastSustainPollLog = dts;
+                    }
+                    prevSustainHeldNow2 = sustainHeldNow;
+                }
             }
             for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = (int32_t)(prevFiltOut[i] * 32768.0f);
             g_sampler->captureBlock(samplerBuf.data(), N);
