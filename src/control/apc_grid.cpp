@@ -691,7 +691,11 @@ void ApcGrid::onShiftRelease(ParamStore& ps) {
 }
 
 void ApcGrid::applyFormantCC(uint8_t data2, ParamStore& ps) {
-    if (!m_liveEngaged && m_keysMode != KeysMode::MultiKey) return;
+    bool anyTransposeVoiceHeld = false;
+    for (int v = 0; v < kTransposeVoices; v++) {
+        if (m_transposeVoiceNote[v] >= 0) { anyTransposeVoiceHeld = true; break; }
+    }
+    if (!m_liveEngaged && m_keysMode != KeysMode::MultiKey && !anyTransposeVoiceHeld) return;
     const bool inDeadzone = (data2 >= 60 && data2 <= 68);
     if (inDeadzone) { ps.setByName("fx/formant", 0.0f); return; }
     float v = (((float)(int)data2 - 64.0f) / 63.0f) * 1.5f;
