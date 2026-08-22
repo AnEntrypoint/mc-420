@@ -803,7 +803,7 @@ static void* worker(void*) {
                     else if (glitchFoldGain > glitchFoldTarget) { glitchFoldGain -= kFoldStepPerSample; if (glitchFoldGain < glitchFoldTarget) glitchFoldGain = glitchFoldTarget; }
                     float combinedFold = foldGain + glitchFoldGain;
                     if (combinedFold > 1.0f) combinedFold = 1.0f;
-                    fin[i] += prevLoopSum[i] * combinedFold;
+                    fin[i] = fin[i] * (1.0f - combinedFold) + prevLoopSum[i] * combinedFold;
                 }
                 if (monitorFoldFaustZone) *monitorFoldFaustZone = foldGain;
                 if (glitchFoldFaustZone) *glitchFoldFaustZone = glitchFoldGain;
@@ -811,16 +811,6 @@ static void* worker(void*) {
                 if (sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
                 bool sustainHeldNow = sustainSlot >= 0 && g_params->getBySlot(sustainSlot) > 0.5f;
                 if (sustainGateFaustZone) *sustainGateFaustZone = (sustainHeldNow || shiftHeldNow) ? 1.0f : 0.0f;
-                {
-                    static bool prevShiftHeldNow = false;
-                    if (shiftHeldNow != prevShiftHeldNow) {
-                        fprintf(stderr, "[diag-shift] shiftHeldNow=%d monitorFoldVal=%.3f foldGain=%.3f combinedFold=%.3f monitorFoldZonePtr=%p shiftFoldZonePtr=%p shiftFoldZoneVal=%.3f\n",
-                                shiftHeldNow, monitorFoldVal, foldGain, std::min(1.0f, foldGain + glitchFoldGain),
-                                (void*)monitorFoldFaustZone, (void*)shiftFoldFaustZone,
-                                shiftFoldFaustZone ? *shiftFoldFaustZone : -999.0f);
-                        prevShiftHeldNow = shiftHeldNow;
-                    }
-                }
             }
             for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = (int32_t)(prevFiltOut[i] * 32768.0f);
             g_sampler->captureBlock(samplerBuf.data(), N);
@@ -865,26 +855,6 @@ static void* worker(void*) {
                 if (extFreqDetZone) *extFreqDetZone = pitchTrackerBuf[N - 1];
             }
             faustHome.compute(N, fins, fouts);
-            {
-                static float peakFout = 0.0f, peakRawLoopSum = 0.0f, peakFin = 0.0f;
-                static timespec lastShiftDiagTs = {0, 0};
-                for (int i = 0; i < N; i++) {
-                    float a1 = fout[i] < 0 ? -fout[i] : fout[i];
-                    float a2 = rawLoopSum[i] < 0 ? -rawLoopSum[i] : rawLoopSum[i];
-                    float a3 = fin[i] < 0 ? -fin[i] : fin[i];
-                    if (a1 > peakFout) peakFout = a1;
-                    if (a2 > peakRawLoopSum) peakRawLoopSum = a2;
-                    if (a3 > peakFin) peakFin = a3;
-                }
-                timespec dts; clock_gettime(CLOCK_MONOTONIC, &dts);
-                double elapsedMs = (dts.tv_sec - lastShiftDiagTs.tv_sec) * 1000.0 + (dts.tv_nsec - lastShiftDiagTs.tv_nsec) / 1e6;
-                if (elapsedMs >= 500.0) {
-                    fprintf(stderr, "[diag-shiftmix] t=%ld.%03ld peakFin=%.5f peakRawLoopSum=%.5f peakFout=%.5f\n",
-                            (long)dts.tv_sec, dts.tv_nsec/1000000, peakFin, peakRawLoopSum, peakFout);
-                    peakFout = 0.0f; peakRawLoopSum = 0.0f; peakFin = 0.0f;
-                    lastShiftDiagTs = dts;
-                }
-            }
             prevLoopSum = rawLoopSum;
             prevFiltOut = rawFiltTap;
             clock_gettime(CLOCK_MONOTONIC, &t1);
