@@ -887,10 +887,10 @@ static void* worker(void*) {
                 buf[(size_t)i * wireCh + 0] = ms32;
                 otgBuf[(size_t)i * wireCh + 0] = ms16;
                 buf[(size_t)i * wireCh + 1] = cs32;
-                otgBuf[(size_t)i * wireCh + 1] = cs16;
+                otgBuf[(size_t)i * wireCh + 1] = ms16;
                 for (int c = 2; c < wireCh; c++) {
                     buf[(size_t)i * wireCh + c] = cs32;
-                    otgBuf[(size_t)i * wireCh + c] = cs16;
+                    otgBuf[(size_t)i * wireCh + c] = ms16;
                 }
                 float a = cueSample < 0 ? -cueSample : cueSample;
                 if (a > outPeak) outPeak = a;
