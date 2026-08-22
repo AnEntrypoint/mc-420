@@ -285,6 +285,7 @@ static void* worker(void*) {
     int masterLenSlot = -1;
     int recordedBpmSlot = -1;
     const float kFoldStepPerSample = (1.0f / 16.0f) / (float)N;
+    float loopDirectGateNow = 1.0f;
     struct ResolvedControl { int slot; float* zone; };
     std::vector<ResolvedControl> resolvedControls;
     int resolvedControlsForCount = -1;
@@ -805,6 +806,12 @@ static void* worker(void*) {
                 }
                 if (monitorFoldFaustZone) *monitorFoldFaustZone = foldGain;
                 if (glitchFoldFaustZone) *glitchFoldFaustZone = glitchFoldGain;
+                {
+                    float loopDirectRaw = 1.0f - std::max(std::max(foldGain, glitchFoldGain),
+                                                            (anyXposeVoiceGatedNow ? 1.0f : 0.0f) * (shiftHeldNow ? 1.0f : 0.0f));
+                    const float kLoopDirectPole = 0.9355f;
+                    loopDirectGateNow = loopDirectGateNow * kLoopDirectPole + loopDirectRaw * (1.0f - kLoopDirectPole);
+                }
                 if (sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
                 bool sustainHeldNow = sustainSlot >= 0 && g_params->getBySlot(sustainSlot) > 0.5f;
                 if (sustainGateFaustZone) *sustainGateFaustZone = (sustainHeldNow || shiftHeldNow) ? 1.0f : 0.0f;
@@ -864,7 +871,7 @@ static void* worker(void*) {
             }
             float outPeak = 0.0f;
             for (int i = 0; i < N; i++) {
-                float masterSample = rawLoopSum[i] + inputFxOut[i];
+                float masterSample = rawLoopSum[i] * loopDirectGateNow + inputFxOut[i];
                 float cueSample = fout[i];
 
                 float mv32 = masterSample * 2147483648.0f;
