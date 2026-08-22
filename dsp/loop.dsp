@@ -91,7 +91,12 @@ with {
     attachWrapLen(x) = attach(x, x*0.0 + float(wrapLen) : wrapLenMeter);
     readPosMeter = hbargraph("readposdiag2", 0.0, float(MAXLEN));
     attachReadPos(x) = attach(x, x*0.0 + float(readPos) : readPosMeter);
-    attachLevel(x) = attach(x, abs(x) : ba.slidingMax(4096, 4096) : levelMeter) : attachWriteIdx : attachWrapLen : attachReadPos;
+    levelPeakDecay = pow(0.001, 1.0/4096.0);
+    levelPeakFollow(x) = loop ~ _
+    with {
+        loop(prev) = max(abs(x), prev * levelPeakDecay);
+    };
+    attachLevel(x) = attach(x, levelPeakFollow(x) : levelMeter) : attachWriteIdx : attachWrapLen : attachReadPos;
 };
 
 loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = in, (par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats))) :> _);
