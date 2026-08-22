@@ -65,7 +65,7 @@ with {
     cycleOffsetStep(prev) = ba.if(armEdge, 0.0,
                              ba.if(masterPhaseWrapped, prev + ba.if(masterLen < 0.5, wrapLen, masterLen), prev));
     cycleOffset = cycleOffsetStep ~ _;
-    absPos = wrapAbs(masterPhase - ringOffset - latencyBiasN + cycleOffset, wrapLen);
+    absPos = wrapAbs(masterPhase - ringOffset + latencyBiasN + cycleOffset, wrapLen);
     speedClamped = max(0.1, min(8.0, effSpeed));
     varispeedActive = effSpeed != 1.0;
     manualPunchActive = abs(effSpeed - 1.0) > 0.3;
