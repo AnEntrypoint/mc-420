@@ -32,6 +32,8 @@ with {
     armEdge = ba.if(masterLen < 0.5, armPulse, armPendingPrev & gridTickCrossed);
     armMasterPhaseStep(prev) = ba.if(armEdge, masterPhase, prev);
     armMasterPhase = armMasterPhaseStep ~ _;
+    armPulseMasterPhaseStep(prev) = ba.if(armPulse, masterPhase, prev);
+    armPulseMasterPhase = armPulseMasterPhaseStep ~ _;
     finishRequestedStep(prev) = ba.if(armEdge, 0, ba.if(finishReqN > 0.5, 1, prev));
     finishRequested = finishRequestedStep ~ _;
     wrapLenStep(prev) = ba.if(finishEdge, max(1.0, snappedWrapLen), prev);
@@ -55,16 +57,15 @@ with {
     roundedBeats = ba.if(masterLen < 0.5, takeLenBeats,
                      max(1.0, floor(takeLenBeats + beatBucketEps)));
     snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, roundedBeats * oneBeat);
-    recordStartMasterPhaseStep(prev) = ba.if(finishEdge, armMasterPhase, prev);
+    recordStartMasterPhaseStep(prev) = ba.if(finishEdge, armPulseMasterPhase, prev);
     recordStartMasterPhase = recordStartMasterPhaseStep ~ _;
-    ringOffset = ba.if(masterLen < 0.5, 0.0, recordStartMasterPhase);
+    ringOffset = recordStartMasterPhase;
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
     cycleOffsetStep(prev) = ba.if(armEdge, 0.0,
-                             ba.if(masterPhaseWrapped, prev + masterLen, prev));
+                             ba.if(masterPhaseWrapped, prev + max(masterLen, wrapLen), prev));
     cycleOffset = cycleOffsetStep ~ _;
-    absPos = ba.if(masterLen < 0.5, wrapAbs(masterPhase - latencyBiasN, wrapLen),
-               wrapAbs(masterPhase - ringOffset + cycleOffset, wrapLen));
+    absPos = wrapAbs(masterPhase - ringOffset - latencyBiasN + cycleOffset, wrapLen);
     speedClamped = max(0.1, min(8.0, effSpeed));
     varispeedActive = effSpeed != 1.0;
     manualPunchActive = abs(effSpeed - 1.0) > 0.3;
