@@ -17,14 +17,13 @@ on:
 
 jobs:
   home-fx-lv2:
-    runs-on: ubuntu-latest
+    # Native aarch64 runner -- the linux/arm64 cross-compile containers below
+    # then run with no QEMU emulation. See build-binary.yml's matching comment
+    # for the measured ~14min QEMU-link-step tax this removes.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - name: Install Faust (host codegen only -- see the cross-compile step below)
         timeout-minutes: 8
@@ -191,14 +190,10 @@ jobs:
   # home-fx-lv2 job above -- no staging/sed-rewriting needed, just faust2lv2
   # directly against the real repo path.
   guitar-lofi-fx-lv2:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - name: Install Faust (host codegen only -- see the cross-compile step below)
         run: |
@@ -348,14 +343,10 @@ jobs:
   # change that lets Lv2Host::setControl push them the same way it already
   # pushes guitar/lofi-fx's own knob targets.
   resonode-lv2:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - name: Install Faust (host codegen only -- see the cross-compile step below)
         run: |
@@ -426,14 +417,10 @@ jobs:
           retention-days: 3
 
   pitchtracker-lv2:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - name: Install Faust (host codegen only -- see the cross-compile step below)
         run: |

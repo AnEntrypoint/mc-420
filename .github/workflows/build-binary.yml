@@ -18,14 +18,15 @@ on:
 
 jobs:
   aloop-aarch64-musl:
-    runs-on: ubuntu-latest
+    # Native aarch64 runner -- the Alpine linux/arm64 container below then runs
+    # with NO QEMU emulation (host arch already matches --platform linux/arm64).
+    # Measured need for this: the QEMU-emulated link step alone took ~14
+    # minutes (compile itself was ~1 minute) on ubuntu-latest -- QEMU
+    # user-mode's binary translation is disproportionately slow for a
+    # linker's memory-access pattern versus straight-line compile codegen.
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up QEMU (for aarch64 emulation)
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - name: Pre-generate the Faust loop engine C++ (on the host, where faust exists)
         run: |
