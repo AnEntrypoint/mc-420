@@ -38,7 +38,7 @@ with {
     wrapLen = max(1, wrapLenStep ~ _);
     writeIdxForLatch = ba.if(finishRequested, finishTargetN, writeIdx);
     recordingGate(prev) = (recN > 0.5) | (finishRequested & (prev < finishTargetN));
-    writeIdxStep(prev) = ba.if(armEdge, 0,
+    writeIdxStep(prev) = ba.if(armPulse, 0,
                           ba.if(recordingGate(prev), min(prev + 1, MAXLEN - 1), prev));
     writeIdx = writeIdxStep ~ _;
     recordingGateNow = recordingGate(writeIdx : mem);
