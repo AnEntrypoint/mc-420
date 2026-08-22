@@ -178,6 +178,15 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
         setLooper(ps, looper, "play", 1.0f);
         long latencyBias = kBlockSize + (m_looperShiftHeldDuringTake[looper] ? kShiftFoldBlockLatencySamples : 0);
         setLooper(ps, looper, "latencybias", (float)latencyBias);
+        if (m_looperShiftHeldDuringTake[looper]) {
+            for (int src = 0; src < kLooperCount; src++) {
+                if (src == looper) continue;
+                if (m_looperHasContent[src] && m_looperPlaying[src]) {
+                    m_looperPlaying[src] = false;
+                    setLooper(ps, src, "play", 0.0f);
+                }
+            }
+        }
         m_masterLenSamples = (long)ps.get("cmd/master_len", 0.0f);
         if (m_masterLenSamples == 0) {
             long lenSamples;
