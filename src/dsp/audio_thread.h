@@ -61,6 +61,8 @@ public:
         float    inPeak = 0.0f;
         float    outPeak = 0.0f;
         float    effSpeed = 1.0f;
+        float    sustainCmd = 0.0f;
+        float    sustainGate = 0.0f;
         static constexpr int kLoopers = 20;
         bool     looperRec[kLoopers]  = {};
         bool     looperPlay[kLoopers] = {};

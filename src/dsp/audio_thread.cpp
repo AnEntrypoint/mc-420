@@ -823,9 +823,13 @@ static void* worker(void*) {
                     loopDirectGateNow = loopDirectGateNow * kLoopDirectPole + loopDirectRaw * (1.0f - kLoopDirectPole);
                 }
                 if (sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
-                bool sustainHeldNow = sustainSlot >= 0 && g_params->getBySlot(sustainSlot) > 0.5f;
+                float sustainCmdRaw = sustainSlot >= 0 ? g_params->getBySlot(sustainSlot) : 0.0f;
+                bool sustainHeldNow = sustainCmdRaw > 0.5f;
                 bool glitchHeldNow = microrepeatDivVal > 0.5f;
-                if (sustainGateFaustZone) *sustainGateFaustZone = (sustainHeldNow || shiftHeldNow || glitchHeldNow) ? 1.0f : 0.0f;
+                float sustainGateNow = (sustainHeldNow || shiftHeldNow || glitchHeldNow) ? 1.0f : 0.0f;
+                if (sustainGateFaustZone) *sustainGateFaustZone = sustainGateNow;
+                g_telem.sustainCmd = sustainCmdRaw;
+                g_telem.sustainGate = sustainGateNow;
             }
             for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = (int32_t)(prevFiltOut[i] * 32768.0f);
             g_sampler->captureBlock(samplerBuf.data(), N);
