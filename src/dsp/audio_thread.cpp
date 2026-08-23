@@ -840,12 +840,10 @@ static void* worker(void*) {
             }
             timespec t0, t1;
             clock_gettime(CLOCK_MONOTONIC, &t0);
-            timespec tHomeFx0; clock_gettime(CLOCK_MONOTONIC, &tHomeFx0);
             if (!g_cfg.disableCore3Lv2) {
                 homeFx.process(fin.data(), N);
                 userFx.process(fin.data(), N);
             }
-            timespec tHomeFx1; clock_gettime(CLOCK_MONOTONIC, &tHomeFx1);
             bool resonodeEngagedNow = g_params && resonodeEngagedSlot >= 0 &&
                                        g_params->getBySlot(resonodeEngagedSlot) > 0.5f;
             if (resonodeEngagedZone) *resonodeEngagedZone = resonodeEngagedNow ? 1.0f : 0.0f;
@@ -855,37 +853,12 @@ static void* worker(void*) {
             } else {
                 std::fill(resonodeInBuf.begin(), resonodeInBuf.end(), 0.0f);
             }
-            timespec tResonode1; clock_gettime(CLOCK_MONOTONIC, &tResonode1);
             if (pitchTrackerFx.hasPlugins()) {
                 std::copy(fin.begin(), fin.end(), pitchTrackerBuf.begin());
                 pitchTrackerFx.process(pitchTrackerBuf.data(), N);
                 if (extFreqDetZone) *extFreqDetZone = pitchTrackerBuf[N - 1];
             }
-            timespec tPitch1; clock_gettime(CLOCK_MONOTONIC, &tPitch1);
             faustHome.compute(N, fins, fouts);
-            timespec tFaust1; clock_gettime(CLOCK_MONOTONIC, &tFaust1);
-            {
-                static double sumHomeFx = 0, sumResonode = 0, sumPitch = 0, sumFaust = 0;
-                static int sampleCount = 0;
-                static timespec lastBreakdownLog = {0, 0};
-                auto deltaMs = [](timespec a, timespec b) {
-                    return (b.tv_sec - a.tv_sec) * 1000.0 + (b.tv_nsec - a.tv_nsec) / 1e6;
-                };
-                sumHomeFx += deltaMs(tHomeFx0, tHomeFx1);
-                sumResonode += deltaMs(tHomeFx1, tResonode1);
-                sumPitch += deltaMs(tResonode1, tPitch1);
-                sumFaust += deltaMs(tPitch1, tFaust1);
-                sampleCount++;
-                double elapsedMs = deltaMs(lastBreakdownLog, tFaust1);
-                if (elapsedMs >= 2000.0 && sampleCount > 0) {
-                    fprintf(stderr, "[diag-breakdown] n=%d avgHomeFxMs=%.4f avgResonodeMs=%.4f avgPitchMs=%.4f avgFaustMs=%.4f pitchHasPlugins=%d resonodeHasPlugins=%d resonodeEngaged=%d\n",
-                            sampleCount, sumHomeFx/sampleCount, sumResonode/sampleCount, sumPitch/sampleCount, sumFaust/sampleCount,
-                            pitchTrackerFx.hasPlugins(), resonodeFx.hasPlugins(), resonodeEngagedNow);
-                    sumHomeFx = sumResonode = sumPitch = sumFaust = 0;
-                    sampleCount = 0;
-                    lastBreakdownLog = tFaust1;
-                }
-            }
             prevLoopSum = rawLoopSum;
             prevFiltOut = rawFiltTap;
             clock_gettime(CLOCK_MONOTONIC, &t1);
