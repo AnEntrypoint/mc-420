@@ -9,12 +9,13 @@ static EngineSoladSnac& dubfx_engine() {
 }
 
 static float& dubfx_lastScale()   { static float s = 1.0f; return s; }
+static float& dubfx_lastFormant() { static float f = 0.0f; return f; }
 static bool&  dubfx_lastEngaged() { static bool e = false; return e; }
 
 static inline void dubfx_pitch_apply(float scale, float formantDepth, float engaged) {
     EngineSoladSnac& e = dubfx_engine();
     if (scale != dubfx_lastScale()) { e.setPitchScale(scale); dubfx_lastScale() = scale; }
-    e.setFormantDepth(formantDepth);
+    if (formantDepth != dubfx_lastFormant()) { e.setFormantDepth(formantDepth); dubfx_lastFormant() = formantDepth; }
     bool eng = engaged >= 0.5f;
     if (eng && !dubfx_lastEngaged()) e.reengage();
     dubfx_lastEngaged() = eng;
