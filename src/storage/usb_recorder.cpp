@@ -74,11 +74,20 @@ void UsbRecorder::pushBlock(const float* samples, int n) {
         m_readCount.store(r, std::memory_order_release);
         m_overruns.fetch_add(1, std::memory_order_relaxed);
     }
-    for (int i = 0; i < n; i++) {
+    uint64_t start = w % m_ringCapacity;
+    uint64_t firstPiece = std::min((uint64_t)n, m_ringCapacity - start);
+    for (uint64_t i = 0; i < firstPiece; i++) {
         float s = samples[i];
         if (s > 1.0f) s = 1.0f;
         else if (s < -1.0f) s = -1.0f;
-        m_ring[(size_t)((w + (uint64_t)i) % m_ringCapacity)] = (int16_t)(s * 32767.0f);
+        m_ring[(size_t)(start + i)] = (int16_t)(s * 32767.0f);
+    }
+    uint64_t secondPiece = (uint64_t)n - firstPiece;
+    for (uint64_t i = 0; i < secondPiece; i++) {
+        float s = samples[firstPiece + i];
+        if (s > 1.0f) s = 1.0f;
+        else if (s < -1.0f) s = -1.0f;
+        m_ring[(size_t)i] = (int16_t)(s * 32767.0f);
     }
     m_writeCount.store(w + (uint64_t)n, std::memory_order_release);
 }

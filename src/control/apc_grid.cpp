@@ -340,18 +340,17 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
     if (m_bankFlashReleaseAt != 0 && now_ms >= m_bankFlashReleaseAt) {
         m_bankFlashReleaseAt = 0;
     }
-    for (int looper = 0; looper < kLooperCount; looper++) {
-        if (m_looperFinishTargetPending[looper] <= 0.0f) continue;
-        bool reached;
-        if (audio) {
-            auto t = audio->snapshotTelemetry();
-            reached = (double)t.looperWriteIdx[looper] >= (double)m_looperFinishTargetPending[looper];
-        } else {
-            reached = true;
-        }
-        if (reached) {
-            m_looperRecording[looper] = false;
-            m_looperFinishTargetPending[looper] = 0.0f;
+    {
+        auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
+        for (int looper = 0; looper < kLooperCount; looper++) {
+            if (m_looperFinishTargetPending[looper] <= 0.0f) continue;
+            bool reached = audio
+                ? (double)t.looperWriteIdx[looper] >= (double)m_looperFinishTargetPending[looper]
+                : true;
+            if (reached) {
+                m_looperRecording[looper] = false;
+                m_looperFinishTargetPending[looper] = 0.0f;
+            }
         }
     }
     applyRemoteTransport(ps, link);
