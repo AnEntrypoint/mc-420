@@ -293,6 +293,7 @@ static void* worker(void*) {
     LooperTelemetryZones looperTelemetryZones[AudioThread::Telemetry::kLoopers];
     float* looperLenZone[AudioThread::Telemetry::kLoopers] = {nullptr};
     float* mlbZone = nullptr;
+    float* recordedBeatsZone = nullptr;
     float* semisZone = nullptr;
     float* engagedZone = nullptr;
     float* divZone = nullptr;
@@ -328,6 +329,7 @@ static void* worker(void*) {
             looperLenZone[lp] = resolveZone();
         }
         snprintf(z, sizeof z, "MLB");                 mlbZone              = resolveZone();
+        snprintf(z, sizeof z, "RECORDEDBEATS");        recordedBeatsZone    = resolveZone();
         snprintf(z, sizeof z, "SEMIS");                semisZone            = resolveZone();
         snprintf(z, sizeof z, "ENGAGED");              engagedZone          = resolveZone();
         snprintf(z, sizeof z, "DIV");                  divZone              = resolveZone();
@@ -615,17 +617,11 @@ static void* worker(void*) {
                         if (looperLenZone[lp]) *looperLenZone[lp] = (float)lenSamples;
                     }
                     if (mlbZone) *mlbZone = (float)(lenSamples / N);
+                    if (recordedBeatsZone) *recordedBeatsZone = (float)beatsPerBar;
                 }
             }
             if (!linkDrivingLength && g_params) {
-                static float frozenMasterLen = 0.0f;
-                float masterLen = masterLenVal;
-                if (masterLen <= 0.0f) {
-                    frozenMasterLen = 0.0f;
-                } else if (frozenMasterLen <= 0.0f) {
-                    frozenMasterLen = masterLen;
-                }
-                if (mlbZone) *mlbZone = frozenMasterLen > 0.0f ? (frozenMasterLen / (float)N) : 0.0f;
+                if (mlbZone) *mlbZone = masterLenVal > 0.0f ? (masterLenVal / (float)N) : 0.0f;
             }
             float linkSpeedRatio = 1.0f;
             if (linkDrivingLength && g_params && g_link) {
@@ -652,6 +648,7 @@ static void* worker(void*) {
                 float masterLen = masterLenVal;
                 float recordedBeatsShared = g_params ? g_params->get("cmd/recorded_beats", 16.0f) : 16.0f;
                 if (recordedBeatsShared < 1.0f) recordedBeatsShared = 16.0f;
+                if (!linkDrivingLength && recordedBeatsZone) *recordedBeatsZone = recordedBeatsShared;
                 double beatLenSamplesShared = masterLen > 0.0f
                     ? (double)masterLen / (double)recordedBeatsShared
                     : (double)g_cfg.sampleRate * 0.5;
