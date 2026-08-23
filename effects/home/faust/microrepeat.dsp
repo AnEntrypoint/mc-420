@@ -6,17 +6,19 @@ STEP = 1.0/16.0;
 
 DIV = 0;
 MLB = 0;
+RECORDEDBEATS = 16;
 
 MR_MAX = 36000;
 
 divSafe     = max(1, DIV);
+beatsSafe   = max(1, RECORDEDBEATS);
 roundNearest(x) = floor(x + 0.5);
-beatBlocks  = max(1, int(roundNearest(MLB / 16.0)));
+beatBlocks  = max(1, int(roundNearest(MLB / beatsSafe)));
 sliceBlocks = max(1, int(roundNearest(beatBlocks / divSafe))) * 2;
 sliceLenRaw = sliceBlocks * BS;
 sliceLen    = min(MR_MAX, sliceLenRaw);
 
-active = (DIV != 0) & (MLB >= 16);
+active = (DIV != 0) & (MLB >= beatsSafe);
 
 activePrev = active : mem;
 engageEdge = active & (activePrev < 0.5);

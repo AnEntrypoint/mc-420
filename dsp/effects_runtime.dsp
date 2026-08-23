@@ -18,6 +18,7 @@ ENGAGED  = checkbox("ENGAGED");
 RESONODE_ENGAGED = checkbox("fx/resonode/engaged");
 glitchDivisor    = nentry("DIV", 0, 0, 16, 1);
 masterLoopBlocks = nentry("MLB", 0, 0, 4096, 1);
+recordedBeats    = nentry("RECORDEDBEATS", 16, 1, 128, 1);
 
 SUSTAINGATE = hslider("SUSTAINGATE", 0.0, 0.0, 1.0, 1.0);
 
@@ -35,7 +36,7 @@ delayStage  = component("effects/home/faust/delay.dsp")[ DELAYAMT=DELAYAMT; TIME
 reverbStage = component("effects/home/faust/reverb.dsp")[ REVAMT=REVAMT; TIME=TIME; ];
 delayStageMaster  = component("effects/home/faust/delay.dsp")[ DELAYAMT=DELAYAMT; TIME=TIME; ];
 reverbStageMaster = component("effects/home/faust/reverb.dsp")[ REVAMT=REVAMT; TIME=TIME; ];
-microStage  = component("effects/home/faust/microrepeat.dsp")[ DIV=glitchDivisor; MLB=masterLoopBlocks; ];
+microStage  = component("effects/home/faust/microrepeat.dsp")[ DIV=glitchDivisor; MLB=masterLoopBlocks; RECORDEDBEATS=recordedBeats; ];
 pitchStage  = component("effects/home/faust/pitch.dsp")[ SEMIS=SEMIS; FORMANT=FORMANT; ENGAGED=ENGAGED; ];
 
 harmonize = component("effects/home/faust/multitranspose.dsp");
