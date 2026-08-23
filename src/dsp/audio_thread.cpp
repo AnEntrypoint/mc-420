@@ -302,6 +302,7 @@ static void* worker(void*) {
     float* sustainGateFaustZone = nullptr;
     float* resonodeEngagedZone = nullptr;
     float* extFreqDetZone = nullptr;
+    float* dubgateClockphaseZone = nullptr;
     {
         char z[32];
         auto resolveZone = [&]() -> float* {
@@ -338,6 +339,7 @@ static void* worker(void*) {
         snprintf(z, sizeof z, "SUSTAINGATE");          sustainGateFaustZone = resolveZone();
         snprintf(z, sizeof z, "fx/resonode/engaged");  resonodeEngagedZone  = resolveZone();
         snprintf(z, sizeof z, "fx/extfreqdet");        extFreqDetZone       = resolveZone();
+        snprintf(z, sizeof z, "fx/dubgate/clockphase"); dubgateClockphaseZone = resolveZone();
     }
     int xposeNoteSlot[kTransposeVoices];
     int xposeGateSlot[kTransposeVoices];
@@ -706,7 +708,7 @@ static void* worker(void*) {
                     if (gatePhase01 < 0.0) gatePhase01 = 0.0;
                     if (gatePhase01 >= 1.0) gatePhase01 = 0.0;
                     Lv2Host::setControlFast(gatePhaseHandle, (float)gatePhase01);
-                    fui.set("fx/dubgate/clockphase", (float)gatePhase01);
+                    if (dubgateClockphaseZone) *dubgateClockphaseZone = (float)gatePhase01;
                 }
 
                 // Beat-reorder shuffle: shuffleMaskNow (0-15, one bit per held button)
