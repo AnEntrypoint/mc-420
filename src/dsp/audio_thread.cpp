@@ -641,6 +641,8 @@ static void* worker(void*) {
                 static double masterPhaseSamples = 0.0;
                 static double standaloneQuantumPhaseSamples = 0.0;
                 static int64_t lastLinkPhaseMicroBeats = -1;
+                static double lastLinkBpmSeen = 0.0;
+                static int tempoStableBlocks = 0;
                 static double shuffleClockSamples = 0.0;
                 static int shuffleMaskSlot = -1;
                 if (shuffleMaskSlot < 0 && g_params) shuffleMaskSlot = g_params->getSlot("fx/shuffle/mask");
@@ -659,6 +661,12 @@ static void* worker(void*) {
                 if (masterLen > 0.0f) {
                     masterPhaseSamples += (double)N;
                     if (linkDrivingLength && g_link) {
+                        double curBpm = linkSnap.bpm;
+                        bool bpmChanged = lastLinkBpmSeen > 0.0 && std::fabs(curBpm - lastLinkBpmSeen) > 0.05;
+                        lastLinkBpmSeen = curBpm;
+                        tempoStableBlocks = bpmChanged ? 0 : (tempoStableBlocks + 1);
+                        const int kTempoStableBlocksThreshold = (int)(g_cfg.sampleRate / (double)N);
+
                         bool freshSnapshot = linkSnap.phaseValid && linkSnap.quantumMicroBeats > 0 &&
                                               linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
                         if (freshSnapshot) {
@@ -676,9 +684,12 @@ static void* worker(void*) {
                             if (delta < 0.0) delta += masterLen;
                             delta -= halfLen;
                             bool largeDrift = std::fabs(delta) > halfLen * 0.5;
-                            masterPhaseSamples += largeDrift ? delta : delta * 0.02;
+                            bool tempoStable = tempoStableBlocks >= kTempoStableBlocksThreshold;
+                            masterPhaseSamples += (largeDrift && tempoStable) ? delta : delta * 0.02;
                         }
                     } else {
+                        lastLinkBpmSeen = 0.0;
+                        tempoStableBlocks = 0;
                         lastLinkPhaseMicroBeats = -1;
                     }
                     masterPhaseSamples = std::fmod(masterPhaseSamples, (double)masterLen);

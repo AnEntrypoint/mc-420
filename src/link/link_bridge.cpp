@@ -14,6 +14,16 @@ namespace aloop {
 namespace {
 std::atomic<unsigned> g_active{0};
 std::atomic<bool> g_weSetTempo{false};
+
+std::atomic<int> g_lastLoggedPeers{-1};
+std::atomic<double> g_lastLoggedTempo{-1.0};
+std::atomic<int> g_lastLoggedPlaying{-1};
+std::atomic<std::size_t> g_pendingPeers{0};
+std::atomic<double> g_pendingTempo{120.0};
+std::atomic<bool> g_pendingPlaying{false};
+std::atomic<bool> g_havePendingPeers{false};
+std::atomic<bool> g_havePendingTempo{false};
+std::atomic<bool> g_havePendingPlaying{false};
 }
 
 void LinkBridge::start(double sampleRate, bool enabled) {
@@ -25,13 +35,16 @@ void LinkBridge::start(double sampleRate, bool enabled) {
     l->enableStartStopSync(true);
 
     l->setNumPeersCallback([](std::size_t peers) {
-        fprintf(stderr, "[link] peers now %u\n", (unsigned)peers);
+        g_pendingPeers.store(peers, std::memory_order_relaxed);
+        g_havePendingPeers.store(true, std::memory_order_release);
     });
     l->setTempoCallback([](double bpm) {
-        fprintf(stderr, "[link] session tempo now %.3f bpm\n", bpm);
+        g_pendingTempo.store(bpm, std::memory_order_relaxed);
+        g_havePendingTempo.store(true, std::memory_order_release);
     });
     l->setStartStopCallback([](bool playing) {
-        fprintf(stderr, "[link] session transport %s\n", playing ? "PLAYING" : "STOPPED");
+        g_pendingPlaying.store(playing, std::memory_order_relaxed);
+        g_havePendingPlaying.store(true, std::memory_order_release);
     });
 
     link_ = l;
@@ -52,6 +65,30 @@ void LinkBridge::controlTick() {
 #ifdef ALOOP_HAVE_LINK
     if (!link_) return;
     auto* l = (ableton::Link*)link_;
+
+    if (g_havePendingPeers.exchange(false, std::memory_order_acquire)) {
+        int peers = (int)g_pendingPeers.load(std::memory_order_relaxed);
+        if (peers != g_lastLoggedPeers.load(std::memory_order_relaxed)) {
+            g_lastLoggedPeers.store(peers, std::memory_order_relaxed);
+            fprintf(stderr, "[link] peers now %d\n", peers);
+        }
+    }
+    if (g_havePendingTempo.exchange(false, std::memory_order_acquire)) {
+        double bpm = g_pendingTempo.load(std::memory_order_relaxed);
+        if (bpm != g_lastLoggedTempo.load(std::memory_order_relaxed)) {
+            g_lastLoggedTempo.store(bpm, std::memory_order_relaxed);
+            fprintf(stderr, "[link] session tempo now %.3f bpm\n", bpm);
+        }
+    }
+    if (g_havePendingPlaying.exchange(false, std::memory_order_acquire)) {
+        bool playing = g_pendingPlaying.load(std::memory_order_relaxed);
+        int playingInt = playing ? 1 : 0;
+        if (playingInt != g_lastLoggedPlaying.load(std::memory_order_relaxed)) {
+            g_lastLoggedPlaying.store(playingInt, std::memory_order_relaxed);
+            fprintf(stderr, "[link] session transport %s\n", playing ? "PLAYING" : "STOPPED");
+        }
+    }
+
     auto state = l->captureAppSessionState();
     const auto now = l->clock().micros();
 

@@ -64,6 +64,7 @@ UsbRecorder::~UsbRecorder() {
 
 void UsbRecorder::pushBlock(const float* samples, int n) {
     if (n <= 0) return;
+    if (!m_recording.load(std::memory_order_relaxed)) return;
     uint64_t w = m_writeCount.load(std::memory_order_relaxed);
     uint64_t r = m_readCount.load(std::memory_order_acquire);
     uint64_t used = w - r;
