@@ -876,21 +876,23 @@ static void* worker(void*) {
 
                 float mv32 = masterSample * 2147483648.0f;
                 int32_t ms32 = (int32_t)(mv32 > 2147483647.0f ? 2147483647 : (mv32 < -2147483648.0f ? -2147483648.0f : mv32));
-                float mv16 = masterSample * 32768.0f;
-                int16_t ms16 = (int16_t)(mv16 > 32767 ? 32767 : (mv16 < -32768 ? -32768 : mv16));
-
                 float cv32 = cueSample * 2147483648.0f;
                 int32_t cs32 = (int32_t)(cv32 > 2147483647.0f ? 2147483647 : (cv32 < -2147483648.0f ? -2147483648.0f : cv32));
-                float cv16 = cueSample * 32768.0f;
-                int16_t cs16 = (int16_t)(cv16 > 32767 ? 32767 : (cv16 < -32768 ? -32768 : cv16));
 
                 buf[(size_t)i * wireCh + 0] = ms32;
-                otgBuf[(size_t)i * wireCh + 0] = ms16;
                 buf[(size_t)i * wireCh + 1] = cs32;
-                otgBuf[(size_t)i * wireCh + 1] = ms16;
                 for (int c = 2; c < wireCh; c++) {
                     buf[(size_t)i * wireCh + c] = cs32;
-                    otgBuf[(size_t)i * wireCh + c] = ms16;
+                }
+
+                if (otgReady) {
+                    float mv16 = masterSample * 32768.0f;
+                    int16_t ms16 = (int16_t)(mv16 > 32767 ? 32767 : (mv16 < -32768 ? -32768 : mv16));
+                    otgBuf[(size_t)i * wireCh + 0] = ms16;
+                    otgBuf[(size_t)i * wireCh + 1] = ms16;
+                    for (int c = 2; c < wireCh; c++) {
+                        otgBuf[(size_t)i * wireCh + c] = ms16;
+                    }
                 }
                 float a = cueSample < 0 ? -cueSample : cueSample;
                 if (a > outPeak) outPeak = a;
