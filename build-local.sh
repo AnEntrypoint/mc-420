@@ -82,7 +82,7 @@ do_codegen() {
   # silently ships the same crash the CI path was fixed to avoid.
   retry 60 "faust codegen" -- \
     docker run --rm -v "$(pwd -W 2>/dev/null || pwd):/w" -w /w aloop-codegen \
-      faust -lang cpp -vec -fun -dfs -vs 16 -nvi -ct 0 -cn AloopLoopDsp -I dsp -I effects/home/faust dsp/aloop.dsp -o build/loop.cpp
+      faust -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopLoopDsp -I dsp -I effects/home/faust dsp/aloop.dsp -o build/loop.cpp
   echo "[build-local] codegen done: $(wc -l < build/loop.cpp) lines"
 }
 

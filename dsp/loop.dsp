@@ -53,10 +53,11 @@ with {
     intendedTakeLen = ba.if(finishTargetN > 0.5, finishTargetN, float(writeIdxForLatch));
     finishTakeLen = max(1.0, intendedTakeLen);
     takeLenBeats = finishTakeLen / oneBeat;
-    anchorGridBeats = ba.if(takeLenBeats > 16.0, 16.0,
-                       ba.if(takeLenBeats > 8.0, 8.0,
-                         ba.if(takeLenBeats > 4.0, 4.0,
-                           ba.if(takeLenBeats > 2.0, 2.0, 1.0))));
+    gridPickEps = 0.01;
+    anchorGridBeats = ba.if(takeLenBeats > 16.0 + gridPickEps, 16.0,
+                       ba.if(takeLenBeats > 8.0 + gridPickEps, 8.0,
+                         ba.if(takeLenBeats > 4.0 + gridPickEps, 4.0,
+                           ba.if(takeLenBeats > 2.0 + gridPickEps, 2.0, 1.0))));
     anchorGridLenNow = max(1.0, anchorGridBeats * oneBeat);
     gridMultiple = max(1.0, floor(takeLenBeats / anchorGridBeats + 0.5));
     snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, gridMultiple * anchorGridLenNow);
@@ -72,7 +73,7 @@ with {
                              ba.if(masterPhaseWrapped, prev + ba.if(masterLen < 0.5, wrapLen, masterLen), prev));
     cycleOffset = cycleOffsetStep ~ _;
     absPosCore = wrapAbs(masterPhase - ringOffset + latencyBiasN + cycleOffset, wrapLen);
-    absPos = absPosCore + writeOriginSkip;
+    absPos = wrapAbs(absPosCore + writeOriginSkip, wrapLen);
     speedClamped = max(0.1, min(8.0, effSpeed));
     varispeedActive = effSpeed != 1.0;
     manualPunchActive = abs(effSpeed - 1.0) > 0.3;
