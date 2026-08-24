@@ -41,8 +41,10 @@ power on
   │      · reads aloop.conf (cores, RT priority, effect dirs, topology)
   │      · mlockall(); spawns the audio threads SCHED_FIFO, pinned:
   │           Core 1 → home-FX,  Core 3 → user-FX,  Core 2 → control
-  │      · loads the home-FX LV2 (/effects/home) + any user LV2 (/effects/user)
-  │        into the in-process host (no graph — ADR-002)
+  │      · the home Faust stack (dsp/aloop.dsp) compiles INTO this binary —
+  │        no graph — and runs on Core 1
+  │      · loads the Core-3 guitar/lofi-fx LV2 (/effects/home)
+  │        + any user LV2 (/effects/user) into the in-process host
   │      · opens the ALSA PCM bridged to the f_uac2 gadget
   │
   ├─ 5. Control plane comes up on Core 2
@@ -52,7 +54,7 @@ power on
   │
   ├─ 6. WiFi / autoAP  (/opt/aloop/autoap.sh, or an OpenRC service)
   │      · try to join a known network (STA)
-  │      · if none: host the 'aloop' AP so peers can Link (ap_isolate=0)
+  │      · if none: host the 'ticker' AP so peers can Link (ap_isolate=0)
   │
   └─ READY: audio flows USB-in → home-FX (Core 1) → user-FX (Core 3) → USB-out,
             synced to Link, tunable from MIDI, no added latency vs bare metal.

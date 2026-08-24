@@ -97,8 +97,8 @@ the hold before the threshold, so Resonode never actually engaged):
     Resonode voice.
 
 LED feedback on the pad itself: blinking red once Resonode is actually
-engaged, blinking green during the pre-threshold granulator preview, solid
-green while latched-on in the background, off otherwise.
+engaged, solid green while the granulator is latched-on in the background,
+off otherwise.
 
 ### Granulator and Resonode: named patches, blended, never raw sliders
 
@@ -147,8 +147,10 @@ pad matching the current position within the active quarter.
 
 ## 3-bank FX knob surface
 
-The knob row is one shared set of 6 CCs whose target table depends on which
-bank is active — **Dub**, **Guitar**, or **LofiFx** (granulator/Resonode, above).
+The knob row is one shared set of 8 CCs — {48, 49, 50, 51, 54, 55, 57, 53},
+with CC53 double-duty as Formant on the Dub page — whose target table depends
+on which bank is active — **Dub**, **Guitar**, or **LofiFx**
+(granulator/Resonode, above).
 A bank-select press only flips which target table the next knob CC reaches
 and starts a brief LED flash; it never re-pushes state to the DSP.
 

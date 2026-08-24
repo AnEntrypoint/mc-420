@@ -69,6 +69,7 @@ public:
         m_reverseProb    = 0.0f;
         m_envShape       = 0.0f;
         _recomputeGrainGainComp();
+        _rebuildGrainWindowLut();
         for (int g = 0; g < MAX_GRAINS; g++) m_grains[g].active = false;
         for (int v = 0; v < VOICES; v++) { m_voice[v].grainAccum = 0.0; m_voice[v].grainCount = 0; }
     }
@@ -140,6 +141,15 @@ public:
         m_reverseProb = reverseProb;
         m_envShape = envShape;
         _recomputeGrainGainComp();
+        _rebuildGrainWindowLut();
+    }
+
+    void _rebuildGrainWindowLut()
+    {
+        for (int i = 0; i < Grain::kWindowLutSize; i++) {
+            float winPhase = (float)i / (float)(Grain::kWindowLutSize - 1);
+            m_grainWinLut[i] = _grainWindow(winPhase, m_envShape);
+        }
     }
 
     void captureBlock(const int *in, int n)
@@ -526,10 +536,7 @@ private:
         gr.lifeSamples = _clipGrainLifeToBuffer(gr.pos, gr.rate, vo.len, nominalLifeSamples);
         gr.lifePos = 0;
 
-        for (int i = 0; i < Grain::kWindowLutSize; i++) {
-            float winPhase = (float)i / (float)(Grain::kWindowLutSize - 1);
-            gr.win[i] = _grainWindow(winPhase, m_envShape);
-        }
+        memcpy(gr.win, m_grainWinLut, sizeof(gr.win));
     }
 
     void _renderGranularVoice(int vSlot, int *inout, int n)
@@ -829,6 +836,7 @@ private:
     float    m_scanRate;
     float    m_reverseProb = 0.0f;
     float    m_envShape = 0.0f;
+    float    m_grainWinLut[129] = {0.0f};
     float    m_grainGainComp = 1.0f;
     uint32_t m_grainRngState = 2463534242u;
 };

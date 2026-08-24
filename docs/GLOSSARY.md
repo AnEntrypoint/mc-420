@@ -41,7 +41,8 @@ Domain terms used throughout aloop, so the docs are self-contained.
 - **mlockall** — a syscall that locks a process's memory into RAM so it never
   page-faults (page faults would blow the audio deadline).
 - **Resonode** — the 4-voice, 6-mode-per-voice modal-resonator synth mode
-  reachable by holding the LofiFx pad past a 1-second threshold; excited by the
+  engaged instantly by SHIFT+tap on the LofiFx pad (edge-triggered, not a
+  hold-duration gesture); excited by the
   live input signal ("reactor mode"), not a synthetic oscillator, and replaces
   (never layers over) the dry signal while engaged.
 - **PREEMPT_RT** — the Linux real-time preemption patch/config that bounds

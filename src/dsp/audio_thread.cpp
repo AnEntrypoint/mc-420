@@ -284,6 +284,8 @@ static void* worker(void*) {
     int microrepeatDivSlot = -1;
     int masterLenSlot = -1;
     int recordedBpmSlot = -1;
+    int recordedBeatsSlot = -1;
+    int slotProbeEpoch = -1;
     const float kFoldStepPerSample = (1.0f / 16.0f) / (float)N;
     float loopDirectGateNow = 1.0f;
     struct ResolvedControl { int slot; float* zone; };
@@ -544,17 +546,21 @@ static void* worker(void*) {
                         rp.hasValue = true;
                     }
                 }
-                if (clearAllSlot < 0) clearAllSlot = g_params->getSlot("cmd/clearall");
-                if (halfSpeedSlot < 0) halfSpeedSlot = g_params->getSlot("cmd/halfspeed");
-                if (doubleSpeedSlot < 0) doubleSpeedSlot = g_params->getSlot("cmd/doublespeed");
-                if (stopAllSlot < 0) stopAllSlot = g_params->getSlot("cmd/stopall");
-                if (monitorFoldSlot < 0) monitorFoldSlot = g_params->getSlot("fx/monitorfold");
-                if (pitchSlot < 0) pitchSlot = g_params->getSlot("fx/pitch");
-                if (pitchbendEngagedSlot < 0) pitchbendEngagedSlot = g_params->getSlot("fx/pitchbend_engaged");
-                if (pitchbendSlot < 0) pitchbendSlot = g_params->getSlot("fx/pitchbend");
-                if (microrepeatDivSlot < 0) microrepeatDivSlot = g_params->getSlot("fx/microrepeat_div");
-                if (masterLenSlot < 0) masterLenSlot = g_params->getSlot("cmd/master_len");
-                if (recordedBpmSlot < 0) recordedBpmSlot = g_params->getSlot("cmd/recorded_bpm");
+                if (slotProbeEpoch != g_params->count) {
+                    slotProbeEpoch = g_params->count;
+                    if (clearAllSlot < 0) clearAllSlot = g_params->getSlot("cmd/clearall");
+                    if (halfSpeedSlot < 0) halfSpeedSlot = g_params->getSlot("cmd/halfspeed");
+                    if (doubleSpeedSlot < 0) doubleSpeedSlot = g_params->getSlot("cmd/doublespeed");
+                    if (stopAllSlot < 0) stopAllSlot = g_params->getSlot("cmd/stopall");
+                    if (monitorFoldSlot < 0) monitorFoldSlot = g_params->getSlot("fx/monitorfold");
+                    if (pitchSlot < 0) pitchSlot = g_params->getSlot("fx/pitch");
+                    if (pitchbendEngagedSlot < 0) pitchbendEngagedSlot = g_params->getSlot("fx/pitchbend_engaged");
+                    if (pitchbendSlot < 0) pitchbendSlot = g_params->getSlot("fx/pitchbend");
+                    if (microrepeatDivSlot < 0) microrepeatDivSlot = g_params->getSlot("fx/microrepeat_div");
+                    if (masterLenSlot < 0) masterLenSlot = g_params->getSlot("cmd/master_len");
+                    if (recordedBpmSlot < 0) recordedBpmSlot = g_params->getSlot("cmd/recorded_bpm");
+                    if (recordedBeatsSlot < 0) recordedBeatsSlot = g_params->getSlot("cmd/recorded_beats");
+                }
                 bool clearAllHeld = g_params->getBySlot(clearAllSlot) > 0.5f;
                 std::fill(clearBuf.begin(), clearBuf.end(), clearAllHeld ? 1.0f : 0.0f);
                 if (clearAllHeld) {
@@ -650,7 +656,7 @@ static void* worker(void*) {
                     ? (int)g_params->getBySlot(shuffleMaskSlot) : 0;
 
                 float masterLen = masterLenVal;
-                float recordedBeatsShared = g_params ? g_params->get("cmd/recorded_beats", 16.0f) : 16.0f;
+                float recordedBeatsShared = g_params ? g_params->getBySlot(recordedBeatsSlot, 16.0f) : 16.0f;
                 if (recordedBeatsShared < 1.0f) recordedBeatsShared = 16.0f;
                 if (!linkDrivingLength && recordedBeatsZone) *recordedBeatsZone = recordedBeatsShared;
                 double beatLenSamplesShared = masterLen > 0.0f

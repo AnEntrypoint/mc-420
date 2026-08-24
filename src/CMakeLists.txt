@@ -45,22 +45,31 @@ set(DSP_SOURCES
   main.cpp                # the wiring
 )
 
-# The Faust loop engine is compiled to C++ (loop.cpp) and #included by
-# audio_thread.cpp. CI pre-generates it (where faust exists) into
-# ${CMAKE_BINARY_DIR}/loop.cpp; if it is already there we use it, otherwise we
-# generate it here (local builds that have faust). Either way loop.cpp ends up in
-# the binary dir on the include path.
-if(NOT EXISTS ${CMAKE_BINARY_DIR}/loop.cpp)
+# The Faust loop engine is compiled to C++ in TWO halves (loop_pre.cpp,
+# loop_post.cpp), #included by audio_thread.cpp, with delay.dsp/reverb.dsp
+# hosted as a separately-invoked LV2 bundle (delayverb.lv2) processed by C++
+# in between the two -- both were fully unconditional in Faust (no runtime
+# branching to skip their real cost even at amount=0) and ran twice
+# (cue+master), a real, measured, structural cost. CI pre-generates both
+# halves (where faust exists) into ${CMAKE_BINARY_DIR}/loop_pre.cpp and
+# loop_post.cpp; if already present we use them, otherwise generate here
+# (local builds that have faust).
+if(NOT EXISTS ${CMAKE_BINARY_DIR}/loop_pre.cpp OR NOT EXISTS ${CMAKE_BINARY_DIR}/loop_post.cpp)
   find_program(FAUST_BIN faust)
   if(FAUST_BIN)
     add_custom_command(
-      OUTPUT  ${CMAKE_BINARY_DIR}/loop.cpp
-      COMMAND ${FAUST_BIN} -lang cpp -cn AloopLoopDsp -I ${CMAKE_SOURCE_DIR}/../dsp -I ${CMAKE_SOURCE_DIR}/../effects/home/faust ${CMAKE_SOURCE_DIR}/../dsp/aloop.dsp -o ${CMAKE_BINARY_DIR}/loop.cpp
-      DEPENDS ${CMAKE_SOURCE_DIR}/../dsp/aloop.dsp ${CMAKE_SOURCE_DIR}/../dsp/loop.dsp ${CMAKE_SOURCE_DIR}/../dsp/effects_runtime.dsp
-      COMMENT "Compiling the Faust home stack (dsp/aloop.dsp = loop + runtime effects) to C++")
-    add_custom_target(faust_loop DEPENDS ${CMAKE_BINARY_DIR}/loop.cpp)
+      OUTPUT  ${CMAKE_BINARY_DIR}/loop_pre.cpp
+      COMMAND ${FAUST_BIN} -lang cpp -cn AloopPreDsp -I ${CMAKE_SOURCE_DIR}/../dsp -I ${CMAKE_SOURCE_DIR}/../effects/home/faust ${CMAKE_SOURCE_DIR}/../dsp/aloop_pre.dsp -o ${CMAKE_BINARY_DIR}/loop_pre.cpp
+      DEPENDS ${CMAKE_SOURCE_DIR}/../dsp/aloop_pre.dsp ${CMAKE_SOURCE_DIR}/../dsp/loop.dsp ${CMAKE_SOURCE_DIR}/../dsp/effects_runtime_pre.dsp
+      COMMENT "Compiling the Faust home stack pre-delayverb half (dsp/aloop_pre.dsp) to C++")
+    add_custom_command(
+      OUTPUT  ${CMAKE_BINARY_DIR}/loop_post.cpp
+      COMMAND ${FAUST_BIN} -lang cpp -cn AloopPostDsp -I ${CMAKE_SOURCE_DIR}/../dsp -I ${CMAKE_SOURCE_DIR}/../effects/home/faust ${CMAKE_SOURCE_DIR}/../dsp/aloop_post.dsp -o ${CMAKE_BINARY_DIR}/loop_post.cpp
+      DEPENDS ${CMAKE_SOURCE_DIR}/../dsp/aloop_post.dsp ${CMAKE_SOURCE_DIR}/../dsp/effects_runtime_post.dsp
+      COMMENT "Compiling the Faust home stack post-delayverb half (dsp/aloop_post.dsp) to C++")
+    add_custom_target(faust_loop DEPENDS ${CMAKE_BINARY_DIR}/loop_pre.cpp ${CMAKE_BINARY_DIR}/loop_post.cpp)
   else()
-    message(FATAL_ERROR "loop.cpp not pre-generated and faust not found — pre-generate it or install faust")
+    message(FATAL_ERROR "loop_pre.cpp/loop_post.cpp not pre-generated and faust not found — pre-generate them or install faust")
   endif()
 else()
   add_custom_target(faust_loop)   # pre-generated; nothing to do

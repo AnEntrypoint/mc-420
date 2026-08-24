@@ -9,11 +9,26 @@ on:
       - '.github/workflows/test-pitch-tracker.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   highoctave-transient:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip wheels (dawdreamer is a large libfaust-bearing wheel)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-dawdreamer-${{ runner.os }}-312-${{ hashFiles('.github/workflows/test-pitch-tracker.yml') }}
 
       - name: Install Faust + Python DawDreamer deps
         run: |

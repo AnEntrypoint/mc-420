@@ -152,7 +152,21 @@ async function main() {
     }
   }
 
-  if (!files.length) throw new Error(`unknown --target ${TARGET} (use home|guitar|both)`);
+  if (TARGET === 'delayverb') {
+    const runId = waitForRun('build-lv2.yml', sha, deadline);
+    const dir = downloadArtifact(runId, 'delayverb-lv2', path.join(workDir, 'lv2'));
+    const bundleName = fs.readdirSync(dir).find(n => n.endsWith('.lv2'));
+    if (!bundleName) throw new Error('expected a *.lv2 dir in delayverb-lv2 artifact');
+    if (!/^[A-Za-z0-9_.-]+\.lv2$/.test(bundleName)) throw new Error(`unsafe bundle name in artifact: ${bundleName}`);
+    const so = path.join(dir, bundleName, `${bundleName.replace(/\.lv2$/, '')}.so`);
+    const ttl = fs.readdirSync(path.join(dir, bundleName)).filter(n => n.endsWith('.ttl'));
+    files.push({ local: so, remote: `/effects/delayverb/${bundleName}/${path.basename(so)}`, exec: true });
+    for (const t of ttl) {
+      files.push({ local: path.join(dir, bundleName, t), remote: `/effects/delayverb/${bundleName}/${t}`, exec: false });
+    }
+  }
+
+  if (!files.length) throw new Error(`unknown --target ${TARGET} (use home|guitar|delayverb|both)`);
   await deployToDevice(files);
   console.log('[dsp-hotdeploy] done -- no OS rebuild, no netboot reflash, no reboot');
 }

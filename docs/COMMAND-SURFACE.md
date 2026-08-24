@@ -19,9 +19,9 @@ the engine-global `clear`/`speed` handling). This is the authoritative parity ma
 | `LOOP_COMMAND_PLAY` | 0x81 | `looper<i>/play` | Faust `checkbox("play")` — gates the looper output |
 | `LOOP_COMMAND_STOP` / `STOP_IMMEDIATE` | 0x03 / 0x02 | `cmd/stopall` | audio thread clears **every** `looper<i>/play` to 0 |
 | `LOOP_COMMAND_STOP_TRACK_BASE` | 0x40+i | `looper<i>/play`=0 | per-track stop = clearing that one play checkbox |
-| `LOOP_COMMAND_CLEAR_ALL` | 0x01 | `cmd/clearall` | engine-global — a plain `process()` signal input (3rd input, `clearBuf` in audio_thread.cpp), NOT a Faust UI zone — wipes all 20 loops |
+| `LOOP_COMMAND_CLEAR_ALL` | 0x01 | `cmd/clearall` | engine-global — a plain `process()` signal input (3rd input), NOT a Faust UI zone — wipes all 20 loops |
 | `LOOP_COMMAND_ERASE_TRACK_BASE` | 0x60+i | `looper<i>/erase` | per-looper Faust `button("erase")` — wipes that one loop |
-| `LOOP_COMMAND_HALFSPEED_ON/OFF` | 0x0C/0x0D | `cmd/halfspeed` | engine-global `speed`=0.5 while held (varispeed read rate) — a plain `process()` signal input (4th input, `speedBuf`), NOT a Faust UI zone (see below) |
+| `LOOP_COMMAND_HALFSPEED_ON/OFF` | 0x0C/0x0D | `cmd/halfspeed` | engine-global `speed`=0.5 while held (varispeed read rate) — a plain `process()` signal input (4th input, `effSpeed`), NOT a Faust UI zone (see below) |
 | `LOOP_COMMAND_DOUBLESPEED_ON/OFF` | 0x0E/0x0F | `cmd/doublespeed` | engine-global `speed`=2.0 while held (2× read rate), same signal-input mechanism |
 | `LOOP_COMMAND_ABORT_RECORDING` | 0x06 | `looper<i>/rec`=0 | releasing rec ends the take; record replaces in place so there is nothing to "un-append" |
 | `LOOP_COMMAND_LOOP_IMMEDIATE` | 0x08 | *(model difference)* | needs an addressable read head — see the note below |
@@ -67,21 +67,22 @@ each appeared 20 times, one per `"looper N"` vgroup, even after 382e775
 believed it had collapsed them to a single shared zone. There is no Faust
 mechanism for "declare a UI control once, reference the same zone from many
 call sites" across a `par()` boundary. The real fix removes `clear`/`speed`
-as Faust UI controls entirely: `dsp/loop.dsp`'s `process()` now takes 4
-signal inputs — `(in, prevFiltIn, clearAll, speedMul)` — and `clearAll`/
-`speedMul` are plain wires threaded through `par()`, which cannot duplicate a
-signal the way it duplicates a UI primitive. `audio_thread.cpp` fills
-`clearBuf`/`speedBuf` (constant across each block) and passes them as
-`fins[2]`/`fins[3]` to `compute()` instead of calling `fui.set("clear"/
-"speed", ...)`.
+as Faust UI controls entirely: `dsp/loop.dsp`'s `process()` takes 8 signal
+inputs — `(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen,
+sidechainEnv, recordedBeats)` — and `clearAll`/`effSpeed` are plain wires
+threaded through `par()`, which cannot duplicate a signal the way it
+duplicates a UI primitive. `audio_thread.cpp` fills the corresponding
+per-block-constant buffers and passes them as the matching `fins[]` slots to
+`compute()` instead of calling `fui.set("clear"/"speed", ...)`.
 
 ## APC Key25 controls (the exact mapping — src/control/midi.cpp, param_mapping.md)
 - CC48–55 → reverb/delay/time/HP/LP/resonance (all `/127`)
-- CC53 → formant depth (deadzone + range, SHIFT expands) — `ApcGrid::onFormantCC`
+- CC53 → formant depth (deadzone 60–68, flat ±1 range always — SHIFT does not
+  expand it) — `ApcGrid::onFormantCC`
 - CC52 / keybed / mod-wheel → live pitch semitones
 - notes 82–86 → microrepeat divisors {1,2,4,8,16}
 - notes 70/71 → global speed-scrub (varispeed)
-- SHIFT (note 0x62/98, channel 0 only) → held state gating CC53's range AND the
+- SHIFT (note 0x62/98, channel 0 only) → held state driving the
   loop-fold/monitor routing: while held, the running loops are folded INTO the
   effect input (`fx/monitorfold` → Faust `MONITORFOLD`, `dsp/aloop.dsp`'s
   `foldMix`) with the dry loop contribution complementarily suppressed, so the
@@ -107,7 +108,7 @@ so is every bank's own effect chain — all 3 banks are simultaneously live.
   left of the two varispeed controls" exactly as originally specified).
 - Tap-to-select, radio-button style — no cycling, no hold-preview. Pressing one
   makes it the `activeBank()` immediately (`ApcGrid::onDubFxPress`/
-  `onLofiFxPress`/`onGuitarFxPress`) and re-pushes every one of that bank's 7
+  `onLofiFxPress`/`onGuitarFxPress`) and re-pushes every one of that bank's 8
   stored knob values into the shared Faust zones right away
   (`pushBankValuesToZones`) — otherwise switching banks would leave the audible
   effect showing the PREVIOUS bank's values until every knob was retouched,
@@ -115,22 +116,24 @@ so is every bank's own effect chain — all 3 banks are simultaneously live.
 - Selecting a bank starts a `bankFlashActive()` window (150ms, `kBankFlashMs`),
   cleared by `pollHolds` — a **transient** LED flash on selection, not a
   persistent "which bank is active" indicator.
-- CC48/49/50/51/54/55/57 (the 7 physical fx knobs) are intercepted directly in
-  `midi.cpp`, ahead of the flat `config/controls.conf` map — that flat map no
-  longer binds any of these 7 targets at all (see its own comment block: a flat
-  binding here would race `ApcGrid`'s bank-aware write with no defined winner).
+- CC48/49/50/51/54/55/57/53 (the 8 physical fx knobs; CC53 double-duties as
+  Formant on the Dub page, intercepted before the table lookup) are intercepted
+  directly in `midi.cpp`, ahead of the flat `config/controls.conf` map — that
+  flat map no longer binds any of these 8 targets at all (see its own comment
+  block: a flat binding here would race `ApcGrid`'s bank-aware write with no
+  defined winner).
   `ApcGrid::onFxKnobCC` writes the normalized `data2/127` value into the
   **currently active bank's own stored slot** for that knob position, AND into
   the shared Faust zone, so turning a knob still has the usual instant effect.
 
 ### Per-bank independent knob storage
 Each bank stores its own value per physical knob position — switching banks
-changes what the 7 knobs currently mean/show without touching any other bank's
+changes what the 8 knobs currently mean/show without touching any other bank's
 stored values (`m_fxBankValues[bank][knob]`, seeded in `ApcGrid::bindAll`).
 
 **REDESIGN (Core-3 move, superseding an earlier in-Faust 3-bank crossfade
 design — see "Guitar/LofiFx bank DSP wiring" below for why that was
-abandoned):** each bank's 7 knob positions now have their OWN permanent
+abandoned):** each bank's 8 knob positions now have their OWN permanent
 target (`FxKnobTarget`/`kDubTargets`/`kGuitarTargets`/`kLofiFxTargets` in
 apc_grid.cpp) — Dub's targets are unchanged Core-1 Faust zones; Guitar/LofiFx
 targets are either an `fx2/*` LV2 control port on the new permanent Core-3

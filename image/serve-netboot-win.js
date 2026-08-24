@@ -460,6 +460,12 @@ async function checkAndUpdate() {
     // when fx/resonode/engaged is true).
     const resonodeDir = await downloadRunArtifact(lv2Run.id, 'resonode-lv2', path.join(work, 'resonode'));
     const pitchTrackerDir = await downloadRunArtifact(lv2Run.id, 'pitchtracker-lv2', path.join(work, 'pitchtracker'));
+    // delayverb-lv2: same isolation reasoning as resonode -- lib-boot-tree.sh's
+    // home-FX find excludes delayverb.lv2 by name, only laid in via
+    // DELAYVERB_LV2_DIR, since it's hosted by its own dedicated Lv2Host
+    // instances in audio_thread.cpp (cue/master), never the general
+    // homeFx/userFx hosts.
+    const delayVerbDir = await downloadRunArtifact(lv2Run.id, 'delayverb-lv2', path.join(work, 'delayverb'));
     const aloopBin = path.join(binDir, 'aloop');
     if (!fs.existsSync(aloopBin)) throw new Error('aloop binary not found in downloaded artifact at ' + aloopBin);
 
@@ -496,9 +502,18 @@ async function checkAndUpdate() {
     // error and retries next tick — matching looper's "any failure is
     // caught, next tick tries again" self-healing design.
     const REBUILD_TIMEOUT_MS = 5 * 60 * 1000;
+    const alpineVersion = process.env.ALPINE_VERSION || '3.20.3';
+    const alpineTarball = path.join(path.dirname(ROOT), '.netboot-cache', 'alpine-rpi-' + alpineVersion + '-aarch64.tar.gz');
+    if (!fs.existsSync(alpineTarball)) {
+      fs.mkdirSync(path.dirname(alpineTarball), { recursive: true });
+      console.log('[update] caching Alpine tarball ' + alpineTarball);
+      await downloadArtifactZip(
+        'https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/aarch64/' + path.basename(alpineTarball),
+        alpineTarball);
+    }
     await execFileAsync(bashExe, [buildScript], {
       cwd: path.join(__dirname, '..'),
-      env: Object.assign({}, process.env, { OUT: ROOT, ALOOP_BIN: aloopBin, LV2_DIR: lv2Dir, RESONODE_LV2_DIR: resonodeDir, PITCHTRACKER_LV2_DIR: pitchTrackerDir, NETBOOT_SERVER: NETBOOT_SERVER }),
+      env: Object.assign({}, process.env, { OUT: ROOT, ALOOP_BIN: aloopBin, LV2_DIR: lv2Dir, RESONODE_LV2_DIR: resonodeDir, PITCHTRACKER_LV2_DIR: pitchTrackerDir, DELAYVERB_LV2_DIR: delayVerbDir, NETBOOT_SERVER: NETBOOT_SERVER, ALPINE_VERSION: alpineVersion, ALPINE_TARBALL: alpineTarball }),
       timeout: REBUILD_TIMEOUT_MS,
       killSignal: 'SIGKILL',
       maxBuffer: 64 * 1024 * 1024

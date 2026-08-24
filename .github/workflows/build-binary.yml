@@ -14,7 +14,16 @@ on:
       - 'effects/**'       # vendored Faust chain + engine headers the build includes
       - '.github/workflows/build-binary.yml'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'dsp/**'
+      - 'effects/**'
+      - '.github/workflows/build-binary.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   aloop-aarch64-musl:
@@ -25,6 +34,7 @@ jobs:
     # user-mode's binary translation is disproportionately slow for a
     # linker's memory-access pattern versus straight-line compile codegen.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -70,8 +80,15 @@ jobs:
           # register-pressure inflection point on AVX-512 has no guaranteed
           # correspondence on Cortex-A72's 128-bit NEON. Do not retry without
           # a fresh reason to suspect the real-hardware result was noise.
-          faust -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopLoopDsp -I dsp -I effects/home/faust dsp/aloop.dsp -o build/loop.cpp
-          echo "generated $(wc -l < build/loop.cpp) lines of loop C++"
+          # Compiled in TWO halves (pre/post-delayverb) -- delay.dsp/reverb.dsp
+          # are extracted into their own separately-invoked LV2 bundle
+          # (delayverb-lv2 job), hosted by audio_thread.cpp only when
+          # DELAYAMT/REVAMT are meaningfully nonzero, instead of paying their
+          # real, unconditional, doubled (cue+master) compute cost every
+          # block regardless of the knobs' actual values.
+          faust -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopPreDsp -I dsp -I effects/home/faust dsp/aloop_pre.dsp -o build/loop_pre.cpp
+          faust -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopPostDsp -I dsp -I effects/home/faust dsp/aloop_post.dsp -o build/loop_post.cpp
+          echo "generated $(wc -l < build/loop_pre.cpp) + $(wc -l < build/loop_post.cpp) lines of loop C++"
 
       # A one-off Faust-flag CPU benchmark previously lived here
       # (faustdoc.grame.fr/manual/optimizing/'s bench.cpp tool, comparing

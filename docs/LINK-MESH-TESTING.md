@@ -14,8 +14,8 @@ having nothing to do with the multicast question this doc was written to
 answer. All four are fixed (see AGENTS.md "aloop <-> esp-idf-link mesh:
 paired invariants"):
 
-1. aloop hosted SSID `aloop`; esp-idf-link hosts/joins `ticker`. Different
-   networks. **Now both use `ticker`.**
+1. aloop hosted SSID `ticker`; esp-idf-link hosts/joins `ticker`. Different
+   networks before the rename. **Now both use `ticker`.**
 2. aloop's `wpa_supplicant.conf` had zero active `network={}` blocks, so it
    could never join anything and always fell through to hosting. **Now
    contains a real open `ticker` block.**
@@ -67,9 +67,9 @@ actually reach a station connected to it?
 ## Test 1: does standard Link discovery complete at all, AP role = aloop
 
 1. Power on one aloop unit with no existing WiFi network available, so
-   `autoap.sh` falls through STA failures and hosts its own AP (`aloop`
+   `autoap.sh` falls through STA failures and hosts its own AP (`ticker`
    SSID, `192.168.4.1/24`, per `src/net/config/hostapd.conf`).
-2. Power on one esp-idf-link ESP32, configured to join that `aloop` SSID as
+2. Power on one esp-idf-link ESP32, configured to join that `ticker` SSID as
    a station (NOT scanning for its own `"ticker"` SSID — you may need to
    temporarily point esp-idf-link's STA join target at aloop's AP SSID for
    this test, since its own auto-election logic assumes a different SSID
@@ -145,7 +145,7 @@ supervisor loop (`main/wifi_config.cpp`'s `wifi_supervisor_task`) into
 aloop's `src/net/autoap.sh`:
 - Each aloop unit needs to know its own WiFi MAC address (`cat
   /sys/class/net/wlan0/address`) and compare against any other AP-mode
-  aloop units it can see (scan for the `aloop` SSID's BSSID before
+  aloop units it can see (scan for the `ticker` SSID's BSSID before
   deciding to host).
 - Lowest-MAC-wins (or highest, pick one convention and match esp-idf-link's
   for consistency) with a randomized/staggered hold-off before hosting, so
