@@ -17,77 +17,100 @@ with {
     eraseN = button("erase");
     wipe   = max(clearAll, eraseN);
 
-    recPrev = recN : mem;
-    armPulse = (recN > 0.5) & (recPrev < 0.5);
     beatsPerMasterLen = max(1.0, recordedBeats);
     oneBeat = max(1.0, masterLen / beatsPerMasterLen);
     gridStep = max(1.0, oneBeat / 4.0);
     phaseInGrid = wrapAbs(masterPhase, gridStep);
     phaseInGridPrev = phaseInGrid : mem;
     gridTickCrossed = phaseInGrid < phaseInGridPrev;
-    armPendingStep(prev) = ba.if(masterLen < 0.5, 0,
-                            ba.if(prev & gridTickCrossed, 0, ba.if(armPulse, 1, prev)));
-    armPending = armPendingStep ~ _;
-    armPendingPrev = armPending : mem;
-    armEdge = ba.if(masterLen < 0.5, armPulse, armPendingPrev & gridTickCrossed);
-    armMasterPhaseStep(prev) = ba.if(armEdge, masterPhase, prev);
-    armMasterPhase = armMasterPhaseStep ~ _;
-    finishRequestedStep(prev) = ba.if(armEdge, 0, ba.if(finishReqN > 0.5, 1, prev));
-    finishRequested = finishRequestedStep ~ _;
-    wrapLenStep(prev) = ba.if(finishEdge, max(1.0, snappedWrapLen), prev);
-    wrapLen = max(1, wrapLenStep ~ _);
-    writeIdxForLatch = ba.if(finishRequested, finishTargetN, writeIdx);
-    recKeepAlive = (recN > 0.5) | finishRequested;
-    recActiveStep(prev) = ba.if(armEdge, 1.0, ba.if(recKeepAlive, prev, 0.0));
-    recActive = recActiveStep ~ _;
-    recordingGate(prev) = (recActive > 0.5) * (1.0 - finishRequested * (prev >= finishTargetN));
-    writeIdxStep(prev) = ba.if(armEdge, 0,
-                          ba.if(recordingGate(prev), min(prev + 1, MAXLEN - 1), prev));
-    writeIdx = writeIdxStep ~ _;
-    recordingGateNow = recordingGate(writeIdx : mem);
-    recordingGatePrev = recordingGateNow : mem;
-    finishEdge = (recordingGateNow < 0.5) & (recordingGatePrev > 0.5);
-    writeVal = prevFiltIn * recordingGateNow * (1.0 - wipe);
-    ring = rwtable(MAXLEN, 0.0, writeIdx, writeVal, readIdx0);
-
-    wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
-    intendedTakeLen = ba.if(finishTargetN > 0.5, finishTargetN, float(writeIdxForLatch));
-    finishTakeLen = max(1.0, intendedTakeLen);
-    takeLenBeats = finishTakeLen / oneBeat;
-    gridPickEps = 0.01;
-    anchorGridBeats = ba.if(takeLenBeats > 16.0 + gridPickEps, 16.0,
-                       ba.if(takeLenBeats > 8.0 + gridPickEps, 8.0,
-                         ba.if(takeLenBeats > 4.0 + gridPickEps, 4.0,
-                           ba.if(takeLenBeats > 2.0 + gridPickEps, 2.0, 1.0))));
-    anchorGridLenNow = max(1.0, anchorGridBeats * oneBeat);
-    gridMultiple = max(1.0, floor(takeLenBeats / anchorGridBeats + 0.5));
-    snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, gridMultiple * anchorGridLenNow);
-    headSkipNow = ba.if(masterLen < 0.5, 0.0, wrapAbs(-armMasterPhase, anchorGridLenNow));
-    headSkipStep(prev) = ba.if(finishEdge, headSkipNow, prev);
-    writeOriginSkip = headSkipStep ~ _;
-    recordStartMasterPhaseStep(prev) = ba.if(finishEdge, armMasterPhase, prev);
-    recordStartMasterPhase = recordStartMasterPhaseStep ~ _;
-    ringOffset = recordStartMasterPhase + writeOriginSkip;
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
-    cycleOffsetStep(prev) = ba.if(armEdge, 0.0,
-                             ba.if(masterPhaseWrapped, prev + ba.if(masterLen < 0.5, wrapLen, masterLen), prev));
-    cycleOffset = cycleOffsetStep ~ _;
-    absPos = wrapAbs(masterPhase - ringOffset + latencyBiasN + cycleOffset, wrapLen);
-    speedClamped = max(0.1, min(8.0, effSpeed));
-    varispeedActive = effSpeed != 1.0;
-    manualPunchActive = abs(effSpeed - 1.0) > 0.3;
-    resyncCoeff = ba.if(manualPunchActive, 0.0, 0.0005);
-    wrapDelta(prev) = wrapAbs(absPos - prev + wrapLen * 0.5, wrapLen) - wrapLen * 0.5;
-    readPosStep(prev) = ba.if(armEdge | finishEdge, absPos,
-                         ba.if(varispeedActive,
-                               wrapAbs(prev + speedClamped + wrapDelta(prev) * resyncCoeff, wrapLen),
-                               absPos));
-    readPos = readPosStep ~ _;
+    wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
+
+    takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, ampPrev, rsmPrev, wosPrev, coffPrev, rposPrev, gatePrev) =
+        (pendNext, finNext, actNext, widxNext, wlenNext, ampNext, rsmNext, wosNext, coffNext, rposNext, gateNext)
+    with {
+        recPrevEdge = recN : mem;
+        armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
+
+        pendNext = ba.if(masterLen < 0.5, 0,
+                    ba.if(pendPrev & gridTickCrossed, 0, ba.if(armPulse, 1, pendPrev)));
+        armEdge = ba.if(masterLen < 0.5, armPulse, pendPrev & gridTickCrossed);
+
+        finNext = ba.if(armEdge, 0, ba.if(finishReqN > 0.5, 1, finPrev));
+        recKeepAlive = (recN > 0.5) | finNext;
+        actNext = ba.if(armEdge, 1.0, ba.if(recKeepAlive, actPrev, 0.0));
+
+        gateOf(x) = (actNext > 0.5) * (1.0 - finNext * (x >= finishTargetN));
+        gateCur = gateOf(widxPrev);
+        widxNext = ba.if(armEdge, 0,
+                    ba.if(gateCur, min(widxPrev + 1, MAXLEN - 1), widxPrev));
+
+        finishEdge = (gateCur < 0.5) & (gatePrev > 0.5);
+
+        writeIdxForLatch = ba.if(finNext, finishTargetN, float(widxNext));
+        intendedTakeLen = ba.if(finishTargetN > 0.5, finishTargetN, writeIdxForLatch);
+        finishTakeLen = max(1.0, intendedTakeLen);
+        takeLenBeats = finishTakeLen / oneBeat;
+        gridPickEps = 0.01;
+        anchorGridBeats = ba.if(takeLenBeats > 16.0 + gridPickEps, 16.0,
+                           ba.if(takeLenBeats > 8.0 + gridPickEps, 8.0,
+                             ba.if(takeLenBeats > 4.0 + gridPickEps, 4.0,
+                               ba.if(takeLenBeats > 2.0 + gridPickEps, 2.0, 1.0))));
+        anchorGridLenNow = max(1.0, anchorGridBeats * oneBeat);
+        gridMultiple = max(1.0, floor(takeLenBeats / anchorGridBeats + 0.5));
+        snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, gridMultiple * anchorGridLenNow);
+        wlenNext = ba.if(finishEdge, max(1.0, snappedWrapLen), wlenPrev);
+
+        ampNext = ba.if(armEdge, masterPhase, ampPrev);
+        headSkipNow = ba.if(masterLen < 0.5, 0.0, wrapAbs(-ampNext, anchorGridLenNow));
+        wosNext = ba.if(finishEdge, headSkipNow, wosPrev);
+        rsmNext = ba.if(finishEdge, ampNext, rsmPrev);
+
+        ringOffset = rsmNext + wosNext;
+        wrapLenCur = max(1, wlenNext);
+        cycleInc = ba.if(masterLen < 0.5, wrapLenCur, masterLen);
+        coffNext = ba.if(armEdge, 0.0,
+                    ba.if(masterPhaseWrapped, coffPrev + cycleInc, coffPrev));
+
+        absPos = wrapAbs(masterPhase - ringOffset + latencyBiasN + coffNext, wrapLenCur);
+        speedClamped = max(0.1, min(8.0, effSpeed));
+        varispeedActive = effSpeed != 1.0;
+        manualPunchActive = abs(effSpeed - 1.0) > 0.3;
+        resyncCoeff = ba.if(manualPunchActive, 0.0, 0.0005);
+        wrapDelta(prev) = wrapAbs(absPos - prev + wrapLenCur * 0.5, wrapLenCur) - wrapLenCur * 0.5;
+        rposNext = ba.if(armEdge | finishEdge, absPos,
+                    ba.if(varispeedActive,
+                          wrapAbs(rposPrev + speedClamped + wrapDelta(rposPrev) * resyncCoeff, wrapLenCur),
+                          absPos));
+
+        gateNext = gateCur;
+    };
+
+    takeStateBus = (_,_,_,_,_,_,_,_,_,_,_) ~ takeState;
+    pickState(k) = takeStateBus : (par(j, 11, *(j == k)) :> _);
+    pend = pickState(0);
+    fin = pickState(1);
+    act = pickState(2);
+    widxRaw = pickState(3);
+    wlenRaw = pickState(4);
+    ampUnused = pickState(5);
+    rsm = pickState(6);
+    wos = pickState(7);
+    coff = pickState(8);
+    readPos = pickState(9);
+    gateNow = pickState(10);
+
+    wrapLen = max(1, wlenRaw);
+    recordingGateNow = gateNow;
+
+    writeVal = prevFiltIn * recordingGateNow * (1.0 - wipe);
+    ring = rwtable(MAXLEN, 0.0, widxRaw, writeVal, int(readPos) % MAXLEN);
+
     readIdx0 = int(readPos) % MAXLEN;
     readIdx1 = (int(readPos) + 1) % MAXLEN;
     readFrac = readPos - floor(readPos);
-    ringCeil = rwtable(MAXLEN, 0.0, writeIdx, writeVal, readIdx1);
+    ringCeil = rwtable(MAXLEN, 0.0, widxRaw, writeVal, readIdx1);
     delayed = ring + (ringCeil - ring) * readFrac;
     hold = delayed * (1.0 - recordingGateNow) * (1.0 - wipe);
     record = writeVal;
@@ -95,7 +118,7 @@ with {
     out = loopSig * playN * (1.0 - recordingGateNow) * volN * duckGain;
     levelMeter = hbargraph("level", 0.0, 1.0);
     writeIdxMeter = hbargraph("writeidx", 0.0, float(MAXLEN));
-    attachWriteIdx(x) = attach(x, x*0.0 + float(writeIdx) : writeIdxMeter);
+    attachWriteIdx(x) = attach(x, x*0.0 + float(widxRaw) : writeIdxMeter);
     wrapLenMeter = hbargraph("wraplen", 0.0, float(MAXLEN));
     attachWrapLen(x) = attach(x, x*0.0 + float(wrapLen) : wrapLenMeter);
     readPosMeter = hbargraph("readposdiag2", 0.0, float(MAXLEN));
