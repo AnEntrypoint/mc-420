@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <atomic>
 
 namespace aloop {
 
@@ -146,10 +147,12 @@ public:
 
     void _rebuildGrainWindowLut()
     {
+        float (&dst)[129] = m_grainWinLutBuf[1 - m_grainWinLutLive.load(std::memory_order_relaxed)];
         for (int i = 0; i < Grain::kWindowLutSize; i++) {
             float winPhase = (float)i / (float)(Grain::kWindowLutSize - 1);
-            m_grainWinLut[i] = _grainWindow(winPhase, m_envShape);
+            dst[i] = _grainWindow(winPhase, m_envShape);
         }
+        m_grainWinLutLive.store(1 - m_grainWinLutLive.load(std::memory_order_relaxed), std::memory_order_release);
     }
 
     void captureBlock(const int *in, int n)
@@ -536,7 +539,7 @@ private:
         gr.lifeSamples = _clipGrainLifeToBuffer(gr.pos, gr.rate, vo.len, nominalLifeSamples);
         gr.lifePos = 0;
 
-        memcpy(gr.win, m_grainWinLut, sizeof(gr.win));
+        memcpy(gr.win, m_grainWinLutBuf[m_grainWinLutLive.load(std::memory_order_acquire)], sizeof(gr.win));
     }
 
     void _renderGranularVoice(int vSlot, int *inout, int n)
@@ -836,7 +839,8 @@ private:
     float    m_scanRate;
     float    m_reverseProb = 0.0f;
     float    m_envShape = 0.0f;
-    float    m_grainWinLut[129] = {0.0f};
+    float    m_grainWinLutBuf[2][129] = {{0.0f}, {0.0f}};
+    std::atomic<int> m_grainWinLutLive{0};
     float    m_grainGainComp = 1.0f;
     uint32_t m_grainRngState = 2463534242u;
 };
