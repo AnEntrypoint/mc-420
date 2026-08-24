@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Flashing aloop to an SD card and testing from it","url":"https://anentrypoint.github.io/mc-420/FLASHING.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0440cd80ecc2de50ddf096b68d6ed7340ab9e2ea">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0a28789cdb64f1d520d9e04d339a94f033cc477a">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -145,8 +145,9 @@ they respawn on crash; logs in <code class="language-plaintext highlighter-rouge
   <li>The host should enumerate the <code class="language-plaintext highlighter-rouge">aloop</code> USB soundcard within a few seconds of the
 OTG cable being connected.</li>
   <li><strong>WiFi / Ableton Link:</strong> <code class="language-plaintext highlighter-rouge">autoap</code> joins a known network if <code class="language-plaintext highlighter-rouge">wpa_supplicant.conf</code>
-has one; otherwise it hosts an AP (SSID <code class="language-plaintext highlighter-rouge">aloop</code>, <code class="language-plaintext highlighter-rouge">ap_isolate=0</code> so Link multicast
-works). Put a Link-enabled app on the same network and it should sync tempo.</li>
+has one; otherwise it hosts an AP (SSID <code class="language-plaintext highlighter-rouge">ticker</code>, <code class="language-plaintext highlighter-rouge">ap_isolate=0</code> so Link
+multicast works). Put a Link-enabled app on the same network and it should
+sync tempo.</li>
 </ul>
 
 <h2 id="5-verify-its-alive">5. Verify it’s alive</h2>

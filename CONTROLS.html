@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0440cd80ecc2de50ddf096b68d6ed7340ab9e2ea">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0a28789cdb64f1d520d9e04d339a94f033cc477a">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -160,8 +160,8 @@ Resonode voice.</li>
 </ul>
 
 <p>LED feedback on the pad itself: blinking red once Resonode is actually
-engaged, blinking green during the pre-threshold granulator preview, solid
-green while latched-on in the background, off otherwise.</p>
+engaged, solid green while the granulator is latched-on in the background,
+off otherwise.</p>
 
 <h3 id="granulator-and-resonode-named-patches-blended-never-raw-sliders">Granulator and Resonode: named patches, blended, never raw sliders</h3>
 
@@ -212,8 +212,10 @@ pad matching the current position within the active quarter.</p>
 
 <h2 id="3-bank-fx-knob-surface">3-bank FX knob surface</h2>
 
-<p>The knob row is one shared set of 6 CCs whose target table depends on which
-bank is active — <strong>Dub</strong>, <strong>Guitar</strong>, or <strong>LofiFx</strong> (granulator/Resonode, above).
+<p>The knob row is one shared set of 8 CCs — {48, 49, 50, 51, 54, 55, 57, 53},
+with CC53 double-duty as Formant on the Dub page — whose target table depends
+on which bank is active — <strong>Dub</strong>, <strong>Guitar</strong>, or <strong>LofiFx</strong>
+(granulator/Resonode, above).
 A bank-select press only flips which target table the next knob CC reaches
 and starts a brief LED flash; it never re-pushes state to the DSP.</p>
 

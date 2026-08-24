@@ -10,7 +10,7 @@ looper's inline effects.
 
 **1. The loop engine — a native Faust reimplementation (behaviorally equivalent).**
 The loop engine is `dsp/loop.dsp` — an aloop-native Faust program: 20 independent
-record/play loopers as cycle-free **feedback-delay rings** (record replaces the loop,
+record/play loopers as cycle-free **rwtable rings** (record replaces the loop,
 play recirculates it), NO overdub. This is the correct Faust looper: it sidesteps the
 read-modify-write that a buffer+playhead would need (which Faust rejects — see ADR-010
 and COMMAND-SURFACE). One consequence: mark-point restart (SET/CLEAR_LOOP_START,
@@ -22,10 +22,11 @@ loop grid is driven by Ableton Link phase (varispeed sync), same as the original
 **2. The effects — the exact same DSP, as Faust.**
 The original ran its effects as inline C++ in this order: pitch → delay+reverb
 sends → beat-repeat (microrepeat) → HP/LP filters → mix. aloop's effect chain
-(`effects/home/faust/chain.dsp`, from dubfx) runs **exactly these stages in
-exactly this order**, and the dubfx project A/B-verified it sample-for-sample
-against the original C++. In aloop the effects are composed straight into the
-home Faust program (`dsp/aloop.dsp = loop.dsp : chain.dsp`) — so the effects are
+runs **exactly these stages in exactly this order**, and the dubfx project A/B-
+verified it sample-for-sample against the original C++. In aloop the effects are
+composed straight into the home Faust program
+(`dsp/aloop.dsp = loop.dsp : effects_runtime.dsp`, whose stage order is glitch →
+filter → delay → reverb) — so the effects are
 the same math, now Faust, and swappable at the LV2 boundary.
 
 ### Why this is sample-identical, not approximate
@@ -61,7 +62,7 @@ deterministic**, delivered through the LV2 boundary.
 ## How the whole home stack is one Faust program
 
 `dsp/aloop.dsp` composes the loop engine and the effects into a single Faust
-program: `component("loop.dsp") : component(".../chain.dsp")` — input → loop
+program: `component("loop.dsp") : component("effects_runtime.dsp")` — input → loop
 engine → the dubfx effect chain → output. It compiles (`faust -lang cpp`) to one
 C++ file containing both the loop feedback and the effect stages (incl. the exact
 pitch engine via `ffunction`). So the entire home audio path is one Faust compile

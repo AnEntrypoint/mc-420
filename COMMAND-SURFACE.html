@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Command surface — the looper control behavior aloop clones","url":"https://anentrypoint.github.io/mc-420/COMMAND-SURFACE.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0440cd80ecc2de50ddf096b68d6ed7340ab9e2ea">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0a28789cdb64f1d520d9e04d339a94f033cc477a">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -108,7 +108,7 @@ the engine-global <code class="language-plaintext highlighter-rouge">clear</code
       <td><code class="language-plaintext highlighter-rouge">LOOP_COMMAND_CLEAR_ALL</code></td>
       <td>0x01</td>
       <td><code class="language-plaintext highlighter-rouge">cmd/clearall</code></td>
-      <td>engine-global — a plain <code class="language-plaintext highlighter-rouge">process()</code> signal input (3rd input, <code class="language-plaintext highlighter-rouge">clearBuf</code> in audio_thread.cpp), NOT a Faust UI zone — wipes all 20 loops</td>
+      <td>engine-global — a plain <code class="language-plaintext highlighter-rouge">process()</code> signal input (3rd input), NOT a Faust UI zone — wipes all 20 loops</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">LOOP_COMMAND_ERASE_TRACK_BASE</code></td>
@@ -120,7 +120,7 @@ the engine-global <code class="language-plaintext highlighter-rouge">clear</code
       <td><code class="language-plaintext highlighter-rouge">LOOP_COMMAND_HALFSPEED_ON/OFF</code></td>
       <td>0x0C/0x0D</td>
       <td><code class="language-plaintext highlighter-rouge">cmd/halfspeed</code></td>
-      <td>engine-global <code class="language-plaintext highlighter-rouge">speed</code>=0.5 while held (varispeed read rate) — a plain <code class="language-plaintext highlighter-rouge">process()</code> signal input (4th input, <code class="language-plaintext highlighter-rouge">speedBuf</code>), NOT a Faust UI zone (see below)</td>
+      <td>engine-global <code class="language-plaintext highlighter-rouge">speed</code>=0.5 while held (varispeed read rate) — a plain <code class="language-plaintext highlighter-rouge">process()</code> signal input (4th input, <code class="language-plaintext highlighter-rouge">effSpeed</code>), NOT a Faust UI zone (see below)</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">LOOP_COMMAND_DOUBLESPEED_ON/OFF</code></td>
@@ -199,22 +199,23 @@ each appeared 20 times, one per <code class="language-plaintext highlighter-roug
 believed it had collapsed them to a single shared zone. There is no Faust
 mechanism for “declare a UI control once, reference the same zone from many
 call sites” across a <code class="language-plaintext highlighter-rouge">par()</code> boundary. The real fix removes <code class="language-plaintext highlighter-rouge">clear</code>/<code class="language-plaintext highlighter-rouge">speed</code>
-as Faust UI controls entirely: <code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code>’s <code class="language-plaintext highlighter-rouge">process()</code> now takes 4
-signal inputs — <code class="language-plaintext highlighter-rouge">(in, prevFiltIn, clearAll, speedMul)</code> — and <code class="language-plaintext highlighter-rouge">clearAll</code>/
-<code class="language-plaintext highlighter-rouge">speedMul</code> are plain wires threaded through <code class="language-plaintext highlighter-rouge">par()</code>, which cannot duplicate a
-signal the way it duplicates a UI primitive. <code class="language-plaintext highlighter-rouge">audio_thread.cpp</code> fills
-<code class="language-plaintext highlighter-rouge">clearBuf</code>/<code class="language-plaintext highlighter-rouge">speedBuf</code> (constant across each block) and passes them as
-<code class="language-plaintext highlighter-rouge">fins[2]</code>/<code class="language-plaintext highlighter-rouge">fins[3]</code> to <code class="language-plaintext highlighter-rouge">compute()</code> instead of calling <code class="language-plaintext highlighter-rouge">fui.set("clear"/
-"speed", ...)</code>.</p>
+as Faust UI controls entirely: <code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code>’s <code class="language-plaintext highlighter-rouge">process()</code> takes 8 signal
+inputs — <code class="language-plaintext highlighter-rouge">(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen,
+sidechainEnv, recordedBeats)</code> — and <code class="language-plaintext highlighter-rouge">clearAll</code>/<code class="language-plaintext highlighter-rouge">effSpeed</code> are plain wires
+threaded through <code class="language-plaintext highlighter-rouge">par()</code>, which cannot duplicate a signal the way it
+duplicates a UI primitive. <code class="language-plaintext highlighter-rouge">audio_thread.cpp</code> fills the corresponding
+per-block-constant buffers and passes them as the matching <code class="language-plaintext highlighter-rouge">fins[]</code> slots to
+<code class="language-plaintext highlighter-rouge">compute()</code> instead of calling <code class="language-plaintext highlighter-rouge">fui.set("clear"/"speed", ...)</code>.</p>
 
 <h2 id="apc-key25-controls-the-exact-mapping--srccontrolmidicpp-param_mappingmd">APC Key25 controls (the exact mapping — src/control/midi.cpp, param_mapping.md)</h2>
 <ul>
   <li>CC48–55 → reverb/delay/time/HP/LP/resonance (all <code class="language-plaintext highlighter-rouge">/127</code>)</li>
-  <li>CC53 → formant depth (deadzone + range, SHIFT expands) — <code class="language-plaintext highlighter-rouge">ApcGrid::onFormantCC</code></li>
+  <li>CC53 → formant depth (deadzone 60–68, flat ±1 range always — SHIFT does not
+expand it) — <code class="language-plaintext highlighter-rouge">ApcGrid::onFormantCC</code></li>
   <li>CC52 / keybed / mod-wheel → live pitch semitones</li>
   <li>notes 82–86 → microrepeat divisors {1,2,4,8,16}</li>
   <li>notes 70/71 → global speed-scrub (varispeed)</li>
-  <li>SHIFT (note 0x62/98, channel 0 only) → held state gating CC53’s range AND the
+  <li>SHIFT (note 0x62/98, channel 0 only) → held state driving the
 loop-fold/monitor routing: while held, the running loops are folded INTO the
 effect input (<code class="language-plaintext highlighter-rouge">fx/monitorfold</code> → Faust <code class="language-plaintext highlighter-rouge">MONITORFOLD</code>, <code class="language-plaintext highlighter-rouge">dsp/aloop.dsp</code>’s
 <code class="language-plaintext highlighter-rouge">foldMix</code>) with the dry loop contribution complementarily suppressed, so the
@@ -242,7 +243,7 @@ which also makes physical sense: they sit immediately before notes 70/71
 left of the two varispeed controls” exactly as originally specified).</li>
   <li>Tap-to-select, radio-button style — no cycling, no hold-preview. Pressing one
 makes it the <code class="language-plaintext highlighter-rouge">activeBank()</code> immediately (<code class="language-plaintext highlighter-rouge">ApcGrid::onDubFxPress</code>/
-<code class="language-plaintext highlighter-rouge">onLofiFxPress</code>/<code class="language-plaintext highlighter-rouge">onGuitarFxPress</code>) and re-pushes every one of that bank’s 7
+<code class="language-plaintext highlighter-rouge">onLofiFxPress</code>/<code class="language-plaintext highlighter-rouge">onGuitarFxPress</code>) and re-pushes every one of that bank’s 8
 stored knob values into the shared Faust zones right away
 (<code class="language-plaintext highlighter-rouge">pushBankValuesToZones</code>) — otherwise switching banks would leave the audible
 effect showing the PREVIOUS bank’s values until every knob was retouched,
@@ -250,10 +251,12 @@ which reads as the switch silently failing.</li>
   <li>Selecting a bank starts a <code class="language-plaintext highlighter-rouge">bankFlashActive()</code> window (150ms, <code class="language-plaintext highlighter-rouge">kBankFlashMs</code>),
 cleared by <code class="language-plaintext highlighter-rouge">pollHolds</code> — a <strong>transient</strong> LED flash on selection, not a
 persistent “which bank is active” indicator.</li>
-  <li>CC48/49/50/51/54/55/57 (the 7 physical fx knobs) are intercepted directly in
-<code class="language-plaintext highlighter-rouge">midi.cpp</code>, ahead of the flat <code class="language-plaintext highlighter-rouge">config/controls.conf</code> map — that flat map no
-longer binds any of these 7 targets at all (see its own comment block: a flat
-binding here would race <code class="language-plaintext highlighter-rouge">ApcGrid</code>’s bank-aware write with no defined winner).
+  <li>CC48/49/50/51/54/55/57/53 (the 8 physical fx knobs; CC53 double-duties as
+Formant on the Dub page, intercepted before the table lookup) are intercepted
+directly in <code class="language-plaintext highlighter-rouge">midi.cpp</code>, ahead of the flat <code class="language-plaintext highlighter-rouge">config/controls.conf</code> map — that
+flat map no longer binds any of these 8 targets at all (see its own comment
+block: a flat binding here would race <code class="language-plaintext highlighter-rouge">ApcGrid</code>’s bank-aware write with no
+defined winner).
 <code class="language-plaintext highlighter-rouge">ApcGrid::onFxKnobCC</code> writes the normalized <code class="language-plaintext highlighter-rouge">data2/127</code> value into the
 <strong>currently active bank’s own stored slot</strong> for that knob position, AND into
 the shared Faust zone, so turning a knob still has the usual instant effect.</li>
@@ -261,12 +264,12 @@ the shared Faust zone, so turning a knob still has the usual instant effect.</li
 
 <h3 id="per-bank-independent-knob-storage">Per-bank independent knob storage</h3>
 <p>Each bank stores its own value per physical knob position — switching banks
-changes what the 7 knobs currently mean/show without touching any other bank’s
+changes what the 8 knobs currently mean/show without touching any other bank’s
 stored values (<code class="language-plaintext highlighter-rouge">m_fxBankValues[bank][knob]</code>, seeded in <code class="language-plaintext highlighter-rouge">ApcGrid::bindAll</code>).</p>
 
 <p><strong>REDESIGN (Core-3 move, superseding an earlier in-Faust 3-bank crossfade
 design — see “Guitar/LofiFx bank DSP wiring” below for why that was
-abandoned):</strong> each bank’s 7 knob positions now have their OWN permanent
+abandoned):</strong> each bank’s 8 knob positions now have their OWN permanent
 target (<code class="language-plaintext highlighter-rouge">FxKnobTarget</code>/<code class="language-plaintext highlighter-rouge">kDubTargets</code>/<code class="language-plaintext highlighter-rouge">kGuitarTargets</code>/<code class="language-plaintext highlighter-rouge">kLofiFxTargets</code> in
 apc_grid.cpp) — Dub’s targets are unchanged Core-1 Faust zones; Guitar/LofiFx
 targets are either an <code class="language-plaintext highlighter-rouge">fx2/*</code> LV2 control port on the new permanent Core-3

@@ -77,8 +77,9 @@ Pick one:
 - The host should enumerate the `aloop` USB soundcard within a few seconds of the
   OTG cable being connected.
 - **WiFi / Ableton Link:** `autoap` joins a known network if `wpa_supplicant.conf`
-  has one; otherwise it hosts an AP (SSID `aloop`, `ap_isolate=0` so Link multicast
-  works). Put a Link-enabled app on the same network and it should sync tempo.
+  has one; otherwise it hosts an AP (SSID `ticker`, `ap_isolate=0` so Link
+  multicast works). Put a Link-enabled app on the same network and it should
+  sync tempo.
 
 ## 5. Verify it's alive
 

@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop &lt;-&gt; esp-idf-link mesh: first-contact test plan","url":"https://anentrypoint.github.io/mc-420/LINK-MESH-TESTING.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0440cd80ecc2de50ddf096b68d6ed7340ab9e2ea">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0a28789cdb64f1d520d9e04d339a94f033cc477a">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -72,8 +72,8 @@ answer. All four are fixed (see AGENTS.md “aloop &lt;-&gt; esp-idf-link mesh:
 paired invariants”):</p>
 
 <ol>
-  <li>aloop hosted SSID <code class="language-plaintext highlighter-rouge">aloop</code>; esp-idf-link hosts/joins <code class="language-plaintext highlighter-rouge">ticker</code>. Different
-networks. <strong>Now both use <code class="language-plaintext highlighter-rouge">ticker</code>.</strong></li>
+  <li>aloop hosted SSID <code class="language-plaintext highlighter-rouge">ticker</code>; esp-idf-link hosts/joins <code class="language-plaintext highlighter-rouge">ticker</code>. Different
+networks before the rename. <strong>Now both use <code class="language-plaintext highlighter-rouge">ticker</code>.</strong></li>
   <li>aloop’s <code class="language-plaintext highlighter-rouge">wpa_supplicant.conf</code> had zero active <code class="language-plaintext highlighter-rouge">network={}</code> blocks, so it
 could never join anything and always fell through to hosting. <strong>Now
 contains a real open <code class="language-plaintext highlighter-rouge">ticker</code> block.</strong></li>
@@ -159,9 +159,9 @@ actually reach a station connected to it?</p>
 
 <ol>
   <li>Power on one aloop unit with no existing WiFi network available, so
-<code class="language-plaintext highlighter-rouge">autoap.sh</code> falls through STA failures and hosts its own AP (<code class="language-plaintext highlighter-rouge">aloop</code>
+<code class="language-plaintext highlighter-rouge">autoap.sh</code> falls through STA failures and hosts its own AP (<code class="language-plaintext highlighter-rouge">ticker</code>
 SSID, <code class="language-plaintext highlighter-rouge">192.168.4.1/24</code>, per <code class="language-plaintext highlighter-rouge">src/net/config/hostapd.conf</code>).</li>
-  <li>Power on one esp-idf-link ESP32, configured to join that <code class="language-plaintext highlighter-rouge">aloop</code> SSID as
+  <li>Power on one esp-idf-link ESP32, configured to join that <code class="language-plaintext highlighter-rouge">ticker</code> SSID as
 a station (NOT scanning for its own <code class="language-plaintext highlighter-rouge">"ticker"</code> SSID — you may need to
 temporarily point esp-idf-link’s STA join target at aloop’s AP SSID for
 this test, since its own auto-election logic assumes a different SSID
@@ -243,7 +243,7 @@ aloop’s <code class="language-plaintext highlighter-rouge">src/net/autoap.sh</
 <ul>
   <li>Each aloop unit needs to know its own WiFi MAC address (<code class="language-plaintext highlighter-rouge">cat
 /sys/class/net/wlan0/address</code>) and compare against any other AP-mode
-aloop units it can see (scan for the <code class="language-plaintext highlighter-rouge">aloop</code> SSID’s BSSID before
+aloop units it can see (scan for the <code class="language-plaintext highlighter-rouge">ticker</code> SSID’s BSSID before
 deciding to host).</li>
   <li>Lowest-MAC-wins (or highest, pick one convention and match esp-idf-link’s
 for consistency) with a randomized/staggered hold-off before hosting, so
