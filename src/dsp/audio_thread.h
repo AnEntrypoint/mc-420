@@ -23,6 +23,7 @@ struct AudioConfig {
     std::string userDir = "/effects/user";
     std::string resonodeDir = "/effects/resonode";
     std::string pitchTrackerDir = "/effects/pitchtracker";
+    std::string delayVerbDir = "/effects/delayverb";
     bool disableCore3Lv2 = false;
 
     bool linkEnabled = true;

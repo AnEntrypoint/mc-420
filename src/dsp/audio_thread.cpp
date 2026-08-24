@@ -55,7 +55,7 @@ static std::string resolveInstrumentDevice(const std::string& configured, const 
     return resolved;
 }
 
-#if __has_include("loop.cpp")
+#if __has_include("loop_pre.cpp") && __has_include("loop_post.cpp")
 #define FAUSTFLOAT float
 struct FaustMeta { void declare(const char*, const char*) {} };
 #include <map>
@@ -102,7 +102,13 @@ struct FaustUI {
 #define UI FaustUI
 #define dsp FaustDspBase
 struct FaustDspBase { virtual ~FaustDspBase(){} };
-#include "loop.cpp"
+#include "pitch_ffi.h"
+namespace aloopfaustpre {
+#include "loop_pre.cpp"
+}
+namespace aloopfaustpost {
+#include "loop_post.cpp"
+}
 #undef dsp
 #define ALOOP_HAVE_FAUST_LOOP 1
 #endif
@@ -240,10 +246,14 @@ static void* worker(void*) {
     std::vector<float> prevFiltOut((size_t)N, 0.0f);
 
 #ifdef ALOOP_HAVE_FAUST_LOOP
-    auto faustHomePtr = std::make_unique<AloopLoopDsp>();
-    AloopLoopDsp& faustHome = *faustHomePtr;
-    faustHome.init((int)g_cfg.sampleRate);
-    FaustUI fui; faustHome.buildUserInterface(&fui);
+    auto faustPrePtr = std::make_unique<aloopfaustpre::AloopPreDsp>();
+    aloopfaustpre::AloopPreDsp& faustPre = *faustPrePtr;
+    faustPre.init((int)g_cfg.sampleRate);
+    FaustUI fuiPre; faustPre.buildUserInterface(&fuiPre);
+    auto faustPostPtr = std::make_unique<aloopfaustpost::AloopPostDsp>();
+    aloopfaustpost::AloopPostDsp& faustPost = *faustPostPtr;
+    faustPost.init((int)g_cfg.sampleRate);
+    FaustUI fuiPost; faustPost.buildUserInterface(&fuiPost);
     std::vector<float> clearBuf((size_t)N, 0.0f);
     std::vector<float> speedBuf((size_t)N, 1.0f);
     std::vector<float> masterPhaseBuf((size_t)N, 0.0f);
@@ -259,6 +269,12 @@ static void* worker(void*) {
     }
     std::vector<float> resonodeInBuf((size_t)N, 0.0f);
     std::vector<float> pitchTrackerBuf((size_t)N, 60.0f);
+    std::vector<float> preFilterOutBuf((size_t)N, 0.0f);
+    std::vector<float> loopHarmonyWetBuf((size_t)N, 0.0f);
+    std::vector<float> masterGatedBuf((size_t)N, 0.0f);
+    std::vector<float> loopSumPreBuf((size_t)N, 0.0f);
+    std::vector<float> cueWetBuf((size_t)N, 0.0f);
+    std::vector<float> masterWetBuf((size_t)N, 0.0f);
     float* fins[22] = {
         fin.data(), prevFiltOut.data(), clearBuf.data(), speedBuf.data(), masterPhaseBuf.data(), masterLenBuf.data(), sidechainEnvBuf.data(),
         recordedBeatsBuf.data(),
@@ -270,6 +286,19 @@ static void* worker(void*) {
         xposeNoteBuf[4].data(), xposeGateBuf[4].data(),
         xposeNoteBuf[5].data(), xposeGateBuf[5].data(),
         resonodeInBuf.data(),
+    };
+    float* preOuts[4] = {
+        preFilterOutBuf.data(), loopHarmonyWetBuf.data(), masterGatedBuf.data(), loopSumPreBuf.data(),
+    };
+    float* postIns[18] = {
+        cueWetBuf.data(), masterWetBuf.data(), loopSumPreBuf.data(), loopHarmonyWetBuf.data(),
+        freeXposeBuf.data(),
+        xposeNoteBuf[0].data(), xposeGateBuf[0].data(),
+        xposeNoteBuf[1].data(), xposeGateBuf[1].data(),
+        xposeNoteBuf[2].data(), xposeGateBuf[2].data(),
+        xposeNoteBuf[3].data(), xposeGateBuf[3].data(),
+        xposeNoteBuf[4].data(), xposeGateBuf[4].data(),
+        xposeNoteBuf[5].data(), xposeGateBuf[5].data(),
     };
     int sidechainSrcSlot[AudioThread::Telemetry::kLoopers];
     for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) sidechainSrcSlot[lp] = -1;
@@ -308,12 +337,14 @@ static void* worker(void*) {
     {
         char z[32];
         auto resolveZone = [&]() -> float* {
-            auto it = fui.zones.find(z);
-            if (it != fui.zones.end()) return it->second;
             std::string suf(z);
-            for (auto& kv : fui.zones) {
-                const std::string& k = kv.first;
-                if (k.size() >= suf.size() && k.compare(k.size() - suf.size(), suf.size(), suf) == 0) return kv.second;
+            for (FaustUI* ui : { &fuiPre, &fuiPost }) {
+                auto it = ui->zones.find(z);
+                if (it != ui->zones.end()) return it->second;
+                for (auto& kv : ui->zones) {
+                    const std::string& k = kv.first;
+                    if (k.size() >= suf.size() && k.compare(k.size() - suf.size(), suf.size(), suf) == 0) return kv.second;
+                }
             }
             return nullptr;
         };
@@ -358,10 +389,16 @@ static void* worker(void*) {
     std::vector<ResonodeParamSlot> resonodeParamSlots;
     int resonodeEngagedSlot = -1;
     int resonodeParamSlotsForCount = -1;
+    struct DelayVerbParamSlot { int slot; const char* target; const char* lv2Label; float lastValue; bool hasValue; };
+    DelayVerbParamSlot delayVerbParamSlots[3] = {
+        { -1, "fx/delay",  "DELAYAMT", 0.0f, false },
+        { -1, "fx/reverb", "REVAMT",   0.0f, false },
+        { -1, "fx/time",   "TIME",     0.5f, false },
+    };
     std::vector<float> rawLoopSum((size_t)N, 0.0f);
     std::vector<float> rawFiltTap((size_t)N, 0.0f);
     std::vector<float> inputFxOut((size_t)N, 0.0f);
-    float* fouts[4] = { fout.data(), rawLoopSum.data(), rawFiltTap.data(), inputFxOut.data() };
+    float* postOuts[4] = { fout.data(), rawLoopSum.data(), rawFiltTap.data(), inputFxOut.data() };
     int sustainSlot = -1;
 #endif
 
@@ -388,6 +425,10 @@ static void* worker(void*) {
     Lv2Host pitchTrackerFx;
     pitchTrackerFx.loadDir(g_cfg.pitchTrackerDir, g_cfg.homeFxCore);
     pitchTrackerFx.connect(N, ch);
+
+    Lv2Host delayVerbFx;
+    delayVerbFx.loadDir(g_cfg.delayVerbDir, g_cfg.homeFxCore);
+    delayVerbFx.connect(N, ch);
 
     UsbRecorder usbRecorder(g_cfg.usbMountPoint, g_cfg.sampleRate, g_cfg.usbChunkMinutes, g_cfg.usbChunkCount);
     if (g_cfg.usbRecordEnabled) g_usbRecorder = &usbRecorder;
@@ -512,17 +553,24 @@ static void* worker(void*) {
                     g_params->forEach([&](const std::string& target, int slotIdx){
                         std::string zone = targetToZone(target);
                         if (zone.empty()) return;
-                        auto it = fui.zones.find(zone);
-                        if (it == fui.zones.end()) {
-                            for (auto& kv : fui.zones) {
-                                const std::string& k = kv.first;
-                                if (k.size() >= zone.size() && k.compare(k.size() - zone.size(), zone.size(), zone) == 0) {
-                                    it = fui.zones.find(k);
-                                    break;
-                                }
+                        auto findIn = [&](FaustUI& ui) -> std::map<std::string, float*>::iterator {
+                            auto it = ui.zones.find(zone);
+                            if (it != ui.zones.end()) return it;
+                            for (auto kv = ui.zones.begin(); kv != ui.zones.end(); ++kv) {
+                                const std::string& k = kv->first;
+                                if (k.size() >= zone.size() && k.compare(k.size() - zone.size(), zone.size(), zone) == 0)
+                                    return kv;
                             }
+                            return ui.zones.end();
+                        };
+                        float* zonePtr = nullptr;
+                        auto it = findIn(fuiPre);
+                        if (it != fuiPre.zones.end()) zonePtr = it->second;
+                        else {
+                            auto jt = findIn(fuiPost);
+                            if (jt != fuiPost.zones.end()) zonePtr = jt->second;
                         }
-                        if (it != fui.zones.end()) resolvedControls.push_back({slotIdx, it->second});
+                        if (zonePtr) resolvedControls.push_back({slotIdx, zonePtr});
                     });
                     resolvedControlsForCount = g_params->count;
                 }
@@ -546,6 +594,15 @@ static void* worker(void*) {
                         rp.hasValue = true;
                     }
                 }
+                for (auto& dp : delayVerbParamSlots) {
+                    if (dp.slot < 0) continue;
+                    float v = g_params->getBySlot(dp.slot);
+                    if (!dp.hasValue || v != dp.lastValue) {
+                        delayVerbFx.setControl(dp.lv2Label, v);
+                        dp.lastValue = v;
+                        dp.hasValue = true;
+                    }
+                }
                 if (slotProbeEpoch != g_params->count) {
                     slotProbeEpoch = g_params->count;
                     if (clearAllSlot < 0) clearAllSlot = g_params->getSlot("cmd/clearall");
@@ -560,6 +617,9 @@ static void* worker(void*) {
                     if (masterLenSlot < 0) masterLenSlot = g_params->getSlot("cmd/master_len");
                     if (recordedBpmSlot < 0) recordedBpmSlot = g_params->getSlot("cmd/recorded_bpm");
                     if (recordedBeatsSlot < 0) recordedBeatsSlot = g_params->getSlot("cmd/recorded_beats");
+                    for (auto& dp : delayVerbParamSlots) {
+                        if (dp.slot < 0) dp.slot = g_params->getSlot(dp.target);
+                    }
                 }
                 bool clearAllHeld = g_params->getBySlot(clearAllSlot) > 0.5f;
                 std::fill(clearBuf.begin(), clearBuf.end(), clearAllHeld ? 1.0f : 0.0f);
@@ -879,7 +939,17 @@ static void* worker(void*) {
                 pitchTrackerFx.process(pitchTrackerBuf.data(), N);
                 if (extFreqDetZone) *extFreqDetZone = pitchTrackerBuf[N - 1];
             }
-            faustHome.compute(N, fins, fouts);
+            faustPre.compute(N, fins, preOuts);
+            std::copy(preFilterOutBuf.begin(), preFilterOutBuf.end(), cueWetBuf.begin());
+            std::copy(masterGatedBuf.begin(), masterGatedBuf.end(), masterWetBuf.begin());
+            bool delayVerbActive = delayVerbFx.hasPlugins() &&
+                                   (delayVerbParamSlots[0].lastValue > 1e-4f ||
+                                    delayVerbParamSlots[1].lastValue > 1e-4f);
+            if (delayVerbActive) {
+                delayVerbFx.process(cueWetBuf.data(), N);
+                delayVerbFx.process(masterWetBuf.data(), N);
+            }
+            faustPost.compute(N, postIns, postOuts);
             prevLoopSum = rawLoopSum;
             prevFiltOut = rawFiltTap;
             clock_gettime(CLOCK_MONOTONIC, &t1);

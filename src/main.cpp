@@ -104,6 +104,7 @@ aloop::AudioConfig loadConfig(const char* path) {
         else if (sscanf(line, " user_dir = %199s", s) == 1) cfg.userDir = s;
         else if (sscanf(line, " resonode_dir = %199s", s) == 1) cfg.resonodeDir = s;
         else if (sscanf(line, " pitchtracker_dir = %199s", s) == 1) cfg.pitchTrackerDir = s;
+        else if (sscanf(line, " delayverb_dir = %199s", s) == 1) cfg.delayVerbDir = s;
         else if (sscanf(line, " disable_core3_lv2 = %d", &v) == 1) cfg.disableCore3Lv2 = (v != 0);
         else if (sscanf(line, " midi_device = %199s", s) == 1) cfg.midiDevice = s;
         else if (sscanf(line, " audio_device = %199s", s) == 1) cfg.audioDevice = s;
