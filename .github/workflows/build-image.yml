@@ -1,11 +1,3 @@
-# Assemble the flashable Alpine SD image for every supported Raspberry Pi board.
-#
-# WHY in CI: the device image must be reproducible — a fresh checkout produces the
-# same image. This job pulls the aloop binary + the home-FX LV2 bundle from the
-# other workflows and runs image/build-image.sh (the SINGLE source of the device
-# layout, now BOARD-parameterized) once per board in a build matrix, then validates
-# each image without a Pi, and a final job publishes every board's artifacts to one
-# shared rolling "latest" GitHub Release.
 name: build-image
 
 on:
@@ -40,24 +32,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # mtools/dosfstools/fdisk cover the Pi boards' unprivileged FAT assembly;
-      # e2fsprogs (mkfs.ext4) + xz-utils + util-linux (losetup) cover Orange Pi
-      # Prime's Armbian-sourced raw-U-Boot + ext4-root image assembly, which needs
-      # real root (sudo losetup/mount) unlike the Pi boards' mtools path.
-      # u-boot-tools (mkimage) compiles boot.scr -- Armbian's compiled U-Boot
-      # bootcmd sources this file directly by fixed filename and never touches
-      # extlinux.conf, confirmed via real hardware debugging this session.
       - name: Tools (mtools, dosfstools, fdisk, e2fsprogs, xz, u-boot-tools, file — image assembly)
         run: sudo apt-get update && sudo apt-get install -y mtools dosfstools fdisk e2fsprogs xz-utils util-linux u-boot-tools curl gzip file zip
 
-      # Pull the aloop binary + LV2 bundle produced by build-binary / build-lv2.
-      # They live in DIFFERENT workflows' runs, so fetch each from the latest
-      # SUCCESSFUL run of its workflow via gh (a workflow_run trigger only carries
-      # its own run's artifacts). Missing artifacts don't fail the image build — it
-      # still produces a valid bootable layout — but the validate step WARNS, and a
-      # release build requires them. Same binary/LV2 for every board — the aloop
-      # payload itself is architecture-independent aarch64 userspace content; only
-      # the boot firmware/DTB/USB-gadget config differs per board.
       - name: Download aloop binary + LV2 bundles from their latest green runs
         continue-on-error: true
         env:
@@ -70,15 +47,6 @@ jobs:
                     --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
           echo "binary run: ${BIN_RUN:-none}   lv2 run: ${LV2_RUN:-none}"
           [ -n "$BIN_RUN" ] && gh run download "$BIN_RUN" -n aloop-aarch64-musl -D dl/bin || echo "no binary artifact yet"
-          # BOTH lv2 jobs from the SAME build-lv2.yml run: home-fx-lv2 (contains
-          # aloop.lv2, EXCLUDED by lib-boot-tree.sh's own name filter, see its
-          # comment) and guitar-lofi-fx-lv2 (contains guitar_lofi_fx.lv2, the
-          # actual wanted standalone effect). Downloading only home-fx-lv2 here
-          # meant every image this workflow ever built shipped with ZERO home-FX
-          # LV2 effects, silently, since aloop.lv2 was the only bundle present
-          # and it's deliberately filtered back out -- fixed by fetching both
-          # into sibling dirs under dl/lv2, matching the find -maxdepth 2 shape
-          # lib-boot-tree.sh's boot_tree_apkovl expects.
           [ -n "$LV2_RUN" ] && gh run download "$LV2_RUN" -n home-fx-lv2 -D dl/lv2/home-fx-lv2 || echo "no home-fx-lv2 artifact yet"
           [ -n "$LV2_RUN" ] && gh run download "$LV2_RUN" -n guitar-lofi-fx-lv2 -D dl/lv2/guitar-lofi-fx-lv2 || echo "no guitar-lofi-fx-lv2 artifact yet"
           mkdir -p dl/resonode
@@ -130,15 +98,6 @@ jobs:
           chmod +x image/validate-image.sh
           image/validate-image.sh aloop-${{ matrix.board }}.img
 
-      # The netboot root is the SAME diskless tree (shared image/lib-boot-tree.sh),
-      # laid into a plain TFTP directory instead of a FAT image — the pre-SD dry-run
-      # path (docs/NETBOOT.md). Build + structurally validate it in CI so it can
-      # never drift from the SD image or silently rot.
-      # SKIPPED for opi-prime: Allwinner's BootROM has no equivalent of the Pi's
-      # native TFTP+HTTP netboot firmware -- U-Boot must already be resident on
-      # local media (SD/eMMC/SPI) before PXE/TFTP can even be reached, so there is
-      # no "drop-in" netboot root to build the way there is for the Pi family
-      # (opi-netboot-feasibility). OPi Prime is SD-card-flash-only for now.
       - name: Build + validate the TFTP netboot root
         if: matrix.board != 'opi-prime'
         env:
@@ -162,16 +121,6 @@ jobs:
           name: aloop-${{ matrix.board }}-image
           path: aloop-${{ matrix.board }}.img.gz
           if-no-files-found: error
-          # WITNESSED: this workflow re-runs on nearly every push (build-binary
-          # completion + any image/kernel/src/dsp/config push), and these two
-          # image artifacts run ~68MB+ each -- with the repo's default 90-day
-          # retention, a single active session's worth of pushes (100+ over a
-          # few hours) accumulated to 6.8GB+ and hit the account's total
-          # Actions artifact storage quota, blocking EVERY workflow's artifact
-          # upload repo-wide (including build-binary's much smaller binary)
-          # until the quota "recalculates" on GitHub's own 6-12h cycle. A
-          # short retention keeps this from recurring; these are dev-iteration
-          # artifacts, not release assets meant to be kept.
           retention-days: 3
 
       - name: Upload netboot root
@@ -183,17 +132,6 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      # Zip of the SAME validated FAT partition contents (firmware + kernel +
-      # DTBs + apkovl + SD-flavored config, no ip=dhcp) for direct extraction
-      # onto a freshly-formatted FAT32 SD card -- the format-in-place flow
-      # (format E: FAT32, unzip onto it) rather than the raw-dd aloop-<board>.img.gz
-      # path above. Extracted straight out of the already-built+validated
-      # image via the same mtools offset-view validate-image.sh uses,
-      # so this can never independently drift from what was actually validated.
-      # SKIPPED for opi-prime: its image is a raw-U-Boot-sector + ext4 layout, not
-      # a single FAT partition mtools can read -- flashing is dd-only for this
-      # board (the .img.gz artifact already covers that; there is no separate
-      # "format+extract zip" flow to offer since there's no FAT partition to zip).
       - name: Extract SD boot tree from the validated image and zip it
         if: matrix.board != 'opi-prime'
         run: |
@@ -217,11 +155,6 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      # A release must never publish a payload-less "layout only" build as
-      # "latest" -- image/validate-image.sh deliberately WARNS (not FAILS) on a
-      # missing binary/LV2, since that's a legitimate structural-only build. The
-      # release step needs a stricter, hard gate: refuse to publish unless a
-      # real aarch64 binary was actually bundled this run.
       - name: Assert the image actually carries a real payload before releasing
         id: payload_check
         run: |
@@ -246,10 +179,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # Matrix jobs cannot share files directly -- each board's image/sdcard-zip
-      # artifacts from the alpine-image matrix round-trip through actions/upload
-      # -artifact, so this job downloads all of them by their per-board names
-      # before publishing one shared release carrying every board's assets.
       - name: Download every board's image + SD card zip
         uses: actions/download-artifact@v4
         with:

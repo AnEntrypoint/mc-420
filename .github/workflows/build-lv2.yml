@@ -1,15 +1,10 @@
-# Build + validate the home-FX LV2 bundle from the Faust chain.
-#
-# WHY this is CI, not a local build: the LV2 .so link needs the LV2 dev headers
-# and the Faust compiler, which live in the build container — not on every dev
-# machine. Building here makes the effects bundle reproducible (ADR-003).
 name: build-lv2
 
 on:
   push:
     paths:
       - 'effects/**'
-      - 'dsp/**'          # the composed Faust program the LV2 bundle builds from
+      - 'dsp/**'
       - 'src/dsp/**'
       - '.github/workflows/build-lv2.yml'
   pull_request:
@@ -26,9 +21,6 @@ concurrency:
 
 jobs:
   home-fx-lv2:
-    # Native aarch64 runner -- the linux/arm64 cross-compile containers below
-    # then run with no QEMU emulation. See build-binary.yml's matching comment
-    # for the measured ~14min QEMU-link-step tax this removes.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
     steps:
@@ -38,14 +30,10 @@ jobs:
         timeout-minutes: 8
         run: |
           sudo apt-get update
-          # libboost-dev: the Faust lv2.cpp architecture uses boost/circular_buffer.
           sudo apt-get install -y faust lv2-dev pkg-config build-essential libboost-dev
 
       - name: Verify the vendored Faust chain from dubfx
         run: |
-          # The home-FX chain IS the dubfx verified chain (ADR-003), vendored under
-          # effects/home/faust/. Fail loudly if absent so we never build a
-          # silently-empty bundle.
           if [ -d effects/home/faust ]; then
             echo "using vendored Faust chain under effects/home/faust"
             ls -la effects/home/faust
@@ -54,42 +42,14 @@ jobs:
             exit 1
           fi
 
-      # WITNESSED live on a real Pi 4 (this session): plain `faust2lv2 aloop.dsp`
-      # compiles the .so with the HOST's own g++ (glibc/x86_64, ubuntu-latest),
-      # but the device boots Alpine/musl/aarch64. The resulting .so dlopen()s
-      # with no bundle-discovery error, but fails at load time with "Error
-      # relocating .../aloop.so: unsupported relocation type 7" -- confirmed on
-      # real hardware logs, "loaded 0 effect(s)". This home-FX bundle has
-      # NEVER actually loaded on the device -- CI staying green only ever meant
-      # "faust2lv2 didn't error on Ubuntu", never "the .so loads on target".
-      #
-      # Fix: same split as build-binary.yml's own proven pattern (and now
-      # guitar-lofi-fx-lv2's job below) -- faust2lv2's own script (`which
-      # faust2lv2`) shows `faust -i -a lv2.cpp ...` emits a SELF-CONTAINED
-      # .cpp (no Faust includes needed to compile it), and a SEPARATE
-      # $HOST_CXX compile+run of that same .cpp emits the .ttl metadata
-      # (runs on the host, never touches musl/aarch64). Only the FINAL
-      # -shared .so link needs to target the real device.
       - name: Build the full home stack (loop engine + effects) as a musl/aarch64 LV2
         timeout-minutes: 25
         run: |
           set -e
           FAUSTLIB=$(dirname "$(ls -f /usr/share/faust/lv2ui.cpp /usr/local/share/faust/lv2ui.cpp 2>/dev/null | tail -1)")
-          # The home-FX bundle is the WHOLE home stack: the Faust loop engine
-          # (dsp/loop.dsp) composed with the dubfx effect chain — one Faust
-          # program (dsp/aloop.dsp). Stage all the pieces in one dir so Faust's
-          # own include resolution (-I below) finds both loop.dsp and the
-          # ffunction pitch engine headers.
           mkdir -p /tmp/homestack
-          # aloop.dsp components loop.dsp AND effects_runtime.dsp — stage BOTH (the
-          # missing effects_runtime.dsp was why faust2lv2 failed "unable to open
-          # file effects_runtime.dsp"). Plus the vendored effect stages + headers.
           cp dsp/loop.dsp dsp/aloop.dsp dsp/effects_runtime.dsp /tmp/homestack/
           cp effects/home/faust/*.dsp effects/home/faust/*.h /tmp/homestack/
-          # Everything is now flat in one dir, so rewrite the sub-directory prefixes
-          # the .dsp files use so every component() resolves in the staging dir:
-          #   effects_runtime.dsp → "effects/home/faust/<stage>.dsp"  (the real refs)
-          #   aloop.dsp (older)   → "../effects/home/faust/chain.dsp" (if present)
           sed -i 's#effects/home/faust/##g' /tmp/homestack/effects_runtime.dsp
           sed -i 's#\.\./effects/home/faust/chain\.dsp#chain.dsp#' /tmp/homestack/aloop.dsp
           cd /tmp/homestack
@@ -97,33 +57,14 @@ jobs:
           WORK=/tmp/lv2work
           mkdir -p "$WORK/$CLSNAME.lv2"
 
-          # Faust codegen (real Faust, Ubuntu host) -- -i inlines the
-          # architecture file so the result has no external Faust dependency.
-          # -vec -fun -dfs -vs 32 -nvi: Faust's documented optimizing-compiler
-          # recipe (faustdoc.grame.fr/manual/optimizing/), same as
-          # build-binary.yml's loop.cpp codegen -- composes independently of
-          # -i/-a (codegen strategy vs architecture-wrapper inlining are
-          # orthogonal), same signal graph, only scheduling/inlining differs.
-          # -ct 0: disables Faust's default table range-checking -- verified
-          # safe for every rwtable this program uses (see AGENTS.md).
-          # -mapp NOT used: an earlier x86_64 synthetic A/B harness showed
-          # byte-identical output, but real hardware testing found it causes
-          # a genuine SIGSEGV inside AloopLoopDsp::compute() on the real
-          # aarch64 device with real (non-synthetic) audio content -- the
-          # x86_64 synthetic A/B did not reproduce the real failure mode.
-          # See AGENTS.md.
           faust -i -a "$FAUSTLIB/lv2.cpp" -vec -fun -dfs -vs 32 -nvi -ct 0 -cn "$CLSNAME" aloop.dsp -o "$WORK/$CLSNAME.cpp"
 
           CPPFLAGS="-DPLUGIN_URI=\"https://faustlv2.bitbucket.io/$CLSNAME\" -DFAUST_META=1 -DFAUST_MIDICC=1 -DFAUST_MTS=1 -DFAUST_UI=0 -DVOICE_CTRLS=1 -DNVOICES=-1"
 
-          # .ttl metadata: compile+run NATIVELY on the host (matches faust2lv2's
-          # own $HOST_CXX step) -- prints static metadata only, never touches
-          # musl/aarch64.
           g++ -std=c++11 -fvisibility=hidden -O3 -DDLLEXT="\".so\"" $CPPFLAGS \
             -I"$(pwd)" "$WORK/$CLSNAME.cpp" -o "$WORK/$CLSNAME.meta"
           "$WORK/$CLSNAME.meta" > "$WORK/$CLSNAME.lv2/$CLSNAME.ttl"
 
-          # manifest.ttl (faust2lv2's static-manifest branch, no GUI).
           printf '%s\n' \
             '@prefix doap: <http://usefulinc.com/ns/doap#> .' \
             '@prefix foaf: <http://xmlns.com/foaf/0.1/> .' \
@@ -136,24 +77,12 @@ jobs:
             "    rdfs:seeAlso <$CLSNAME.ttl> ." \
             > "$WORK/$CLSNAME.lv2/manifest.ttl"
 
-          # The ACTUAL shared library: cross-compiled to musl/aarch64 inside a
-          # real Alpine container (QEMU-emulated), matching build-binary.yml.
-          # CPPFLAGS passed via -e, not string-interpolated into the outer
-          # sh -c "..." -- interpolating loses its embedded escaped quotes
-          # across the nested-shell boundary (WITNESSED: PLUGIN_URI expanded to
-          # bare unquoted text, "'https' was not declared in this scope").
           cp "$WORK/$CLSNAME.cpp" .
           docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w \
             -e CPPFLAGS="$CPPFLAGS" -e CLSNAME="$CLSNAME" \
             alpine:3.20 sh -c '
               set -e
               apk add --no-cache build-base lv2-dev boost-dev
-              # -mcpu=cortex-a72: Pi 4 real core, matching src/CMakeLists.txt
-              # (Faust manual -march=cpu advice, aarch64 form). No apostrophes
-              # in this comment -- it lives inside the outer single-quoted
-              # sh -c string, where an apostrophe terminates that quoting
-              # early (WITNESSED: broke this exact step, syntax error near
-              # unexpected token, fixed by removing every apostrophe here).
               g++ -shared -std=c++11 -fvisibility=hidden -O3 -mcpu=cortex-a72 -fPIC -DDLLEXT="\".so\"" $CPPFLAGS \
                 -I. "$CLSNAME.cpp" -o "$CLSNAME.so"
               file "$CLSNAME.so"
@@ -161,7 +90,6 @@ jobs:
           cp "$CLSNAME.so" "$WORK/$CLSNAME.lv2/"
 
           ls -R "$WORK/$CLSNAME.lv2" || (echo "::error::no .lv2 bundle produced" && exit 1)
-          # place the bundle where the image build expects it
           mkdir -p "$GITHUB_WORKSPACE/effects/home"
           cp -r "$WORK/$CLSNAME.lv2" "$GITHUB_WORKSPACE/effects/home/"
 
@@ -169,7 +97,6 @@ jobs:
         run: |
           sudo apt-get install -y lv2-dev lilv-utils || true
           cd effects/home
-          # lv2_validate checks the .ttl against the LV2 spec; lv2ls lists it.
           find . -name '*.ttl' -print
           if command -v lv2_validate >/dev/null; then
             lv2_validate $(find . -name 'manifest.ttl') || echo "::warning::lv2_validate reported issues"
@@ -181,23 +108,8 @@ jobs:
           name: home-fx-lv2
           path: effects/home/*.lv2
           if-no-files-found: error
-          # Short retention: see build-image.yml's matching comment for the
-          # full incident (accumulated artifacts across every push hit the
-          # account's total Actions storage quota and blocked all uploads).
           retention-days: 3
 
-  # Core-3 "always-on" guitar+lofi-fx chain -- LOFI feature, moved off Core 1
-  # (WITNESSED live regression: folding these 8 effects into Core 1's own
-  # always-on home Faust program as a 3-way crossfade was a real, measured
-  # ~7 percentage-point core_busy increase, causing audible continuous
-  # dropouts -- Faust cannot skip computing a signal path at runtime, so 3
-  # parallel chains computed every block regardless of "selection" had no
-  # in-Faust fix). effects/home/faust/guitar_lofi_fx.dsp is a genuinely
-  # standalone Faust program (only component()-imports the already-vendored
-  # individual effect stage files, no dependency on loop.dsp/aloop.dsp/
-  # effects_runtime.dsp at all), so this build is much simpler than the
-  # home-fx-lv2 job above -- no staging/sed-rewriting needed, just faust2lv2
-  # directly against the real repo path.
   guitar-lofi-fx-lv2:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
@@ -210,29 +122,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y faust lv2-dev pkg-config build-essential libboost-dev
 
-      # WITNESSED live on a real Pi 4 (this session): plain `faust2lv2 guitar_lofi_fx.dsp`
-      # compiles the .so with the HOST's own g++ (glibc/x86_64, ubuntu-latest) --
-      # the device boots Alpine/musl/aarch64 (see build-binary.yml's own ADR-001
-      # comment: "Alpine's arm64 repos don't reliably package faust", which is
-      # exactly why this job never ran faust2lv2 INSIDE the Alpine container to
-      # begin with). The resulting .so genuinely dlopen()s on the device with NO
-      # error at the LV2-bundle-discovery level, but fails at load time with
-      # "Error relocating .../guitar_lofi_fx.so: unsupported relocation type 7" --
-      # confirmed on real hardware logs, loaded 0 effects. This means guitar/
-      # lofi-fx's effects (and the pre-existing home-fx bundle, same bug) never
-      # actually reached the device's audio path at all, despite CI staying
-      # green the whole time (green only means "faust2lv2 didn't error on
-      # Ubuntu", never "the .so loads on the real target").
-      #
-      # Fix: faust2lv2 itself cleanly separates concerns once you read its
-      # actual script (`which faust2lv2`) -- `faust -i -a lv2.cpp ...` emits a
-      # SELF-CONTAINED .cpp (no Faust-specific includes needed to compile it,
-      # verified: only libc/libstdc++/lv2/boost headers), and a SEPARATE
-      # $HOST_CXX compile+run of that same .cpp emits the plugin's own .ttl
-      # metadata (runs on the host, never touches musl/aarch64). Only the FINAL
-      # -shared .so link needs to target the real device -- so replicate
-      # build-binary.yml's exact split: Faust codegen here on Ubuntu, the
-      # actual .so cross-compiled inside a real Alpine aarch64 QEMU container.
       - name: Build guitar_lofi_fx.dsp as its own musl/aarch64 LV2 bundle
         timeout-minutes: 15
         run: |
@@ -243,29 +132,14 @@ jobs:
           WORK=/tmp/lv2work
           mkdir -p "$WORK/$CLSNAME.lv2"
 
-          # Faust codegen (real Faust, Ubuntu host) -- matches faust2lv2's own
-          # `faust -i -a lv2.cpp ...` line exactly, -i inlines the architecture
-          # file so the result has no external Faust dependency to compile.
-          # -vec -fun -dfs -vs 32 -nvi: same optimizing-compiler recipe as the
-          # home-fx-lv2 job above and build-binary.yml's loop.cpp codegen.
-          # -ct 0: disables Faust's table range-checking. guitar_lofi_fx.dsp
-          # has no rwtable/rdtable at all, so this is unconditionally safe
-          # here. -mapp NOT used -- see the aloop.dsp job above and
-          # AGENTS.md: it caused a real SIGSEGV on the real aarch64 device.
           faust -i -a "$FAUSTLIB/lv2.cpp" -vec -fun -dfs -vs 32 -nvi -ct 0 -cn "$CLSNAME" "$CLSNAME.dsp" -o "$WORK/$CLSNAME.cpp"
 
           CPPFLAGS="-DPLUGIN_URI=\"https://faustlv2.bitbucket.io/$CLSNAME\" -DFAUST_META=1 -DFAUST_MIDICC=1 -DFAUST_MTS=1 -DFAUST_UI=0 -DVOICE_CTRLS=1 -DNVOICES=-1"
 
-          # .ttl metadata: compile+run NATIVELY on the host (matches faust2lv2's
-          # own $HOST_CXX step) -- this binary only ever prints static metadata,
-          # it never touches musl/aarch64.
           g++ -std=c++11 -fvisibility=hidden -O3 -DDLLEXT="\".so\"" $CPPFLAGS \
             -I"$(pwd)" "$WORK/$CLSNAME.cpp" -o "$WORK/$CLSNAME.meta"
           "$WORK/$CLSNAME.meta" > "$WORK/$CLSNAME.lv2/$CLSNAME.ttl"
 
-          # manifest.ttl (faust2lv2's static-manifest branch, no GUI -- this
-          # project's LV2 bundles are headless, matching the existing home-fx
-          # bundle's own manifest shape).
           printf '%s\n' \
             '@prefix doap: <http://usefulinc.com/ns/doap#> .' \
             '@prefix foaf: <http://xmlns.com/foaf/0.1/> .' \
@@ -278,26 +152,12 @@ jobs:
             "    rdfs:seeAlso <$CLSNAME.ttl> ." \
             > "$WORK/$CLSNAME.lv2/manifest.ttl"
 
-          # The ACTUAL shared library: cross-compiled to musl/aarch64 inside a
-          # real Alpine container (QEMU-emulated), matching build-binary.yml's
-          # proven pattern exactly. CPPFLAGS passed via -e (not string-
-          # interpolated into the outer sh -c "...") so its embedded escaped
-          # quotes (-DPLUGIN_URI=\"...\") survive into the container verbatim --
-          # WITNESSED: interpolating it into the outer string loses those
-          # escapes across the nested-shell boundary, expanding PLUGIN_URI to
-          # bare unquoted text ("'https' was not declared in this scope").
           cp "$WORK/$CLSNAME.cpp" .
           docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w \
             -e CPPFLAGS="$CPPFLAGS" -e CLSNAME="$CLSNAME" \
             alpine:3.20 sh -c '
               set -e
               apk add --no-cache build-base lv2-dev boost-dev
-              # -mcpu=cortex-a72: Pi 4 real core, matching src/CMakeLists.txt
-              # (Faust manual -march=cpu advice, aarch64 form). No apostrophes
-              # in this comment -- it lives inside the outer single-quoted
-              # sh -c string, where an apostrophe terminates that quoting
-              # early (WITNESSED: broke this exact step, syntax error near
-              # unexpected token, fixed by removing every apostrophe here).
               g++ -shared -std=c++11 -fvisibility=hidden -O3 -mcpu=cortex-a72 -fPIC -DDLLEXT="\".so\"" $CPPFLAGS \
                 -I. "$CLSNAME.cpp" -o "$CLSNAME.so"
               file "$CLSNAME.so"
@@ -321,37 +181,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: guitar-lofi-fx-lv2
-          # WITNESSED live: a literal single-directory path (no wildcard) makes
-          # upload-artifact@v4 zip the DIRECTORY'S CONTENTS flattened at the
-          # zip root, dropping the guitar_lofi_fx.lv2/ wrapper entirely --
-          # unlike home-fx-lv2's own `effects/home/*.lv2` above, whose wildcard
-          # match preserves the matched directory's basename inside the zip.
-          # The flattened zip meant serve-netboot-win.js's download+unzip put
-          # guitar_lofi_fx.so/.ttl loose in lv2Dir instead of inside a
-          # guitar_lofi_fx.lv2/ folder, so lib-boot-tree.sh's own `find
-          # "${LV2_DIR}" -name '*.lv2'` packing step never matched them and
-          # the bundle silently never reached the device at all. Match the
-          # wildcard pattern so both jobs zip identically.
           path: effects/home/*.lv2
           if-no-files-found: error
           retention-days: 3
 
-  # Resonode: pulled OUT of the always-on home Faust stack (effects_runtime.dsp)
-  # into its own standalone LV2 bundle, so audio_thread.cpp can call
-  # Lv2Host::process() on it ONLY when fx/resonode/engaged is true. WITNESSED
-  # real-hardware regression that motivated this: even a reduced 4-voice x
-  # 2-mode shape produced a sustained ~2ms readi gap (vs a 1.333ms block
-  # budget) with the instrument fully idle/unengaged, because Faust has no
-  # runtime branching to skip a stage's cost -- the whole mode bank computed
-  # every block regardless of engagement. Moving it here mirrors
-  # guitar-lofi-fx-lv2's own build exactly (a genuinely standalone Faust
-  # program, only component()-importing itself, no dependency on loop.dsp/
-  # aloop.dsp/effects_runtime.dsp), except note/gate/vel per voice are now
-  # LV2 control ports (hslider) instead of Faust signal inputs -- they were
-  # already only ever updated once per control-tick from ApcGrid's MIDI
-  # note-on/off, never per-sample, so this is a lossless representation
-  # change that lets Lv2Host::setControl push them the same way it already
-  # pushes guitar/lofi-fx's own knob targets.
   resonode-lv2:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
@@ -503,13 +336,6 @@ jobs:
           retention-days: 3
 
   delayverb-lv2:
-    # delay.dsp + reverb.dsp extracted out of the always-on Faust graph:
-    # both were fully unconditional (Faust has no runtime branching -- a
-    # select2 gate only discards the wasted OUTPUT, never skips the compute),
-    # and ran TWICE (cue + master paths) every block regardless of the
-    # DELAYAMT/REVAMT knobs' actual values. Same Resonode-style extraction
-    # pattern: audio_thread.cpp now only calls .process() on whichever
-    # instance (cue/master) actually has a meaningfully nonzero amount.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
     steps:

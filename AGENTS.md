@@ -188,6 +188,17 @@ is independently verified correct for this board's DTB.
 **WiFi is Realtek RTL8723BS.** `kernel/rt-tune.sh`'s IRQ-steering matches
 `rtl8723bs` alongside `brcmfmac`.
 
+**`build-opi-armbian-source.yml` pins Armbian's last pre-6.18 sunxi64
+`current` kernel.** Checkout pinned to `armbian/build@be0bd46058e23cfdad66e840198dda157b998db5`,
+with a verification step asserting the checkout genuinely resolves to 6.12
+(grep of `config/sources/families/include/sunxi64_common.inc`). Two patch-time
+workarounds are applied before compiling: known-broken unrelated-hardware
+entries are disabled in `patch/kernel/archive/sunxi-6.12/series.conf` (Rockchip
+SPI runtime-PM fixes, Cedrus probe-cleanup), and Realtek USB-WiFi driver
+configs (RTL8189ES/FS, RTL8192EU, 88XXAU, RTL8821CU) are unset in
+`linux-sunxi64-current.config` because they fail `-Werror=incompatible-pointer-types`
+against 6.12's `cfg80211_ops` signature.
+
 ## apkovl assembly constraints
 
 **`boot_tree_apkovl` must stamp `.default_boot_services`.** Alpine's
@@ -434,6 +445,37 @@ ETXTBSY. Sequence is stop → `fastPut` → start, never `restart`-after-write.
 Does NOT replace the netboot path for changes to
 `image/lib-boot-tree.sh`/`image/build-netboot.sh`, kernel/cmdline config, or
 OpenRC service files.
+
+## CI runner, docker-step, and artifact discipline (build workflows)
+
+- **Cross-compilation runs on native `ubuntu-24.04-arm` runners** (`build-binary.yml`,
+  `build-lv2.yml`): the Alpine `linux/arm64` container then needs NO QEMU
+  emulation. Measured need: the QEMU-emulated link step alone took ~14 minutes
+  on `ubuntu-latest` (the compile itself ~1 minute) — QEMU user-mode binary
+  translation is disproportionately slow for a linker's memory-access pattern.
+- **Docker build steps are split with per-command `timeout` bounds + `set -x`.**
+  An unbounded single `docker run ... sh -c` stalled silently multiple times
+  under emulation (apk-mirror stall / QEMU codegen hang) until GitHub's
+  multi-hour job timeout, with no signal naming WHICH sub-step hung.
+- **All workflow artifacts ship `retention-days: 3`** (opi armbian image: 7).
+  These workflows run on nearly every push; at the default 90-day retention,
+  accumulated ~68MB image artifacts hit the account-wide Actions storage quota
+  and blocked EVERY workflow's uploads repo-wide until GitHub's quota
+  recalculation cycled days later.
+- **`build-image.yml` downloads BOTH `home-fx-lv2` AND `guitar-lofi-fx-lv2`
+  from the same green `build-lv2.yml` run into sibling dirs** (a
+  `workflow_run` trigger only carries its own run's artifacts). Fetching only
+  `home-fx-lv2` shipped images with ZERO usable home-FX effects silently —
+  that bundle contains `aloop.lv2`, which `lib-boot-tree.sh` filters back out;
+  `guitar_lofi_fx.lv2` is the wanted standalone effect.
+- **The rolling `latest` release hard-gates on a real bundled aloop binary**
+  (`payload_check` step): `validate-image.sh` deliberately only WARNS on a
+  missing payload (legitimate structural-only build), so the release job needs
+  its own stricter gate refusing a payload-less "latest".
+- **The SD-card zip is extracted straight out of the already-built+validated
+  FAT image** via the same mtools offset view `validate-image.sh` uses, so it
+  can never drift from what was actually validated. Skipped for opi-prime
+  (raw-U-Boot-sector + ext4 layout, no FAT partition to zip — dd-only flash).
 
 ---
 
@@ -1075,8 +1117,14 @@ Known limits (see also `[[memory: faust-verification-discipline]]`,
   iteration, much cheaper than a full CI round-trip).
 - Warm delay-line-bearing files ~90000 samples before measuring.
 
-`faust2bench` (real Linux host) is the CPU-measurement counterpart used by
-`build-binary.yml`'s "Benchmark CPU usage" step. Standard invocation: 20
+`faust2bench` (real Linux host) is the CPU-measurement counterpart for any
+Faust-flag A/B. A mandatory `build-binary.yml` "Benchmark CPU usage" step that
+once ran it was REMOVED: its output was human-read-once diagnostics already
+recorded here, and it became a real, repeated source of CI stalls (3 of 4
+build-binary attempts hung indefinitely on it around the Resonode-LV2
+extraction change), blocking every real build behind a step nothing needed.
+Run it manually only when a Faust-flag change needs a fresh measured
+comparison — never as a critical-path CI step again. Standard invocation: 20
 runs, `-bs 64`, real shipped Faust flags, isolated via a `git stash`/
 rebuild A/B on the same tree.
 
@@ -1347,6 +1395,19 @@ silent feature with zero error anywhere. Same bug class separately hit
 when auditing hardcoded `setByName` call sites alone — grep the config file
 too). Any new internal (non-MIDI-mapped) C++ flag reaching Faust via
 `setByName` needs an explicit `bind()` audit before being trusted.
+
+## delayverb: a separate, conditionally-called LV2 bundle
+
+`effects/delayverb-src/delayverb.dsp` (delay + reverb stages) is extracted out
+of the always-on Faust graph into its own `delayverb.lv2`
+(`build-lv2.yml`'s `delayverb-lv2` job), compiled in TWO halves
+(`aloop_pre.dsp`/`aloop_post.dsp`) around it: both stages were fully
+unconditional in-graph (Faust has no runtime branching) and ran TWICE (cue +
+master paths) every block regardless of the DELAYAMT/REVAMT knobs' actual
+values. `audio_thread.cpp` now calls `.process()` only on whichever instance
+(cue/master) has a meaningfully nonzero amount — same extraction pattern as
+Resonode. The LV2 build container needs `libboost-dev` because Faust's
+`lv2.cpp` architecture uses boost/circular_buffer.
 
 ## Tracktion Engine was evaluated and REJECTED — do not re-open without new evidence
 

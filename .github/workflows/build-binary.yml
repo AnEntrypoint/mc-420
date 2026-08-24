@@ -1,17 +1,11 @@
-# Cross-compile the aloop native binary for Raspberry Pi 4 (aarch64) under musl.
-#
-# WHY musl + Alpine container: the device runs Alpine (musl libc), so the binary
-# must be built against musl, not glibc (ADR-001; MIGRATION-MAP musl note). We
-# build inside an Alpine aarch64 container so the toolchain and libc match the
-# target exactly — no surprises at deploy.
 name: build-binary
 
 on:
   push:
     paths:
       - 'src/**'
-      - 'dsp/**'          # the Faust loop+effects program (pre-generated to loop.cpp)
-      - 'effects/**'       # vendored Faust chain + engine headers the build includes
+      - 'dsp/**'
+      - 'effects/**'
       - '.github/workflows/build-binary.yml'
   pull_request:
     paths:
@@ -27,12 +21,6 @@ concurrency:
 
 jobs:
   aloop-aarch64-musl:
-    # Native aarch64 runner -- the Alpine linux/arm64 container below then runs
-    # with NO QEMU emulation (host arch already matches --platform linux/arm64).
-    # Measured need for this: the QEMU-emulated link step alone took ~14
-    # minutes (compile itself was ~1 minute) on ubuntu-latest -- QEMU
-    # user-mode's binary translation is disproportionately slow for a
-    # linker's memory-access pattern versus straight-line compile codegen.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     steps:
@@ -40,96 +28,22 @@ jobs:
 
       - name: Pre-generate the Faust loop engine C++ (on the host, where faust exists)
         run: |
-          # Faust codegen runs ONCE here (Ubuntu has faust); the arm64/musl build
-          # then just compiles the generated C++ — no faust needed in the container
-          # (Alpine's arm64 repos don't reliably package faust). This keeps the
-          # cross-build to a pure C++ compile.
           sudo apt-get update && sudo apt-get install -y faust
-          # Generate into the same build dir CMake uses (cmake -S src -B build →
-          # CMAKE_BINARY_DIR = build), so CMake sees it as already-present.
           mkdir -p build
-          # -vec -fun -dfs -vs 32 -nvi: Faust's documented optimizing-compiler
-          # recipe (faustdoc.grame.fr/manual/optimizing/) -- vectorized codegen,
-          # function inlining, depth-first scheduling, no-virtual C++ backend
-          # (Faust's own docs: -nvi is "especially useful in embedded devices
-          # context"). Pure codegen-strategy flags -- same DSP source, same
-          # signal graph, only how the compiler schedules/inlines it.
-          # -ct 0: disables Faust's default table range-checking -- verified
-          # safe (every rwtable index in this program is already
-          # software-bounded by explicit modulo/clamp logic, see AGENTS.md).
-          # RE-VERIFIED live during a crash bisection: removing -ct 0 alone
-          # did NOT stop the crash (identical SIGSEGV, identical
-          # AloopLoopDsp::compute() crash site) -- ruled out as the cause,
-          # restored.
-          # -mapp DELIBERATELY NOT USED: a real SIGSEGV (si_addr=0x0, inside
-          # AloopLoopDsp::compute) reproduced 100% of the time on the real
-          # Pi 4 the instant real (non-silent) audio reached the DSP for the
-          # first time. Removing -ct 0 alone did not fix it; removing -mapp
-          # did (confirmed live, held stable 20+s, zero xruns). -mapp's
-          # floor/ceil/fmod/remainder approximation was only ever verified
-          # byte-identical against a synthetic 9280-sample cycle on x86_64 --
-          # that A/B never caught the real failure mode, which needed real
-          # aarch64 codegen and real audio content to surface. Do not
-          # re-add -mapp without a fresh real-hardware A/B, not just a
-          # synthetic one. See AGENTS.md.
-          # -vs 16 TRIED AND REJECTED on real hardware (this session): real
-          # Pi 4 core_busy went from ~90% to 186%+ (saturated/overrun) and
-          # xruns climbed to 1000+ within 6 seconds of a fresh restart --
-          # dramatically WORSE, not the ~14% reduction the x86_64 CI-only
-          # measurement suggested. Confirms AGENTS.md's own caution: a
-          # register-pressure inflection point on AVX-512 has no guaranteed
-          # correspondence on Cortex-A72's 128-bit NEON. Do not retry without
-          # a fresh reason to suspect the real-hardware result was noise.
-          # Compiled in TWO halves (pre/post-delayverb) -- delay.dsp/reverb.dsp
-          # are extracted into their own separately-invoked LV2 bundle
-          # (delayverb-lv2 job), hosted by audio_thread.cpp only when
-          # DELAYAMT/REVAMT are meaningfully nonzero, instead of paying their
-          # real, unconditional, doubled (cue+master) compute cost every
-          # block regardless of the knobs' actual values.
           faust -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopPreDsp -I dsp -I effects/home/faust dsp/aloop_pre.dsp -o build/loop_pre.cpp
           faust -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopPostDsp -I dsp -I effects/home/faust dsp/aloop_post.dsp -o build/loop_post.cpp
           echo "generated $(wc -l < build/loop_pre.cpp) + $(wc -l < build/loop_post.cpp) lines of loop C++"
 
-      # A one-off Faust-flag CPU benchmark previously lived here
-      # (faustdoc.grame.fr/manual/optimizing/'s bench.cpp tool, comparing
-      # baseline vs this session's shipped compiler flags). Removed: it was
-      # diagnostic-only, its output was never consumed by anything downstream
-      # (log lines for a human to read once, already recorded in AGENTS.md's
-      # "Faust compiler flags — currently shipped" section), and it became a
-      # real, repeated source of CI stalls (3 of 4 build-binary attempts hung
-      # indefinitely on this exact step around the Resonode-LV2-extraction
-      # change) that blocked every real build behind a step nothing needed.
-      # Re-run it manually (`faust2bench` on a real Linux host, see AGENTS.md's
-      # "DawDreamer verification harness" section for the standard invocation)
-      # if a future Faust-flag change needs a fresh measured comparison --
-      # never as a mandatory step in the critical build path again.
 
       - name: Build in an Alpine aarch64 container
-        # WITNESSED this session: this step (QEMU-emulated aarch64 apk fetch +
-        # cmake compile) stalled indefinitely, with zero output, multiple
-        # times across many build-binary attempts -- no bound anywhere in the
-        # original single `docker run ... sh -c '...'` block meant a genuine
-        # hang (a stalled apk mirror under emulation, or a QEMU-user-mode
-        # codegen hang) ran silently until GitHub's own multi-hour job
-        # timeout, with no diagnostic signal telling us WHICH sub-step hung.
-        # Split into two explicit steps with per-command `timeout` bounds and
-        # `set -x` so a future hang fails loudly and fast, naming the exact
-        # command that stalled, instead of a silent multi-hour wedge.
         timeout-minutes: 30
         run: |
           docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w alpine:3.20 sh -c '
             set -ex
-            # No faust in the container — loop.cpp is pre-generated above. Just the
-            # C++ toolchain + the audio deps, all musl.
             timeout 300 apk add --no-cache build-base cmake pkgconf git \
               alsa-lib-dev lilv-dev lv2-dev \
               linux-headers eudev-dev
-            # Ableton Link is header-only C++ (vendored under third_party/link).
-            # The DSP is Faust (loop + the dubfx effects); src/ is the thin RT shell.
             echo "toolchain:"; gcc --version | head -1; faust --version | head -1
-            # The real build wires up when src/ has its CMakeLists; until then this
-            # step verifies the container + deps resolve (a musl-availability gate,
-            # MIGRATION-MAP musl-compat row) and fails loudly if a dep is missing.
             if [ -f src/CMakeLists.txt ]; then
               timeout 120 cmake -S src -B build -DCMAKE_BUILD_TYPE=Release
               timeout 1500 cmake --build build -j"$(nproc)"
@@ -146,8 +60,4 @@ jobs:
         with:
           name: aloop-aarch64-musl
           path: build/aloop
-          # Short retention: this workflow runs on nearly every push during
-          # active iteration -- see build-image.yml's matching comment for
-          # the full incident (accumulated artifacts hit the account's total
-          # Actions storage quota and blocked every workflow's uploads).
           retention-days: 3
