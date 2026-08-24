@@ -53,19 +53,26 @@ with {
     intendedTakeLen = ba.if(finishTargetN > 0.5, finishTargetN, float(writeIdxForLatch));
     finishTakeLen = max(1.0, intendedTakeLen);
     takeLenBeats = finishTakeLen / oneBeat;
-    beatBucketEps = 0.5;
-    roundedBeats = ba.if(masterLen < 0.5, takeLenBeats,
-                     max(1.0, floor(takeLenBeats + beatBucketEps)));
-    snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, roundedBeats * oneBeat);
+    anchorGridBeats = ba.if(takeLenBeats > 16.0, 16.0,
+                       ba.if(takeLenBeats > 8.0, 8.0,
+                         ba.if(takeLenBeats > 4.0, 4.0,
+                           ba.if(takeLenBeats > 2.0, 2.0, 1.0))));
+    anchorGridLenNow = max(1.0, anchorGridBeats * oneBeat);
+    gridMultiple = max(1.0, floor(takeLenBeats / anchorGridBeats + 0.5));
+    snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, gridMultiple * anchorGridLenNow);
+    headSkipNow = ba.if(masterLen < 0.5, 0.0, wrapAbs(-armPulseMasterPhase, anchorGridLenNow));
+    headSkipStep(prev) = ba.if(finishEdge, headSkipNow, prev);
+    writeOriginSkip = headSkipStep ~ _;
     recordStartMasterPhaseStep(prev) = ba.if(finishEdge, armPulseMasterPhase, prev);
     recordStartMasterPhase = recordStartMasterPhaseStep ~ _;
-    ringOffset = recordStartMasterPhase;
+    ringOffset = recordStartMasterPhase + writeOriginSkip;
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
     cycleOffsetStep(prev) = ba.if(armEdge, 0.0,
                              ba.if(masterPhaseWrapped, prev + ba.if(masterLen < 0.5, wrapLen, masterLen), prev));
     cycleOffset = cycleOffsetStep ~ _;
-    absPos = wrapAbs(masterPhase - ringOffset + latencyBiasN + cycleOffset, wrapLen);
+    absPosCore = wrapAbs(masterPhase - ringOffset + latencyBiasN + cycleOffset, wrapLen);
+    absPos = absPosCore + writeOriginSkip;
     speedClamped = max(0.1, min(8.0, effSpeed));
     varispeedActive = effSpeed != 1.0;
     manualPunchActive = abs(effSpeed - 1.0) > 0.3;
