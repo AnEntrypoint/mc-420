@@ -48,7 +48,7 @@ jobs:
           # Generate into the same build dir CMake uses (cmake -S src -B build →
           # CMAKE_BINARY_DIR = build), so CMake sees it as already-present.
           mkdir -p build
-          # -vec -fun -dfs -vs 32 -nvi: Faust's documented optimizing-compiler
+          # -vec -fun -dfs -vs 16 -nvi: Faust's documented optimizing-compiler
           # recipe (faustdoc.grame.fr/manual/optimizing/) -- vectorized codegen,
           # function inlining, depth-first scheduling, no-virtual C++ backend
           # (Faust's own docs: -nvi is "especially useful in embedded devices
@@ -86,8 +86,8 @@ jobs:
           # DELAYAMT/REVAMT are meaningfully nonzero, instead of paying their
           # real, unconditional, doubled (cue+master) compute cost every
           # block regardless of the knobs' actual values.
-          faust -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopPreDsp -I dsp -I effects/home/faust dsp/aloop_pre.dsp -o build/loop_pre.cpp
-          faust -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopPostDsp -I dsp -I effects/home/faust dsp/aloop_post.dsp -o build/loop_post.cpp
+          faust -lang cpp -vec -fun -dfs -vs 16 -nvi -ct 0 -cn AloopPreDsp -I dsp -I effects/home/faust dsp/aloop_pre.dsp -o build/loop_pre.cpp
+          faust -lang cpp -vec -fun -dfs -vs 16 -nvi -ct 0 -cn AloopPostDsp -I dsp -I effects/home/faust dsp/aloop_post.dsp -o build/loop_post.cpp
           echo "generated $(wc -l < build/loop_pre.cpp) + $(wc -l < build/loop_post.cpp) lines of loop C++"
 
       # A one-off Faust-flag CPU benchmark previously lived here
