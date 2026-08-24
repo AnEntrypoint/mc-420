@@ -762,11 +762,13 @@ x86_64).
 `-Ofast`, no `-march=native`, no fast-math.
 
 `-vs 16` measured a real ~14% CPU reduction over the shipped `-vs 32` on
-x86_64 CI hardware, but is NOT shipped — a register-pressure inflection
-point on a 512-bit AVX-512 vector unit has no guaranteed correspondence on
-Cortex-A72's 128-bit NEON. Needs a real cross-compiled aarch64 build + real
-`core_busy`/xrun telemetry on the Pi before becoming the shipped default (all
-5 real invocation sites must move together).
+x86_64 CI hardware, but is REJECTED on CI-witnessed evidence (2026-08-24,
+commits 468c10541a → reverted in 655e742e09): with all invocation sites moved
+together, the real `faust` compiler was killed by SIGALRM ~2 minutes into
+codegenning `dsp/aloop_pre.dsp` — `build-binary.yml` and `build-lv2.yml` both
+failed hard before any binary existed to A/B. Do not re-propose without a
+fresh, separately-justified compile-time investigation; all invocation sites
+must still move together if ever retried.
 
 **Faust already CSEs `par()`-replicated pure-signal subexpressions** — a
 subexpression built purely from already-shared signal inputs (no UI
