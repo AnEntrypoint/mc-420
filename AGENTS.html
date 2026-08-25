@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=99fec42430e8cbad2f38e4a5d2ca0118e1fa67d4">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=2e17b3aa8f6a9fe5448ba3aadb22dbdd9acec53d">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1586,17 +1586,25 @@ other, guaranteeing drift-free repeat alignment forever.
 
 Every loop, once a master phrase exists, plays back starting exactly at the
 SAME shared downbeat (`masterPhase == 0`) — never an independently-computed
-per-take offset. `recordStartMasterPhase` remembers the real, grid-deferred
-recording-start instant purely as a RING INDEXING offset; `cycleOffset`
-(accumulates `+masterLen` on each `masterPhase` wrap, reset at `armEdge`
-only) restores which repetition of a multi-`masterLen` take is being read.
-`wrapLen = roundedBeats * oneBeat` where `roundedBeats` is a plain
-nearest-whole-beat rounding of the take's own recorded length (the C++
-quantizer already produces a clean power-of-2 multiple of `masterLen`).
-Content is never trimmed/discarded — recording start is deferred to the
-next fine grid tick (`masterLen/16`) via `armPending`/`gridTickCrossed`, so
-the take's real content always begins on-grid without losing any captured
-audio.
+per-take offset. Recording start is DOWNBEAT-ONLY quantized (real RC-505
+behavior, not a finer sub-beat grid): `armEdge` for any non-first looper
+fires only when `pendPrev` (armed since the raw `armPulse` press) coincides
+with `gridTickCrossed`, which is exactly `masterPhaseWrapped` — the next
+`masterPhase == 0` downbeat, however far away that is. Because `armEdge`
+therefore always coincides with `masterPhase == 0`, `recordStartMasterPhase`
+(`rsmNext`) is a hardcoded `0.0` for every non-first looper — there is no
+sub-beat offset left to store or correct for. (Loop 1 itself, before any
+master phrase exists, is the one exception: `armEdge == armPulse`
+immediately, no downbeat to wait for, and `rsmNext` captures the real
+free-running `masterPhase` at that instant.) `cycleOffset` (accumulates
+`+masterLen` on each `masterPhase` wrap, reset at `armEdge` only) restores
+which repetition of a multi-`masterLen` take is being read.
+`wrapLen = gridMultiple * anchorGridLenNow`, where `anchorGridLenNow` picks
+the coarsest anchor-grid unit (1/2/4/8/16 beats) not exceeding the take's
+raw recorded length, and `gridMultiple` is a CEILING (never round-to-nearest)
+of how many of that unit the raw length needs — the grid-snap can only ever
+round the loop length UP to contain everything actually recorded, never
+truncate content out of the ring.
 
 **Known, disclosed, unfixed edge case**: `winSamples`/`xfSamples` (the
 window-freeze mechanism, separate from the phase-anchor above) can
