@@ -19,16 +19,13 @@ with {
 
     beatsPerMasterLen = max(1.0, recordedBeats);
     oneBeat = max(1.0, masterLen / beatsPerMasterLen);
-    gridStep = max(1.0, oneBeat / 4.0);
-    phaseInGrid = wrapAbs(masterPhase, gridStep);
-    phaseInGridPrev = phaseInGrid : mem;
-    gridTickCrossed = phaseInGrid < phaseInGridPrev;
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
+    gridTickCrossed = masterPhaseWrapped;
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
 
-    takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, ampPrev, rsmPrev, wosPrev, coffPrev, rposPrev, gatePrev) =
-        (pendNext, finNext, actNext, widxNext, wlenNext, ampNext, rsmNext, wosNext, coffNext, rposNext, gateNext)
+    takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev) =
+        (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext)
     with {
         recPrevEdge = recN : mem;
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
@@ -36,6 +33,8 @@ with {
         pendNext = ba.if(masterLen < 0.5, 0,
                     ba.if(pendPrev & gridTickCrossed, 0, ba.if(armPulse, 1, pendPrev)));
         armEdge = ba.if(masterLen < 0.5, armPulse, pendPrev & gridTickCrossed);
+
+        rsmNext = ba.if(armEdge, ba.if(masterLen < 0.5, masterPhase, 0.0), rsmPrev);
 
         finNext = ba.if(armEdge, 0, ba.if(finishReqN > 0.5, 1, finPrev));
         recKeepAlive = (recN > 0.5) | finNext;
@@ -47,6 +46,7 @@ with {
                     ba.if(gateCur, min(widxPrev + 1, MAXLEN - 1), widxPrev));
 
         finishEdge = (gateCur < 0.5) & (gatePrev > 0.5);
+        gateNext = gateCur;
 
         writeIdxForLatch = ba.if(finNext, finishTargetN, float(widxNext));
         intendedTakeLen = ba.if(finishTargetN > 0.5, finishTargetN, writeIdxForLatch);
@@ -62,18 +62,12 @@ with {
         snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, gridMultiple * anchorGridLenNow);
         wlenNext = ba.if(finishEdge, max(1.0, snappedWrapLen), wlenPrev);
 
-        ampNext = ba.if(armEdge, masterPhase, ampPrev);
-        headSkipNow = ba.if(masterLen < 0.5, 0.0, wrapAbs(-ampNext, anchorGridLenNow));
-        wosNext = ba.if(finishEdge, headSkipNow, wosPrev);
-        rsmNext = ba.if(finishEdge, ampNext, rsmPrev);
-
-        ringOffset = rsmNext + wosNext;
         wrapLenCur = max(1, wlenNext);
         cycleInc = ba.if(masterLen < 0.5, wrapLenCur, masterLen);
         coffNext = ba.if(armEdge, 0.0,
                     ba.if(masterPhaseWrapped, coffPrev + cycleInc, coffPrev));
 
-        absPos = wrapAbs(masterPhase - ringOffset + latencyBiasN + coffNext, wrapLenCur);
+        absPos = wrapAbs(masterPhase - rsmNext + latencyBiasN + coffNext, wrapLenCur);
         speedClamped = max(0.1, min(8.0, effSpeed));
         varispeedActive = effSpeed != 1.0;
         manualPunchActive = abs(effSpeed - 1.0) > 0.3;
@@ -83,23 +77,19 @@ with {
                     ba.if(varispeedActive,
                           wrapAbs(rposPrev + speedClamped + wrapDelta(rposPrev) * resyncCoeff, wrapLenCur),
                           absPos));
-
-        gateNext = gateCur;
     };
 
-    takeStateBus = (_,_,_,_,_,_,_,_,_,_,_) ~ takeState;
-    pickState(k) = takeStateBus : (par(j, 11, *(j == k)) :> _);
+    takeStateBus = (_,_,_,_,_,_,_,_,_) ~ takeState;
+    pickState(k) = takeStateBus : (par(j, 9, *(j == k)) :> _);
     pend = pickState(0);
     fin = pickState(1);
     act = pickState(2);
     widxRaw = pickState(3);
     wlenRaw = pickState(4);
-    ampUnused = pickState(5);
-    rsm = pickState(6);
-    wos = pickState(7);
-    coff = pickState(8);
-    readPos = pickState(9);
-    gateNow = pickState(10);
+    rsm = pickState(5);
+    coff = pickState(6);
+    readPos = pickState(7);
+    gateNow = pickState(8);
 
     wrapLen = max(1, wlenRaw);
     recordingGateNow = gateNow;
