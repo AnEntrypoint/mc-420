@@ -41,9 +41,11 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     """
     master_len_samples: established masterLen (0 for the very first take).
     arm_offset_samples: how far (in samples) the performer's raw press lands
-        after a reference instant -- simulates loose press timing within a
-        grid cell; the grid-deferral mechanism (dsp/loop.dsp armEdge) absorbs
-        this before real recording starts.
+        after a reference instant -- simulates loose press timing anywhere
+        within the phrase; dsp/loop.dsp's armEdge (RC-505-style, downbeat-only
+        quantize) always defers real recording start to the NEXT
+        masterPhase==0 downbeat regardless of where within the phrase the
+        press landed, absorbing all of this offset.
     take_len_samples: raw recording duration requested via rec-hold and
         finishtarget (the performer's felt phrase length before power-of-2
         snapping upstream in apc_grid.cpp -- here fed directly since this
@@ -52,12 +54,20 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     if total_extra is None:
         total_extra = take_len_samples * 3 + 6000
     dsp = harness.single_looper_dsp()
-    grid_step = max(1.0, master_len_samples / 16.0) if master_len_samples > 0 else 0
-    margin = int(grid_step) + 500 if master_len_samples > 0 else 0
+    grid_step = float(master_len_samples) if master_len_samples > 0 else 0
+    # Worst case: arm_offset_samples lands just under a full masterLen past
+    # the base reference, so the deferred armEdge (downbeat-only quantize)
+    # can be up to ANOTHER full masterLen later still -- headroom must cover
+    # both the offset itself and the subsequent defer, not just one masterLen.
+    margin = int(grid_step) * 2 + arm_offset_samples + 500 if master_len_samples > 0 else 0
     n = take_len_samples + total_extra + margin + 4000
 
     arm_press_sample = 4000 + arm_offset_samples
-    finish_reference_sample = 4000 + int(grid_step) + 200 if master_len_samples > 0 else arm_press_sample
+    if master_len_samples > 0:
+        next_downbeat = ((arm_press_sample // master_len_samples) + 1) * master_len_samples
+        finish_reference_sample = next_downbeat + 200
+    else:
+        finish_reference_sample = arm_press_sample
     finish_sample = max(finish_reference_sample, arm_press_sample) + take_len_samples
 
     if master_len_samples > 0:
@@ -81,16 +91,15 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     sidechainEnv = harness.const(n, 0.0)
     recordedBeats = harness.const(n, 4.0)
     in_unused = harness.const(n, 0.0)
-    # Marker sits at the MIDDLE of the take (safely inside any trim window --
-    # the trim can only discard up to half of the coarsest anchor grid unit
-    # from the very start, never from the middle). It must be anchored to
-    # the FIXED, grid-deferred armEdge instant (the same absolute sample
-    # for every arm_offset within one gridStep cell -- confirmed via direct
-    # trace), not to the raw arm_press_sample itself, or the marker becomes
-    # a moving target that shifts 1:1 with arm_offset even though the DSP's
-    # own snap/anchor mechanism is correctly jitter-invariant.
+    # Marker sits at the MIDDLE of the take. It must be anchored to the
+    # FIXED, downbeat-deferred armEdge instant (the same absolute sample for
+    # every arm_offset within one masterLen cell -- armEdge always waits for
+    # the next masterPhase==0 downbeat regardless of press timing), not to
+    # the raw arm_press_sample itself, or the marker becomes a moving target
+    # that shifts 1:1 with arm_offset even though the DSP's own downbeat-lock
+    # is correctly jitter-invariant.
     if master_len_samples > 0:
-        arm_grid_cell_start = int(np.ceil(4000 / grid_step)) * int(grid_step)
+        arm_grid_cell_start = ((arm_press_sample // master_len_samples) + 1) * master_len_samples
     else:
         arm_grid_cell_start = arm_press_sample
     marker_sample = arm_grid_cell_start + take_len_samples // 2
@@ -118,16 +127,14 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
         },
     )
     out = audio[0]
-    # finish_sample is a NAIVE press-relative estimate; dsp/loop.dsp's real
-    # armEdge grid-deferral shifts the true recording start (and thus the
-    # true playback-loop start) later by a variable amount. Slicing from
-    # finish_sample can therefore start mid-loop or even before the real
-    # loop content exists -- absolute onset position from THIS point is not
-    # a reliable invariant. Search a window that starts well before the
-    # naive estimate (covering the worst-case grid-deferral) and report the
-    # onset's position MODULO the loop's own repeat period (inter-onset
-    # spacing), which is invariant to exactly where the search window
-    # happened to start.
+    # finish_sample is always >= the true finishEdge instant (recording end),
+    # so it is a reliable, fixed-phase anchor relative to the take's own
+    # repeat period regardless of arm-timing jitter -- report onsets as an
+    # offset FROM finish_sample (never from an arbitrary search-window
+    # origin whose own phase-within-period can itself shift between test
+    # cases, which silently broke the modulo-invariance this used to rely
+    # on once armEdge's defer window grew from a 16th-grid cell to a full
+    # masterLen).
     search_start = max(0, finish_sample - master_len_samples - 4000)
     playback = out[search_start:]
     onsets = find_all_onsets(playback)
@@ -136,7 +143,8 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     period = onsets[1] - onsets[0]
     if period <= 0:
         return onsets
-    return [o % period for o in onsets]
+    anchor = finish_sample - search_start
+    return [(o - anchor) % period for o in onsets]
 
 
 def check_case(name, master_len_samples, take_len_samples, arm_offsets, tol=8):
@@ -177,31 +185,31 @@ def main():
     results.append(check_case(
         "half-phrase-loose-arm-timing",
         master_len_samples=19200, take_len_samples=9600,
-        arm_offsets=[0, 20, 40, 60, 80],
+        arm_offsets=[0, 2000, 8000, 15000, 19100],
     ))
 
     results.append(check_case(
         "full-phrase-loose-arm-timing",
         master_len_samples=19200, take_len_samples=19200,
-        arm_offsets=[0, 20, 40, 60, 80],
+        arm_offsets=[0, 2000, 8000, 15000, 19100],
     ))
 
     results.append(check_case(
         "two-phrase-loose-arm-timing",
         master_len_samples=19200, take_len_samples=38400,
-        arm_offsets=[0, 20, 40, 60, 80],
+        arm_offsets=[0, 2000, 8000, 15000, 19100],
     ))
 
     results.append(check_case(
         "sixteenth-grid-loose-arm-timing",
         master_len_samples=19200, take_len_samples=2400,
-        arm_offsets=[0, 20, 40, 60, 80],
+        arm_offsets=[0, 2000, 8000, 15000, 19100],
     ))
 
     results.append(check_case(
         "quarter-phrase-loose-arm-timing",
         master_len_samples=19200, take_len_samples=4800,
-        arm_offsets=[0, 20, 40, 60, 80],
+        arm_offsets=[0, 2000, 8000, 15000, 19100],
     ))
 
     print()
