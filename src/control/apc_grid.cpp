@@ -239,24 +239,19 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             }
             double effectiveSamples = (double)rawSamples * tempoScale;
             double log2Ratio = std::log2(effectiveSamples / (double)m_masterLenSamples);
-            double lowerExp = std::floor(log2Ratio);
+            double gridPickEps = 0.0001;
+            double lowerExp = std::floor(log2Ratio + gridPickEps);
             if (lowerExp < -4.0) lowerExp = -4.0;
             double lowerCand = (double)m_masterLenSamples * std::pow(2.0, lowerExp);
             double upperCand = (double)m_masterLenSamples * std::pow(2.0, lowerExp + 1.0);
             if (upperCand > (double)kMaxLoopSamples) upperCand = (double)kMaxLoopSamples;
             if (lowerCand > upperCand) lowerCand = upperCand;
-            double bestLen;
-            if (upperCand <= lowerCand) {
-                bestLen = lowerCand;
-            } else {
-                double midpoint = std::sqrt(lowerCand * upperCand);
-                bestLen = (effectiveSamples >= midpoint) ? upperCand : lowerCand;
-            }
+            double bestLen = (lowerCand >= effectiveSamples) ? lowerCand : upperCand;
             long quantized = (long)(bestLen / tempoScale + 0.5);
             if (quantized < 64) quantized = 64;
             if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;
-            fprintf(stderr, "[diag-trunc] looper=%d rawSamples=%ld lowerCand=%.0f upperCand=%.0f quantized=%ld truncates=%s\n",
-                    looper, rawSamples, lowerCand, upperCand, quantized, (quantized < rawSamples) ? "YES" : "no");
+            if (quantized < rawSamples) quantized = rawSamples;
+            if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;
             setLooper(ps, looper, "finishtarget", (float)quantized);
             setLooper(ps, looper, "finishreq", 1.0f);
             m_looperFinishReqReleaseAt[looper] = now_ms + 50;
