@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cmath>
 #include <array>
+#include <ctime>
 
 namespace aloop {
 
@@ -247,6 +248,11 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             long quantized = (long)(bestLen / tempoScale + 0.5);
             if (quantized < 64) quantized = 64;
             if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;
+            {
+                struct timespec diagTs; clock_gettime(CLOCK_MONOTONIC, &diagTs);
+                fprintf(stderr, "[diag-finish] t=%ld.%03ld looper=%d rawSamples=%ld masterLenSamples=%ld tempoScale=%.4f quantized=%ld recordedBeats=%.2f\n",
+                        (long)diagTs.tv_sec, diagTs.tv_nsec / 1000000, looper, rawSamples, m_masterLenSamples, tempoScale, quantized, ps.get("cmd/recorded_beats", 0.0f));
+            }
             setLooper(ps, looper, "finishtarget", (float)quantized);
             setLooper(ps, looper, "finishreq", 1.0f);
             m_looperFinishReqReleaseAt[looper] = now_ms + 50;
