@@ -7,7 +7,6 @@
 #include <cstring>
 #include <cmath>
 #include <array>
-#include <ctime>
 
 namespace aloop {
 
@@ -222,6 +221,14 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
                 unsigned elapsedMs = now_ms - m_recordStartMs[looper];
                 rawSamples = (long)elapsedMs * kSampleRate / 1000;
             }
+            if (rawSamples <= 0) {
+                setLooper(ps, looper, "rec", 0.0f);
+                m_looperRecording[looper] = false;
+                m_looperHasContent[looper] = false;
+                m_looperPlaying[looper] = false;
+                setLooper(ps, looper, "play", 0.0f);
+                return;
+            }
             double tempoScale = 1.0;
             if (link && link->audioRead().synced) {
                 float recordedBpm = ps.get("cmd/recorded_bpm", 0.0f);
@@ -248,11 +255,6 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             long quantized = (long)(bestLen / tempoScale + 0.5);
             if (quantized < 64) quantized = 64;
             if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;
-            {
-                struct timespec diagTs; clock_gettime(CLOCK_MONOTONIC, &diagTs);
-                fprintf(stderr, "[diag-finish] t=%ld.%03ld looper=%d rawSamples=%ld masterLenSamples=%ld tempoScale=%.4f quantized=%ld recordedBeats=%.2f\n",
-                        (long)diagTs.tv_sec, diagTs.tv_nsec / 1000000, looper, rawSamples, m_masterLenSamples, tempoScale, quantized, ps.get("cmd/recorded_beats", 0.0f));
-            }
             setLooper(ps, looper, "finishtarget", (float)quantized);
             setLooper(ps, looper, "finishreq", 1.0f);
             m_looperFinishReqReleaseAt[looper] = now_ms + 50;

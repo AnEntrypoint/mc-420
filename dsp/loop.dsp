@@ -30,13 +30,14 @@ with {
         recPrevEdge = recN : mem;
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
 
+        cancelPend = pendPrev & (finishReqN > 0.5) & (actPrev < 0.5);
         pendNext = ba.if(masterLen < 0.5, 0,
-                    ba.if(pendPrev & gridTickCrossed, 0, ba.if(armPulse, 1, pendPrev)));
+                    ba.if(pendPrev & gridTickCrossed, 0, ba.if(cancelPend, 0, ba.if(armPulse, 1, pendPrev))));
         armEdge = ba.if(masterLen < 0.5, armPulse, pendPrev & gridTickCrossed);
 
         rsmNext = ba.if(armEdge, ba.if(masterLen < 0.5, masterPhase, 0.0), rsmPrev);
 
-        finNext = ba.if(armEdge, 0, ba.if(finishReqN > 0.5, 1, finPrev));
+        finNext = ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(finishReqN > 0.5, 1, finPrev)));
         recKeepAlive = (recN > 0.5) | finNext;
         actNext = ba.if(armEdge, 1.0, ba.if(recKeepAlive, actPrev, 0.0));
 
