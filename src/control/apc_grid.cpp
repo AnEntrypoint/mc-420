@@ -178,17 +178,17 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
         setLooper(ps, looper, "play", 1.0f);
         long latencyBias = kBlockSize + (m_looperShiftHeldDuringTake[looper] ? kShiftFoldBlockLatencySamples : 0);
         setLooper(ps, looper, "latencybias", (float)latencyBias);
-        if (m_looperShiftHeldDuringTake[looper]) {
-            for (int src = 0; src < kLooperCount; src++) {
-                if (src == looper) continue;
-                if (m_looperHasContent[src] && m_looperPlaying[src]) {
-                    m_looperPlaying[src] = false;
-                    setLooper(ps, src, "play", 0.0f);
-                }
-            }
-        }
         m_masterLenSamples = (long)ps.get("cmd/master_len", 0.0f);
         if (m_masterLenSamples == 0) {
+            if (m_looperShiftHeldDuringTake[looper]) {
+                for (int src = 0; src < kLooperCount; src++) {
+                    if (src == looper) continue;
+                    if (m_looperHasContent[src] && m_looperPlaying[src]) {
+                        m_looperPlaying[src] = false;
+                        setLooper(ps, src, "play", 0.0f);
+                    }
+                }
+            }
             long lenSamples;
             if (audio) {
                 auto t = audio->snapshotTelemetry();
@@ -256,6 +256,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             setLooper(ps, looper, "finishreq", 1.0f);
             m_looperFinishReqReleaseAt[looper] = now_ms + 50;
             m_looperFinishTargetPending[looper] = (float)quantized;
+            m_looperPauseOthersOnFinish[looper] = m_looperShiftHeldDuringTake[looper];
         }
     } else if (!m_looperHasContent[looper]) {
         setLooper(ps, looper, "rec", 1.0f);
@@ -355,6 +356,16 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
             if (reached) {
                 m_looperRecording[looper] = false;
                 m_looperFinishTargetPending[looper] = 0.0f;
+                if (m_looperPauseOthersOnFinish[looper]) {
+                    m_looperPauseOthersOnFinish[looper] = false;
+                    for (int src = 0; src < kLooperCount; src++) {
+                        if (src == looper) continue;
+                        if (m_looperHasContent[src] && m_looperPlaying[src]) {
+                            m_looperPlaying[src] = false;
+                            setLooper(ps, src, "play", 0.0f);
+                        }
+                    }
+                }
             }
         }
     }
@@ -386,6 +397,8 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
             setLooper(ps, looper, "rec", 0.0f);
             m_looperRecording[looper] = false;
         }
+        m_looperFinishTargetPending[looper] = 0.0f;
+        m_looperPauseOthersOnFinish[looper] = false;
         m_looperErased[looper] = true;
         m_looperArmedOnPress[looper] = false;
         m_looperHasContent[looper] = false;
@@ -488,6 +501,8 @@ void ApcGrid::onStopImmediate(ParamStore& ps, LinkBridge* link) {
             setLooper(ps, lp, "rec", 0.0f);
             m_looperRecording[lp] = false;
         }
+        m_looperFinishTargetPending[lp] = 0.0f;
+        m_looperPauseOthersOnFinish[lp] = false;
         setLooper(ps, lp, "play", 0.0f);
         m_looperPlaying[lp] = false;
     }
@@ -510,6 +525,8 @@ void ApcGrid::onClearAll(bool held, ParamStore& ps, LinkBridge* link) {
         setLooper(ps, lp, "rec", 0.0f);
         setLooper(ps, lp, "finishreq", 0.0f);
         m_looperFinishReqReleaseAt[lp] = 0;
+        m_looperFinishTargetPending[lp] = 0.0f;
+        m_looperPauseOthersOnFinish[lp] = false;
     }
     for (int p = 0; p < kPresetCount; p++) {
         m_presetHeld[p] = false;

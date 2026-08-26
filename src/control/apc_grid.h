@@ -128,6 +128,7 @@ private:
     float m_looperFinishTargetPending[kLooperCount] = {};
     unsigned m_recordStartMs[kLooperCount] = {};
     bool m_looperShiftHeldDuringTake[kLooperCount] = {};
+    bool m_looperPauseOthersOnFinish[kLooperCount] = {};
     bool m_lastPublishedPlaying = false;
     bool    m_lastSeenRemotePlaying = false;
     bool    m_remoteStartPending    = false;
