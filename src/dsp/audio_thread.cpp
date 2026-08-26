@@ -426,9 +426,13 @@ static void* worker(void*) {
     pitchTrackerFx.loadDir(g_cfg.pitchTrackerDir, g_cfg.homeFxCore);
     pitchTrackerFx.connect(N, ch);
 
-    Lv2Host delayVerbFx;
-    delayVerbFx.loadDir(g_cfg.delayVerbDir, g_cfg.homeFxCore);
-    delayVerbFx.connect(N, ch);
+    Lv2Host delayVerbFxCue;
+    delayVerbFxCue.loadDir(g_cfg.delayVerbDir, g_cfg.homeFxCore);
+    delayVerbFxCue.connect(N, ch);
+
+    Lv2Host delayVerbFxMaster;
+    delayVerbFxMaster.loadDir(g_cfg.delayVerbDir, g_cfg.homeFxCore);
+    delayVerbFxMaster.connect(N, ch);
 
     UsbRecorder usbRecorder(g_cfg.usbMountPoint, g_cfg.sampleRate, g_cfg.usbChunkMinutes, g_cfg.usbChunkCount);
     if (g_cfg.usbRecordEnabled) g_usbRecorder = &usbRecorder;
@@ -598,7 +602,8 @@ static void* worker(void*) {
                     if (dp.slot < 0) continue;
                     float v = g_params->getBySlot(dp.slot);
                     if (!dp.hasValue || v != dp.lastValue) {
-                        delayVerbFx.setControl(dp.lv2Label, v);
+                        delayVerbFxCue.setControl(dp.lv2Label, v);
+                        delayVerbFxMaster.setControl(dp.lv2Label, v);
                         dp.lastValue = v;
                         dp.hasValue = true;
                     }
@@ -942,12 +947,12 @@ static void* worker(void*) {
             faustPre.compute(N, fins, preOuts);
             std::copy(preFilterOutBuf.begin(), preFilterOutBuf.end(), cueWetBuf.begin());
             std::copy(masterGatedBuf.begin(), masterGatedBuf.end(), masterWetBuf.begin());
-            bool delayVerbActive = delayVerbFx.hasPlugins() &&
+            bool delayVerbActive = delayVerbFxCue.hasPlugins() &&
                                    (delayVerbParamSlots[0].lastValue > 1e-4f ||
                                     delayVerbParamSlots[1].lastValue > 1e-4f);
             if (delayVerbActive) {
-                delayVerbFx.process(cueWetBuf.data(), N);
-                delayVerbFx.process(masterWetBuf.data(), N);
+                delayVerbFxCue.process(cueWetBuf.data(), N);
+                delayVerbFxMaster.process(masterWetBuf.data(), N);
             }
             faustPost.compute(N, postIns, postOuts);
             prevLoopSum = rawLoopSum;
