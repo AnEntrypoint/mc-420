@@ -255,6 +255,8 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             long quantized = (long)(bestLen / tempoScale + 0.5);
             if (quantized < 64) quantized = 64;
             if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;
+            fprintf(stderr, "[diag-trunc] looper=%d rawSamples=%ld lowerCand=%.0f upperCand=%.0f quantized=%ld truncates=%s\n",
+                    looper, rawSamples, lowerCand, upperCand, quantized, (quantized < rawSamples) ? "YES" : "no");
             setLooper(ps, looper, "finishtarget", (float)quantized);
             setLooper(ps, looper, "finishreq", 1.0f);
             m_looperFinishReqReleaseAt[looper] = now_ms + 50;
