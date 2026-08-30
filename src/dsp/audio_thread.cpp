@@ -974,6 +974,14 @@ static void* worker(void*) {
                     }
                 }
                 if (extFreqDetZone) *extFreqDetZone = extFreqGuardAnchor;
+                static float diagLastLogged = -1.0f;
+                if (rawFreq != diagLastLogged) {
+                    timespec diagTs; clock_gettime(CLOCK_MONOTONIC, &diagTs);
+                    fprintf(stderr, "[diag-pitchguard] t=%ld.%03ld raw=%.2f anchor=%.2f cand=%.2f streak=%d\n",
+                            (long)diagTs.tv_sec, diagTs.tv_nsec / 1000000, rawFreq, extFreqGuardAnchor,
+                            extFreqGuardCandidate, extFreqGuardStreakBlocks);
+                    diagLastLogged = rawFreq;
+                }
             }
             faustPre.compute(N, fins, preOuts);
             std::copy(preFilterOutBuf.begin(), preFilterOutBuf.end(), cueWetBuf.begin());
