@@ -145,11 +145,31 @@ with {
     ready = holdCount >= onsetHoldSamples;
 };
 
+jumpMaxRatio = pow(2.0, 9.0 / 12.0);
+jumpResyncMs = 20.0;
+jumpResyncSamples = jumpResyncMs * 0.001 * ma.SR;
+
+jumpGuard(rawFreq, accept) = anchorOut
+with {
+    firstSample = ba.time == 0;
+    plausible(a, cand) = (cand < a * jumpMaxRatio) & (cand > a / jumpMaxRatio);
+    pairStep(anchorPrev, cntPrev) = newAnchor, newCnt
+    with {
+        forceResync = cntPrev >= jumpResyncSamples;
+        acceptJump = firstSample | forceResync | plausible(anchorPrev, rawFreq);
+        newAnchor = ba.if(accept & acceptJump, rawFreq, anchorPrev);
+        newCnt = ba.if(accept & acceptJump, 0.0, ba.if(accept, cntPrev + 1.0, cntPrev));
+    };
+    pair = pairStep ~ (_, _);
+    anchorOut = pair : (_, !);
+};
+
 holdLastGood(freqHz, ready, confident) = out
 with {
     fallingEdge = (ready:mem) * (1.0 - ready);
     accept = ready & confident;
-    heldStep(prev) = ba.if(accept, freqHz, ba.if(fallingEdge > 0.5, 0.0, prev));
+    guardedFreq = jumpGuard(freqHz, accept);
+    heldStep(prev) = ba.if(accept, guardedFreq, ba.if(fallingEdge > 0.5, 0.0, prev));
     out = heldStep ~ _;
 };
 
