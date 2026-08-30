@@ -269,6 +269,9 @@ static void* worker(void*) {
     }
     std::vector<float> resonodeInBuf((size_t)N, 0.0f);
     std::vector<float> pitchTrackerBuf((size_t)N, 60.0f);
+    float extFreqGuardAnchor = 0.0f;
+    float extFreqGuardCandidate = 0.0f;
+    int extFreqGuardStreakBlocks = 0;
     std::vector<float> preFilterOutBuf((size_t)N, 0.0f);
     std::vector<float> loopHarmonyWetBuf((size_t)N, 0.0f);
     std::vector<float> masterGatedBuf((size_t)N, 0.0f);
@@ -942,7 +945,35 @@ static void* worker(void*) {
             if (pitchTrackerFx.hasPlugins()) {
                 std::copy(fin.begin(), fin.end(), pitchTrackerBuf.begin());
                 pitchTrackerFx.process(pitchTrackerBuf.data(), N);
-                if (extFreqDetZone) *extFreqDetZone = pitchTrackerBuf[N - 1];
+                float rawFreq = pitchTrackerBuf[N - 1];
+                constexpr float kJumpMaxRatio = 1.6817928f;
+                constexpr int kJumpConfirmBlocks = 15;
+                bool plausibleVsAnchor = extFreqGuardAnchor <= 0.0f ||
+                    (rawFreq < extFreqGuardAnchor * kJumpMaxRatio && rawFreq > extFreqGuardAnchor / kJumpMaxRatio);
+                if (rawFreq <= 0.0f) {
+                    extFreqGuardAnchor = 0.0f;
+                    extFreqGuardCandidate = 0.0f;
+                    extFreqGuardStreakBlocks = 0;
+                } else if (plausibleVsAnchor) {
+                    extFreqGuardAnchor = rawFreq;
+                    extFreqGuardCandidate = 0.0f;
+                    extFreqGuardStreakBlocks = 0;
+                } else {
+                    bool candidatePlausible = extFreqGuardCandidate > 0.0f &&
+                        rawFreq < extFreqGuardCandidate * kJumpMaxRatio && rawFreq > extFreqGuardCandidate / kJumpMaxRatio;
+                    if (candidatePlausible) {
+                        extFreqGuardStreakBlocks++;
+                    } else {
+                        extFreqGuardCandidate = rawFreq;
+                        extFreqGuardStreakBlocks = 1;
+                    }
+                    if (extFreqGuardStreakBlocks >= kJumpConfirmBlocks) {
+                        extFreqGuardAnchor = rawFreq;
+                        extFreqGuardCandidate = 0.0f;
+                        extFreqGuardStreakBlocks = 0;
+                    }
+                }
+                if (extFreqDetZone) *extFreqDetZone = extFreqGuardAnchor;
             }
             faustPre.compute(N, fins, preOuts);
             std::copy(preFilterOutBuf.begin(), preFilterOutBuf.end(), cueWetBuf.begin());
