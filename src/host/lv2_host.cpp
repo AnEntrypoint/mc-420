@@ -149,6 +149,13 @@ bool Lv2Host::readTtl(const std::string& bundlePath, Lv2Plugin& out) {
             const LilvNode* symNode = lilv_port_get_symbol(found, port);
             pi.symbol = symNode ? lilv_node_as_string(symNode) : ("port" + std::to_string(idx));
             if (!pi.isAudio && !lilv_port_is_a(found, port, controlClass)) continue;
+            if (!pi.isAudio) {
+                LilvNode *defNode = nullptr, *minNode = nullptr, *maxNode = nullptr;
+                lilv_port_get_range(found, port, &defNode, &minNode, &maxNode);
+                if (defNode) { pi.defaultValue = lilv_node_as_float(defNode); lilv_node_free(defNode); }
+                if (minNode) lilv_node_free(minNode);
+                if (maxNode) lilv_node_free(maxNode);
+            }
             out.ports.push_back(pi);
         }
         lilv_node_free(inputClass);
@@ -223,6 +230,7 @@ void Lv2Host::connectPorts(Lv2Plugin& p, int blockSize) {
             d->connect_port(p.instance, pi.index, sharedMonoBuf);
             (pi.isInput ? p.audioIn : p.audioOut).push_back(sharedMonoBuf);
         } else {
+            p.controlValues[i] = pi.defaultValue;
             d->connect_port(p.instance, pi.index, &p.controlValues[i]);
             p.controlPortIdx.push_back(i);
         }

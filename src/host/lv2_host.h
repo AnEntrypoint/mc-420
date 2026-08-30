@@ -22,6 +22,7 @@ struct Lv2Plugin {
         std::string symbol;
         bool isAudio = false;
         bool isInput = false;
+        float defaultValue = 0.0f;
     };
     std::vector<PortInfo> ports;
     std::vector<float*>   audioIn;
