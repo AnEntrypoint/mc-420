@@ -947,7 +947,7 @@ static void* worker(void*) {
             faustPre.compute(N, fins, preOuts);
             std::copy(preFilterOutBuf.begin(), preFilterOutBuf.end(), cueWetBuf.begin());
             std::copy(masterGatedBuf.begin(), masterGatedBuf.end(), masterWetBuf.begin());
-            bool delayVerbActive = delayVerbFxCue.hasPlugins() &&
+            bool delayVerbActive = delayVerbFxCue.hasPlugins() && delayVerbFxMaster.hasPlugins() &&
                                    (delayVerbParamSlots[0].lastValue > 1e-4f ||
                                     delayVerbParamSlots[1].lastValue > 1e-4f);
             if (delayVerbActive) {
