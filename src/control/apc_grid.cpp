@@ -179,6 +179,8 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
         long latencyBias = kBlockSize + (m_looperShiftHeldDuringTake[looper] ? kShiftFoldBlockLatencySamples : 0);
         setLooper(ps, looper, "latencybias", (float)latencyBias);
         m_masterLenSamples = (long)ps.get("cmd/master_len", 0.0f);
+        fprintf(stderr, "[diag-master] FINISH looper=%d cmd_master_len=%ld m_masterLenSamples=%ld\n",
+                looper, (long)ps.get("cmd/master_len", 0.0f), m_masterLenSamples);
         if (m_masterLenSamples == 0) {
             if (m_looperShiftHeldDuringTake[looper]) {
                 for (int src = 0; src < kLooperCount; src++) {
@@ -423,6 +425,7 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
     bool anyHasContent = false;
     for (int lp = 0; lp < kLooperCount; lp++) if (m_looperHasContent[lp]) { anyHasContent = true; break; }
     if (!anyHasContent && m_masterLenSamples != 0) {
+        fprintf(stderr, "[diag-master] RESET-TO-ZERO fired, was m_masterLenSamples=%ld\n", m_masterLenSamples);
         m_masterLenSamples = 0;
         ps.setByName("cmd/master_len", 0.0f);
         ps.setByName("cmd/recorded_bpm", 0.0f);
