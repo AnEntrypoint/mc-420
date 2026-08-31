@@ -215,15 +215,22 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             m_looperFinishReqReleaseAt[looper] = now_ms + 50;
             m_looperRecording[looper] = false;
         } else {
-            long rawSamples;
+            long rawSamples = 0;
+            long elapsedEstimate = (long)(now_ms - m_recordStartMs[looper]) * kSampleRate / 1000;
             if (audio) {
                 auto t = audio->snapshotTelemetry();
                 rawSamples = (long)t.looperWriteIdx[looper];
+                if (rawSamples <= 0 && elapsedEstimate > 0) {
+                    fprintf(stderr, "[diag-earlyret] looper=%d telemetry writeIdx<=0 (%ld) but elapsed wall-clock implies %ld samples -- stale cross-thread read, using elapsed estimate instead of aborting\n",
+                            looper, rawSamples, elapsedEstimate);
+                    rawSamples = elapsedEstimate;
+                }
             } else {
-                unsigned elapsedMs = now_ms - m_recordStartMs[looper];
-                rawSamples = (long)elapsedMs * kSampleRate / 1000;
+                rawSamples = elapsedEstimate;
             }
             if (rawSamples <= 0) {
+                fprintf(stderr, "[diag-earlyret] looper=%d rawSamples<=0 (rawSamples=%ld) even after elapsed fallback -- aborting take, wiping hasContent/play\n",
+                        looper, rawSamples);
                 setLooper(ps, looper, "rec", 0.0f);
                 m_looperRecording[looper] = false;
                 m_looperHasContent[looper] = false;
