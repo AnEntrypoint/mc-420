@@ -126,6 +126,7 @@ private:
     bool m_looperHasContent[kLooperCount] = {};
     bool m_looperRecording[kLooperCount] = {};
     float m_looperFinishTargetPending[kLooperCount] = {};
+    unsigned m_looperFinishPendingSinceMs[kLooperCount] = {};
     unsigned m_recordStartMs[kLooperCount] = {};
     bool m_looperShiftHeldDuringTake[kLooperCount] = {};
     bool m_looperPauseOthersOnFinish[kLooperCount] = {};

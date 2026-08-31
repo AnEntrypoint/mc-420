@@ -256,7 +256,10 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             setLooper(ps, looper, "finishreq", 1.0f);
             m_looperFinishReqReleaseAt[looper] = now_ms + 50;
             m_looperFinishTargetPending[looper] = (float)quantized;
+            m_looperFinishPendingSinceMs[looper] = now_ms;
             m_looperPauseOthersOnFinish[looper] = m_looperShiftHeldDuringTake[looper];
+            fprintf(stderr, "[diag-finish] looper=%d rawSamples=%ld masterLen=%ld quantized=%ld tempoScale=%.4f\n",
+                    looper, rawSamples, m_masterLenSamples, quantized, tempoScale);
         }
     } else if (!m_looperHasContent[looper]) {
         setLooper(ps, looper, "rec", 1.0f);
@@ -353,6 +356,15 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
             bool reached = audio
                 ? (double)t.looperWriteIdx[looper] >= (double)m_looperFinishTargetPending[looper]
                 : true;
+            if (!reached && now_ms - m_looperFinishPendingSinceMs[looper] > 500) {
+                static unsigned lastStuckLogMs[kLooperCount] = {};
+                if (now_ms - lastStuckLogMs[looper] > 500) {
+                    fprintf(stderr, "[diag-finish-stuck] looper=%d writeIdx=%.1f target=%.1f pendingMs=%u\n",
+                            looper, (double)t.looperWriteIdx[looper], (double)m_looperFinishTargetPending[looper],
+                            now_ms - m_looperFinishPendingSinceMs[looper]);
+                    lastStuckLogMs[looper] = now_ms;
+                }
+            }
             if (reached) {
                 m_looperRecording[looper] = false;
                 m_looperFinishTargetPending[looper] = 0.0f;
