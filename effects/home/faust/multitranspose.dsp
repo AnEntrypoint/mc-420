@@ -101,7 +101,7 @@ with {
     lastConvergedNoteStep(prev) = ba.if(inLockWarmup, prev, rawDetNote);
     lastConvergedNoteRaw = lastConvergedNoteStep ~ _;
     lastConvergedNote = ba.if(ba.time == 0, targetNote, lastConvergedNoteRaw);
-    smoothPole = ba.tau2pole(0.02);
+    smoothPole = ba.tau2pole(0.008);
     smoothedDetNoteStep(prev) = ba.if(attackEdge, lastConvergedNote,
                                   prev * smoothPole + rawDetNote * (1.0 - smoothPole));
     smoothedDetNote = smoothedDetNoteStep ~ _;
