@@ -959,7 +959,8 @@ static void* worker(void*) {
                     }
                 } else {
                     extFreqGuardSilenceBlocks = 0;
-                    bool plausibleVsAnchor = extFreqGuardAnchor <= 0.0f ||
+                    bool freshOnset = extFreqGuardAnchor <= 0.0f;
+                    bool plausibleVsAnchor = !freshOnset &&
                         (rawFreq < extFreqGuardAnchor * kJumpMaxRatio && rawFreq > extFreqGuardAnchor / kJumpMaxRatio);
                     if (plausibleVsAnchor) {
                         extFreqGuardAnchor = rawFreq;
