@@ -272,6 +272,7 @@ static void* worker(void*) {
     float extFreqGuardAnchor = 0.0f;
     float extFreqGuardCandidate = 0.0f;
     int extFreqGuardStreakBlocks = 0;
+    int extFreqGuardSilenceBlocks = 0;
     std::vector<float> preFilterOutBuf((size_t)N, 0.0f);
     std::vector<float> loopHarmonyWetBuf((size_t)N, 0.0f);
     std::vector<float> masterGatedBuf((size_t)N, 0.0f);
@@ -948,32 +949,39 @@ static void* worker(void*) {
                 float rawFreq = pitchTrackerBuf[N - 1];
                 constexpr float kJumpMaxRatio = 1.6817928f;
                 constexpr int kJumpConfirmBlocks = 15;
-                bool plausibleVsAnchor = extFreqGuardAnchor <= 0.0f ||
-                    (rawFreq < extFreqGuardAnchor * kJumpMaxRatio && rawFreq > extFreqGuardAnchor / kJumpMaxRatio);
+                constexpr int kSilenceResetBlocks = 40;
                 if (rawFreq <= 0.0f) {
-                    extFreqGuardAnchor = 0.0f;
-                    extFreqGuardCandidate = 0.0f;
-                    extFreqGuardStreakBlocks = 0;
-                } else if (plausibleVsAnchor) {
-                    extFreqGuardAnchor = rawFreq;
-                    extFreqGuardCandidate = 0.0f;
-                    extFreqGuardStreakBlocks = 0;
-                } else {
-                    bool candidatePlausible = extFreqGuardCandidate > 0.0f &&
-                        rawFreq < extFreqGuardCandidate * kJumpMaxRatio && rawFreq > extFreqGuardCandidate / kJumpMaxRatio;
-                    if (candidatePlausible) {
-                        extFreqGuardStreakBlocks++;
-                    } else {
-                        extFreqGuardCandidate = rawFreq;
-                        extFreqGuardStreakBlocks = 1;
-                    }
-                    if (extFreqGuardStreakBlocks >= kJumpConfirmBlocks) {
-                        extFreqGuardAnchor = rawFreq;
+                    extFreqGuardSilenceBlocks++;
+                    if (extFreqGuardSilenceBlocks >= kSilenceResetBlocks) {
+                        extFreqGuardAnchor = 0.0f;
                         extFreqGuardCandidate = 0.0f;
                         extFreqGuardStreakBlocks = 0;
                     }
+                } else {
+                    extFreqGuardSilenceBlocks = 0;
+                    bool plausibleVsAnchor = extFreqGuardAnchor <= 0.0f ||
+                        (rawFreq < extFreqGuardAnchor * kJumpMaxRatio && rawFreq > extFreqGuardAnchor / kJumpMaxRatio);
+                    if (plausibleVsAnchor) {
+                        extFreqGuardAnchor = rawFreq;
+                        extFreqGuardCandidate = 0.0f;
+                        extFreqGuardStreakBlocks = 0;
+                    } else {
+                        bool candidatePlausible = extFreqGuardCandidate > 0.0f &&
+                            rawFreq < extFreqGuardCandidate * kJumpMaxRatio && rawFreq > extFreqGuardCandidate / kJumpMaxRatio;
+                        if (candidatePlausible) {
+                            extFreqGuardStreakBlocks++;
+                        } else {
+                            extFreqGuardCandidate = rawFreq;
+                            extFreqGuardStreakBlocks = 1;
+                        }
+                        if (extFreqGuardStreakBlocks >= kJumpConfirmBlocks) {
+                            extFreqGuardAnchor = rawFreq;
+                            extFreqGuardCandidate = 0.0f;
+                            extFreqGuardStreakBlocks = 0;
+                        }
+                    }
                 }
-                if (extFreqDetZone) *extFreqDetZone = extFreqGuardAnchor;
+                if (extFreqDetZone) *extFreqDetZone = (extFreqGuardSilenceBlocks >= kSilenceResetBlocks) ? 0.0f : extFreqGuardAnchor;
                 static float diagLastLogged = -1.0f;
                 if (rawFreq != diagLastLogged) {
                     timespec diagTs; clock_gettime(CLOCK_MONOTONIC, &diagTs);
