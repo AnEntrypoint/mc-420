@@ -948,7 +948,7 @@ static void* worker(void*) {
                 pitchTrackerFx.process(pitchTrackerBuf.data(), N);
                 float rawFreq = pitchTrackerBuf[N - 1];
                 constexpr float kJumpMaxRatio = 1.6817928f;
-                constexpr int kJumpConfirmBlocks = 15;
+                constexpr int kJumpConfirmBlocks = 9;
                 constexpr int kSilenceResetBlocks = 40;
                 if (rawFreq <= 0.0f) {
                     extFreqGuardSilenceBlocks++;
