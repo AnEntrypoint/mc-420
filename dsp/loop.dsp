@@ -60,7 +60,10 @@ with {
         anchorGridBeats = ba.if(takeLenBeats > 16.0 + gridPickEps, 16.0,
                            ba.if(takeLenBeats > 8.0 + gridPickEps, 8.0,
                              ba.if(takeLenBeats > 4.0 + gridPickEps, 4.0,
-                               ba.if(takeLenBeats > 2.0 + gridPickEps, 2.0, 1.0))));
+                               ba.if(takeLenBeats > 2.0 + gridPickEps, 2.0,
+                                 ba.if(takeLenBeats > 1.0 + gridPickEps, 1.0,
+                                   ba.if(takeLenBeats > 0.5 + gridPickEps, 0.5,
+                                     ba.if(takeLenBeats > 0.25 + gridPickEps, 0.25, 0.125)))))));
         anchorGridLenNow = max(1.0, anchorGridBeats * oneBeat);
         gridMultiple = max(1.0, ceil(takeLenBeats / anchorGridBeats - gridPickEps));
         snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, gridMultiple * anchorGridLenNow);
