@@ -38,7 +38,7 @@ with {
                     ba.if(pendPrev & gridTickCrossed, 0, ba.if(cancelPend, 0, ba.if(armPulse, 1, pendPrev))));
         armEdge = ba.if(masterLen < 0.5, armPulse, pendPrev & gridTickCrossed);
 
-        rsmNext = ba.if(armEdge, ba.if(masterLen < 0.5, masterPhase, 0.0), rsmPrev);
+        rsmNext = ba.if(armEdge, masterPhase, rsmPrev);
 
         finNext = ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(finishReqN > 0.5, 1, finPrev)));
         recKeepAlive = (recN > 0.5) | finNext;
