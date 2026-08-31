@@ -21,8 +21,11 @@ with {
     oneBeat = max(1.0, masterLen / beatsPerMasterLen);
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
-    gridTickCrossed = masterPhaseWrapped;
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
+    beatPhase = wrapAbs(masterPhase, oneBeat);
+    beatPhasePrev = beatPhase : mem;
+    beatTickCrossed = beatPhase < beatPhasePrev;
+    gridTickCrossed = beatTickCrossed;
 
     takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev) =
         (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext)
