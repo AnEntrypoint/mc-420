@@ -97,7 +97,7 @@ with {
     sinceAttackStep(prev) = ba.if(attackEdge, 0.0, prev + 1.0);
     sinceAttack = sinceAttackStep ~ _;
     inLockWarmup = sinceAttack < lockDelaySamples;
-    rawDetNote = ba.hz2midikey(freqDet);
+    rawDetNote = ba.hz2midikey(max(20.0, freqDet));
     lastConvergedNoteStep(prev) = ba.if(inLockWarmup, prev, rawDetNote);
     lastConvergedNoteRaw = lastConvergedNoteStep ~ _;
     lastConvergedNote = ba.if(ba.time == 0, targetNote, lastConvergedNoteRaw);
