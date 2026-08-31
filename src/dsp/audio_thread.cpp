@@ -982,13 +982,13 @@ static void* worker(void*) {
                     }
                 }
                 if (extFreqDetZone) *extFreqDetZone = (extFreqGuardSilenceBlocks >= kSilenceResetBlocks) ? 0.0f : extFreqGuardAnchor;
-                static float diagLastLogged = -1.0f;
-                if (rawFreq != diagLastLogged) {
+                static float diagLastAnchor = -1.0f;
+                if (extFreqGuardAnchor != diagLastAnchor) {
                     timespec diagTs; clock_gettime(CLOCK_MONOTONIC, &diagTs);
-                    fprintf(stderr, "[diag-pitchguard] t=%ld.%03ld raw=%.2f anchor=%.2f cand=%.2f streak=%d\n",
+                    fprintf(stderr, "[diag-pitchguard] t=%ld.%03ld raw=%.2f anchor=%.2f cand=%.2f streak=%d sil=%d\n",
                             (long)diagTs.tv_sec, diagTs.tv_nsec / 1000000, rawFreq, extFreqGuardAnchor,
-                            extFreqGuardCandidate, extFreqGuardStreakBlocks);
-                    diagLastLogged = rawFreq;
+                            extFreqGuardCandidate, extFreqGuardStreakBlocks, extFreqGuardSilenceBlocks);
+                    diagLastAnchor = extFreqGuardAnchor;
                 }
             }
             faustPre.compute(N, fins, preOuts);
