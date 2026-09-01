@@ -166,8 +166,8 @@ with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
     freqDetInternal = detectedFreq(sigIn);
-    extFreqDetApplies = extFreqDet > 0.5 & free < 0.5;
-    freqDet    = ba.if(extFreqDetApplies, extFreqDet, freqDetInternal);
+    extFreqDetApplies = extFreqDet > minTrackHz & free < 0.5;
+    freqDet    = ba.if(extFreqDetApplies, extFreqDet, freqDetInternal) : max(minTrackHz);
     trustedTracker = extFreqDetApplies;
     freqDetDiag = attach(freqDet, freqDet : freqDetMeter);
     winSamplesRaw = windowForFormant(freqDetDiag, formant);
