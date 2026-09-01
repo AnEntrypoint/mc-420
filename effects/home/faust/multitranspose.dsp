@@ -133,7 +133,7 @@ with {
 process(dry, loopSum, free, formant, extFreqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
 with {
     freeSmooth = free : si.smoo;
-    sigIn      = dry;
+    sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
     freqDetInternal = detectedFreq(sigIn);
     freqDet    = ba.if(extFreqDet > 0.5, extFreqDet, freqDetInternal);
     trustedTracker = extFreqDet > 0.5;
