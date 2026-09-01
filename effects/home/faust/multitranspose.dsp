@@ -173,7 +173,7 @@ with {
     freqDetInternal = detectedFreq(sigIn);
     extFreqDetDiagRaw = attach(extFreqDet, extFreqDet : rawExtFreqDetMeter);
     freeDiagRaw = attach(free, free : freeMeter);
-    extFreqDetApplies = extFreqDetDiagRaw > (minTrackHz + 1.0) & freeDiagRaw < 0.5;
+    extFreqDetApplies = (extFreqDetDiagRaw > (minTrackHz + 1.0)) & (freeDiagRaw < 0.5);
     freqDet    = ba.if(extFreqDetApplies, extFreqDetDiagRaw, freqDetInternal) : max(minTrackHz);
     trustedTracker = attach(extFreqDetApplies, extFreqDetApplies : trustedTrackerMeter);
     freqDetDiag = attach(freqDet, freqDet : freqDetMeter);
