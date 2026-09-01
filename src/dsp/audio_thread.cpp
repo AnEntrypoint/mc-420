@@ -1003,7 +1003,8 @@ static void* worker(void*) {
                         bool plausibleVsAnchor = !rawAtTrackerFloor &&
                             (rawFreq < extFreqGuardAnchor * kJumpMaxRatio && rawFreq > extFreqGuardAnchor / kJumpMaxRatio);
                         if (plausibleVsAnchor) {
-                            extFreqGuardAnchor = rawFreq;
+                            constexpr float kAnchorSmoothCoeff = 0.25f;
+                            extFreqGuardAnchor = extFreqGuardAnchor * (1.0f - kAnchorSmoothCoeff) + rawFreq * kAnchorSmoothCoeff;
                             extFreqGuardCandidate = 0.0f;
                             extFreqGuardStreakBlocks = 0;
                         } else {
