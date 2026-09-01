@@ -69,3 +69,4 @@ test-audio-corpus/*.pcm
 test-audio-corpus/*.mp3
 test-audio-corpus/free_transpose_harness
 test-audio-corpus/*.json
+.hotdeploy-work/
