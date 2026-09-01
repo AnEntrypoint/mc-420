@@ -949,6 +949,8 @@ static void* worker(void*) {
                 float rawFreq = pitchTrackerBuf[N - 1];
                 constexpr float kJumpMaxRatio = 1.6817928f;
                 constexpr int kJumpConfirmBlocks = 9;
+                constexpr int kOctaveConfirmBlocks = 60;
+                constexpr float kOctaveToleranceRatio = 1.05f;
                 constexpr int kSilenceResetBlocks = 40;
                 if (rawFreq <= 0.0f) {
                     extFreqGuardSilenceBlocks++;
@@ -975,7 +977,13 @@ static void* worker(void*) {
                             extFreqGuardCandidate = rawFreq;
                             extFreqGuardStreakBlocks = 1;
                         }
-                        if (extFreqGuardStreakBlocks >= kJumpConfirmBlocks) {
+                        float octaveRatioUp = !freshOnset ? rawFreq / (extFreqGuardAnchor * 2.0f) : 1.0f;
+                        float octaveRatioDown = !freshOnset ? rawFreq / (extFreqGuardAnchor * 0.5f) : 1.0f;
+                        bool octaveSuspicious = !freshOnset &&
+                            ((octaveRatioUp < kOctaveToleranceRatio && octaveRatioUp > 1.0f / kOctaveToleranceRatio) ||
+                             (octaveRatioDown < kOctaveToleranceRatio && octaveRatioDown > 1.0f / kOctaveToleranceRatio));
+                        int requiredStreak = octaveSuspicious ? kOctaveConfirmBlocks : kJumpConfirmBlocks;
+                        if (extFreqGuardStreakBlocks >= requiredStreak) {
                             extFreqGuardAnchor = rawFreq;
                             extFreqGuardCandidate = 0.0f;
                             extFreqGuardStreakBlocks = 0;
