@@ -116,10 +116,41 @@ with {
     wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * 0.6;
 };
 
+voiceOutDiag(sig, winSamples, xfSamples, freqDet, trustedTracker, targetNote, gate) = wet
+with {
+    attackEdge = gate > (gate : mem);
+    sinceAttackStep(prev) = ba.if(attackEdge, 0.0, prev + 1.0);
+    sinceAttack = sinceAttackStep ~ _;
+    inLockWarmup = sinceAttack < lockDelaySamples;
+    rawDetNote = ba.hz2midikey(max(20.0, freqDet));
+    lastConvergedNoteStep(prev) = ba.if(inLockWarmup, prev, rawDetNote);
+    lastConvergedNoteRaw = lastConvergedNoteStep ~ _;
+    lastConvergedNote = ba.if(ba.time == 0, targetNote, lastConvergedNoteRaw);
+    smoothPole = ba.tau2pole(0.008);
+    smoothedDetNoteStep(prev) = ba.if(attackEdge, lastConvergedNote,
+                                  prev * smoothPole + rawDetNote * (1.0 - smoothPole));
+    smoothedDetNote = smoothedDetNoteStep ~ _;
+    heldDetNoteStep(prev) = ba.if(trustedTracker > 0.5, smoothedDetNote,
+                             ba.if(inLockWarmup, smoothedDetNote, prev));
+    heldDetNote = heldDetNoteStep ~ _ : heldDetNoteMeter;
+    shiftTarget = targetNote - heldDetNote;
+    shiftStep(prev) = ba.if(attackEdge, shiftTarget,
+                       prev * normalGlidePole + shiftTarget * (1.0 - normalGlidePole));
+    shiftAmount = shiftStep ~ _ : shiftAmountMeter;
+    voiceEnv    = en.adsr(0.003, 0.03, 1, 0.05, gate);
+    wet = (sig : xpose(winSamples, xfSamples, shiftAmount)) * voiceEnv * 0.6;
+};
+
 harmonySum(sig, winSamples, xfSamples, freqDet, trustedTracker, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
-    voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n0,g0) + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n1,g1)
+    voiceOutDiag(sig,winSamples,xfSamples,freqDet,trustedTracker,n0,g0) + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n1,g1)
   + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n2,g2) + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n3,g3)
   + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n4,g4) + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n5,g5);
+
+freqDetMeter = hbargraph("freqdetdiag", 0.0, 2000.0);
+winSamplesMeter = hbargraph("winsamplesdiag", 0.0, 2000.0);
+xfSamplesMeter = hbargraph("xfsamplesdiag", 0.0, 2000.0);
+shiftAmountMeter = hbargraph("shiftamountdiag", -48.0, 48.0);
+heldDetNoteMeter = hbargraph("helddetnotediag", 0.0, 127.0);
 
 formantTiltDb(formant) = formant * 2.5;
 
@@ -138,7 +169,8 @@ with {
     extFreqDetApplies = extFreqDet > 0.5 & free < 0.5;
     freqDet    = ba.if(extFreqDetApplies, extFreqDet, freqDetInternal);
     trustedTracker = extFreqDetApplies;
-    winSamplesRaw = windowForFormant(freqDet, formant);
+    freqDetDiag = attach(freqDet, freqDet : freqDetMeter);
+    winSamplesRaw = windowForFormant(freqDetDiag, formant);
     xfSkew     = formantXfSkew(formant);
     xfSamplesRaw = int(winSamplesRaw * 0.5 * xfSkew) : max(crossfadeFloorSamples);
     anyRising = (g0 > 0.5) & (g0 : mem < 0.5)
@@ -153,11 +185,11 @@ with {
     winSamplesSmoothed = winSamplesRaw : si.smooth(ba.tau2pole(0.02));
     winFrozenStep(prev) = ba.if(trustedTracker > 0.5, winSamplesSmoothed,
                             ba.if(inWinWarmup, winSamplesSmoothed, prev));
-    winSamples = max(windowFloorSamples, int(winFrozenStep ~ _));
+    winSamples = max(windowFloorSamples, int(winFrozenStep ~ _)) : attach(_, _ : winSamplesMeter);
     xfSamplesSmoothed = xfSamplesRaw : si.smooth(ba.tau2pole(0.02));
     xfFrozenStep(prev) = ba.if(trustedTracker > 0.5, xfSamplesSmoothed,
                            ba.if(inWinWarmup, xfSamplesSmoothed, prev));
-    xfSamples = max(crossfadeFloorSamples, int(xfFrozenStep ~ _));
+    xfSamples = max(crossfadeFloorSamples, int(xfFrozenStep ~ _)) : attach(_, _ : xfSamplesMeter);
     wetRaw = harmonySum(
         sigIn, winSamples, xfSamples, freqDet, trustedTracker,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5

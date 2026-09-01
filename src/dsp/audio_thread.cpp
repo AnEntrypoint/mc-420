@@ -338,6 +338,11 @@ static void* worker(void*) {
     float* resonodeEngagedZone = nullptr;
     float* extFreqDetZone = nullptr;
     float* dubgateClockphaseZone = nullptr;
+    float* mtFreqDetDiagZone = nullptr;
+    float* mtWinSamplesDiagZone = nullptr;
+    float* mtXfSamplesDiagZone = nullptr;
+    float* mtShiftAmountDiagZone = nullptr;
+    float* mtHeldDetNoteDiagZone = nullptr;
     {
         char z[32];
         auto resolveZone = [&]() -> float* {
@@ -378,6 +383,11 @@ static void* worker(void*) {
         snprintf(z, sizeof z, "fx/resonode/engaged");  resonodeEngagedZone  = resolveZone();
         snprintf(z, sizeof z, "fx/extfreqdet");        extFreqDetZone       = resolveZone();
         snprintf(z, sizeof z, "fx/dubgate/clockphase"); dubgateClockphaseZone = resolveZone();
+        snprintf(z, sizeof z, "freqdetdiag");         mtFreqDetDiagZone      = resolveZone();
+        snprintf(z, sizeof z, "winsamplesdiag");       mtWinSamplesDiagZone   = resolveZone();
+        snprintf(z, sizeof z, "xfsamplesdiag");        mtXfSamplesDiagZone    = resolveZone();
+        snprintf(z, sizeof z, "shiftamountdiag");      mtShiftAmountDiagZone  = resolveZone();
+        snprintf(z, sizeof z, "helddetnotediag");      mtHeldDetNoteDiagZone  = resolveZone();
     }
     int xposeNoteSlot[kTransposeVoices];
     int xposeGateSlot[kTransposeVoices];
@@ -1003,6 +1013,21 @@ static void* worker(void*) {
                 }
             }
             faustPre.compute(N, fins, preOuts);
+            {
+                static float lastLoggedShift = -999.0f;
+                float curShift = mtShiftAmountDiagZone ? *mtShiftAmountDiagZone : 0.0f;
+                if (mtShiftAmountDiagZone && fabsf(curShift - lastLoggedShift) > 0.3f) {
+                    timespec diagTs; clock_gettime(CLOCK_MONOTONIC, &diagTs);
+                    fprintf(stderr, "[diag-multitranspose] t=%ld.%03ld freqDet=%.2f winSamples=%.1f xfSamples=%.1f shiftAmount=%.2f heldDetNote=%.2f\n",
+                            (long)diagTs.tv_sec, diagTs.tv_nsec / 1000000,
+                            mtFreqDetDiagZone ? *mtFreqDetDiagZone : -1.0f,
+                            mtWinSamplesDiagZone ? *mtWinSamplesDiagZone : -1.0f,
+                            mtXfSamplesDiagZone ? *mtXfSamplesDiagZone : -1.0f,
+                            curShift,
+                            mtHeldDetNoteDiagZone ? *mtHeldDetNoteDiagZone : -1.0f);
+                    lastLoggedShift = curShift;
+                }
+            }
             std::copy(preFilterOutBuf.begin(), preFilterOutBuf.end(), cueWetBuf.begin());
             std::copy(masterGatedBuf.begin(), masterGatedBuf.end(), masterWetBuf.begin());
             bool delayVerbActive = delayVerbFxCue.hasPlugins() && delayVerbFxMaster.hasPlugins() &&
