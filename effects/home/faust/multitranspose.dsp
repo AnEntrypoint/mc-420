@@ -135,8 +135,9 @@ with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
     freqDetInternal = detectedFreq(sigIn);
-    freqDet    = ba.if(extFreqDet > 0.5, extFreqDet, freqDetInternal);
-    trustedTracker = extFreqDet > 0.5;
+    extFreqDetApplies = extFreqDet > 0.5 & free < 0.5;
+    freqDet    = ba.if(extFreqDetApplies, extFreqDet, freqDetInternal);
+    trustedTracker = extFreqDetApplies;
     winSamplesRaw = windowForFormant(freqDet, formant);
     xfSkew     = formantXfSkew(formant);
     xfSamplesRaw = int(winSamplesRaw * 0.5 * xfSkew) : max(crossfadeFloorSamples);
