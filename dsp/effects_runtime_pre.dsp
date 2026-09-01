@@ -30,7 +30,7 @@ harmonize = component("effects/home/faust/multitranspose.dsp");
 process(dry, loopSum, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5, resonodeIn) = preFilterOut, loopHarmonyWet, masterGatedIn, loopSum
 with {
     anyVoiceGated = min(1.0, g0+g1+g2+g3+g4+g5);
-    dryGate = (1.0 - anyVoiceGated*(1.0-freeXpose)) * (1.0 - KEYSMULTIMODE) : si.smoo;
+    dryGate = (1.0 - anyVoiceGated) * (1.0 - KEYSMULTIMODE) : si.smoo;
     resonodeEngageGate = RESONODE_ENGAGED : si.smoo;
     harmonyBus     = harmonize(dry, loopSum, freeXpose, FORMANT, EXTFREQDET, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5);
     dryWet         = harmonyBus : _,!;
