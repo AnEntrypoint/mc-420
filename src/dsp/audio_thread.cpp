@@ -343,6 +343,9 @@ static void* worker(void*) {
     float* mtXfSamplesDiagZone = nullptr;
     float* mtShiftAmountDiagZone = nullptr;
     float* mtHeldDetNoteDiagZone = nullptr;
+    float* mtRawExtFreqDetDiagZone = nullptr;
+    float* mtTrustedTrackerDiagZone = nullptr;
+    float* mtFreeDiagZone = nullptr;
     {
         char z[32];
         auto resolveZone = [&]() -> float* {
@@ -388,6 +391,9 @@ static void* worker(void*) {
         snprintf(z, sizeof z, "xfsamplesdiag");        mtXfSamplesDiagZone    = resolveZone();
         snprintf(z, sizeof z, "shiftamountdiag");      mtShiftAmountDiagZone  = resolveZone();
         snprintf(z, sizeof z, "helddetnotediag");      mtHeldDetNoteDiagZone  = resolveZone();
+        snprintf(z, sizeof z, "rawextfreqdetdiag");    mtRawExtFreqDetDiagZone = resolveZone();
+        snprintf(z, sizeof z, "trustedtrackerdiag");   mtTrustedTrackerDiagZone = resolveZone();
+        snprintf(z, sizeof z, "freediag");             mtFreeDiagZone         = resolveZone();
     }
     int xposeNoteSlot[kTransposeVoices];
     int xposeGateSlot[kTransposeVoices];
@@ -1035,13 +1041,16 @@ static void* worker(void*) {
                 float curShift = mtShiftAmountDiagZone ? *mtShiftAmountDiagZone : 0.0f;
                 if (mtShiftAmountDiagZone && fabsf(curShift - lastLoggedShift) > 0.3f) {
                     timespec diagTs; clock_gettime(CLOCK_MONOTONIC, &diagTs);
-                    fprintf(stderr, "[diag-multitranspose] t=%ld.%03ld freqDet=%.2f winSamples=%.1f xfSamples=%.1f shiftAmount=%.2f heldDetNote=%.2f\n",
+                    fprintf(stderr, "[diag-multitranspose] t=%ld.%03ld freqDet=%.2f winSamples=%.1f xfSamples=%.1f shiftAmount=%.2f heldDetNote=%.2f rawExt=%.2f trusted=%.0f free=%.3f\n",
                             (long)diagTs.tv_sec, diagTs.tv_nsec / 1000000,
                             mtFreqDetDiagZone ? *mtFreqDetDiagZone : -1.0f,
                             mtWinSamplesDiagZone ? *mtWinSamplesDiagZone : -1.0f,
                             mtXfSamplesDiagZone ? *mtXfSamplesDiagZone : -1.0f,
                             curShift,
-                            mtHeldDetNoteDiagZone ? *mtHeldDetNoteDiagZone : -1.0f);
+                            mtHeldDetNoteDiagZone ? *mtHeldDetNoteDiagZone : -1.0f,
+                            mtRawExtFreqDetDiagZone ? *mtRawExtFreqDetDiagZone : -1.0f,
+                            mtTrustedTrackerDiagZone ? *mtTrustedTrackerDiagZone : -1.0f,
+                            mtFreeDiagZone ? *mtFreeDiagZone : -1.0f);
                     lastLoggedShift = curShift;
                 }
             }

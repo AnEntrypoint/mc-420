@@ -149,6 +149,9 @@ harmonySum(sig, winSamples, xfSamples, freqDet, trustedTracker, n0,g0, n1,g1, n2
   + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n4,g4) + voiceOut(sig,winSamples,xfSamples,freqDet,trustedTracker,n5,g5);
 
 freqDetMeter = hbargraph("freqdetdiag", 0.0, 2000.0);
+rawExtFreqDetMeter = hbargraph("rawextfreqdetdiag", 0.0, 2000.0);
+trustedTrackerMeter = hbargraph("trustedtrackerdiag", 0.0, 1.0);
+freeMeter = hbargraph("freediag", 0.0, 1.0);
 winSamplesMeter = hbargraph("winsamplesdiag", 0.0, 2000.0);
 xfSamplesMeter = hbargraph("xfsamplesdiag", 0.0, 2000.0);
 shiftAmountMeter = hbargraph("shiftamountdiag", -48.0, 48.0);
@@ -168,9 +171,11 @@ with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
     freqDetInternal = detectedFreq(sigIn);
-    extFreqDetApplies = extFreqDet > (minTrackHz + 1.0) & free < 0.5;
-    freqDet    = ba.if(extFreqDetApplies, extFreqDet, freqDetInternal) : max(minTrackHz);
-    trustedTracker = extFreqDetApplies;
+    extFreqDetDiagRaw = attach(extFreqDet, extFreqDet : rawExtFreqDetMeter);
+    freeDiagRaw = attach(free, free : freeMeter);
+    extFreqDetApplies = extFreqDetDiagRaw > (minTrackHz + 1.0) & freeDiagRaw < 0.5;
+    freqDet    = ba.if(extFreqDetApplies, extFreqDetDiagRaw, freqDetInternal) : max(minTrackHz);
+    trustedTracker = attach(extFreqDetApplies, extFreqDetApplies : trustedTrackerMeter);
     freqDetDiag = attach(freqDet, freqDet : freqDetMeter);
     winSamplesRaw = windowForFormant(freqDetDiag, formant);
     xfSkew     = formantXfSkew(formant);
