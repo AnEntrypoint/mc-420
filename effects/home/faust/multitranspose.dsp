@@ -102,11 +102,13 @@ with {
     lastConvergedNoteRaw = lastConvergedNoteStep ~ _;
     lastConvergedNote = ba.if(ba.time == 0, targetNote, lastConvergedNoteRaw);
     smoothPole = ba.tau2pole(0.008);
+    trackingAllowed = (trustedTracker > 0.5) | inLockWarmup;
     smoothedDetNoteStep(prev) = ba.if(attackEdge, lastConvergedNote,
-                                  prev * smoothPole + rawDetNote * (1.0 - smoothPole));
+                                  ba.if(trackingAllowed,
+                                    prev * smoothPole + rawDetNote * (1.0 - smoothPole),
+                                    prev));
     smoothedDetNote = smoothedDetNoteStep ~ _;
-    heldDetNoteStep(prev) = ba.if(trustedTracker > 0.5, smoothedDetNote,
-                             ba.if(inLockWarmup, smoothedDetNote, prev));
+    heldDetNoteStep(prev) = ba.if(trackingAllowed, smoothedDetNote, prev);
     heldDetNote = heldDetNoteStep ~ _;
     shiftTarget = targetNote - heldDetNote;
     shiftStep(prev) = ba.if(attackEdge, shiftTarget,
@@ -166,7 +168,7 @@ with {
     freeSmooth = free : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
     freqDetInternal = detectedFreq(sigIn);
-    extFreqDetApplies = extFreqDet > minTrackHz & free < 0.5;
+    extFreqDetApplies = extFreqDet > (minTrackHz + 1.0) & free < 0.5;
     freqDet    = ba.if(extFreqDetApplies, extFreqDet, freqDetInternal) : max(minTrackHz);
     trustedTracker = extFreqDetApplies;
     freqDetDiag = attach(freqDet, freqDet : freqDetMeter);
@@ -182,15 +184,18 @@ with {
     sinceRiseStep(prev) = ba.if(anyRising, 0.0, prev + 1.0);
     sinceRise = sinceRiseStep ~ _;
     inWinWarmup = sinceRise < winFreezeDelaySamples;
-    winSamplesSmoothed = winSamplesRaw : si.smooth(ba.tau2pole(0.02));
-    winFrozenStep(prev) = ba.if(trustedTracker > 0.5, winSamplesSmoothed,
-                            ba.if(inWinWarmup, winSamplesSmoothed, prev));
-    winSamplesClamped = max(windowFloorSamples, int(winFrozenStep ~ _));
+    winTrackingAllowed = (trustedTracker > 0.5) | inWinWarmup;
+    winSamplesSmoothedStep(prev) = ba.if(winTrackingAllowed,
+                                     prev * ba.tau2pole(0.02) + winSamplesRaw * (1.0 - ba.tau2pole(0.02)),
+                                     prev);
+    winSamplesSmoothed = winSamplesSmoothedStep ~ _;
+    winSamplesClamped = max(windowFloorSamples, int(winSamplesSmoothed));
     winSamples = attach(winSamplesClamped, winSamplesClamped : winSamplesMeter);
-    xfSamplesSmoothed = xfSamplesRaw : si.smooth(ba.tau2pole(0.02));
-    xfFrozenStep(prev) = ba.if(trustedTracker > 0.5, xfSamplesSmoothed,
-                           ba.if(inWinWarmup, xfSamplesSmoothed, prev));
-    xfSamplesClamped = max(crossfadeFloorSamples, int(xfFrozenStep ~ _));
+    xfSamplesSmoothedStep(prev) = ba.if(winTrackingAllowed,
+                                    prev * ba.tau2pole(0.02) + xfSamplesRaw * (1.0 - ba.tau2pole(0.02)),
+                                    prev);
+    xfSamplesSmoothed = xfSamplesSmoothedStep ~ _;
+    xfSamplesClamped = max(crossfadeFloorSamples, int(xfSamplesSmoothed));
     xfSamples = attach(xfSamplesClamped, xfSamplesClamped : xfSamplesMeter);
     wetRaw = harmonySum(
         sigIn, winSamples, xfSamples, freqDet, trustedTracker,
