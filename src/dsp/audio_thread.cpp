@@ -1023,9 +1023,10 @@ static void* worker(void*) {
                                 (octaveRatioDown < kOctaveToleranceRatio && octaveRatioDown > 1.0f / kOctaveToleranceRatio);
                             int requiredStreak = (octaveSuspicious || rawAtTrackerFloor) ? kOctaveConfirmBlocks : kJumpConfirmBlocks;
                             if (extFreqGuardStreakBlocks >= requiredStreak) {
-                                extFreqGuardAnchor = rawFreq;
-                                extFreqGuardCandidate = 0.0f;
-                                extFreqGuardStreakBlocks = 0;
+                                constexpr float kConfirmedJumpSmoothCoeff = 0.15f;
+                                extFreqGuardAnchor = extFreqGuardAnchor * (1.0f - kConfirmedJumpSmoothCoeff) + rawFreq * kConfirmedJumpSmoothCoeff;
+                                extFreqGuardCandidate = rawFreq;
+                                extFreqGuardStreakBlocks = requiredStreak - 1;
                             }
                         }
                     }
