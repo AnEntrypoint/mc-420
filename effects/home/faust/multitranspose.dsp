@@ -202,10 +202,13 @@ with {
     xfSamplesSmoothed = xfSamplesSmoothedStep ~ _;
     xfSamplesClamped = max(crossfadeFloorSamples, int(xfSamplesSmoothed));
     xfSamples = attach(xfSamplesClamped, xfSamplesClamped : xfSamplesMeter);
+    anyGateHigh = (g0 > 0.5) | (g1 > 0.5) | (g2 > 0.5) | (g3 > 0.5) | (g4 > 0.5) | (g5 > 0.5);
+    anyGateHighRelease(prev) = ba.if(anyGateHigh, 1.0, max(0.0, prev - (1.0/(0.1*ma.SR))));
+    voiceActive = anyGateHighRelease ~ _;
     wetRaw = harmonySum(
         sigIn, winSamples, xfSamples, freqDet, trustedTracker,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5
-    ) : ma.tanh;
+    ) : ma.tanh : *(voiceActive);
     wet = formantTilt(formant, wetRaw);
     dryWet  = wet * (1.0-freeSmooth);
     loopWet = wet * freeSmooth;
