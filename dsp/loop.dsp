@@ -72,7 +72,7 @@ with {
         wrapLenCur = max(1, wlenNext);
         cycleInc = ba.if(masterLen < 0.5, wrapLenCur, masterLen);
         coffNext = ba.if(armEdge, 0.0,
-                    ba.if(masterPhaseWrapped, coffPrev + cycleInc, coffPrev));
+                    ba.if(masterPhaseWrapped, wrapAbs(coffPrev + cycleInc, wrapLenCur), coffPrev));
 
         absPos = wrapAbs(masterPhase - rsmNext + latencyBiasN + coffNext, wrapLenCur);
         speedClamped = max(0.1, min(8.0, effSpeed));
