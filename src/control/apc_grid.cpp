@@ -172,7 +172,6 @@ int ApcGrid::monitorFoldSlot(ParamStore& ps) {
 
 void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
     if (m_looperRecording[looper]) {
-        setLooper(ps, looper, "rec", 0.0f);
         m_looperHasContent[looper] = true;
         m_looperPlaying[looper] = true;
         setLooper(ps, looper, "play", 1.0f);
@@ -212,6 +211,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             }
             setLooper(ps, looper, "finishtarget", (float)m_masterLenSamples);
             setLooper(ps, looper, "finishreq", 1.0f);
+            setLooper(ps, looper, "rec", 0.0f);
             m_looperFinishReqReleaseAt[looper] = now_ms + 50;
             m_looperRecording[looper] = false;
         } else {
@@ -258,6 +258,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;
             setLooper(ps, looper, "finishtarget", (float)quantized);
             setLooper(ps, looper, "finishreq", 1.0f);
+            setLooper(ps, looper, "rec", 0.0f);
             m_looperFinishReqReleaseAt[looper] = now_ms + 50;
             m_looperFinishTargetPending[looper] = (float)quantized;
             m_looperFinishPendingSinceMs[looper] = now_ms;
