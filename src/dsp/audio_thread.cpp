@@ -971,6 +971,10 @@ static void* worker(void*) {
                 constexpr float kOctaveToleranceRatio = 1.05f;
                 constexpr int kSilenceResetBlocks = 40;
                 constexpr int kFreshOnsetConfirmBlocks = 3;
+                constexpr float kTrackerFloorHz = 60.0f;
+                constexpr float kTrackerFloorMarginHz = 0.5f;
+                bool rawAtTrackerFloor = rawFreq > 0.0f &&
+                    rawFreq < kTrackerFloorHz + kTrackerFloorMarginHz;
                 if (rawFreq <= 0.0f) {
                     extFreqGuardSilenceBlocks++;
                     if (extFreqGuardSilenceBlocks >= kSilenceResetBlocks) {
@@ -996,7 +1000,7 @@ static void* worker(void*) {
                             extFreqGuardStreakBlocks = 0;
                         }
                     } else {
-                        bool plausibleVsAnchor =
+                        bool plausibleVsAnchor = !rawAtTrackerFloor &&
                             (rawFreq < extFreqGuardAnchor * kJumpMaxRatio && rawFreq > extFreqGuardAnchor / kJumpMaxRatio);
                         if (plausibleVsAnchor) {
                             extFreqGuardAnchor = rawFreq;
@@ -1016,7 +1020,7 @@ static void* worker(void*) {
                             bool octaveSuspicious =
                                 (octaveRatioUp < kOctaveToleranceRatio && octaveRatioUp > 1.0f / kOctaveToleranceRatio) ||
                                 (octaveRatioDown < kOctaveToleranceRatio && octaveRatioDown > 1.0f / kOctaveToleranceRatio);
-                            int requiredStreak = octaveSuspicious ? kOctaveConfirmBlocks : kJumpConfirmBlocks;
+                            int requiredStreak = (octaveSuspicious || rawAtTrackerFloor) ? kOctaveConfirmBlocks : kJumpConfirmBlocks;
                             if (extFreqGuardStreakBlocks >= requiredStreak) {
                                 extFreqGuardAnchor = rawFreq;
                                 extFreqGuardCandidate = 0.0f;
