@@ -120,12 +120,15 @@ with {
     attachWrapLen(x) = attach(x, x*0.0 + float(wrapLen) : wrapLenMeter);
     readPosMeter = hbargraph("readposdiag2", 0.0, float(MAXLEN));
     attachReadPos(x) = attach(x, x*0.0 + float(readPos) : readPosMeter);
+    stateFlagsMeter = hbargraph("stateflagsdiag", 0.0, 15.0);
+    stateFlags = pend*1.0 + fin*2.0 + act*4.0 + gateNow*8.0;
+    attachStateFlags(x) = attach(x, x*0.0 + stateFlags : stateFlagsMeter);
     levelPeakDecay = pow(0.001, 1.0/4096.0);
     levelPeakFollow(x) = loop ~ _
     with {
         loop(prev) = max(abs(x), prev * levelPeakDecay);
     };
-    attachLevel(x) = attach(x, levelPeakFollow(x) : levelMeter) : attachWriteIdx : attachWrapLen : attachReadPos;
+    attachLevel(x) = attach(x, levelPeakFollow(x) : levelMeter) : attachWriteIdx : attachWrapLen : attachReadPos : attachStateFlags;
 };
 
 loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = in, (par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats))) :> _);

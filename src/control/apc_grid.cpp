@@ -363,9 +363,11 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
             if (!reached && now_ms - m_looperFinishPendingSinceMs[looper] > 500) {
                 static unsigned lastStuckLogMs[kLooperCount] = {};
                 if (now_ms - lastStuckLogMs[looper] > 500) {
-                    fprintf(stderr, "[diag-finish-stuck] looper=%d writeIdx=%.1f target=%.1f pendingMs=%u\n",
+                    int sf = (int)t.looperStateFlags[looper];
+                    fprintf(stderr, "[diag-finish-stuck] looper=%d writeIdx=%.1f target=%.1f pendingMs=%u pend=%d fin=%d act=%d gate=%d\n",
                             looper, (double)t.looperWriteIdx[looper], (double)m_looperFinishTargetPending[looper],
-                            now_ms - m_looperFinishPendingSinceMs[looper]);
+                            now_ms - m_looperFinishPendingSinceMs[looper],
+                            sf & 1, (sf >> 1) & 1, (sf >> 2) & 1, (sf >> 3) & 1);
                     lastStuckLogMs[looper] = now_ms;
                 }
             }

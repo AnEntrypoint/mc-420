@@ -72,6 +72,7 @@ public:
         float    looperWriteIdx[kLoopers] = {};
         float    looperWrapLen[kLoopers] = {};
         float    looperReadPos[kLoopers] = {};
+        float    looperStateFlags[kLoopers] = {};
         int      gridBeatIndex = -1;
     };
     Telemetry snapshotTelemetry() const;

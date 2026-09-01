@@ -324,7 +324,7 @@ static void* worker(void*) {
     struct ResolvedControl { int slot; float* zone; };
     std::vector<ResolvedControl> resolvedControls;
     int resolvedControlsForCount = -1;
-    struct LooperTelemetryZones { float* rec=nullptr; float* play=nullptr; float* vol=nullptr; float* level=nullptr; float* writeidx=nullptr; float* wraplen=nullptr; float* readpos=nullptr; };
+    struct LooperTelemetryZones { float* rec=nullptr; float* play=nullptr; float* vol=nullptr; float* level=nullptr; float* writeidx=nullptr; float* wraplen=nullptr; float* readpos=nullptr; float* stateflags=nullptr; };
     LooperTelemetryZones looperTelemetryZones[AudioThread::Telemetry::kLoopers];
     float* looperLenZone[AudioThread::Telemetry::kLoopers] = {nullptr};
     float* mlbZone = nullptr;
@@ -361,6 +361,7 @@ static void* worker(void*) {
             snprintf(z, sizeof z, "looper%2d/writeidx", lp);     tz.writeidx = resolveZone();
             snprintf(z, sizeof z, "looper%2d/wraplen", lp);      tz.wraplen  = resolveZone();
             snprintf(z, sizeof z, "looper%2d/readposdiag2", lp); tz.readpos  = resolveZone();
+            snprintf(z, sizeof z, "looper%2d/stateflagsdiag", lp); tz.stateflags = resolveZone();
         }
         for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) {
             snprintf(z, sizeof z, "looper%2d/len", lp);
@@ -673,6 +674,7 @@ static void* worker(void*) {
                     g_telem.looperWriteIdx[lp] = tz.writeidx ? *tz.writeidx : 0.0f;
                     g_telem.looperWrapLen[lp]  = tz.wraplen  ? *tz.wraplen : 0.0f;
                     g_telem.looperReadPos[lp]  = tz.readpos  ? *tz.readpos : 0.0f;
+                    g_telem.looperStateFlags[lp] = tz.stateflags ? *tz.stateflags : -1.0f;
                 }
             }
             g_telem.monitorMode = g_params && monitorFoldVal > 0.5f;
