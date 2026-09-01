@@ -185,11 +185,13 @@ with {
     winSamplesSmoothed = winSamplesRaw : si.smooth(ba.tau2pole(0.02));
     winFrozenStep(prev) = ba.if(trustedTracker > 0.5, winSamplesSmoothed,
                             ba.if(inWinWarmup, winSamplesSmoothed, prev));
-    winSamples = max(windowFloorSamples, int(winFrozenStep ~ _)) : attach(_, _ : winSamplesMeter);
+    winSamplesClamped = max(windowFloorSamples, int(winFrozenStep ~ _));
+    winSamples = attach(winSamplesClamped, winSamplesClamped : winSamplesMeter);
     xfSamplesSmoothed = xfSamplesRaw : si.smooth(ba.tau2pole(0.02));
     xfFrozenStep(prev) = ba.if(trustedTracker > 0.5, xfSamplesSmoothed,
                            ba.if(inWinWarmup, xfSamplesSmoothed, prev));
-    xfSamples = max(crossfadeFloorSamples, int(xfFrozenStep ~ _)) : attach(_, _ : xfSamplesMeter);
+    xfSamplesClamped = max(crossfadeFloorSamples, int(xfFrozenStep ~ _));
+    xfSamples = attach(xfSamplesClamped, xfSamplesClamped : xfSamplesMeter);
     wetRaw = harmonySum(
         sigIn, winSamples, xfSamples, freqDet, trustedTracker,
         n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5
