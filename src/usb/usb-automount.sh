@@ -26,13 +26,17 @@ fi
 
 modprobe ntfs3 2>/dev/null || true
 
-for FSTYPE in ntfs3 vfat ext4 exfat "" ntfs; do
-  if [ -z "$FSTYPE" ]; then
-    mount -o rw,noatime "$DEV" "$MOUNT_POINT" 2>/dev/null && break
-  else
-    mount -t "$FSTYPE" -o rw,noatime "$DEV" "$MOUNT_POINT" 2>/dev/null && break
-  fi
-done
+mount -t ntfs3 -o rw,noatime,force "$DEV" "$MOUNT_POINT" 2>/dev/null && MOUNTED=1 || MOUNTED=0
+
+if [ "$MOUNTED" = "0" ]; then
+  for FSTYPE in vfat ext4 exfat "" ntfs; do
+    if [ -z "$FSTYPE" ]; then
+      mount -o rw,noatime "$DEV" "$MOUNT_POINT" 2>/dev/null && break
+    else
+      mount -t "$FSTYPE" -o rw,noatime "$DEV" "$MOUNT_POINT" 2>/dev/null && break
+    fi
+  done
+fi
 
 if grep -q " $MOUNT_POINT " /proc/mounts 2>/dev/null; then
   echo "[usb-automount] mounted $DEV at $MOUNT_POINT"
