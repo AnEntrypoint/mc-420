@@ -4,6 +4,7 @@
 #include "../link/link_bridge.h"
 #include "sampler/sampler.h"
 #include "../storage/usb_recorder.h"
+#include "../storage/clip_exporter.h"
 
 #include <pthread.h>
 #include <sched.h>
@@ -125,6 +126,8 @@ LinkBridge* g_link = nullptr;
 aloop::Sampler* g_sampler = nullptr;
 aloop::Lv2Host* g_homeFx = nullptr;
 aloop::UsbRecorder* g_usbRecorder = nullptr;
+aloop::ClipExporter* g_clipExporter = nullptr;
+std::atomic<bool> g_clipExportTriggerPending{false};
 
 float g_manualSpeedMul = 1.0f;
 constexpr int kTransposeVoices = 6;
@@ -277,6 +280,8 @@ static void* worker(void*) {
     std::vector<float> loopHarmonyWetBuf((size_t)N, 0.0f);
     std::vector<float> masterGatedBuf((size_t)N, 0.0f);
     std::vector<float> loopSumPreBuf((size_t)N, 0.0f);
+    std::vector<float> looperSoloBuf[AudioThread::Telemetry::kLoopers];
+    for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) looperSoloBuf[lp].assign((size_t)N, 0.0f);
     std::vector<float> cueWetBuf((size_t)N, 0.0f);
     std::vector<float> masterWetBuf((size_t)N, 0.0f);
     float* fins[22] = {
@@ -291,8 +296,13 @@ static void* worker(void*) {
         xposeNoteBuf[5].data(), xposeGateBuf[5].data(),
         resonodeInBuf.data(),
     };
-    float* preOuts[4] = {
+    float* preOuts[4 + AudioThread::Telemetry::kLoopers] = {
         preFilterOutBuf.data(), loopHarmonyWetBuf.data(), masterGatedBuf.data(), loopSumPreBuf.data(),
+        looperSoloBuf[0].data(), looperSoloBuf[1].data(), looperSoloBuf[2].data(), looperSoloBuf[3].data(),
+        looperSoloBuf[4].data(), looperSoloBuf[5].data(), looperSoloBuf[6].data(), looperSoloBuf[7].data(),
+        looperSoloBuf[8].data(), looperSoloBuf[9].data(), looperSoloBuf[10].data(), looperSoloBuf[11].data(),
+        looperSoloBuf[12].data(), looperSoloBuf[13].data(), looperSoloBuf[14].data(), looperSoloBuf[15].data(),
+        looperSoloBuf[16].data(), looperSoloBuf[17].data(), looperSoloBuf[18].data(), looperSoloBuf[19].data(),
     };
     float* postIns[18] = {
         cueWetBuf.data(), masterWetBuf.data(), loopSumPreBuf.data(), loopHarmonyWetBuf.data(),
@@ -457,6 +467,9 @@ static void* worker(void*) {
 
     UsbRecorder usbRecorder(g_cfg.usbMountPoint, g_cfg.sampleRate, g_cfg.usbChunkMinutes, g_cfg.usbChunkCount);
     if (g_cfg.usbRecordEnabled) g_usbRecorder = &usbRecorder;
+
+    ClipExporter clipExporter(g_cfg.usbMountPoint, g_cfg.sampleRate);
+    g_clipExporter = &clipExporter;
 
 #ifdef ALOOP_HAVE_ALSA
     snd_pcm_t *cap = nullptr, *play = nullptr;
@@ -691,6 +704,7 @@ static void* worker(void*) {
                     g_telem.looperWrapLen[lp]  = tz.wraplen  ? *tz.wraplen : 0.0f;
                     g_telem.looperReadPos[lp]  = tz.readpos  ? *tz.readpos : 0.0f;
                     g_telem.looperStateFlags[lp] = tz.stateflags ? *tz.stateflags : -1.0f;
+                    g_telem.looperHasContent[lp] = g_telem.looperWrapLen[lp] > 0.5f;
                 }
             }
             g_telem.monitorMode = g_params && monitorFoldVal > 0.5f;
@@ -1060,6 +1074,18 @@ static void* worker(void*) {
                     lastLoggedShift = curShift;
                 }
             }
+            if (g_clipExporter) {
+                timespec clipTs; clock_gettime(CLOCK_MONOTONIC, &clipTs);
+                unsigned clipNowMs = (unsigned)(clipTs.tv_sec * 1000u + clipTs.tv_nsec / 1000000u);
+                if (g_clipExportTriggerPending.exchange(false, std::memory_order_relaxed)) {
+                    g_clipExporter->trigger(g_telem.looperHasContent, g_telem.looperWrapLen, clipNowMs);
+                }
+                for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) {
+                    g_clipExporter->pushBlock(lp, looperSoloBuf[lp].data(), N);
+                }
+                g_clipExporter->poll(clipNowMs);
+                g_telem.clipExportState = (int)g_clipExporter->state();
+            }
             std::copy(preFilterOutBuf.begin(), preFilterOutBuf.end(), cueWetBuf.begin());
             std::copy(masterGatedBuf.begin(), masterGatedBuf.end(), masterWetBuf.begin());
             bool delayVerbActive = delayVerbFxCue.hasPlugins() && delayVerbFxMaster.hasPlugins() &&
@@ -1160,6 +1186,9 @@ AudioThread::Telemetry AudioThread::snapshotTelemetry() const { return g_telem; 
 Sampler* AudioThread::sampler() const { return g_sampler; }
 Lv2Host* AudioThread::homeFx() const { return g_homeFx; }
 UsbRecorder* AudioThread::usbRecorder() const { return g_usbRecorder; }
+ClipExporter* AudioThread::clipExporter() const { return g_clipExporter; }
+
+void AudioThread::triggerClipExport() { g_clipExportTriggerPending.store(true, std::memory_order_relaxed); }
 bool AudioThread::setRealtime(int core, int prio) { return setRealtimeSelf(core, prio); }
 void AudioThread::workerLoop() {}
 

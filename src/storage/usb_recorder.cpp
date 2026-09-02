@@ -105,10 +105,15 @@ bool UsbRecorder::isMounted() const {
 int UsbRecorder::effectiveChunkCount() const {
     struct statvfs sv {};
     if (statvfs(m_mountPoint.c_str(), &sv) != 0) return m_chunkCount;
+    uint64_t totalBytes = (uint64_t)sv.f_blocks * (uint64_t)sv.f_frsize;
     uint64_t availableBytes = (uint64_t)sv.f_bavail * (uint64_t)sv.f_frsize;
+    uint64_t usedBytes = totalBytes > availableBytes ? totalBytes - availableBytes : 0;
+    uint64_t driveHalfBudget = totalBytes / 2;
+    uint64_t ringCurrentBytes = (uint64_t)m_effectiveChunkCount * (m_chunkMaxSamples * sizeof(int16_t) + 44);
+    uint64_t nonRingUsedBytes = usedBytes > ringCurrentBytes ? usedBytes - ringCurrentBytes : 0;
+    uint64_t ringBudget = driveHalfBudget > nonRingUsedBytes ? driveHalfBudget - nonRingUsedBytes : 0;
     uint64_t perChunkBytes = m_chunkMaxSamples * sizeof(int16_t) + 44;
-    uint64_t usableBytes = (uint64_t)(availableBytes * 0.9);
-    int fit = (int)(usableBytes / perChunkBytes);
+    int fit = (int)(ringBudget / perChunkBytes);
     if (fit < 2) fit = 2;
     return std::min(fit, m_chunkCount);
 }
@@ -197,6 +202,7 @@ bool UsbRecorder::drainToFile() {
         m_chunkSamplesWritten += take;
         if (m_chunkSamplesWritten >= m_chunkMaxSamples) {
             finalizeChunk();
+            m_effectiveChunkCount = effectiveChunkCount();
             int next = (m_chunkIndex + 1) % m_effectiveChunkCount;
             if (!openChunk(next)) { m_readCount.store(r, std::memory_order_release); return false; }
         }

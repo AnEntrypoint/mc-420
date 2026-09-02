@@ -11,6 +11,7 @@ class  LinkBridge;
 class  Sampler;
 class  Lv2Host;
 class  UsbRecorder;
+class  ClipExporter;
 
 struct AudioConfig {
     int sampleRate = 48000;
@@ -73,15 +74,21 @@ public:
         float    looperWrapLen[kLoopers] = {};
         float    looperReadPos[kLoopers] = {};
         float    looperStateFlags[kLoopers] = {};
+        bool     looperHasContent[kLoopers] = {};
+        int      clipExportState = 0;
         int      gridBeatIndex = -1;
     };
     Telemetry snapshotTelemetry() const;
+
+    static void triggerClipExport();
 
     Sampler* sampler() const;
 
     Lv2Host* homeFx() const;
 
     UsbRecorder* usbRecorder() const;
+
+    ClipExporter* clipExporter() const;
 
 private:
     void workerLoop();

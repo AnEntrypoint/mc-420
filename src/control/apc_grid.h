@@ -21,6 +21,7 @@ constexpr int kSampleRate = 48000;
 constexpr int kBlockSize  = 64;
 constexpr int kMaxLoopSamples = 48000 * 60;
 constexpr int kApcBtnShift = 0x62;
+constexpr int kApcBtnRec = 0x5D;
 
 enum class FxBank : uint8_t { Dub = 0, Guitar = 1, LofiFx = 2 };
 constexpr int kFxBankCount = 3;

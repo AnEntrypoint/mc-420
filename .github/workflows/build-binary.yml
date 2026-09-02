@@ -41,7 +41,7 @@ jobs:
           docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w alpine:3.20 sh -c '
             set -ex
             timeout 300 apk add --no-cache build-base cmake pkgconf git \
-              alsa-lib-dev lilv-dev lv2-dev \
+              alsa-lib-dev lilv-dev lv2-dev zlib-dev \
               linux-headers eudev-dev
             echo "toolchain:"; gcc --version | head -1; faust --version | head -1
             if [ -f src/CMakeLists.txt ]; then

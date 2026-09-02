@@ -42,6 +42,7 @@ set(DSP_SOURCES
   control/apc_leds.cpp    # APC Key25 LED output (grid/preset/transport/live-pitch colors)
   control/remote_control.cpp  # remote reboot + log-tail (udp/4446, token-authenticated)
   storage/usb_recorder.cpp    # continuous USB-drive ring recorder (lock-free handoff from the RT thread)
+  storage/clip_exporter.cpp   # REC-button clip export: per-looper WAV + Ableton/FL project files
   main.cpp                # the wiring
 )
 
@@ -120,7 +121,7 @@ if(LINK_INCLUDE)
   # before anything else, so Link's byte-stream serializer compiles under musl.
   target_compile_options(aloop PRIVATE -include ${CMAKE_SOURCE_DIR}/compat/musl_compat.h)
 endif()
-target_link_libraries(aloop PRIVATE ${ALSA_LIBRARIES} ${LILV_LIBRARIES} pthread dl)
+target_link_libraries(aloop PRIVATE ${ALSA_LIBRARIES} ${LILV_LIBRARIES} pthread dl z)
 add_dependencies(aloop faust_loop)
 
 # The effects are NOT a build dependency — they are the dubfx LV2 bundle deployed

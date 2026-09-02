@@ -200,14 +200,14 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
                 unsigned n = nowMs();
                 grid.pollHolds(n, ps, link, audio);
                 auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1);
+                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0);
                 continue;
             }
             if (pr < 0) {
                 unsigned n = nowMs();
                 grid.pollHolds(n, ps, link, audio);
                 auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1);
+                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0);
                 continue;
             }
             if (!realReady) continue;
@@ -222,7 +222,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         grid.pollHolds(now, ps, link, audio);
         {
             auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-            leds.refresh(now, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1);
+            leds.refresh(now, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0);
         }
 
         if (type == 0xB0 && d1 == 64) { grid.onSustainPedal(d2 >= 64, ps); continue; }
@@ -268,6 +268,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
                 if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onPadRelease((int)d1, now, ps, link, audio); continue; }
             }
             if (type == 0x90 && d2 > 0 && d1 == 0x51 && grid.shiftHeld()) { grid.onStopImmediate(ps, link); continue; }
+            if (type == 0x90 && d2 > 0 && d1 == kApcBtnRec) { AudioThread::triggerClipExport(); continue; }
             if (d1 == 0x5B) {
                 if (type == 0x90 && d2 > 0) { grid.onClearAll(true, ps, link); continue; }
                 if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onClearAll(false, ps, link); continue; }
@@ -279,10 +280,6 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
             if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onKeybedNoteOff((int)d1, ps, audio ? audio->sampler() : nullptr); continue; }
         }
 
-        if (channel == 0 && type == 0x90 && d2 > 0) {
-            fprintf(stderr, "[diag-midi-unmapped] channel=%d type=0x%02X note=%d(0x%02X) vel=%d\n",
-                    channel, type, (int)d1, (int)d1, (int)d2);
-        }
         uint32_t key = 0; float val = 0;
         if (type == 0xB0) { key = midiKey(false, d1); val = d2 / 127.0f; }
         else if (type == 0x90 && d2 > 0) { key = midiKey(true, d1); val = 1.0f; }

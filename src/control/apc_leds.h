@@ -24,11 +24,32 @@ constexpr int kApcLiveLedNote = 0x40;
 class ApcLeds {
 public:
     template <typename WriteFn>
-    void refresh(unsigned now_ms, const ApcGrid& grid, bool liveEngaged, WriteFn&& write, const float* looperLevels = nullptr, int gridBeatIndex = -1) {
+    void refresh(unsigned now_ms, const ApcGrid& grid, bool liveEngaged, WriteFn&& write, const float* looperLevels = nullptr, int gridBeatIndex = -1, int clipExportState = 0) {
         if (!bootMs_) bootMs_ = now_ms ? now_ms : 1;
         if (now_ms - bootMs_ < kBootDelayMs) return;
+
+        if (clipExportState != lastClipExportState_) {
+            if (clipExportState == 2 /* Done */ || clipExportState == 3 /* Failed */) {
+                clipFlashReleaseAt_ = now_ms + kClipFlashMs;
+                clipFlashIsError_ = clipExportState == 3;
+            }
+            lastClipExportState_ = clipExportState;
+        }
+        bool clipFlashActive = clipFlashReleaseAt_ != 0 && now_ms < clipFlashReleaseAt_;
+        if (clipFlashReleaseAt_ != 0 && now_ms >= clipFlashReleaseAt_) clipFlashReleaseAt_ = 0;
+
         if (now_ms - lastMs_ < kRefreshMs) return;
         lastMs_ = now_ms;
+
+        if (clipFlashActive) {
+            uint8_t flashColor = clipFlashIsError_ ? kLedRed : kLedGreen;
+            for (int row = 0; row < kApcRows; row++) {
+                for (int col = 0; col < kApcCols; col++) {
+                    sendCoalesced(row * kApcCols + col, flashColor, write);
+                }
+            }
+            return;
+        }
 
         for (int row = 0; row < kApcRows; row++) {
             for (int col = 0; col < kApcCols; col++) {
@@ -78,11 +99,15 @@ public:
 private:
     static constexpr unsigned kBootDelayMs = 2000;
     static constexpr unsigned kRefreshMs = 33;
+    static constexpr unsigned kClipFlashMs = 1200;
 
     unsigned bootMs_ = 0;
     unsigned lastMs_ = 0;
     std::array<uint8_t, 128> cache_{};
     std::array<bool, 128> cacheValid_{};
+    int lastClipExportState_ = 0;
+    unsigned clipFlashReleaseAt_ = 0;
+    bool clipFlashIsError_ = false;
 
     template <typename WriteFn>
     void sendCoalesced(int note, uint8_t velocity, WriteFn&& write) {
