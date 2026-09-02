@@ -24,7 +24,9 @@ if grep -q " $MOUNT_POINT " /proc/mounts 2>/dev/null; then
   exit 0
 fi
 
-for FSTYPE in "" vfat ext4 exfat ntfs; do
+modprobe ntfs3 2>/dev/null || true
+
+for FSTYPE in ntfs3 vfat ext4 exfat "" ntfs; do
   if [ -z "$FSTYPE" ]; then
     mount -o rw,noatime "$DEV" "$MOUNT_POINT" 2>/dev/null && break
   else
