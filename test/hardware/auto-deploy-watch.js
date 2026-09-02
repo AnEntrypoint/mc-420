@@ -2,11 +2,11 @@
 // Watches for a new green build-binary.yml run on the current HEAD commit,
 // downloads the aloop-aarch64-musl artifact, and deploys it to the live
 // device via the same stop -> sftp fastPut -> chmod -> start sequence
-// deploy-binary.js uses (never a bare restart -- musl ETXTBSY against a
+// deploy.js uses (never a bare restart -- musl ETXTBSY against a
 // currently-executing binary's inode, see AGENTS.md's dsp-hotdeploy.js
 // note). Meant for exactly this session's iterate-on-a-live-bug loop:
 // push a commit, this notices it went green, deploys automatically, no
-// manual gh run download / node deploy-binary.js round trip per iteration.
+// manual gh run download / node deploy.js round trip per iteration.
 //
 // Usage: node auto-deploy-watch.js [--host 192.168.137.100] [--once]
 //   --once   check once and exit (0 if deployed, 1 if not yet ready)
