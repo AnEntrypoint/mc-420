@@ -316,6 +316,8 @@ static void* worker(void*) {
     };
     int sidechainSrcSlot[AudioThread::Telemetry::kLoopers];
     for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) sidechainSrcSlot[lp] = -1;
+    int hasContentSlot[AudioThread::Telemetry::kLoopers];
+    for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) hasContentSlot[lp] = -1;
     int clearAllSlot = -1;
     int halfSpeedSlot = -1;
     int doubleSpeedSlot = -1;
@@ -704,7 +706,16 @@ static void* worker(void*) {
                     g_telem.looperWrapLen[lp]  = tz.wraplen  ? *tz.wraplen : 0.0f;
                     g_telem.looperReadPos[lp]  = tz.readpos  ? *tz.readpos : 0.0f;
                     g_telem.looperStateFlags[lp] = tz.stateflags ? *tz.stateflags : -1.0f;
-                    g_telem.looperHasContent[lp] = g_telem.looperWrapLen[lp] > 0.5f;
+                    if (g_params) {
+                        if (hasContentSlot[lp] < 0) {
+                            char z[32];
+                            snprintf(z, sizeof z, "looper%d/hascontent", lp);
+                            hasContentSlot[lp] = g_params->getSlot(z);
+                        }
+                        g_telem.looperHasContent[lp] = g_params->getBySlot(hasContentSlot[lp]) > 0.5f;
+                    } else {
+                        g_telem.looperHasContent[lp] = false;
+                    }
                 }
             }
             g_telem.monitorMode = g_params && monitorFoldVal > 0.5f;

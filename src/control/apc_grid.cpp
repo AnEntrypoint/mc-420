@@ -23,6 +23,8 @@ void ApcGrid::bindAll(ParamStore& ps) {
         ps.bind(name, 0.0f);
         snprintf(name, sizeof name, "looper%d/sidechainsrc", looper);
         ps.bind(name, 0.0f);
+        snprintf(name, sizeof name, "looper%d/hascontent", looper);
+        ps.bind(name, 0.0f);
     }
     ps.bind("fx/pitchbend");
     ps.bind("fx/pitchbend_engaged");
@@ -347,6 +349,11 @@ void ApcGrid::onPadRelease(int note, unsigned now_ms, ParamStore& ps, LinkBridge
 void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
     if (m_bankFlashReleaseAt != 0 && now_ms >= m_bankFlashReleaseAt) {
         m_bankFlashReleaseAt = 0;
+    }
+    for (int looper = 0; looper < kLooperCount; looper++) {
+        char name[32];
+        snprintf(name, sizeof name, "looper%d/hascontent", looper);
+        ps.setByName(name, m_looperHasContent[looper] ? 1.0f : 0.0f);
     }
     {
         auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
