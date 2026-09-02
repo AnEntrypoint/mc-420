@@ -279,6 +279,10 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
             if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onKeybedNoteOff((int)d1, ps, audio ? audio->sampler() : nullptr); continue; }
         }
 
+        if (channel == 0 && type == 0x90 && d2 > 0) {
+            fprintf(stderr, "[diag-midi-unmapped] channel=%d type=0x%02X note=%d(0x%02X) vel=%d\n",
+                    channel, type, (int)d1, (int)d1, (int)d2);
+        }
         uint32_t key = 0; float val = 0;
         if (type == 0xB0) { key = midiKey(false, d1); val = d2 / 127.0f; }
         else if (type == 0x90 && d2 > 0) { key = midiKey(true, d1); val = 1.0f; }
