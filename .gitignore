@@ -57,6 +57,8 @@ tmp/
 .image-flash-work/
 
 test/hardware/aloop.conf.backup.*
+.pi3-sdcard-work/
+.pi4-card-backup-*/
 __pycache__/
 
 .claude/
