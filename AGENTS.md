@@ -1810,6 +1810,97 @@ patch's identity) still stands — re-verify with
 `coupling_changes_output` AND `sustained_excitation_stability` checks
 before retuning either constant.
 
+**Coupling is now skew-symmetric energy exchange on peak-normalised states, and
+the clamp is genuinely a last resort.** The `tanh(x*0.25)*4.0` guard around
+`coupleAmt = couple*8.0` is gone. Each mode exports `rawOut*aliasGuard /
+modePeakGain(r)` — a peak-normalised state, so loop gain is decay-independent —
+the network computes `u_{k+1} - u_{k-1}` (skew, i.e. lossless exchange), scales
+by `couple*0.45`, and a hard `min/max` clamp at +-8 is the only guard.
+`modePeakGain(r) = sqrt(K(1+r)/(1-r))` was checked against the exact filter
+response over the whole (T60, f) range (max error 0.14%), so `2c <= 0.901 < 1`
+is a real small-gain bound.
+
+BOTH approaches the review named were built and measured over 72 sustained
+corners against a guard-free twin. Symmetric exchange at the same coefficient
+gives a 0.22% couple effect; **skew gives 12.84%** — ~58x the audible effect —
+with zero clamping and zero limiter saturation even at 4.4x the symmetric bound.
+`coupleSmallGainMax = 0.45` is kept anyway so the design holds under both the
+energy-conservation and small-gain guarantees, not just the empirical sweep.
+A hard clamp was chosen over `tanh` deliberately: `tanh` is never exactly
+identity, so "never engages" is unprovable, whereas a hard clamp is exactly
+identity below threshold. Probed over 150 corners, the SUM over all 24 modes of
+|normalised coupling read| peaks at 0.583 against the +-8.0 per-mode clamp —
+13.7x headroom on a quantity that upper-bounds any single mode.
+
+**A separation-aware coupling bound does NOT hold — do not re-propose it.**
+Making the coefficient frequency-aware via the Lorentzian bound
+`max|H_k*H_k'| <= G_kG_k'/(1+(df/(B_k+B_k'))^2)` was tested over 4000 random
+(T60, f) pairs and is violated by up to 7619x; the `(1-z^-2)` numerator's
+far-field tails are not Lorentzian.
+
+**Bandwidth is frequency-proportional.** `modeInvT60 = (1/decay) *
+(f1/261.6Hz) * rho^p` with `p = 1.934*log2(1/damping)` and `rho` the mode's live
+frequency ratio, so mode overlap is note-invariant and `damping` is a real
+frequency power law rather than a mode-INDEX power law. The 1.934 slope
+(`5/log2(6)`) is calibrated to reproduce the shipped `damping^(k-1)` factor
+exactly at mode 6, preserving the knob's shipped meaning. `1 - r` comes directly
+from `6.907755/(SR*T60)` (relative error < 3e-5), removing 24 `pow` calls per
+voice. Measured mode-1 overlap `BW/(f2-f1)` across notes 24-96 goes from a 64.0x
+spread to 1.000x at the old divergent corner's settings.
+
+**24 modes, five named ratio tables, loudness normalisation.** `string`
+(1..24, exactly harmonic, and the DEFAULT so the plugin is a harmonic bank with
+no C++ change), `bell` (11 measured church-bell partials plus a plate-density
+continuation), `plate` (`m^2+n^2`), `membrane` (Bessel zeros `j_mn/j_01`), `bar`
+(free-free `beta^2`). Blended convexly by five hsliders with a string fallback at
+zero sum, log-blended once and shared across all 4 voices (24 `log` call sites in
+the generated C++, not 96). Mode amplitude is `k^-0.85`; the old hand-tuned
+mode-6 `0.55` bump is deliberately NOT carried over — its documented
+justification was a `b0`/`r` interaction at long T60 that the new bandwidth law
+removes. `decayLoudnessNorm = 1.06*(decay/1.2)^0.17` cuts the decay-axis
+loudness spread from 7.5dB to 1.7dB while leaving the default patch level
+within 2.8%, so `outLevel = 25` still means what it did.
+
+Measured distinctness (note 52, decay 4.0, damping 0.97) — centroid /
+inharmonic fraction: string 1490Hz/0.21, bell 1393Hz/0.51, plate 1794Hz/0.53,
+membrane 703Hz/0.76, bar 2499Hz/0.59; minimum pairwise max-relative-feature
+difference 0.224. These are genuinely different instruments, not relabelled
+copies.
+
+**UNRESOLVED, and it gates shipping: the mode-count CPU cost.** Independently
+measured against the true pre-change baseline, 4 voices, 20s audio, one x86
+core: **6.29% -> 14.24%, i.e. +7.95 percentage points (2.26x)**. Real generated
+C++ goes 2939 -> 9812 lines with per-sample `cos 24->96, sin 24->96, exp 1->185,
+sqrt 6->192`. The review's estimate that "biquads are nearly free, a few percent
+of a core" is WRONG as applied: the biquads themselves are nearly free, but
+`freqGlide` and the glided knobs make every mode's coefficient recomputation
+sample-rate work, and that is the entire cost. Extrapolating at ~3.5x for a
+Cortex-A72 puts this near 0.5ms of the 1.333ms block — Resonode is only computed
+when engaged, but this needs a real on-device witness before it can be trusted.
+`modeCount` is a single constant on line 8 and the measured curve is
+6 modes 4.2% / 12 modes 6.0% / 16 modes 7.7% / 24 modes 10.4% (agent's harness,
+which subtracts its floor), so dropping to 16 or 12 is one edit and the 24-entry
+tables stay complete either way.
+
+**`modes_2_to_6_are_not_starved` FAILS as literally written after this change
+(28.0x against a 15x bound), and that is a measurement artifact, proven by
+isolation.** With `positionDriftAmt` set to 0 the worst ratio across all 20
+measurable modes drops to 8.7x, inside the bound; `stretchJitter` contributes
+nothing (bit-identical). The shipped position-drift envelope sweeps
+`positionLive` from ~0.24 to 0.08 across the check's own 10-90ms window, so
+high-index modes cross a `sin(pi*position*k)` null and partially cancel in the
+windowed FFT. The baseline passed at 9.7x only because of the mode-6 `0.55`
+bump (2.5x; 9.7 x 2.5 = 24, matching). Restoring a mode-6-shaped bump would turn
+the check green without fixing anything real, which is why it was not done.
+
+**Control wiring**: the five `fx/resonode/shape/*` names MUST be `ps.bind()`-ed
+in `ApcGrid::bindAll` — `ParamStore::setByName` is a silent no-op on an unbound
+name, and this exact bug class has already hit `fx/resonode/engaged` and
+`fx/resonode/collision`. They reach the plugin through the existing
+`fx/resonode/` prefix match in `audio_thread.cpp` (the lambda at line 136), and
+`Lv2Host::setControl`'s mangled-prefix match resolves them uniquely because none
+of `fx_resonode_shape_{string,bell,plate,membrane,bar}` is a prefix of another.
+
 **Scope note on "doesn't quite sound like Objekt" (disclosed, not fully
 addressed)**: the numerical-instability fix above addresses "feeds back
 easily"/"unpredictable" directly (a real divergence bug, now closed). It

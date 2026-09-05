@@ -54,6 +54,11 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("fx/resonode/collision", 0.0f);
     ps.bind("fx/resonode/level", 25.0f);
     ps.bind("fx/resonode/couple", 0.15f);
+    ps.bind("fx/resonode/shape/string", 1.0f);
+    ps.bind("fx/resonode/shape/bell", 0.0f);
+    ps.bind("fx/resonode/shape/plate", 0.0f);
+    ps.bind("fx/resonode/shape/membrane", 0.0f);
+    ps.bind("fx/resonode/shape/bar", 0.0f);
     ps.bind("fx/microrepeat_div");
     ps.bind("fx/monitorfold");
     ps.bind("fx/formant");
@@ -829,14 +834,15 @@ static int granPitchIntervalSetFromKnob(float v01) {
     return Sampler::kGrainPitchOctaves + idx;
 }
 
-struct ResonodePatch { float position, decay, damping, stretch, collision; };
+struct ResonodePatch { float position, decay, damping, stretch, collision;
+                       float shapeString, shapeBell, shapePlate, shapeMembrane, shapeBar; };
 
 constexpr int kResonodePatchCount = 4;
 static const ResonodePatch kResonodePatches[kResonodePatchCount] = {
-    { 0.080f, 0.150f, 0.800f, -0.100f, 0.550f },
-    { 0.080f, 7.000f, 0.970f,  1.200f, 0.150f },
-    { 0.080f, 7.000f, 0.970f, -0.100f, 0.000f },
-    { 0.420f, 7.000f, 0.150f, -0.100f, 0.300f },
+    { 0.080f, 0.150f, 0.800f, -0.100f, 0.550f,  0.0f, 0.0f, 0.4f, 0.6f, 0.0f },
+    { 0.080f, 7.000f, 0.970f,  1.200f, 0.150f,  0.0f, 0.7f, 0.0f, 0.0f, 0.3f },
+    { 0.080f, 7.000f, 0.970f, -0.100f, 0.000f,  1.0f, 0.0f, 0.0f, 0.0f, 0.0f },
+    { 0.420f, 7.000f, 0.150f, -0.100f, 0.300f,  0.7f, 0.0f, 0.0f, 0.3f, 0.0f },
 };
 
 struct ResonodeDirectKnobRange { const char* zone; float lo; float hi; bool logTaper; };
@@ -861,7 +867,7 @@ void ApcGrid::applyResonodePatchMorph(ParamStore& ps) {
 
     ResonodePatch blend = kResonodePatches[0];
     if (totalWeight > 0.0001f) {
-        blend = ResonodePatch{0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+        blend = ResonodePatch{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
         for (int p = 0; p < kResonodePatchCount; p++) {
             float wn = weight[p] / totalWeight;
             blend.position  += wn * kResonodePatches[p].position;
@@ -869,8 +875,18 @@ void ApcGrid::applyResonodePatchMorph(ParamStore& ps) {
             blend.damping   += wn * kResonodePatches[p].damping;
             blend.stretch   += wn * kResonodePatches[p].stretch;
             blend.collision += wn * kResonodePatches[p].collision;
+            blend.shapeString   += wn * kResonodePatches[p].shapeString;
+            blend.shapeBell     += wn * kResonodePatches[p].shapeBell;
+            blend.shapePlate    += wn * kResonodePatches[p].shapePlate;
+            blend.shapeMembrane += wn * kResonodePatches[p].shapeMembrane;
+            blend.shapeBar      += wn * kResonodePatches[p].shapeBar;
         }
     }
+    ps.setByName("fx/resonode/shape/string", blend.shapeString);
+    ps.setByName("fx/resonode/shape/bell", blend.shapeBell);
+    ps.setByName("fx/resonode/shape/plate", blend.shapePlate);
+    ps.setByName("fx/resonode/shape/membrane", blend.shapeMembrane);
+    ps.setByName("fx/resonode/shape/bar", blend.shapeBar);
     ps.setByName("fx/resonode/position", blend.position);
     ps.setByName("fx/resonode/decay", blend.decay);
     ps.setByName("fx/resonode/damping", blend.damping);

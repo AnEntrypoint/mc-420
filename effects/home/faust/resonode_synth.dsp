@@ -158,8 +158,8 @@ coupleCoef = couple*coupleSmallGainMax;
 coupleGuardCeil = 8.0;
 coupleGuard(x) = max(-coupleGuardCeil, min(coupleGuardCeil, x));
 
-neighbourSum(n) = route(n, n, par(i, n-1, (i+1, i+2)), par(i, n-1, (i+2, i+1)));
-couplingNetwork(n) = par(i, n, coupleGuard) : neighbourSum(n) : par(i, n, *(coupleCoef));
+neighbourExchange(n) = route(n, 2*n, par(i, n-1, (i+2, 2*i+1)), par(i, n-1, (i+1, 2*i+2))) : par(i, n, -);
+couplingNetwork(n) = par(i, n, coupleGuard) : neighbourExchange(n) : par(i, n, *(coupleCoef));
 
 modeStage(i, coupledIn, exc, freqFund, ratioExponent, positionLive) = normalisedOut, weightedOut
 with {
