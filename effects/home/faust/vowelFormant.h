@@ -83,26 +83,31 @@ struct SibilanceDetector {
     float xPrev = 0.0f;
     float envBroad = 0.0f;
     float envHf = 0.0f;
-    static constexpr float kHpCoeff = 0.30f;
+    float unpitchedGate = 0.0f;
+    static constexpr float kHpPole = 0.5925f;
+    static constexpr float kHpGain = (1.0f + kHpPole) * 0.5f;
     static constexpr float kBroadTc = 1.0f / 400.0f;
     static constexpr float kHfTc = 1.0f / 120.0f;
     static constexpr float kRatioFloor = 0.45f;
     static constexpr float kRatioSpan = 0.35f;
+    static constexpr float kUnpitchedGateTc = 1.0f / 240.0f;
 
-    inline float update(float x) {
-        float hp = kHpCoeff * (hpState + x - xPrev);
+    inline float update(float x, bool pitchTrackerLocked) {
+        float hp = kHpPole * hpState + kHpGain * (x - xPrev);
         hpState = hp;
         xPrev = x;
         float ax = fabsf(x);
         float ahp = fabsf(hp);
         envBroad += (ax - envBroad) * kBroadTc;
         envHf += (ahp - envHf) * kHfTc;
+        float unpitchedTarget = pitchTrackerLocked ? 0.0f : 1.0f;
+        unpitchedGate += (unpitchedTarget - unpitchedGate) * kUnpitchedGateTc;
         if (envBroad < 1e-6f) return 0.0f;
         float ratio = envHf / envBroad;
         float amt = (ratio - kRatioFloor) / kRatioSpan;
         if (amt < 0.0f) amt = 0.0f;
         if (amt > 1.0f) amt = 1.0f;
-        return amt;
+        return amt * unpitchedGate;
     }
 };
 

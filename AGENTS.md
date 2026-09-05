@@ -1059,47 +1059,68 @@ signal argument into `pitchPoly`'s `process()`; real-world CC range is
 m_keysMode==KeysMode::MultiKey)` — a genuine no-op when neither pitch-shift
 engine is active).
 
-**Investigated but NOT fixed this way — a tempting routing fix for "gappy"
-turned out to be unsafe, keep it that way**: `EngineSoladSnac::processBlock()`
-blends two internal signals — the phase-coherent splice/PSOLA reader (`y`)
-and `GrainFormant`'s independent overlap-add grain resynthesis (`gOut`, the
-ONLY path that moves formants independently of pitch) — and forces the mix
-to `1.0` (100% grain path) for ANY upward shift beyond `scale > 1.02`
-(~0.34 semitones) regardless of the formant setting. It looked like exactly
-the mechanism behind "pushing the pitch up a bit with neutral formant makes
-it gappy" (neutral formant silently still meant "use the grain path"), and
-also behind "some pitches/formants are more latent than others" (the grain
-path's own `targetLag = Tin*(3+fm)` scales with the detected period and the
-formant factor). **A real attempt to disable the forced-grain override for
-the polyphonic voices only (leaving the mono "pedal ride" engine's default
-untouched) was built, then reverted after direct measurement proved it
-unsafe**: a standalone C++ harness linking `soladSnacOctaver.h` directly
-(bypassing Faust/DawDreamer entirely — see the JIT-limitation note below)
-showed the splice-only path (`y` alone, `mixTgt` forced to 0) is NOT
-pitch-accurate for real shifts on a clean sine — up to **-200 cents**
-(nearly 2 semitones flat) at some frequency/shift combinations, worst around
-+1-2 semitones at 110-220Hz, independent of any formant or vowel/sibilance
-work. This bug was never visible before because the `scale > 1.02` override
-ALWAYS routed every real shift through the (separately measured, ~1-5 cents
-accurate) grain path, on both engines, unconditionally — so "the splice path
-alone is high quality" (this file's own prior "0.99-1.00 spectral purity on
-a clean sweep" claim, which is about harmonic distortion, not frequency
-accuracy) was never actually tested at real shift amounts. **Do not disable
-or raise the `scale > 1.02` forced-grain threshold on either engine without
-first fixing this splice-path frequency bug** (most likely in
-`triggerSpliceByPeriod`'s period-multiple resplicing interacting with the
-active/passive crossfade) and re-verifying with the same kind of direct
-sine-frequency harness — a plausible next step for a session with more
-time, but out of scope for the fixes actually shipped here. The literal
-"gappy" root cause on real (non-sine) signal therefore remains OPEN — the
-grain path is confirmed pitch-accurate and free of gross amplitude dropouts
-on both synthetic sine and real vocal/piano/violin corpus content (measured
-via the same harness, zero-drop RMS-ratio check across neutral/±1.4 formant
-and 0.5-2 semitone shifts), so the remaining "gappy" quality is most likely
-a subtler artifact (grain-overlap phase drift when the SNAC period estimate
-`Tin` isn't exactly locked between its ~43ms `SNAC_HOP` updates) that needs
-real-hardware/real-mic listening to characterize further, per the project's
-own "compiling/synthetic-testing clean proves nothing" rule.
+**FIXED (supersedes the prior "splice path is mysteriously inaccurate" note):
+the splice path had no upward-shift mechanism at all.** `triggerSpliceByPeriod`
+fired only on `driftFromTarget > trigger` — the reader falling BEHIND, which is
+what a downward shift produces. On any upward shift the reader gains on the
+writer, drift goes negative, and the periodic resplice could never fire. The
+only remaining path was the emergency branch at `gap < SINC_HALF+2`, which was
+effectively a no-op (`newPos = wr - 64` sits within half a period of the reader,
+so the period-multiple rounding gave 0 and both crossfaded readers landed on the
+same position); the reader then overran the writer and read ring-stale audio.
+That, not a subtle resplice/crossfade interaction, was the measured -200 cents.
+The `scale > 1.02` forced-grain override existed purely to paper over it, and the
+mono "pedal ride" lane never surfaced it because it is a downward effect.
+
+The root cause behind the root cause: `INITIAL_READ_OFFSET_DEFAULT` is 64
+samples, but one period at 110Hz is 436 — there was no headroom behind the
+writer to resplice backward INTO. Both halves are now fixed:
+`upshiftTargetLag()` raises the target lag to `kUpshiftLagPeriods (1.5) * period
++ SINC_HALF + 2` whenever `m_scale > 1.0` and a period is known, and the drift
+test is symmetric (`driftFromTarget < -trigger` jumps the passive reader BACKWARD
+by `n*per` through the same value+slope candidate search — textbook SOLA for
+pitch-up, repeating segments). `shrinkSpliceCount` bounds |n| on both sides.
+The added lag is engaged-only wet-path latency (covered by the Working Rules
+carve-out) and is SHORTER than the grain path it replaces: ~14ms vs ~36ms at
+110Hz.
+
+Measured on a clean sine via the standalone C++ harness (splice path isolated,
+`mixTgt` forced to 0), before -> after: worst upward error **-204.7 cents ->
++18.9 cents**; envelope-stability cv **0.46 -> 0.044**; amplitude drops
+**15 -> 0**. Downward and unity shifts are **bit-identical** across a 108-case
+sweep (6 frequencies x 6 ratios x 3 formant depths) — the mono engine is
+provably untouched. Because the splice path now beats the grain path on
+envelope stability at neutral formant (440Hz/+12: cv 0.122 -> 0.023), the
+`scale > 1.02` forced-grain override has been REMOVED; neutral formant now runs
+on the phase-coherent path, which is the fix for "gappy" on upward shifts.
+
+**Open, disclosed, NOT fixed: `GrainFormant` shifts pitch by an octave at high
+formant settings.** Measured at unity pitch on the shipped code, the output is
+correct for `fx/formant` depth <= 0.7 and jumps to **+1193 cents (exactly 2x)**
+for depth >= 0.9, at both 110Hz and 220Hz. The threshold is where `mixTgt`
+crosses ~0.5 and the grain path becomes the dominant term — so the grain engine
+has ALWAYS produced octave-up content at large `fm`; it was merely masked below
+half mix. Cause is structural, not a tuning error: the grain window is
+`2*Tin` long while its read span is `len*fm`, so at `fm ~ 2` each grain carries
+~4 input periods compressed into 2 output periods and the resampled periodicity
+dominates the OLA hop that is supposed to set the pitch. Shortening the window
+to keep the input span at ~2 periods would make it shorter than the hop and
+open real gaps — that window-vs-hop tension IS the "gappy" on the grain path.
+This is reachable in production (the CC maps to a practical +-1.5). The correct
+fix is to stop using time-domain grain resampling for formants at all and move
+to an LPC spectral-envelope model (whiten, recolor), which shifts no pitch and
+adds no latency; the splice path now handles pitch correctly in both directions
+on its own, so the two concerns no longer need to share one mechanism.
+
+**Measured and REJECTED: reducing the grain path's `targetLag`.** The
+suggestion to cap the grain lag (it is `Tin*(3+fm)`, i.e. 40-60ms at low guitar
+notes) was implemented and swept against envelope stability across 3 frequencies
+x 5 ratios x 6 formant depths. It makes the grain path WORSE, monotonically:
+mean cv 0.0231 at the shipped `periods=3.0, no ceiling`, 0.0347 with a 960-sample
+ceiling, 0.0515 at `periods=1.0`. Latency there is not free quality. The shipped
+constants are retained; the real latency win came instead from removing the
+forced-grain override, which takes the grain path out of the neutral-formant
+signal path entirely.
 
 **Real formant/vowel/sibilance shaping (new)**: `vowelFormant.h` adds a
 `VowelFormantShaper` (3 parallel RBJ peaking biquads tuned to F1/F2/F3 of a
@@ -1119,10 +1140,23 @@ onto the U-O-A-I-E vowel continuum, so sweeping the one existing formant
 knob morphs through real vowel coloration on top of whatever `GrainFormant`
 mix the engine already settles on, instead of just a spectral-tilt
 brightness cue — at `formant=0` both new stages are fully bypassed (zero
-coloring, verified identity). Sibilance detection runs unconditionally (not
-formant-gated): a detected fricative/consonant crossfades the voice's
+coloring, verified identity). Sibilance detection is gated on the SNAC
+tracker being UNLOCKED (`!periodOk()`, smoothed over ~5ms) as well as on the
+HF-energy ratio: a detected fricative/consonant crossfades the voice's
 output back toward its own raw dry input (up to 85%) so "s"/"sh"/"f"/"t"
 transients stay intelligible instead of being pitch/formant-warped.
+The HF-ratio test alone was a measured liability on the primary instrument —
+the ungated detector fired **full-scale (peak 1.0) on both a guitar pick
+attack and a sustained guitar note**, because a pick attack is exactly the
+broadband HF burst it looks for. Its one-pole highpass was also wrong rather
+than merely leaky (`hp = 0.30*(hpState + x - xPrev)` has a gain of only 0.46
+at Nyquist, so it attenuated the very band it was measuring, and real
+sibilance scored a mean of just 0.035). It is now a unity-at-Nyquist form
+(`hp = p*hpState + ((1+p)/2)*(x - xPrev)`, `p = 0.5925`, corner ~4kHz).
+Measured after: guitar pick attack and sustained guitar note both **0.000**,
+genuine unpitched sibilance **0.988 mean**. A pitched instrument holds its
+SNAC lock through a pick transient (`m_lockMiss` needs 3 consecutive misses),
+which is what makes the gate discriminate.
 Verified via a standalone C++ harness (`pitch_poly_ffi.h` linked directly,
 no Faust JIT involved — see the DawDreamer-limits note below): finite/
 bounded output across the full formant/shift extremes (formant -3..+3,
@@ -1166,6 +1200,65 @@ now shells out to it per test case instead of calling `daw.RenderEngine`/
 `make_faust_processor` at all. This is also the pattern to reach for when
 verifying any future change to this file's shifter/formant/sibilance
 behavior — a standalone C++ harness against the real FFI, never the JIT.
+
+## One shared SNAC period tracker serves all 6 poly voices
+
+`snacPeriodTracker.h` holds the SNAC sweep (buffer, `snacBegin`,
+`detectPitchStep`, period/validity/lock-miss state), extracted verbatim out of
+`EngineSoladSnac`. The extraction is provably behavior-preserving: a 108-case
+sweep (6 frequencies x 6 ratios x 3 formant depths) is **bit-identical** to the
+pre-refactor engine.
+
+`EngineSoladSnac` owns one (`m_ownSnac`) and uses it by default, so the mono
+free-transpose engine is unchanged. `attachSharedTracker()` points it at an
+external tracker instead; `pitch_poly_ffi.h` creates ONE shared instance, feeds
+it from voice 0's per-sample tick (which the Faust graph always evaluates —
+Faust has no runtime branching, so all 6 `voiceOut` calls run every sample
+regardless of gate) and attaches all 6 voices to it. Six identical sweeps over
+one identical `sigIn` became one.
+
+`reengage()` on a shared-tracker voice now INHERITS the locked period instead of
+falling back to `kReengageSeedPeriod` (600 samples / ~80Hz), which is what
+removes most of the per-note lock-time variance. Only an owned-tracker engine
+still resets its own tracker on reengage.
+
+Measured on the 6-voice poly engine (x86_64 dev host — NOT the Pi 4 Cortex-A72;
+treat the ratios as indicative and the absolute microseconds as not
+transferable): mean per-block **60.4us -> 37.5us** against the 1333us budget,
+and p99 per-block **208.6us -> 68.2us**. The p99 number is the one that matters:
+it is the chord-attack case where six independent sweeps used to synchronize
+into the same blocks. Median rises slightly (27.9 -> 32.8us) because the splice
+path now genuinely does the pitch-shifting work it previously skipped.
+
+Part of that win is a second change in the same area: `GrainFormant::read()` used
+to run its whole overlap-add voice loop every sample even when the grain mix was
+zero. With the forced-grain override gone, neutral formant means the mix really
+is zero, so the engine now calls `suspend()` instead (below `kGrainBypassFloor`),
+which drops the grain voices and clears `m_seeded` so the next engagement
+re-seeds cleanly. **The formant-factor glide must still advance while
+suspended** — `mixTgt` is derived from `factorNow()`, so freezing the glide
+would make small formant settings unable to ever re-cross the mix floor. That is
+why `advanceFactor()` is called from both `read()` and `suspend()`. The per-grain
+Hann window is also a LUT now rather than a per-sample `cosf`.
+
+## Every momentary voice must stay engaged through its own release tail
+
+`multitranspose.dsp` gated the shifter on `engaged = gate > 0.5` while `voiceEnv`
+is an `en.adsr` with a 50ms release. So on every note-off the engine disengaged
+instantly, `dubfx_pitch_tick_poly` returned raw `x`, and the voice played a 50ms
+tail of UNSHIFTED dry input at full envelope — plus a discontinuity from the
+64-sample-delayed `outBuf` to an instantaneous sample. Measured: the release tail
+read **-492 cents** off the shifted target (i.e. it was the dry input pitch).
+`engaged` is now held by a linear release counter (`engageReleaseHoldS = 0.06`,
+mirroring the file's existing `anyGateHighRelease` idiom) that is guaranteed to
+reach exactly 0 — do NOT gate on `voiceEnv > 0` directly, since an asymptotic
+envelope may never reach the threshold and the engine would never disengage or
+re-`reengage()` on the next note.
+
+`DubfxPolyVoice::pos`/`inBuf`/`outBuf` are also cleared on reengage. They were
+not, so a note-on replayed up to 64 stale samples of the PREVIOUS note: measured
+a **0.549 peak** burst into the first block of a new note whose own input was
+only 0.02 amplitude, a 27x onset blowout. Now exactly 0.
 
 ## `pitchtracker.lv2`: standalone autocorrelation pitch tracker
 
@@ -1277,11 +1370,10 @@ independent-formant grain-playback-speed stage (`grainFormant.h`).
   by both the mono and polyphonic engines. The measured spectral purity
   (0.99-1.00 THD on a clean sine sweep up to 5000Hz, no degradation near
   700Hz) still stands for this class in general, but see the
-  `multitranspose.dsp` section's "Investigated but NOT fixed" note for a
-  real, separately-discovered FREQUENCY-ACCURACY (not THD) bug in the
-  splice-only mixing mode (`mixTgt` forced to 0) that applies equally to
-  both engines and is currently masked on both by the `scale > 1.02`
-  forced-grain-mix default.
+  `multitranspose.dsp` section's splice-path note for the upward-shift
+  frequency-accuracy defect that was found and FIXED there (it applied to
+  this class generally, not to one engine); the `scale > 1.02`
+  forced-grain-mix default that used to mask it no longer exists.
 
 **Open, disclosed bug**: a genuine SNAC period-tracker drift bug on
 tremolo/amplitude-modulated or dynamically-varying content (e.g. vibrato,
