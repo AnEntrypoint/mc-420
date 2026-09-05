@@ -823,6 +823,97 @@ call sites, including through recursive `~` signals. Only `button()`/
 `hslider()` boxes are exempt (each must produce its own zone). Before
 proposing a manual hoist, check the real generated C++ call count first.
 
+## Guitar/LofiFx bank (`guitar_lofi_fx.dsp`): audited for CPU, no safe win found
+
+A full audit of the always-on Guitar+LofiFx bank (`guitar_lofi_fx.dsp`
+composing `flanger`/`tremolo`/`phaser`/`distortion`/`bitcrush`/`vinyl`/
+`flutter` + its own `gateStage`) generated the REAL compiled C++ via
+DawDreamer's `faust.box.boxFromDSP`/`boxToSource` with the exact shipped
+flags (`-vec -fun -dfs -vs 32 -ct 0`) and read it line-by-line, rather than
+assuming from the `.dsp` source. Result: there is no exploitable CPU waste
+left to fix at the Faust-source level — every "obvious" candidate the
+pattern below would suggest is already handled by the compiler:
+
+- The shared `BANKSPEED` LFO (`flanger`/`tremolo`/`phaser` each writing
+  their own `pow(10, DECADES*BANKSPEED)`/`os.osc(...)` against the SAME
+  rebound top-level hslider) already compiles to exactly ONE `pow()` call
+  and ONE oscillator/table lookup for all three files combined — the
+  "Faust already CSEs..." rule above extends across `component()`-composed
+  files sharing a control, not just within one file's own `par()`.
+- `gateStage`'s `pow(x, 4.0)` already compiles to a generated
+  `faustpower4_f(x)=x*x*x*x` helper with zero `pow()` call — the SAME
+  strength-reduction this file documents as a MANUAL fix for Resonode's
+  `mode2`/`mode3`/`mode4` happens here automatically. That Resonode
+  precedent does not generalize to every `pow(x, literal)` call; check the
+  real generated code per case before assuming a manual fix is needed.
+- `bitcrush.dsp`'s `pow(2.0, bits-1.0)` and `distortion.dsp`'s `tan()`/
+  `tanh()` coefficients are already block-rate (`fSlow*`, computed once
+  per 64-sample callback), confirmed directly in the generated
+  `compute()` body, not just inferred from "only depends on an hslider".
+- `flanger.dsp`'s `MAXD=4096` and `flutter.dsp`'s `MAXD=1024` are already
+  at (or, per a follow-up empirical test sizing the same delay with
+  MAXD=2048/2200/3000/4096, ABOVE — Faust's `de.delay`/`de.fdelay` size
+  the real ring from the signal's own interval analysis, mostly ignoring
+  the declared constant once it's large enough) their real usage ceiling;
+  do not shrink or grow either.
+- `phaser.dsp`'s 6-stage allpass cascade (`apStage:apStage:...`, 6x) LOOKS
+  like it recomputes the same per-sample division 6 times (`fun24..fun29`
+  in generated code each independently divide by `(t+1)`) even though the
+  shared `tan()`/coefficient inputs are already correctly hoisted to a
+  single call — but a controlled test (rewriting the source to pass the
+  allpass coefficient as one explicit shared parameter into all 6 stages,
+  regenerating C++) produced BYTE-IDENTICAL output to the original. This
+  is the compiler's own vectorizer/scheduler re-deriving and duplicating
+  the division regardless of how the source expresses it — not fixable at
+  the `.dsp`-source level, and its cost (~5 redundant divisions/sample) is
+  under 0.1% of the 1.333ms block budget regardless. Do not attempt this
+  "fix" again without a different compiler backend/flag.
+
+**Verification methodology to reuse before touching this bank again**:
+generate the real compiled C++ (`dawdreamer.faust.box.boxFromDSP` +
+`boxToSource`, exact shipped flags) and grep the actual op counts and
+whether a variable is `fSlow*` (block-rate) vs inside the per-sample loop,
+per the DawDreamer section's existing "check the real generated C++ call
+count first" rule. If a rewrite is proposed, regenerate and diff against
+the original — byte-identical output means the compiler already handles
+it and the change should be dropped.
+
+**Judgment-call CPU/quality tradeoffs found — NOT applied, need a real Pi 4
+by-ear pass before ever shipping, per the project's own
+faust-verification-discipline**: reducing `phaser.dsp`'s allpass cascade
+from 6 to 4 stages (real CPU win, changes notch density/"swoosh"
+character); a Faust-source rational `tanh` approximation (e.g.
+`x*(27+x*x)/(27+9*x*x)`, clamped) for `flanger.dsp`'s feedback saturator
+and `distortion.dsp`'s drive stage, which would sidestep the `-fm def`
+JIT-link failure since it never touches `fastmath.cpp` but is not
+bit-exact and changes each stage's saturation character; collapsing
+`vinyl.dsp`'s cascaded lowpass+highpass noise-bed shaping into one biquad
+bandpass (background texture, lower risk, still audible). None of these
+were implemented — this file only records that they were considered and
+why they're gated on real-hardware verification, not that a fix has been
+queued for them.
+
+**Zero-cost musicality candidates checked, both DISPROVED by real
+DawDreamer measurement** (recorded so they are not re-investigated):
+`distortion.dsp`'s `DISTAMT`-coupled drive is NOT flat/dead at the top of
+its range — rendering a 220Hz/-6dBFS sine at `DISTAMT=0.0..1.0` in 0.1
+steps gives RMS deltas of `[0.040, 0.061, 0.062, 0.063, 0.064, 0.065,
+0.065, 0.065, 0.062, 0.052]` between consecutive steps: a mild,
+tanh-typical taper (the smallest delta, 0.040 at the very bottom, is still
+~60% of the peak ~0.065 in the middle; the final 0.9->1.0 delta, 0.052, is
+one of the smaller deltas but nowhere near a collapsed/dead zone) — no
+retaper needed. `bitcrush.dsp`'s `BITCRUSHAMT` is already correctly
+linear-tapered for its own perceptually-relevant unit (quantization noise
+floor is linear in dB per bit, and `bits` is already linear in
+`BITCRUSHAMT`) — a log taper would be wrong here, not an improvement.
+One real, zero-CPU-cost candidate remains genuinely open:
+`flanger.dsp`'s `FEEDBACK_MIN=0.5` makes feedback jump straight to an
+audibly-resonant ~0.5 the instant `FLANGEAMT` leaves 0 rather than
+ramping up from a subtle chorus-like character; lowering it (e.g. to
+~0.15-0.25) is a one-constant change with no CPU cost, but it is a genuine
+sound-character change and needs a by-ear call, not a blind edit — left
+open, not applied.
+
 ## Faust compiler flags — deliberately NOT shipped
 
 - **`-mapp`** — 100%-reproducible real-aarch64 SIGSEGV inside
