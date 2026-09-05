@@ -141,14 +141,13 @@ modePole(freqFund, modeHfDampFactor) = 1.0 - poleFromInvT60*modeInvT60(freqFund,
 peakGainRefT60 = 0.15;
 peakGainRefPole = 1.0 - poleFromInvT60/peakGainRefT60;
 modeGainRefFactor = (1.0 - peakGainRefPole)/(1.0 + peakGainRefPole);
-modePeakGain(r) = sqrt(modeGainRefFactor*(1.0 + r)/(1.0 - r));
 
-modeResonator(r, freqHz, x) = fi.tf2(b0, 0.0, -b0, a1, a2, x)
+modeResonatorUnscaled(r, freqHz, x) = fi.tf2(1.0, 0.0, -1.0, a1, a2, x)
 with {
     a1 = -2.0*r*cos(2.0*ma.PI*freqHz/ma.SR);
     a2 = r*r;
-    b0 = sqrt(modeGainRefFactor*(1.0 - r*r));
 };
+modeNumeratorGain(r) = sqrt(modeGainRefFactor*(1.0 - r*r));
 
 modeAmpTilt = 0.85;
 modeAmpBase(i) = pow(float(i+1), -modeAmpTilt);
@@ -167,8 +166,9 @@ with {
     freqMode = freqFund*exp(modeLogRatioLive);
     poleRadius = modePole(freqFund, exp(highFreqDampExponent*modeLogRatioLive));
     modeAliasGuard = aliasGuard(freqMode);
-    rawOut = modeResonator(poleRadius, freqMode, exc + coupledIn);
-    normalisedOut = rawOut*modeAliasGuard/modePeakGain(poleRadius);
+    unscaledOut = modeResonatorUnscaled(poleRadius, freqMode, exc + coupledIn);
+    rawOut = unscaledOut*modeNumeratorGain(poleRadius);
+    normalisedOut = unscaledOut*(1.0 - poleRadius)*modeAliasGuard;
     weightedOut = rawOut
                 * modeAmpBase(i)
                 * sin(ma.PI*positionLive*float(i+1))
