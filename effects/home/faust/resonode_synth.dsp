@@ -149,6 +149,14 @@ with {
 };
 modeNumeratorGain(r) = sqrt(modeGainRefFactor*(1.0 - r*r));
 
+chebyshevU(k, x) = chebU(k)
+with {
+    chebU(0) = 1.0;
+    chebU(1) = 2.0*x;
+    chebU(m) = 2.0*x*chebU(m-1) - chebU(m-2);
+};
+modePositionSin(i, pos) = sin(ma.PI*pos)*chebyshevU(i, cos(ma.PI*pos));
+
 modeAmpTilt = 0.85;
 modeAmpBase(i) = pow(float(i+1), -modeAmpTilt);
 
@@ -171,7 +179,7 @@ with {
     normalisedOut = unscaledOut*(1.0 - poleRadius)*modeAliasGuard;
     weightedOut = rawOut
                 * modeAmpBase(i)
-                * sin(ma.PI*positionLive*float(i+1))
+                * modePositionSin(i, positionLive)
                 * modeAliasGuard
                 * fundamentalBassBoost(i, freqMode);
 };
