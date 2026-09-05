@@ -30,8 +30,10 @@ static DubfxPolyVoice& dubfx_poly_voice(int idx) {
     static DubfxPolyVoice voices[DUBFX_POLY_VOICES];
     static bool sharedTrackerAttached = false;
     if (!sharedTrackerAttached) {
-        for (int v = 0; v < DUBFX_POLY_VOICES; v++)
+        for (int v = 0; v < DUBFX_POLY_VOICES; v++) {
             voices[v].eng.attachSharedTracker(&dubfx_poly_shared_snac());
+            voices[v].formant.setAnalysisPhase(v, DUBFX_POLY_VOICES);
+        }
         sharedTrackerAttached = true;
     }
     if (idx < 0) idx = 0;

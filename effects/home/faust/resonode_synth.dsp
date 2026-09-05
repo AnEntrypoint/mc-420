@@ -165,12 +165,13 @@ with {
     modeLogRatioLive = ratioExponent*modeLogRatio(i);
     freqMode = freqFund*exp(modeLogRatioLive);
     poleRadius = modePole(freqFund, exp(highFreqDampExponent*modeLogRatioLive));
+    modeAliasGuard = aliasGuard(freqMode);
     rawOut = modeResonator(poleRadius, freqMode, exc + coupledIn);
-    normalisedOut = rawOut/modePeakGain(poleRadius);
+    normalisedOut = rawOut*modeAliasGuard/modePeakGain(poleRadius);
     weightedOut = rawOut
                 * modeAmpBase(i)
                 * sin(ma.PI*positionLive*float(i+1))
-                * aliasGuard(freqMode)
+                * modeAliasGuard
                 * fundamentalBassBoost(i, freqMode);
 };
 

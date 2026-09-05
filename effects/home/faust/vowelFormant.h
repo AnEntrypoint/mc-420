@@ -3,12 +3,11 @@
 #include <math.h>
 
 struct LpcFormantShifter {
-    static const int kOrder = 12;
-    static const int kFrame = 512;
+    static const int kOrder = 44;
+    static const int kFrame = 1024;
     static const int kFrameMask = kFrame - 1;
-    static const int kAnalysisHop = 1024;
-    static const int kMaxWarpLag = 36;
-    static const int kMinWarpOrder = 4;
+    static const int kAnalysisHop = 2048;
+    static const int kSpectrumBins = 128;
     static constexpr float kOctavesMax = 3.0f;
     static constexpr float kReflectionMagnitudeCeil = 0.985f;
     static constexpr float kPoleContraction = 0.995f;
@@ -16,16 +15,37 @@ struct LpcFormantShifter {
     static constexpr float kWhiteNoiseCorrection = 1.0003f;
     static constexpr float kFrameEnergyFloor = 1.0e-9f;
     static constexpr float kResidualEnergyFloorRatio = 1.0e-7f;
-    static constexpr float kGainMin = 0.125f;
-    static constexpr float kGainMax = 8.0f;
+    static constexpr float kSpectrumFloor = 1.0e-30f;
+    static constexpr float kGainMin = 0.5f;
+    static constexpr float kGainMax = 2.0f;
     static constexpr float kGainGlidePerSample = 1.0f / 240.0f;
     static constexpr float kReflectionGlidePerBlock = 0.2f;
     static constexpr float kOutputMagnitudeCeil = 4.0f;
 
+    struct BinTables {
+        float cosLag[kSpectrumBins][kOrder + 1];
+        float sinLag[kSpectrumBins][kOrder + 1];
+        float trapezoid[kSpectrumBins];
+        BinTables() {
+            for (int i = 0; i < kSpectrumBins; i++) {
+                float w = (float)M_PI * (float)i / (float)(kSpectrumBins - 1);
+                for (int k = 0; k <= kOrder; k++) {
+                    cosLag[i][k] = cosf(w * (float)k);
+                    sinLag[i][k] = sinf(w * (float)k);
+                }
+                trapezoid[i] = 1.0f;
+            }
+            trapezoid[0] = 0.5f;
+            trapezoid[kSpectrumBins - 1] = 0.5f;
+        }
+    };
+    static const BinTables& binTables() { static BinTables t; return t; }
+
     LpcFormantShifter(float sampleRate = 48000.0f) {
+        binTables();
         for (int n = 0; n < kFrame; n++)
             m_analysisWindow[n] = 0.5f - 0.5f * cosf(2.0f * (float)M_PI * (float)n / (float)kFrame);
-        for (int k = 0; k <= kMaxWarpLag; k++) {
+        for (int k = 0; k <= kOrder; k++) {
             float w = 2.0f * (float)M_PI * kLagWindowBandwidthHz * (float)k / sampleRate;
             m_lagWindow[k] = expf(-0.5f * w * w);
         }
@@ -38,6 +58,7 @@ struct LpcFormantShifter {
         for (int i = 0; i < kFrame; i++) m_history[i] = 0.0f;
         m_historyWrite = 0;
         m_sinceAnalysis = kAnalysisHop;
+        m_analysisPhaseApplied = false;
         m_haveEnvelope = false;
         for (int i = 0; i < kOrder; i++) {
             m_reflSourceTarget[i] = 0.0f; m_reflShiftedTarget[i] = 0.0f;
@@ -54,6 +75,11 @@ struct LpcFormantShifter {
         for (int i = 0; i < kOrder; i++) { m_whitenState[i] = 0.0f; m_recolorState[i] = 0.0f; }
     }
 
+    void setAnalysisPhase(int voiceIndex, int voiceCount) {
+        if (voiceCount < 1) voiceCount = 1;
+        m_analysisPhase = (voiceIndex * kAnalysisHop) / voiceCount;
+    }
+
     void setFormantOctaves(float octaves) {
         if (octaves > kOctavesMax) octaves = kOctavesMax;
         else if (octaves < -kOctavesMax) octaves = -kOctavesMax;
@@ -61,7 +87,11 @@ struct LpcFormantShifter {
     }
 
     void beginBlock() {
-        if (m_sinceAnalysis >= kAnalysisHop) { m_sinceAnalysis = 0; estimateEnvelopes(); }
+        if (m_sinceAnalysis >= kAnalysisHop) {
+            m_sinceAnalysis = m_analysisPhaseApplied ? 0 : m_analysisPhase;
+            m_analysisPhaseApplied = true;
+            estimateEnvelopes();
+        }
         for (int i = 0; i < kOrder; i++) {
             m_reflSourceNow[i]  += (m_reflSourceTarget[i]  - m_reflSourceNow[i])  * kReflectionGlidePerBlock;
             m_reflShiftedNow[i] += (m_reflShiftedTarget[i] - m_reflShiftedNow[i]) * kReflectionGlidePerBlock;
@@ -110,13 +140,13 @@ struct LpcFormantShifter {
     }
 
 private:
-    static bool levinson(const float* r, int order, float* reflection, float& residualEnergy) {
+    static bool levinson(const float* r, float* reflection, float* direct, float& residualEnergy) {
         float a[kOrder];
         for (int i = 0; i < kOrder; i++) a[i] = 0.0f;
         float energy = r[0];
         if (!(energy > 0.0f)) return false;
         const float energyFloor = r[0] * kResidualEnergyFloorRatio;
-        for (int i = 0; i < order; i++) {
+        for (int i = 0; i < kOrder; i++) {
             float acc = r[i + 1];
             for (int j = 0; j < i; j++) acc -= a[j] * r[i - j];
             float k = acc / energy;
@@ -131,7 +161,7 @@ private:
             energy *= (1.0f - k * k);
             if (energy < energyFloor) energy = energyFloor;
         }
-        for (int i = order; i < kOrder; i++) reflection[i] = 0.0f;
+        if (direct) for (int i = 0; i < kOrder; i++) direct[i] = a[i];
         residualEnergy = energy;
         return true;
     }
@@ -154,43 +184,57 @@ private:
         for (int n = 0; n < kFrame; n++)
             frame[n] = m_history[(oldest + n) & kFrameMask] * m_analysisWindow[n];
 
-        float r[kMaxWarpLag + 1];
-        for (int k = 0; k <= kMaxWarpLag; k++) {
+        float r[kOrder + 1];
+        for (int k = 0; k <= kOrder; k++) {
             float acc = 0.0f;
             for (int n = k; n < kFrame; n++) acc += frame[n] * frame[n - k];
             r[k] = acc;
         }
         if (!(r[0] > kFrameEnergyFloor)) return;
-        for (int k = 1; k <= kMaxWarpLag; k++) r[k] *= m_lagWindow[k];
+        for (int k = 1; k <= kOrder; k++) r[k] *= m_lagWindow[k];
         r[0] *= kWhiteNoiseCorrection;
 
         float reflSource[kOrder];
+        float directSource[kOrder];
         float energySource;
-        if (!levinson(r, kOrder, reflSource, energySource)) return;
+        if (!levinson(r, reflSource, directSource, energySource)) return;
+
+        const BinTables& tb = binTables();
+        float modelPower[kSpectrumBins];
+        for (int i = 0; i < kSpectrumBins; i++) {
+            float re = 1.0f, im = 0.0f;
+            for (int k = 0; k < kOrder; k++) {
+                re -= directSource[k] * tb.cosLag[i][k + 1];
+                im += directSource[k] * tb.sinLag[i][k + 1];
+            }
+            modelPower[i] = energySource / (re * re + im * im + kSpectrumFloor);
+        }
 
         float alpha = powf(2.0f, m_octaves);
-        int warpOrder = kOrder;
-        if (alpha > 1.0f) {
-            int reachable = (int)((float)kMaxWarpLag / alpha);
-            if (reachable < warpOrder) warpOrder = reachable;
+        float shiftedPower[kSpectrumBins];
+        for (int i = 0; i < kSpectrumBins; i++) {
+            float src = (float)i / alpha;
+            if (src >= (float)(kSpectrumBins - 1)) { shiftedPower[i] = modelPower[kSpectrumBins - 1]; continue; }
+            int lo = (int)src;
+            float frac = src - (float)lo;
+            shiftedPower[i] = modelPower[lo] * (1.0f - frac) + modelPower[lo + 1] * frac;
         }
-        if (warpOrder < kMinWarpOrder) warpOrder = kMinWarpOrder;
 
-        float warped[kOrder + 1];
-        warped[0] = r[0];
-        for (int k = 1; k <= warpOrder; k++) {
-            float lag = alpha * (float)k;
-            if (lag > (float)kMaxWarpLag) lag = (float)kMaxWarpLag;
-            int i = (int)lag;
-            float frac = lag - (float)i;
-            float lo = r[i];
-            float hi = (i + 1 <= kMaxWarpLag) ? r[i + 1] : r[kMaxWarpLag];
-            warped[k] = lo + (hi - lo) * frac;
+        float shiftedAuto[kOrder + 1];
+        const float binScale = 1.0f / (float)(kSpectrumBins - 1);
+        for (int k = 0; k <= kOrder; k++) {
+            float acc = 0.0f;
+            for (int i = 0; i < kSpectrumBins; i++)
+                acc += shiftedPower[i] * tb.trapezoid[i] * tb.cosLag[i][k];
+            shiftedAuto[k] = acc * binScale;
         }
+        if (!(shiftedAuto[0] > 0.0f)) return;
+        for (int k = 1; k <= kOrder; k++) shiftedAuto[k] *= m_lagWindow[k];
+        shiftedAuto[0] *= kWhiteNoiseCorrection;
 
         float reflShifted[kOrder];
         float energyShifted;
-        if (!levinson(warped, warpOrder, reflShifted, energyShifted)) return;
+        if (!levinson(shiftedAuto, reflShifted, nullptr, energyShifted)) return;
 
         float gain = sqrtf(energyShifted / energySource);
         if (!(gain > kGainMin)) gain = kGainMin;
@@ -205,11 +249,13 @@ private:
     }
 
     float m_analysisWindow[kFrame];
-    float m_lagWindow[kMaxWarpLag + 1];
+    float m_lagWindow[kOrder + 1];
     float m_contraction[kOrder];
     float m_history[kFrame];
     int   m_historyWrite;
     int   m_sinceAnalysis;
+    int   m_analysisPhase = 0;
+    bool  m_analysisPhaseApplied;
     bool  m_haveEnvelope;
     float m_reflSourceTarget[kOrder], m_reflShiftedTarget[kOrder];
     float m_reflSourceNow[kOrder], m_reflShiftedNow[kOrder];
