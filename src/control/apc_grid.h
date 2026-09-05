@@ -178,7 +178,11 @@ private:
 
     bool m_granulatorHeld = false;
     bool m_granulatorLatched = false;
+    float m_granDirectScanRate = 1.0f;
+    float m_granDirectDensityHz = 20.0f;
+    float m_granDirectSprayCents = 0.0f;
     void applyGranulatorMorph(Sampler* sampler);
+    void applyGranulatorDirectKnob(int knobIdx, float v01, Sampler* sampler);
 
     bool m_resonodeEngaged = false;
     bool m_resonodeLatched = false;

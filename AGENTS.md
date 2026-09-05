@@ -1716,12 +1716,79 @@ While Resonode is engaged, the keybed drives 4 Resonode voices
 (`allocateResonodeVoice`/`releaseResonodeVoice`, same oldest-steal shape as
 transpose voices) via `Lv2Host::setControl` pushes to
 `fx/resonodevoice{v}/{note,gate,vel}`. Knob slots 1-4 are the named-patch
-blend weights (table above); slots 5-6 are the direct tone/level dials.
+blend weights (table above); slots 5-7 are the direct tone/level/couple
+dials (`kResonodeDirectKnobRanges`/`applyResonodeDirectKnob`).
 LED feedback: blinking red while Resonode engaged, solid green while
 granulator latched, off otherwise.
 
 Resonode's 4 voices are only computed when engaged (genuinely skipped at
 the C++ call site) — unlike `multitranspose.dsp`'s 6 always-on voices.
+
+## Granulator: 4 named patches + 3 direct dials (current architecture)
+
+The granulator engine itself lives entirely in C++
+(`src/dsp/sampler/sampler.h`'s `Sampler::_renderGranularVoice`/
+`_spawnGrain`), not Faust — a real overlap-add grain engine with 7
+underlying parameters (`grainMs`/`grainRateHz`/`pitchSprayCents`/
+`posJitterMs`/`scanRate`/`reverseProb`/`envShape`), `MAX_GRAINS=48`
+concurrent grain slots shared across all 16 voices, and a cubic-
+interpolated grain reader. `scanRate=0` is a genuine freeze (the scan
+position stops advancing while grains keep spawning from the same spot);
+negative `rate`/`reverseProb` plays a grain backwards; `envShape` morphs
+the per-grain window from Blackman (0.0) through Hann (0.5) to a
+percussive attack-then-decay shape (1.0), LUT-cached and double-buffered
+(`m_grainWinLutBuf[2]`) so a control-thread rebuild never races an RT
+grain spawn.
+
+**Fixed: the granulator previously had NO direct dial at all** — its whole
+LofiFx knob bank (knobs 1-6) was 6 named-patch blend WEIGHTS
+(`kGranPatches`/`applyGranulatorMorph`, a convex combination of all 7
+underlying parameters at once) with knob7 sitting `Unused`, unlike every
+other engine in this codebase (Resonode's tone/level/couple, Guitar/Dub's
+direct per-effect sliders) which all pair named patches with at least one
+direct performative dial. This meant every granulator parameter was only
+reachable by figuring out which BLEND of fixed presets happened to land
+near what you wanted — never a direct "turn this knob, hear that one
+thing change" control, which is the concrete mechanism behind "not easy to
+understand" and, since averaging 7 parameters across patches tends to wash
+out any single patch's character, a real contributor to "boring". Now:
+`kGranPatchCount = 4` (reduced from 6, dropping the two patches most
+redundant with what the 3 new direct dials below already cover), freeing
+knobs 5-7 for direct dials (`kGranDirectKnobRanges`/
+`applyGranulatorDirectKnob`, the exact same per-instance touched-knob
+pattern as `applyResonodeDirectKnob`) that override the corresponding
+patch-blended field only once that knob has actually been touched
+(`m_lofiFxKnobTouched[5..7]`, checked in `applyGranulatorMorph`) — before
+that, the patch blend's own value applies unchanged, so this is purely
+additive over the prior patch-only behavior:
+- **Scan/Freeze** (knob5, linear 0.0-3.0): 0 = frozen (grains keep firing
+  from one static position — the classic granular-freeze/"stuck" texture,
+  reachable now with ANY patch, not just the one preset that happened to
+  set `scanRate=0`), 1.0 = normal forward scan matching the source
+  material's own pitch, up to 3x fast-forward scan.
+- **Density** (knob6, log taper 2-200Hz): directly dials `grainRateHz`,
+  the single highest-leverage "how granular does this sound" control in
+  any granular engine, previously only reachable via patch-blend guessing.
+- **Pitch Scatter** (knob7, linear 0-1200 cents): directly dials
+  `pitchSprayCents`, a full octave of per-grain random pitch scatter at
+  the extreme.
+
+**Fixed: mechanically regular grain-spawn timing** (a second, independent
+"boring" contributor) — `_renderGranularVoice` fired grains at an exactly
+regular period derived from `grainRateHz`/velocity, with zero timing
+variation between successive grains (only grain POSITION/pitch had
+randomization, via `posJitterMs`/`pitchSprayCents`). A perfectly regular
+grain clock reads as mechanical/synthetic regardless of how much position/
+pitch jitter is layered on top. `Voice::grainNextPeriod` now applies a
+fixed internal `kGrainTimingJitterAmt = 0.15` (+/-15%) random deviation to
+each grain's own inter-onset interval, drawn fresh every time a grain
+actually fires (not a user-facing knob — matches Resonode's own
+`positionDriftAmt`/`stretchJitterAmt` internal-constant convention for
+this exact class of fix). Verified via a standalone C++ harness linking
+`sampler.h` directly (`Sampler::renderInto` on a synthetic tone,
+freeze-mode and normal-scan-mode both produce finite, real, non-crashing
+grain output; freeze-mode confirms grains keep sounding while the scan
+position itself is provably static).
 
 ## `mode2`/`mode3`/`mode4`'s damping exponent is small-integer — strength-reduced from `pow()`
 
@@ -1738,8 +1805,10 @@ permanently on press (matching Dub/Guitar's existing behavior), with NO
 revert-on-release logic — `m_bankBeforeGranulatorHold` was removed once
 bank selection stopped being tied to physical hold duration.
 `m_lofiShiftMode` selects which of LofiFx's two knob pages is live: plain
-press = granulator page (bitcrush + 6 named granulator patches), SHIFT
-press = Resonode page (bitcrush + 4 named Resonode patches + tone/level).
+press = granulator page (bitcrush + 4 named granulator patches + 3 direct
+performative dials — Scan/Freeze, Density, Pitch Scatter, see the
+granulator section below), SHIFT press = Resonode page (bitcrush + 4 named
+Resonode patches + tone/level/couple).
 
 ## Three-page x regular/shift x 8-knob control surface (current architecture)
 
@@ -1768,8 +1837,11 @@ intercepted before the table lookup).
   FOUR stages before deciding to engage; `Sampler{Attack,AmpDecay,
   AmpSustain,Release}Ms` — amplitude envelope). No Faust/LV2 targets — all
   write straight into the C++ `Sampler` object.
-- **LofiFx**: knob0 `fx2/BITCRUSHAMT`; knobs1-6/7 are granulator or
-  Resonode named-patch weights per `m_lofiShiftMode` (above).
+- **LofiFx**: knob0 `fx2/BITCRUSHAMT`; knobs1-4 are 4 named-patch weights
+  (granulator or Resonode per `m_lofiShiftMode`); knobs5-7 are 3 direct
+  performative dials, own meaning per page (granulator: Scan/Freeze,
+  Density, Pitch Scatter; Resonode: tone, level, couple — see the
+  granulator section below for the granulator page's own layout).
 
 `compressor.dsp` is kept in-tree unreferenced by the live chain, only
 because `test/faust-flags/ab_fm_def.py` still uses it for an unrelated
