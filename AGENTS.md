@@ -1190,6 +1190,31 @@ deployed to the device (`/effects/pitchtracker/pitchtracker.lv2/`) for
 `multitranspose.dsp` to use it — see deploy-two-paths memory for the
 artifact-fetch wiring this depends on.
 
+## Fixed (shared, both engines): `reengage()` never reset `GrainFormant`'s own grain clock
+
+`GrainFormant`'s `m_inEpoch`/active grain voices/`m_Tin` are class members
+constructed once and free-running for the process's whole lifetime;
+`EngineSoladSnac::reengage()` (called on every note attack/voice-steal, on
+both the mono and polyphonic engines) reset the SNAC period tracker but
+never called `m_grainFormant.reset()`, so a new note inherited the
+PREVIOUS note's grain-clock timing state — e.g. a fresh note's
+`setInputPeriod()` call could yank `m_Tin` by 4x+ with no epoch resync,
+since the resplice-epoch correction is deliberately slow to react (only
+fires once drift exceeds `Tin*kRespliceDeadbandPeriods=5` periods).
+`reengage()` now calls `m_grainFormant.reset()` and immediately restores
+the currently-dialed formant factor
+(`setFormantFactor(powf(2, m_formantDepth))`) so a new note gets a clean
+grain clock without silently losing the player's formant setting.
+Verified via a standalone harness linking `soladSnacOctaver.h` directly:
+`targetFactorNow()` stays at the dialed value across `reengage()` (the
+formant setting survives), `factorNow()` (the glide-smoothed value
+actually used) correctly re-glides from neutral over the same ~10ms
+`kFormantGlideInvSamples` window every other formant change already uses
+rather than jumping, and output stays finite across a two-note sequence.
+This is a real state-leakage bug fix, independent of the mixTgt-routing
+question in the `multitranspose.dsp` section above, and applies
+identically to both engines since they share this class.
+
 ## Free-transpose engine (`soladSnacOctaver.h` / `EngineSoladSnac`)
 
 The `-12` live pitch engine, bridged into Faust via `pitch_ffi.h`/
@@ -2055,10 +2080,16 @@ live-chain reference. `rawGlitchTap` was removed from
 
 ## CC53 formant constants
 
-Deadzone 60-68, formula `((data2-64)/63.0)*1.0` — a flat ±1 range always
-(a shift-dependent widening was tried and removed per direct user
-direction: a bare SHIFT press must never change a knob's behavior — SHIFT
-is reserved exclusively for the native fold/resample gesture).
+Deadzone 60-68, formula `((data2-64)/63.0)*1.5` (`applyFormantCC` in
+`apc_grid.cpp`) — a real reachable range of roughly ±1.5 (clamped to the
+`-3..3` hslider range, which the CC mapping can never actually reach), NOT
+a flat ±1 range — this section previously documented a stale `*1.0`
+factor that no longer matches the shipped code; see the
+`multitranspose.dsp` section above for the same formula and its
+downstream saturation behavior against `GrainFormant`'s `[0.5,2.0]`
+factor clamp. A shift-dependent widening was tried and removed per direct
+user direction: a bare SHIFT press must never change a knob's behavior —
+SHIFT is reserved exclusively for the native fold/resample gesture.
 
 ---
 
