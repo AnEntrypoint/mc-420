@@ -14,12 +14,12 @@ letrec {
     'y = ba.if(morphIsFirstSample, x, y + (x - y)*(1.0 - morphGlidePole));
 };
 
-position  = hslider("fx/resonode/position", 0.35, 0.0, 1.0, 0.001);
-tone      = hslider("fx/resonode/tone", 6000.0, 200.0, 18000.0, 1.0);
-decayTime = hslider("fx/resonode/decay", 1.2, 0.05, 8.0, 0.001);
-damping   = hslider("fx/resonode/damping", 0.85, 0.05, 1.0, 0.001);
-stretch   = hslider("fx/resonode/stretch", 0.0, -0.5, 1.5, 0.001);
-collision = hslider("fx/resonode/collision", 0.0, 0.0, 1.0, 0.001);
+position  = hslider("fx/resonode/position", 0.35, 0.0, 1.0, 0.001) : morphGlide;
+tone      = hslider("fx/resonode/tone", 6000.0, 200.0, 18000.0, 1.0) : morphGlide;
+decayTime = hslider("fx/resonode/decay", 1.2, 0.05, 8.0, 0.001) : morphGlide;
+damping   = hslider("fx/resonode/damping", 0.85, 0.05, 1.0, 0.001) : morphGlide;
+stretch   = hslider("fx/resonode/stretch", 0.0, -0.5, 1.5, 0.001) : morphGlide;
+collision = hslider("fx/resonode/collision", 0.0, 0.0, 1.0, 0.001) : morphGlide;
 outLevel  = hslider("fx/resonode/level", 25.0, 0.0, 60.0, 0.001) : morphGlide;
 couple    = hslider("fx/resonode/couple", 0.15, 0.0, 1.0, 0.001) : morphGlide;
 
@@ -163,9 +163,9 @@ couplingNetwork(n) = par(i, n, coupleGuard) : neighbourExchange(n) : par(i, n, *
 
 modeStage(i, coupledIn, exc, freqFund, ratioExponent, positionLive) = normalisedOut, weightedOut
 with {
-    modeLogRatioLive = ratioExponent*modeLogRatio(i);
-    freqMode = freqFund*exp(modeLogRatioLive);
-    poleRadius = modePole(freqFund, exp(highFreqDampExponent*modeLogRatioLive));
+    modeRatioLive = pow(modeRatio(i), ratioExponent);
+    freqMode = freqFund*modeRatioLive;
+    poleRadius = modePole(freqFund, pow(modeRatioLive, highFreqDampExponent));
     modeAliasGuard = aliasGuard(freqMode);
     rawOut = modeResonator(poleRadius, freqMode, exc + coupledIn);
     normalisedOut = rawOut*modeAliasGuard/modePeakGain(poleRadius);
