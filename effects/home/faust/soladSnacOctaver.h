@@ -60,6 +60,8 @@ public:
         m_haveGoodPeriod = true;
         m_lockMiss = 0;
         m_spliceCooldown = 0;
+        m_grainFormant.reset();
+        m_grainFormant.setFormantFactor(powf(2.0f, m_formantDepth));
     }
 
     void setInitialReadOffset(int samples) {

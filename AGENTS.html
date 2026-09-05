@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=de433200431439c75ef42ef9cf004c0448697066">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=34cad6de831891838eb5efd026267bf3e4ffd6e2">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -878,9 +878,13 @@ wire count. Correct idiom: build the bus with `,` then pipe with `:`.
 
 Always read the real stdlib definition (`/usr/share/faust/*.lib`) before
 trusting a call site's own window/size argument — `ef.transpose` has a
-HARDCODED `maxDelay=65536` independent of the window argument passed, which
-is why `multitranspose.dsp` defines its own local `xpose` sized to its real
-usage ceiling instead.
+HARDCODED `maxDelay=65536` independent of the window argument passed. This
+is why `multitranspose.dsp` originally defined its own local `xpose` sized
+to its real usage ceiling instead of calling `ef.transpose` directly; that
+local shifter itself has since been replaced by the per-voice
+`EngineSoladSnac` C++ engine (see the `multitranspose.dsp` section below),
+so the concrete example is gone, but the underlying stdlib-footgun lesson
+still applies to any future `ef.transpose`/similarly-sized stdlib call.
 
 ## Faust compiler flags — currently shipped
 
@@ -915,6 +919,97 @@ call sites, including through recursive `~` signals. Only `button()`/
 `hslider()` boxes are exempt (each must produce its own zone). Before
 proposing a manual hoist, check the real generated C++ call count first.
 
+## Guitar/LofiFx bank (`guitar_lofi_fx.dsp`): audited for CPU, no safe win found
+
+A full audit of the always-on Guitar+LofiFx bank (`guitar_lofi_fx.dsp`
+composing `flanger`/`tremolo`/`phaser`/`distortion`/`bitcrush`/`vinyl`/
+`flutter` + its own `gateStage`) generated the REAL compiled C++ via
+DawDreamer's `faust.box.boxFromDSP`/`boxToSource` with the exact shipped
+flags (`-vec -fun -dfs -vs 32 -ct 0`) and read it line-by-line, rather than
+assuming from the `.dsp` source. Result: there is no exploitable CPU waste
+left to fix at the Faust-source level — every "obvious" candidate the
+pattern below would suggest is already handled by the compiler:
+
+- The shared `BANKSPEED` LFO (`flanger`/`tremolo`/`phaser` each writing
+  their own `pow(10, DECADES*BANKSPEED)`/`os.osc(...)` against the SAME
+  rebound top-level hslider) already compiles to exactly ONE `pow()` call
+  and ONE oscillator/table lookup for all three files combined — the
+  "Faust already CSEs..." rule above extends across `component()`-composed
+  files sharing a control, not just within one file's own `par()`.
+- `gateStage`'s `pow(x, 4.0)` already compiles to a generated
+  `faustpower4_f(x)=x*x*x*x` helper with zero `pow()` call — the SAME
+  strength-reduction this file documents as a MANUAL fix for Resonode's
+  `mode2`/`mode3`/`mode4` happens here automatically. That Resonode
+  precedent does not generalize to every `pow(x, literal)` call; check the
+  real generated code per case before assuming a manual fix is needed.
+- `bitcrush.dsp`'s `pow(2.0, bits-1.0)` and `distortion.dsp`'s `tan()`/
+  `tanh()` coefficients are already block-rate (`fSlow*`, computed once
+  per 64-sample callback), confirmed directly in the generated
+  `compute()` body, not just inferred from "only depends on an hslider".
+- `flanger.dsp`'s `MAXD=4096` and `flutter.dsp`'s `MAXD=1024` are already
+  at (or, per a follow-up empirical test sizing the same delay with
+  MAXD=2048/2200/3000/4096, ABOVE — Faust's `de.delay`/`de.fdelay` size
+  the real ring from the signal's own interval analysis, mostly ignoring
+  the declared constant once it's large enough) their real usage ceiling;
+  do not shrink or grow either.
+- `phaser.dsp`'s 6-stage allpass cascade (`apStage:apStage:...`, 6x) LOOKS
+  like it recomputes the same per-sample division 6 times (`fun24..fun29`
+  in generated code each independently divide by `(t+1)`) even though the
+  shared `tan()`/coefficient inputs are already correctly hoisted to a
+  single call — but a controlled test (rewriting the source to pass the
+  allpass coefficient as one explicit shared parameter into all 6 stages,
+  regenerating C++) produced BYTE-IDENTICAL output to the original. This
+  is the compiler's own vectorizer/scheduler re-deriving and duplicating
+  the division regardless of how the source expresses it — not fixable at
+  the `.dsp`-source level, and its cost (~5 redundant divisions/sample) is
+  under 0.1% of the 1.333ms block budget regardless. Do not attempt this
+  "fix" again without a different compiler backend/flag.
+
+**Verification methodology to reuse before touching this bank again**:
+generate the real compiled C++ (`dawdreamer.faust.box.boxFromDSP` +
+`boxToSource`, exact shipped flags) and grep the actual op counts and
+whether a variable is `fSlow*` (block-rate) vs inside the per-sample loop,
+per the DawDreamer section's existing "check the real generated C++ call
+count first" rule. If a rewrite is proposed, regenerate and diff against
+the original — byte-identical output means the compiler already handles
+it and the change should be dropped.
+
+**Judgment-call CPU/quality tradeoffs found — NOT applied, need a real Pi 4
+by-ear pass before ever shipping, per the project's own
+faust-verification-discipline**: reducing `phaser.dsp`'s allpass cascade
+from 6 to 4 stages (real CPU win, changes notch density/"swoosh"
+character); a Faust-source rational `tanh` approximation (e.g.
+`x*(27+x*x)/(27+9*x*x)`, clamped) for `flanger.dsp`'s feedback saturator
+and `distortion.dsp`'s drive stage, which would sidestep the `-fm def`
+JIT-link failure since it never touches `fastmath.cpp` but is not
+bit-exact and changes each stage's saturation character; collapsing
+`vinyl.dsp`'s cascaded lowpass+highpass noise-bed shaping into one biquad
+bandpass (background texture, lower risk, still audible). None of these
+were implemented — this file only records that they were considered and
+why they're gated on real-hardware verification, not that a fix has been
+queued for them.
+
+**Zero-cost musicality candidates checked, both DISPROVED by real
+DawDreamer measurement** (recorded so they are not re-investigated):
+`distortion.dsp`'s `DISTAMT`-coupled drive is NOT flat/dead at the top of
+its range — rendering a 220Hz/-6dBFS sine at `DISTAMT=0.0..1.0` in 0.1
+steps gives RMS deltas of `[0.040, 0.061, 0.062, 0.063, 0.064, 0.065,
+0.065, 0.065, 0.062, 0.052]` between consecutive steps: a mild,
+tanh-typical taper (the smallest delta, 0.040 at the very bottom, is still
+~60% of the peak ~0.065 in the middle; the final 0.9-&gt;1.0 delta, 0.052, is
+one of the smaller deltas but nowhere near a collapsed/dead zone) — no
+retaper needed. `bitcrush.dsp`'s `BITCRUSHAMT` is already correctly
+linear-tapered for its own perceptually-relevant unit (quantization noise
+floor is linear in dB per bit, and `bits` is already linear in
+`BITCRUSHAMT`) — a log taper would be wrong here, not an improvement.
+One real, zero-CPU-cost candidate remains genuinely open:
+`flanger.dsp`'s `FEEDBACK_MIN=0.5` makes feedback jump straight to an
+audibly-resonant ~0.5 the instant `FLANGEAMT` leaves 0 rather than
+ramping up from a subtle chorus-like character; lowering it (e.g. to
+~0.15-0.25) is a one-constant change with no CPU cost, but it is a genuine
+sound-character change and needs a by-ear call, not a blind edit — left
+open, not applied.
+
 ## Faust compiler flags — deliberately NOT shipped
 
 - **`-mapp`** — 100%-reproducible real-aarch64 SIGSEGV inside
@@ -944,11 +1039,6 @@ proposing a manual hoist, check the real generated C++ call count first.
 Buffer sizes here are all "real usage ceiling + margin", verified bit-exact
 against the unsized-down original via DawDreamer JIT before shipping:
 
-- `multitranspose.dsp`'s `xposeMaxDelay = 2000` (real ring 2048 floats) — the
-  `xpose()` read index can mathematically never exceed `2*960=1920`
-  (`windowFor()`'s hard 960-sample ceiling); Faust's interval analyzer can't
-  narrow a `letrec`-recursive index, so the declared constant matters
-  directly.
 - `delay.dsp`'s `MAXD = 52000` (real ring 65536 floats) — `TIME`'s own
   `targetSamples()` caps the real usable delay at ~999.6ms (~47999 samples
   @ 48kHz), roughly half the previous `96000`.
@@ -1005,74 +1095,173 @@ is actually being played. Strictly additive with the existing mono SNAC
 engine (`fx/pitchbend`, CC52/mod wheel, `pitch_ffi.h`), which remains the
 mono "pedal ride" lane, untouched.
 
+**Shifter engine (current, post-`xpose` rewrite)**: each of the 6 voices
+now owns its own `EngineSoladSnac` instance (`pitch_poly.dsp` /
+`pitch_poly_ffi.h`, a `DubfxPolyVoice[6]` array) — the SAME SNAC-tracked
+splice-based PSOLA engine that already powers the mono "pedal ride" effect
+(`pitch.dsp`/`pitch_ffi.h`/`soladSnacOctaver.h`), made polyphonic. The
+OLD per-file two-tap delay-line `xpose()` shifter (pitch-synchronous
+window/crossfade sizing, `windowFor()`, `winSkewMul`/`formantXfSkew`,
+`xposeMaxDelay`) no longer exists anywhere in this file or the codebase —
+do not look for it. `shiftAmount = targetNote - heldDetNote` (still
+sampled once per voice at `attackEdge`, held for the whole sustain per the
+same absolute-pitch-lock design) converts to a ratio (`pow(2, shiftAmount
+/ 12)`) and is threaded straight into the per-voice engine as a plain
+signal argument, per the compile-time-cliff discipline below.
+
 **Current mechanism (absolute pitch-lock, per explicit user direction — an
 earlier "interval harmonizer" rearchitecture was tried and reverted)**:
-`shiftAmount = targetNote - heldDetNote`, where `heldDetNote` is sampled
-once per voice at `attackEdge` and held for the whole sustain (never
-re-tracked mid-note, so a mid-sustain plosive/burst cannot perturb an
-already-locked note). The detected pitch source is `freqDet = ba.if(
-extFreqDet &gt; 0.5, extFreqDet, detectedFreq(sigIn))` — prefers the external
-`pitchtracker.lv2` autocorrelation tracker's reading (`fx/extfreqdet`, fed
-from `audio_thread.cpp` via `pitchTrackerFx`) when present, falls back to
-the internal zero-crossing tracker (`trackPitchHzAndHp`/`jumpGuard`)
-otherwise.
+unchanged from before the shifter rewrite. The detected pitch source is
+`freqDet = ba.if(extFreqDet &gt; 0.5, extFreqDet, detectedFreq(sigIn))` —
+prefers the external `pitchtracker.lv2` autocorrelation tracker's reading
+(`fx/extfreqdet`, fed from `audio_thread.cpp` via `pitchTrackerFx`) when
+present, falls back to the internal zero-crossing tracker
+(`trackPitchHzAndHp`/`jumpGuard`) otherwise.
 
 **Known, disclosed, current limitation**: the internal zero-crossing
 fallback tracker (when `pitchtracker.lv2` is NOT loaded) has a real,
 unresolved note-selection accuracy problem — it can take well over 400ms to
-converge and can drift non-monotonically rather than settle. This does NOT
-affect `xpose`'s window/crossfade SIZING use of the same tracker (a wrong
-window only costs naturalness, never a wrong note). With `pitchtracker.lv2`
-genuinely loaded (the real, intended on-device configuration — see deploy
-section), lock is near-instant and accurate (~11-38 cents on real
-recordings spanning piano/violin/vocal/brass/woodwind/marimba/vibraphone).
-Do not attempt a timing-based heuristic fix for the fallback tracker's
-convergence in `multitranspose.dsp` itself — this file's own history (see
-`[[memory: faust-compile-time-cliff]]`) records the real, repeated risk of
-touching this file's tracker internals.
+converge and can drift non-monotonically rather than settle. With
+`pitchtracker.lv2` genuinely loaded (the real, intended on-device
+configuration — see deploy section), lock is near-instant and accurate
+(~11-38 cents on real recordings spanning piano/violin/vocal/brass/
+woodwind/marimba/vibraphone). Do not attempt a timing-based heuristic fix
+for the fallback tracker's convergence in `multitranspose.dsp` itself —
+this file's own history (see `[[memory: faust-compile-time-cliff]]`)
+records the real, repeated risk of touching this file's tracker internals.
 
 **Voice mechanics**: `an.pitchTracker`-derived detection runs on the live
 input once per sample (shared instance, not per-voice). Each voice's shift
-glides via `si.smooth(tau2pole(glide_ms=8))`, gated by `en.adsr` (3ms
-attack/30ms decay/sustain 1/50ms release — 50ms release is the verified
-click-free value), shifted by the local `xpose` (window sized
-pitch-synchronously from the detected period, capped at 20ms, with a
-mandatory `si.smooth(...) : max(64)` double-clamp to prevent a
-zero-window NaN poison). Gain staging: fixed per-voice gain (0.6) + static
-`ma.tanh` soft-clip on the summed bus (never a dynamic
-`1/sqrt(activeVoices)` renormalization — that pumps on every chord-note
-release). Voice allocation: round-robin/oldest-steal
+glides via a one-pole (`normalGlidePole`, `tau2pole(0.008)`), gated by
+`en.adsr` (3ms attack/30ms decay/sustain 1/50ms release — 50ms release is
+the verified click-free value), then shifted+formant-shaped by the
+per-voice `EngineSoladSnac`+`GrainFormant` engine (see below), block-
+buffered at 64 samples (~1.333ms), the same fixed algorithmic latency as
+the mono engine's wet effect regardless of pitch or formant. Gain staging:
+fixed per-voice gain (0.6) + static `ma.tanh` soft-clip on the summed bus
+(never a dynamic `1/sqrt(activeVoices)` renormalization — that pumps on
+every chord-note release). Voice allocation: round-robin/oldest-steal
 (`allocateTransposeVoice`/`releaseTransposeVoice` in `ApcGrid`) — a held
 note reuses its own slot, an unheld slot is preferred, oldest-triggered is
-stolen once all 6 are held (ADSR re-attacks). Note-off releases by GATE
-only, never a hard cut.
+stolen once all 6 are held (ADSR re-attacks, and each steal calls
+`EngineSoladSnac::reengage()` to reset that voice's read position/period
+tracking cleanly). Note-off releases by GATE only, never a hard cut.
 
-**Formant control** (`fx/formant`, CC53, -3..+3) reaches this engine too:
-`winSkewMul(formant) = pow(1.2, formant/3)` and
-`formantXfSkew(formant) = pow(4.0, formant/3)` skew `xpose`'s window/
-crossfade sizing (before the safety clamps, so the 960-sample ceiling is
-unaffected regardless of formant), plus a light `fi.low_shelf`/
-`fi.high_shelf` spectral tilt (`formantTiltDb(formant) = formant*2.5`,
-exact identity at 0). Real, measured, large expressiveness on real audio
-(tens to hundreds of Hz spectral-centroid spread depending on timbre).
-`applyFormantCC` in `apc_grid.cpp` is gated on `(m_liveEngaged ||
-m_keysMode==KeysMode::MultiKey)` — a genuine no-op when neither
-pitch-shift engine is active.
+**Formant control** (`fx/formant`, CC53) reaches this engine as a plain
+signal argument into `pitchPoly`'s `process()`; real-world CC range is
+`((data2-64)/63)*1.5` clamped to the `-3..3` hslider range in
+`effects_runtime.dsp`, so the practically reachable magnitude is ~1.5, not
+3 (`applyFormantCC` in `apc_grid.cpp`, gated on `(m_liveEngaged ||
+m_keysMode==KeysMode::MultiKey)` — a genuine no-op when neither pitch-shift
+engine is active).
 
-**Known, disclosed limitations of the underlying `xpose` shifter**: above
-~700Hz, the window becomes short relative to the sample rate and develops
-real crossfade-splice sidebands (costs naturalness, not pitch correctness).
-At extreme downward shifts (2+ octaves) combined with nonzero formant, the
-large per-sample delay-index step can itself become an audible tone.
-Neither is fixable without a shifter algorithm change; both are inherent to
-`xpose`'s own design, not introduced by any specific formant/lock change.
+**Investigated but NOT fixed this way — a tempting routing fix for "gappy"
+turned out to be unsafe, keep it that way**: `EngineSoladSnac::processBlock()`
+blends two internal signals — the phase-coherent splice/PSOLA reader (`y`)
+and `GrainFormant`'s independent overlap-add grain resynthesis (`gOut`, the
+ONLY path that moves formants independently of pitch) — and forces the mix
+to `1.0` (100% grain path) for ANY upward shift beyond `scale &gt; 1.02`
+(~0.34 semitones) regardless of the formant setting. It looked like exactly
+the mechanism behind "pushing the pitch up a bit with neutral formant makes
+it gappy" (neutral formant silently still meant "use the grain path"), and
+also behind "some pitches/formants are more latent than others" (the grain
+path's own `targetLag = Tin*(3+fm)` scales with the detected period and the
+formant factor). **A real attempt to disable the forced-grain override for
+the polyphonic voices only (leaving the mono "pedal ride" engine's default
+untouched) was built, then reverted after direct measurement proved it
+unsafe**: a standalone C++ harness linking `soladSnacOctaver.h` directly
+(bypassing Faust/DawDreamer entirely — see the JIT-limitation note below)
+showed the splice-only path (`y` alone, `mixTgt` forced to 0) is NOT
+pitch-accurate for real shifts on a clean sine — up to **-200 cents**
+(nearly 2 semitones flat) at some frequency/shift combinations, worst around
++1-2 semitones at 110-220Hz, independent of any formant or vowel/sibilance
+work. This bug was never visible before because the `scale &gt; 1.02` override
+ALWAYS routed every real shift through the (separately measured, ~1-5 cents
+accurate) grain path, on both engines, unconditionally — so "the splice path
+alone is high quality" (this file's own prior "0.99-1.00 spectral purity on
+a clean sweep" claim, which is about harmonic distortion, not frequency
+accuracy) was never actually tested at real shift amounts. **Do not disable
+or raise the `scale &gt; 1.02` forced-grain threshold on either engine without
+first fixing this splice-path frequency bug** (most likely in
+`triggerSpliceByPeriod`'s period-multiple resplicing interacting with the
+active/passive crossfade) and re-verifying with the same kind of direct
+sine-frequency harness — a plausible next step for a session with more
+time, but out of scope for the fixes actually shipped here. The literal
+"gappy" root cause on real (non-sine) signal therefore remains OPEN — the
+grain path is confirmed pitch-accurate and free of gross amplitude dropouts
+on both synthetic sine and real vocal/piano/violin corpus content (measured
+via the same harness, zero-drop RMS-ratio check across neutral/±1.4 formant
+and 0.5-2 semitone shifts), so the remaining "gappy" quality is most likely
+a subtler artifact (grain-overlap phase drift when the SNAC period estimate
+`Tin` isn't exactly locked between its ~43ms `SNAC_HOP` updates) that needs
+real-hardware/real-mic listening to characterize further, per the project's
+own "compiling/synthetic-testing clean proves nothing" rule.
+
+**Real formant/vowel/sibilance shaping (new)**: `vowelFormant.h` adds a
+`VowelFormantShaper` (3 parallel RBJ peaking biquads tuned to F1/F2/F3 of a
+5-point vowel table — U/O/A/E/I, from
+`{300,870,2240}`/`{570,840,2410}`/`{730,1090,2440}`/`{530,1840,2480}`/
+`{270,2290,3010}` Hz) and a `SibilanceDetector` (a ~4kHz one-pole
+highpass energy ratio against a slower broadband envelope). Both are
+per-voice, applied in `pitch_poly_ffi.h`'s `dubfx_poly_shape_block()`
+right after `EngineSoladSnac::processBlock()` fills that voice's 64-sample
+output block — plain C++ math against the existing `formant` scalar and
+the block-aligned dry `inBuf`, so this needed NO new Faust UI primitive
+and carries none of the compile-time-cliff risk below. The existing
+`fx/formant` scalar now does double duty: its magnitude (normalized
+against the ~1.5 practical CC range) is both the `GrainFormant` mix depth
+(unchanged) and the vowel-filter blend depth, and its sign/position maps
+onto the U-O-A-I-E vowel continuum, so sweeping the one existing formant
+knob morphs through real vowel coloration on top of whatever `GrainFormant`
+mix the engine already settles on, instead of just a spectral-tilt
+brightness cue — at `formant=0` both new stages are fully bypassed (zero
+coloring, verified identity). Sibilance detection runs unconditionally (not
+formant-gated): a detected fricative/consonant crossfades the voice's
+output back toward its own raw dry input (up to 85%) so "s"/"sh"/"f"/"t"
+transients stay intelligible instead of being pitch/formant-warped.
+Verified via a standalone C++ harness (`pitch_poly_ffi.h` linked directly,
+no Faust JIT involved — see the DawDreamer-limits note below): finite/
+bounded output across the full formant/shift extremes (formant -3..+3,
+shift -24..+24 semitones), and pitch accuracy within ~5 cents at neutral
+and positive formant on a clean sine (matching the underlying engine's own
+accuracy, i.e. the vowel EQ does not itself perturb pitch). At strongly
+NEGATIVE formant (`d` near the practical -1.5 floor) the same harness shows
+a real, reproducible ~70-90 cents flat error that predates this session's
+changes (confirmed by testing raw `EngineSoladSnac`/`GrainFormant` with no
+vowel/sibilance code at all) — consistent with this file's own
+already-documented free-transpose-engine note that "negative side is
+flatter/more non-monotonic... an inherent asymmetry in the `factor=
+powf(2,d)` mapping, not an engine defect"; the vowel/sibilance addition
+does not make this worse or better. The vowel filter's exact Q/gain
+constants and the sibilance detector's HF-corner/ratio thresholds are a
+first real implementation, not by-ear-tuned on real hardware yet — needs a
+live-mic pass on the Pi 4 before calling the vowel/sibilance character
+final.
 
 **Compile-time-cliff discipline for this file**: `[[memory:
 faust-compile-time-cliff]]` — any new UI primitive declared inside
 `multitranspose.dsp` itself risks an unbounded real-`faust`-CLI compile
 time regardless of DawDreamer JIT results. New controls affecting this
 engine are declared elsewhere (e.g. `effects_runtime.dsp`) and threaded in
-as plain signal arguments.
+as plain signal arguments. This is why the vowel/sibilance shaping above
+lives entirely in the C++ FFI headers instead: it needed zero new Faust
+declarations.
+
+**DawDreamer JIT cannot compile `multitranspose.dsp` (or `pitch.dsp`)
+directly anymore** — `pitch_poly.dsp`'s `ffunction` declaration hits the
+same "calling foreign function ... is not allowed in this compilation
+mode" JIT limitation documented below for `pitch.dsp`. `test-audio-corpus/
+real_audio_cross_verify.py`'s direct `set_dsp(".../multitranspose.dsp")`
+call predated the `xpose`-to-`EngineSoladSnac` rewrite and stopped
+compiling once `multitranspose.dsp` started pulling in `pitch_poly.dsp`'s
+`ffunction` — fixed by porting it to the same pattern
+`free_transpose_harness.cpp` already used for the mono engine: a new
+`test-audio-corpus/multitranspose_harness.cpp` links `pitch_poly_ffi.h`
+directly (no Faust/DawDreamer involved) and `real_audio_cross_verify.py`
+now shells out to it per test case instead of calling `daw.RenderEngine`/
+`make_faust_processor` at all. This is also the pattern to reach for when
+verifying any future change to this file's shifter/formant/sibilance
+behavior — a standalone C++ harness against the real FFI, never the JIT.
 
 ## `pitchtracker.lv2`: standalone autocorrelation pitch tracker
 
@@ -1096,6 +1285,31 @@ register (82Hz-1500Hz+) and a broad instrument/vocal corpus. Must be
 deployed to the device (`/effects/pitchtracker/pitchtracker.lv2/`) for
 `multitranspose.dsp` to use it — see deploy-two-paths memory for the
 artifact-fetch wiring this depends on.
+
+## Fixed (shared, both engines): `reengage()` never reset `GrainFormant`'s own grain clock
+
+`GrainFormant`'s `m_inEpoch`/active grain voices/`m_Tin` are class members
+constructed once and free-running for the process's whole lifetime;
+`EngineSoladSnac::reengage()` (called on every note attack/voice-steal, on
+both the mono and polyphonic engines) reset the SNAC period tracker but
+never called `m_grainFormant.reset()`, so a new note inherited the
+PREVIOUS note's grain-clock timing state — e.g. a fresh note's
+`setInputPeriod()` call could yank `m_Tin` by 4x+ with no epoch resync,
+since the resplice-epoch correction is deliberately slow to react (only
+fires once drift exceeds `Tin*kRespliceDeadbandPeriods=5` periods).
+`reengage()` now calls `m_grainFormant.reset()` and immediately restores
+the currently-dialed formant factor
+(`setFormantFactor(powf(2, m_formantDepth))`) so a new note gets a clean
+grain clock without silently losing the player's formant setting.
+Verified via a standalone harness linking `soladSnacOctaver.h` directly:
+`targetFactorNow()` stays at the dialed value across `reengage()` (the
+formant setting survives), `factorNow()` (the glide-smoothed value
+actually used) correctly re-glides from neutral over the same ~10ms
+`kFormantGlideInvSamples` window every other formant change already uses
+rather than jumping, and output stays finite across a two-note sequence.
+This is a real state-leakage bug fix, independent of the mixTgt-routing
+question in the `multitranspose.dsp` section above, and applies
+identically to both engines since they share this class.
 
 ## Free-transpose engine (`soladSnacOctaver.h` / `EngineSoladSnac`)
 
@@ -1150,11 +1364,20 @@ independent-formant grain-playback-speed stage (`grainFormant.h`).
   cost accompanies brightening; a make-up-gain fix was measured
   (grain-path RMS ~57-73% of clean-reader RMS) but deliberately NOT
   implemented — needs by-ear tuning on real hardware, not a blind constant.
-- The `&gt;700Hz` crossfade-splice-quality concern documented for
-  `multitranspose.dsp`'s `xpose()` does NOT transfer to this engine —
-  measured via a clean sine sweep, spectral purity stays 0.99-1.00 (0-1%
-  THD) at every tested frequency up to 5000Hz with no degradation near
-  700Hz. The two engines use structurally different splice algorithms.
+- Historical note: this bullet used to contrast this engine against
+  `multitranspose.dsp`'s OWN, now-removed, `xpose()` two-tap delay shifter
+  ("structurally different splice algorithms"). That's no longer true —
+  `multitranspose.dsp`'s 6 voices now each run this exact same
+  `EngineSoladSnac` class (see the `multitranspose.dsp` section above), so
+  there is only one splice/PSOLA implementation in the codebase now, shared
+  by both the mono and polyphonic engines. The measured spectral purity
+  (0.99-1.00 THD on a clean sine sweep up to 5000Hz, no degradation near
+  700Hz) still stands for this class in general, but see the
+  `multitranspose.dsp` section's "Investigated but NOT fixed" note for a
+  real, separately-discovered FREQUENCY-ACCURACY (not THD) bug in the
+  splice-only mixing mode (`mixTgt` forced to 0) that applies equally to
+  both engines and is currently masked on both by the `scale &gt; 1.02`
+  forced-grain-mix default.
 
 **Open, disclosed bug**: a genuine SNAC period-tracker drift bug on
 tremolo/amplitude-modulated or dynamically-varying content (e.g. vibrato,
@@ -1390,16 +1613,74 @@ documents' own cost-vs-richness guidance. `coupleScale = 8.0` is the
 internal knob-to-coefficient multiplier (the user-facing `couple` knob is
 0..1); every per-mode filter here is inherently damped (`r&lt;1` always, no
 delay-line unity-feedback loop the way Resonarium's own coupling math
-assumes), so — unlike Resonarium's knife-edge `-2/G` lossless-junction
-coefficient — this topology cannot diverge by construction and was verified
-stable (no NaN/Inf, peak never exceeding the final `ma.tanh` ceiling) across
-`coupleScale` up to 40 and the full extreme corners of decay/damping/
-position/stretch/collision/couple. `8.0` was chosen empirically as the
-smallest value producing a clearly audible (~20% peak-sample difference,
-measurable spectral-centroid shift) effect at `couple=1.0` without
-dominating a patch's own identity — re-verify with
+assumes) — but the earlier claim here that this topology "cannot diverge by
+construction" was WRONG, and has been corrected: each mode filter alone
+(`r&lt;1`) is stable, but a real linear feedback LOOP through two or more
+coupled modes can still have combined loop gain above unity for some
+parameter corner even when every individual pole is damped, and a real one
+was found. `test/resonode-sweetspot/verify_musical_controls.py`'s older
+checks only ever used a short (~15ms) burst excitation into silence, so
+they could never see a divergence that only emerges after continuous
+excitation — a real mic input, unlike a burst, never stops exciting the
+loop. A direct DawDreamer sweep using SUSTAINED noise excitation over a
+multi-second held gate (matching how Resonode is actually played — see
+`check_sustained_excitation_stability` below) found a genuine NaN/Inf
+runaway at `position=0.08, decay=0.15, damping=0.97, stretch=-0.4,
+couple=1.0, note=36` (and other nearby corners), diverging to non-finite
+output roughly 1.5s into a held note, not instantly — a real, slow
+numerical blow-up, not a one-sample glitch. Fixed by wrapping every
+mode-to-mode coupling READ (never a mode's own primary output into the
+sum) in a bounded soft-clip, `coupleFeedback(x) = tanh(x*0.25)*4.0`
+(`coupleFeedbackKnee`/`coupleFeedbackCeil` in `resonode_synth.dsp`) —
+near-identity for normal in-range signal levels (slope 1 at the origin, so
+`coupling_changes_output`'s measured couple=0-vs-1 diff/peaks are
+unchanged bit-for-bit-close after the fix) but strictly bounded for large
+values, which — combined with every mode filter already being BIBO-stable
+for a bounded input (`r&lt;1`) — makes the whole coupled network provably
+unable to diverge to infinity regardless of parameter corner, closing the
+actual gap in the old "cannot diverge by construction" reasoning (that
+reasoning was true for the isolated per-mode filters, never extended to
+prove the closed-loop coupled system). Re-verified: the same DawDreamer
+sweep that found 2 diverging corners out of 288 now finds zero, and every
+pre-existing `verify_musical_controls.py` check still passes unchanged
+(`coupling_changes_output`'s couple=1.0-vs-0.0 diff/peak numbers are
+identical to before the fix). `coupleScale = 8.0` is unchanged and its own
+empirical rationale (smallest value giving a clearly audible ~20%
+peak-sample/spectral-centroid effect at `couple=1.0` without dominating a
+patch's identity) still stands — re-verify with
 `test/resonode-sweetspot/verify_musical_controls.py`'s
-`coupling_changes_output` check before retuning.
+`coupling_changes_output` AND `sustained_excitation_stability` checks
+before retuning either constant.
+
+**Scope note on "doesn't quite sound like Objekt" (disclosed, not fully
+addressed)**: the numerical-instability fix above addresses "feeds back
+easily"/"unpredictable" directly (a real divergence bug, now closed). It
+does not itself close the broader tonal-character gap against Objekt/
+Resonarium. One structural difference both reference instruments lean on —
+stereo diffusion across the mode bank — is architecturally out of reach
+here without a much larger change: `resonode_synth.dsp` is mono in/out,
+and the ENTIRE aloop signal path is mono end-to-end (the OTG gadget mirror
+already averages capture L/R to mono, `dsp/loop.dsp`'s rings are mono,
+`audio_thread.cpp` carries one channel throughout) — giving Resonode real
+stereo would mean carrying a second channel through the whole pipeline,
+not a local change to this file. Left open for a dedicated audio-thread
+architecture change, not attempted here.
+
+**Defense-in-depth: a NaN/Inf guard now sits at the C++ call site too**
+(`audio_thread.cpp`, right after `resonodeFx.process(resonodeInBuf.data(),
+N)`), independent of the `coupleFeedback` fix above. If Resonode's LV2
+plugin ever emits a non-finite sample for any reason (a future patch/
+preset landing outside the coupling fix's safety margin, a bug in a
+different Resonode code path entirely, or simply defense against a class
+of bug this audit didn't anticipate), the block is detected and zeroed
+before it reaches the shared mix, with a rate-limited (max 1/second),
+wall-clock-timestamped `[diag-resonode]` log line — matching the
+project's existing `[diag-gap]`/`[diag-pitchguard]` logging convention and
+the "diagnostic logging must carry wall-clock timestamps" working rule.
+This is pure safety-net C++ with zero DSP/latency change; keep it even
+after the coupling fix, the same way the project already treats crash
+isolation at LV2 load time (ADR-002) as permanent defense-in-depth rather
+than something to remove once a specific crash cause is fixed.
 
 **Per-voice structural modulation** (new, cheap, reuses the existing
 attack-edge envelope idiom `pitchEnv` already used for pitch-mod): `position`
@@ -1663,12 +1944,113 @@ While Resonode is engaged, the keybed drives 4 Resonode voices
 (`allocateResonodeVoice`/`releaseResonodeVoice`, same oldest-steal shape as
 transpose voices) via `Lv2Host::setControl` pushes to
 `fx/resonodevoice{v}/{note,gate,vel}`. Knob slots 1-4 are the named-patch
-blend weights (table above); slots 5-6 are the direct tone/level dials.
+blend weights (table above); slots 5-7 are the direct tone/level/couple
+dials (`kResonodeDirectKnobRanges`/`applyResonodeDirectKnob`).
 LED feedback: blinking red while Resonode engaged, solid green while
 granulator latched, off otherwise.
 
 Resonode's 4 voices are only computed when engaged (genuinely skipped at
 the C++ call site) — unlike `multitranspose.dsp`'s 6 always-on voices.
+
+## Granulator: 4 named patches + 3 direct dials (current architecture)
+
+The granulator engine itself lives entirely in C++
+(`src/dsp/sampler/sampler.h`'s `Sampler::_renderGranularVoice`/
+`_spawnGrain`), not Faust — a real overlap-add grain engine with 7
+underlying parameters (`grainMs`/`grainRateHz`/`pitchSprayCents`/
+`posJitterMs`/`scanRate`/`reverseProb`/`envShape`), `MAX_GRAINS=48`
+concurrent grain slots shared across all 16 voices, and a cubic-
+interpolated grain reader. `scanRate=0` is a genuine freeze (the scan
+position stops advancing while grains keep spawning from the same spot);
+negative `rate`/`reverseProb` plays a grain backwards; `envShape` morphs
+the per-grain window from Blackman (0.0) through Hann (0.5) to a
+percussive attack-then-decay shape (1.0), LUT-cached and double-buffered
+(`m_grainWinLutBuf[2]`) so a control-thread rebuild never races an RT
+grain spawn.
+
+**Fixed: the granulator previously had NO direct dial at all** — its whole
+LofiFx knob bank (knobs 1-6) was 6 named-patch blend WEIGHTS
+(`kGranPatches`/`applyGranulatorMorph`, a convex combination of all 7
+underlying parameters at once) with knob7 sitting `Unused`, unlike every
+other engine in this codebase (Resonode's tone/level/couple, Guitar/Dub's
+direct per-effect sliders) which all pair named patches with at least one
+direct performative dial. This meant every granulator parameter was only
+reachable by figuring out which BLEND of fixed presets happened to land
+near what you wanted — never a direct "turn this knob, hear that one
+thing change" control, which is the concrete mechanism behind "not easy to
+understand" and, since averaging 7 parameters across patches tends to wash
+out any single patch's character, a real contributor to "boring". Now:
+`kGranPatchCount = 4` (reduced from 6, dropping the two patches most
+redundant with what the 3 new direct dials below already cover), freeing
+knobs 5-7 for direct dials (`kGranDirectKnobRanges`/
+`applyGranulatorDirectKnob`, the exact same per-instance touched-knob
+pattern as `applyResonodeDirectKnob`) that override the corresponding
+patch-blended field only once that knob has actually been touched
+(`m_lofiFxKnobTouched[5..7]`, checked in `applyGranulatorMorph`) — before
+that, the patch blend's own value applies unchanged, so this is purely
+additive over the prior patch-only behavior:
+- **Scan/Freeze** (knob5, linear 0.0-3.0): 0 = frozen (grains keep firing
+  from one static position — the classic granular-freeze/"stuck" texture,
+  reachable now with ANY patch, not just the one preset that happened to
+  set `scanRate=0`), 1.0 = normal forward scan matching the source
+  material's own pitch, up to 3x fast-forward scan.
+- **Density** (knob6, log taper 2-200Hz): directly dials `grainRateHz`,
+  the single highest-leverage "how granular does this sound" control in
+  any granular engine, previously only reachable via patch-blend guessing.
+- **Pitch Scatter** (knob7, linear 0-1200 cents): directly dials
+  `pitchSprayCents`, a full octave of per-grain random pitch scatter at
+  the extreme.
+
+**Fixed: mechanically regular grain-spawn timing** (a second, independent
+"boring" contributor) — `_renderGranularVoice` fired grains at an exactly
+regular period derived from `grainRateHz`/velocity, with zero timing
+variation between successive grains (only grain POSITION/pitch had
+randomization, via `posJitterMs`/`pitchSprayCents`). A perfectly regular
+grain clock reads as mechanical/synthetic regardless of how much position/
+pitch jitter is layered on top. `Voice::grainNextPeriod` now applies a
+fixed internal `kGrainTimingJitterAmt = 0.15` (+/-15%) random deviation to
+each grain's own inter-onset interval, drawn fresh every time a grain
+actually fires (not a user-facing knob — matches Resonode's own
+`positionDriftAmt`/`stretchJitterAmt` internal-constant convention for
+this exact class of fix). Verified via a standalone C++ harness linking
+`sampler.h` directly (`Sampler::renderInto` on a synthetic tone,
+freeze-mode and normal-scan-mode both produce finite, real, non-crashing
+grain output; freeze-mode confirms grains keep sounding while the scan
+position itself is provably static).
+
+**Fixed: the untouched/default patch was the tamest one in the table** —
+`kGranPatches[0]` (the fallback when `totalWeight &lt;= 0.0001`, i.e. before
+any patch-weight knob has been touched) was the 200ms/8Hz/no-spray/
+no-jitter "soft pad" corner, the least obviously-granular-sounding patch
+available — so a first-time press of the LofiFx button produced exactly
+the least characterful texture in the whole table, a real contributor to
+a first impression of "boring". Reordered so index 0 is the 90ms/35Hz/
+25-cent-spray/35ms-jitter patch instead — a properly textured, obviously
+"granular" starting point — with zero other behavior change (same 4
+patches, same blend math, only the array order/who's-the-fallback moved).
+
+**Considered, not implemented: making the granulator audible without a
+held key.** `setGranulatorEnabled` only flags newly-spawned NOTE voices as
+granular; toggling the LofiFx button alone produces no sound until a key
+is actually played, which is a real mismatch against this file's own
+"latches the grain engine on/off as a persistent, backgrounded texture"
+framing (Control-surface section, LofiFx button paragraph — that framing
+itself should be read as aspirational/imprecise until this is addressed).
+The straightforward fix (auto-`pushEvent(EV_NOTE_ON, someNote, ...)` on
+latch-ON, `EV_NOTE_OFF` on latch-OFF, reusing the existing event-ring
+verbatim) has two real bugs that must be solved first, not glossed over:
+(1) `Sampler::ROOT_NOTE=60` sits inside the drum-key range
+(`BASE_NOTE=48`..`BASE_NOTE+NUM_DRUM-1=72`), so if a drum sample is ever
+recorded at note 60 the auto-trigger would silently grain the wrong
+buffer — any implementation must pick a note number structurally outside
+`[BASE_NOTE, BASE_NOTE+NUM_DRUM)` or bypass the drum-check branch
+explicitly; (2) `_noteOn`'s existing same-note release logic means
+manually playing that exact note kills the ambient voice with no code
+path to resume it afterward, so the "persistent" texture would vanish the
+first time anyone plays that note on the keybed — needs either a
+dedicated non-keybed-reachable voice slot or an explicit re-arm on note-
+off, neither of which exists today. Left open for a follow-up change,
+not attempted here.
 
 ## `mode2`/`mode3`/`mode4`'s damping exponent is small-integer — strength-reduced from `pow()`
 
@@ -1685,8 +2067,10 @@ permanently on press (matching Dub/Guitar's existing behavior), with NO
 revert-on-release logic — `m_bankBeforeGranulatorHold` was removed once
 bank selection stopped being tied to physical hold duration.
 `m_lofiShiftMode` selects which of LofiFx's two knob pages is live: plain
-press = granulator page (bitcrush + 6 named granulator patches), SHIFT
-press = Resonode page (bitcrush + 4 named Resonode patches + tone/level).
+press = granulator page (bitcrush + 4 named granulator patches + 3 direct
+performative dials — Scan/Freeze, Density, Pitch Scatter, see the
+granulator section below), SHIFT press = Resonode page (bitcrush + 4 named
+Resonode patches + tone/level/couple).
 
 ## Three-page x regular/shift x 8-knob control surface (current architecture)
 
@@ -1715,8 +2099,11 @@ intercepted before the table lookup).
   FOUR stages before deciding to engage; `Sampler{Attack,AmpDecay,
   AmpSustain,Release}Ms` — amplitude envelope). No Faust/LV2 targets — all
   write straight into the C++ `Sampler` object.
-- **LofiFx**: knob0 `fx2/BITCRUSHAMT`; knobs1-6/7 are granulator or
-  Resonode named-patch weights per `m_lofiShiftMode` (above).
+- **LofiFx**: knob0 `fx2/BITCRUSHAMT`; knobs1-4 are 4 named-patch weights
+  (granulator or Resonode per `m_lofiShiftMode`); knobs5-7 are 3 direct
+  performative dials, own meaning per page (granulator: Scan/Freeze,
+  Density, Pitch Scatter; Resonode: tone, level, couple — see the
+  granulator section below for the granulator page's own layout).
 
 `compressor.dsp` is kept in-tree unreferenced by the live chain, only
 because `test/faust-flags/ab_fm_def.py` still uses it for an unrelated
@@ -1789,10 +2176,16 @@ live-chain reference. `rawGlitchTap` was removed from
 
 ## CC53 formant constants
 
-Deadzone 60-68, formula `((data2-64)/63.0)*1.0` — a flat ±1 range always
-(a shift-dependent widening was tried and removed per direct user
-direction: a bare SHIFT press must never change a knob's behavior — SHIFT
-is reserved exclusively for the native fold/resample gesture).
+Deadzone 60-68, formula `((data2-64)/63.0)*1.5` (`applyFormantCC` in
+`apc_grid.cpp`) — a real reachable range of roughly ±1.5 (clamped to the
+`-3..3` hslider range, which the CC mapping can never actually reach), NOT
+a flat ±1 range — this section previously documented a stale `*1.0`
+factor that no longer matches the shipped code; see the
+`multitranspose.dsp` section above for the same formula and its
+downstream saturation behavior against `GrainFormant`'s `[0.5,2.0]`
+factor clamp. A shift-dependent widening was tried and removed per direct
+user direction: a bare SHIFT press must never change a knob's behavior —
+SHIFT is reserved exclusively for the native fold/resample gesture.
 
 ---
 
