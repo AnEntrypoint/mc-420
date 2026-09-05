@@ -801,8 +801,8 @@ struct GranPatch { float grainMs, grainRateHz, pitchSprayCents, posJitterMs, sca
 
 constexpr int kGranPatchCount = 4;
 static const GranPatch kGranPatches[kGranPatchCount] = {
-    { 200.0f,   8.0f,  0.0f,   0.0f, 1.0f, 0.00f, 0.00f },
     {  90.0f,  35.0f, 25.0f,  35.0f, 0.4f, 0.10f, 0.15f },
+    { 200.0f,   8.0f,  0.0f,   0.0f, 1.0f, 0.00f, 0.00f },
     {  22.0f,  70.0f,  0.0f,   0.0f, 2.5f, 0.00f, 0.85f },
     {  14.0f, 150.0f, 90.0f, 300.0f, 4.5f, 0.50f, 1.00f },
 };

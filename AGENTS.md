@@ -1881,6 +1881,40 @@ freeze-mode and normal-scan-mode both produce finite, real, non-crashing
 grain output; freeze-mode confirms grains keep sounding while the scan
 position itself is provably static).
 
+**Fixed: the untouched/default patch was the tamest one in the table** —
+`kGranPatches[0]` (the fallback when `totalWeight <= 0.0001`, i.e. before
+any patch-weight knob has been touched) was the 200ms/8Hz/no-spray/
+no-jitter "soft pad" corner, the least obviously-granular-sounding patch
+available — so a first-time press of the LofiFx button produced exactly
+the least characterful texture in the whole table, a real contributor to
+a first impression of "boring". Reordered so index 0 is the 90ms/35Hz/
+25-cent-spray/35ms-jitter patch instead — a properly textured, obviously
+"granular" starting point — with zero other behavior change (same 4
+patches, same blend math, only the array order/who's-the-fallback moved).
+
+**Considered, not implemented: making the granulator audible without a
+held key.** `setGranulatorEnabled` only flags newly-spawned NOTE voices as
+granular; toggling the LofiFx button alone produces no sound until a key
+is actually played, which is a real mismatch against this file's own
+"latches the grain engine on/off as a persistent, backgrounded texture"
+framing (Control-surface section, LofiFx button paragraph — that framing
+itself should be read as aspirational/imprecise until this is addressed).
+The straightforward fix (auto-`pushEvent(EV_NOTE_ON, someNote, ...)` on
+latch-ON, `EV_NOTE_OFF` on latch-OFF, reusing the existing event-ring
+verbatim) has two real bugs that must be solved first, not glossed over:
+(1) `Sampler::ROOT_NOTE=60` sits inside the drum-key range
+(`BASE_NOTE=48`..`BASE_NOTE+NUM_DRUM-1=72`), so if a drum sample is ever
+recorded at note 60 the auto-trigger would silently grain the wrong
+buffer — any implementation must pick a note number structurally outside
+`[BASE_NOTE, BASE_NOTE+NUM_DRUM)` or bypass the drum-check branch
+explicitly; (2) `_noteOn`'s existing same-note release logic means
+manually playing that exact note kills the ambient voice with no code
+path to resume it afterward, so the "persistent" texture would vanish the
+first time anyone plays that note on the keybed — needs either a
+dedicated non-keybed-reachable voice slot or an explicit re-arm on note-
+off, neither of which exists today. Left open for a follow-up change,
+not attempted here.
+
 ## `mode2`/`mode3`/`mode4`'s damping exponent is small-integer — strength-reduced from `pow()`
 
 `pow(damping,1)` → `damping`, `pow(damping,2)` → `damping*damping`,
