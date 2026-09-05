@@ -1865,7 +1865,7 @@ with zero clamping and zero limiter saturation even at 4.4x the symmetric bound.
 energy-conservation and small-gain guarantees, not just the empirical sweep.
 A hard clamp was chosen over `tanh` deliberately: `tanh` is never exactly
 identity, so "never engages" is unprovable, whereas a hard clamp is exactly
-identity below threshold. Probed over 150 corners, the SUM over all 24 modes of
+identity below threshold. Probed over 150 corners, the SUM over all modes of
 |normalised coupling read| peaks at 0.583 against the +-8.0 per-mode clamp —
 13.7x headroom on a quantity that upper-bounds any single mode.
 
@@ -1919,26 +1919,63 @@ Three exact, sound-preserving optimisations then removed most of that cost,
 each verified against the real generated C++ via the `faust-codegen-probe`
 workflow (`workflow_dispatch` only) rather than argued from the source:
 
-- **The two per-mode `sqrt` calls cancel.** `b0 = sqrt(K(1-r^2))` divided by
-  `modePeakGain = sqrt(K(1+r)/(1-r))` is exactly `1-r` for `0<=r<1` (max
-  relative error 4.9e-13 over 300000 values of r). The resonator now runs
-  unscaled, the coupling path multiplies by `(1-r)`, and the weighted path
-  keeps the numerator gain it needs. `sqrt` 192 -> 96.
-- **The position sine is a polynomial.** `sin(pi*pos*(i+1))`'s multiplier is
-  the MODE INDEX, always integer whatever the ratio table holds, so
-  `sin(k*t) = sin(t)*U_{k-1}(cos t)` applies exactly (max absolute error
-  8.3e-15) and leaves every mode independent — no change to the bank's
-  routing. `sin` 64 -> 4.
-- **The five shape weights left the audio-rate path.** Each was piped through
-  `morphGlide`, a `letrec`, so they compiled to recursive `fRec` variables
-  rather than `fSlow` constants and dragged `modeLogRatio` — and `log`/`exp`/
-  `cos`/`sqrt` behind it — into the sample loop. `log` 12 -> 1.
+- **The position sine is a polynomial. THIS ONE SHIPPED.**
+  `sin(pi*pos*(i+1))`'s multiplier is the MODE INDEX, always integer whatever
+  the ratio table holds, so `sin(k*t) = sin(t)*U_{k-1}(cos t)` applies with
+  `k = i+1`, i.e. `U_i`, and leaves every mode independent — no change to the
+  bank's routing. `sin` 64 -> 4. Max absolute error 1.03e-14 in double over
+  `pos` 0..1.2 and `i` 0..15; the shipped build is `float`, where the same
+  sweep gives 4.6e-6, about -107 dBFS and inaudible. That float figure is the
+  one to re-check if `modeCount` is ever raised, since the recurrence's error
+  grows with mode index. Safe because `modePositionSin` is a plain output
+  MULTIPLIER in `weightedOut`'s product chain, never a filter coefficient —
+  see the `sqrt` entry below for why that distinction decides everything.
+
+**Two further optimisations were built, measured, and then REVERTED on
+review, because both were exact only while the knobs were still.** Both are
+recorded here with their real numbers so the same trade is not re-proposed
+as free:
+
+- **The two per-mode `sqrt` calls do cancel algebraically, but the refactor
+  that exploits it is NOT sound-preserving.** The identity is real:
+  `b0 = sqrt(K(1-r^2))` divided by `modePeakGain = sqrt(K(1+r)/(1-r))` is
+  `|1-r|`, and `r` is hard-clamped to [0.96402, 0.99998] by `modeInvT60`'s
+  `max`/`min` (so `r>=1` and `r<=0` are both structurally unreachable and
+  `|1-r| = 1-r`); max relative error 7.4e-13 over 300000 values of `r` across
+  that true range. The catch is that exploiting it requires moving `b0` from
+  a NUMERATOR COEFFICIENT INSIDE `fi.tf2` to a post-multiply outside. That
+  commutes only for a CONSTANT `b0`. `b0` derives from `poleRadius`, hence
+  from `decayTime` and `damping`, both of which are `morphGlide`d and so move
+  at audio rate on every knob sweep. In a transposed-direct-form-II biquad the
+  numerator taps feed the state registers, so a coefficient changing between
+  samples is applied to different state in the two forms: measured divergence
+  **8.4% of peak** while a pole glides, against 3.6e-12% at rest, and it
+  persists well past the 15ms glide because it decays through the resonator's
+  own multi-second tail. Keeping `b0` inside and rewriting only the divisor
+  does not help — `(1-r)/b0` is itself `sqrt((1-r)/(K(1+r)))`, so the count
+  goes back to two square roots and the win evaporates entirely. The win and
+  the correctness are mutually exclusive here; correctness was chosen.
+- **De-gliding the five shape weights hoists `log` 12 -> 1, and was reverted
+  anyway.** They were piped through `morphGlide`, a `letrec`, so they compile
+  to recursive `fRec` variables rather than `fSlow` constants and drag
+  `modeLogRatio` — and `log`/`exp`/`cos`/`sqrt` behind it — into the sample
+  loop. But those weights feed `modeLogRatioLive`, which feeds BOTH `freqMode`
+  AND `poleRadius`, so an ungated slider step moves `a1` and `a2` in one
+  sample on a resonator holding up to 8.5s of stored energy at r ~ 0.96-0.99998.
+  That is a step change in a very-high-Q pole against a live ringing state, and
+  these are LV2 control ports written per control tick from `ApcGrid`, so real
+  sweeps genuinely do step. This file already rejects un-gliding the MORPH
+  knobs for costing zipper-free sweeps; the same objection applies here with
+  a ringing filter behind it.
 
 Measured ladder after those, eight-key stress, peak `core_busy` and gap count:
 **12 modes ~73% / 2-3 gaps; 16 modes 70-73% / 5-7; 20 modes 82-85% / 8-13;
 24 modes will not build at all.** Every one of these reports zero xruns.
 Combined worst case at 16 (Resonode + guitar bank + lofi bank + 8 keys):
-81% peak, 6 gaps, zero xruns; Resonode engaged with no keys is zero gaps.
+41-81% peak depending on what the FX banks are set to, 0-6 gaps, zero xruns;
+Resonode engaged with no keys is zero to one gap. NOTE these numbers were
+taken WITH the sqrt and shape-weight changes in the build; both were later
+reverted, so the shipped 16-mode figure is the conservative end of that range.
 
 **24 modes is now a build-time ceiling, not a CPU question.** With the
 Chebyshev sine in place the real `faust` compiler is killed by SIGALRM about
