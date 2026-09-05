@@ -1230,14 +1230,29 @@ fundamental-protection span from 1.25x to 2.0x was needed to clear two cases at
 494Hz and 698Hz and cost downward movement at 330/440Hz (0.72/0.81 -> 0.87/0.91)
 — correctness was chosen over movement magnitude there.
 
-**UNRESOLVED, and it gates shipping: CPU.** With formant engaged this costs
-about **1.8x the grain path it replaces** — 6 voices, x86_64 dev host:
-49.6/51.0us per block before, 87.6/97.7us after, against a 1333us budget. At
-neutral it is FREE and in fact cheaper than the old code overall (58.7 ->
-37.3us) because the grain path is skipped entirely. Per this file's own rule an
-x86 number never clears an aarch64 RT path, and the engaged figure has not been
-witnessed on a real Pi 4. Staggering the per-voice analysis phase was necessary
-to get here at all: unstaggered, p99 was 280us and max 499us.
+**RESOLVED on real hardware: the engaged formant cost does NOT reproduce on
+aarch64.** This section stood as UNRESOLVED and gating shipping on the
+strength of an x86 figure — about 1.8x the grain path it replaces, 6 voices,
+x86_64 dev host: 49.6/51.0us per block before, 87.6/97.7us after, against a
+1333us budget — with the note that an x86 number never clears an aarch64 RT
+path. That witness has now been taken on the real Pi 4, driving MultiKey
+transpose with 6 held keys via byte-level MIDI injection and sweeping
+`fx/formant` (CC53) across its range:
+
+  formant neutral (CC 64)   80% peak core_busy   3 gaps   0 xruns
+  formant maximum (CC 127)  83% peak core_busy   3 gaps   0 xruns
+  formant minimum (CC 0)    82% peak core_busy   2 gaps   0 xruns
+
+Engaging the formant stage at either extreme costs about **three percentage
+points**, not the 1.8x the x86 measurement predicted, and produces no xruns
+at any setting. The per-voice analysis-phase staggering (without which x86
+p99 was 280us and max 499us) is doing its job on the target. Transpose is
+not a CPU problem on this hardware; a separate measurement driving 6 voices
+with no formant showed the gap count moving only 26 -> 28 across engage,
+play and release combined.
+
+At neutral the stage remains FREE and cheaper than the old code overall
+(x86: 58.7 -> 37.3us) because the grain path is skipped entirely.
 
 **Known, disclosed, NOT fixed**: at f0=880 with -12 semitones the output reads
 +1200c in BOTH builds including at formant 0 where they are bit-identical — a
