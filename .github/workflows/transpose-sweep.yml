@@ -1,0 +1,87 @@
+name: transpose-sweep
+on:
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the standalone poly harness against the real FFI
+        run: |
+          g++ -std=c++17 -O2 -I effects/home/faust \
+            test-audio-corpus/multitranspose_harness.cpp -o /tmp/mt -lm
+      - name: Sweep pitch x shift and report envelope stability
+        run: |
+          python3 - <<'PY'
+import math, os, struct, subprocess
+
+SR = 48000
+DUR = 1.0
+N = int(SR * DUR)
+
+def write_tone(path, f0, harmonics):
+    buf = bytearray()
+    for n in range(N):
+        t = n / SR
+        v = 0.0
+        for h in range(1, harmonics + 1):
+            v += (1.0 / h) * math.sin(2 * math.pi * f0 * h * t)
+        v *= 0.25
+        env = min(1.0, n / (SR * 0.01))
+        buf += struct.pack('<f', v * env)
+    open(path, 'wb').write(buf)
+
+def read_f32(path):
+    d = open(path, 'rb').read()
+    return list(struct.unpack('<%df' % (len(d) // 4), d))
+
+def envelope_cv(x):
+    win = 512
+    mags = []
+    for i in range(SR // 4, len(x) - win, win):
+        s = sum(v * v for v in x[i:i+win])
+        mags.append(math.sqrt(s / win))
+    mags = [m for m in mags if m > 1e-7]
+    if len(mags) < 4:
+        return 99.0
+    mean = sum(mags) / len(mags)
+    var = sum((m - mean) ** 2 for m in mags) / len(mags)
+    return math.sqrt(var) / mean if mean > 0 else 99.0
+
+def drops(x):
+    win = 512
+    mags = []
+    for i in range(SR // 4, len(x) - win, win):
+        s = sum(v * v for v in x[i:i+win])
+        mags.append(math.sqrt(s / win))
+    if not mags:
+        return 0
+    peak = max(mags)
+    return sum(1 for m in mags if m < peak * 0.4)
+
+print(f"{'f0':>7} {'harm':>5} {'semis':>6} {'cv':>8} {'drops':>6}  verdict")
+bad = []
+for f0 in [82.4, 110.0, 146.8, 196.0, 261.6, 329.6, 440.0, 587.3, 880.0]:
+    for harm in [1, 6]:
+        write_tone('/tmp/in.f32', f0, harm)
+        for semis in [-12, -7, -5, 0, 5, 7, 12]:
+            scale = 2.0 ** (semis / 12.0)
+            subprocess.run(['/tmp/mt', '/tmp/in.f32', '/tmp/out.f32', str(scale)],
+                           check=True, capture_output=True)
+            y = read_f32('/tmp/out.f32')
+            cv = envelope_cv(y)
+            dr = drops(y)
+            verdict = ''
+            if cv > 0.15 or dr > 2:
+                verdict = 'GLITCH'
+                bad.append((f0, harm, semis, cv, dr))
+            print(f"{f0:7.1f} {harm:5d} {semis:6d} {cv:8.3f} {dr:6d}  {verdict}")
+
+print()
+print("=== GLITCHING COMBINATIONS ===")
+for f0, harm, semis, cv, dr in bad:
+    print(f"  f0={f0}Hz harmonics={harm} shift={semis:+d} cv={cv:.3f} drops={dr}")
+print(f"total bad: {len(bad)}")
+PY
