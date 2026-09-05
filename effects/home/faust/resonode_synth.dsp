@@ -23,11 +23,11 @@ collision = hslider("fx/resonode/collision", 0.0, 0.0, 1.0, 0.001) : morphGlide;
 outLevel  = hslider("fx/resonode/level", 25.0, 0.0, 60.0, 0.001) : morphGlide;
 couple    = hslider("fx/resonode/couple", 0.15, 0.0, 1.0, 0.001) : morphGlide;
 
-shapeStringWeight   = hslider("fx/resonode/shape/string",   1.0, 0.0, 1.0, 0.001);
-shapeBellWeight     = hslider("fx/resonode/shape/bell",     0.0, 0.0, 1.0, 0.001);
-shapePlateWeight    = hslider("fx/resonode/shape/plate",    0.0, 0.0, 1.0, 0.001);
-shapeMembraneWeight = hslider("fx/resonode/shape/membrane", 0.0, 0.0, 1.0, 0.001);
-shapeBarWeight      = hslider("fx/resonode/shape/bar",      0.0, 0.0, 1.0, 0.001);
+shapeStringWeight   = hslider("fx/resonode/shape/string",   1.0, 0.0, 1.0, 0.001) : morphGlide;
+shapeBellWeight     = hslider("fx/resonode/shape/bell",     0.0, 0.0, 1.0, 0.001) : morphGlide;
+shapePlateWeight    = hslider("fx/resonode/shape/plate",    0.0, 0.0, 1.0, 0.001) : morphGlide;
+shapeMembraneWeight = hslider("fx/resonode/shape/membrane", 0.0, 0.0, 1.0, 0.001) : morphGlide;
+shapeBarWeight      = hslider("fx/resonode/shape/bar",      0.0, 0.0, 1.0, 0.001) : morphGlide;
 
 note0 = hslider("fx/resonodevoice0/note", -1.0, -1.0, 127.0, 1.0);
 gate0 = hslider("fx/resonodevoice0/gate", 0.0, 0.0, 1.0, 1.0);
@@ -142,12 +142,14 @@ peakGainRefT60 = 0.15;
 peakGainRefPole = 1.0 - poleFromInvT60/peakGainRefT60;
 modeGainRefFactor = (1.0 - peakGainRefPole)/(1.0 + peakGainRefPole);
 
-modeResonatorUnscaled(r, freqHz, x) = fi.tf2(1.0, 0.0, -1.0, a1, a2, x)
+modePeakGain(r) = sqrt(modeGainRefFactor*(1.0 + r)/(1.0 - r));
+
+modeResonator(r, freqHz, x) = fi.tf2(b0, 0.0, -b0, a1, a2, x)
 with {
     a1 = -2.0*r*cos(2.0*ma.PI*freqHz/ma.SR);
     a2 = r*r;
+    b0 = sqrt(modeGainRefFactor*(1.0 - r*r));
 };
-modeNumeratorGain(r) = sqrt(modeGainRefFactor*(1.0 - r*r));
 
 chebyshevU(k, x) = chebU(k)
 with {
@@ -174,9 +176,8 @@ with {
     freqMode = freqFund*exp(modeLogRatioLive);
     poleRadius = modePole(freqFund, exp(highFreqDampExponent*modeLogRatioLive));
     modeAliasGuard = aliasGuard(freqMode);
-    unscaledOut = modeResonatorUnscaled(poleRadius, freqMode, exc + coupledIn);
-    rawOut = unscaledOut*modeNumeratorGain(poleRadius);
-    normalisedOut = unscaledOut*(1.0 - poleRadius)*modeAliasGuard;
+    rawOut = modeResonator(poleRadius, freqMode, exc + coupledIn);
+    normalisedOut = rawOut*modeAliasGuard/modePeakGain(poleRadius);
     weightedOut = rawOut
                 * modeAmpBase(i)
                 * modePositionSin(i, positionLive)
