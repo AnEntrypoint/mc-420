@@ -1087,8 +1087,8 @@ carve-out) and is SHORTER than the grain path it replaces: ~14ms vs ~36ms at
 Measured on a clean sine via the standalone C++ harness (splice path isolated,
 `mixTgt` forced to 0), before -> after: worst upward error **-204.7 cents ->
 +18.9 cents**; envelope-stability cv **0.46 -> 0.044**; amplitude drops
-**15 -> 0**. Downward and unity shifts are **bit-identical** across a 108-case
-sweep (6 frequencies x 6 ratios x 3 formant depths) — the mono engine is
+**15 -> 0**. Downward and unity shifts are **bit-identical** across a 180-case
+sweep (6 frequencies x 6 ratios x 5 formant depths) — the mono engine is
 provably untouched. Because the splice path now beats the grain path on
 envelope stability at neutral formant (440Hz/+12: cv 0.122 -> 0.023), the
 `scale > 1.02` forced-grain override has been REMOVED; neutral formant now runs
@@ -1240,6 +1240,45 @@ one identical `sigIn` became one.
 falling back to `kReengageSeedPeriod` (600 samples / ~80Hz), which is what
 removes most of the per-note lock-time variance. Only an owned-tracker engine
 still resets its own tracker on reengage.
+
+**The shared tracker MUST step its sweep at the same point in the block as the
+engine's own tracker did, or it silently degrades on modulated material.**
+`stepSchedule` originally ran at `i == 0` inside `processBlock`, i.e. after the
+FIRST sample of a block reached the SNAC buffer. A `tick()` that instead stepped
+after the 64th sample put the sweep 63 samples out of phase, which shifts which
+1024-sample window `snacBegin` snapshots. On steady material that is invisible;
+on amplitude-modulated material it flips which autocorrelation peak wins.
+Measured on `vibraphone_mid_C5B5.wav` (motor tremolo — exactly the content the
+documented SNAC drift bug affects), envelope-tracking error against the input:
+own-tracker 0.057, misaligned shared tracker **0.239**, block-aligned shared
+tracker **0.057**. The misaligned version's period trace showed the classic
+`maxDelta = period/8` walk toward a wrong subharmonic
+(586-511-446-389-339-295-257-223-194-168-145); the aligned version goes straight
+to the correct ~91. Keep `tick()` stepping at `m_sinceBlock == 0`.
+
+**Measured and REJECTED while fixing the above: requiring a second sweep to
+confirm a large period jump.** It cleanly removed the subharmonic WALK from the
+period trace, but produced no corpus-wide benefit whatsoever (mean
+envelope-tracking error 0.0883 vs 0.0882 over 32 real-instrument cases) and left
+the vibraphone error at 0.251. The walk was a symptom, not the cause; the cause
+was window alignment. Do not re-propose without evidence that distinguishes it
+from the alignment fix. This joins the other rejected attempts on the documented
+SNAC tremolo-drift bug.
+
+**Measured and REJECTED: a Hann-window LUT in place of `GrainFormant`'s
+per-grain `cosf`.** It cost bit-exactness against the shipped engine for every
+formant-engaged case (max abs diff 5.4e-07) and bought no measurable CPU at all
+(6 voices, formant engaged: 49.8/48.9us with `cosf` vs 46.3/49.2us with the LUT
+— inside run-to-run noise). `cosf` is not the bottleneck here.
+
+**The grain-suspend condition is keyed on the DIALED formant depth
+(`m_formantDepth != 0.0f`), not on the smoothed mix.** Keying it on
+`m_grainMix`/`m_grainMixTarget` reads the PREVIOUS sample's mix, which is 0 on
+the very first sample even when formant is dialed in — so the grain clock
+re-seeded at a different `m_wr` and every formant-engaged case stopped being
+bit-identical. With the depth-keyed condition, all 180 downshift/unity cases
+(6 frequencies x 6 ratios x 5 formant depths) are bit-identical to the shipped
+engine.
 
 Measured on the 6-voice poly engine (x86_64 dev host — NOT the Pi 4 Cortex-A72;
 treat the ratios as indicative and the absolute microseconds as not

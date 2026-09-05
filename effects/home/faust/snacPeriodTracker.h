@@ -51,7 +51,8 @@ public:
 
     void tick(float x) {
         write(x);
-        if (++m_sinceBlock >= BLOCK) { m_sinceBlock = 0; stepSchedule(BLOCK); }
+        if (m_sinceBlock == 0) stepSchedule(BLOCK);
+        if (++m_sinceBlock >= BLOCK) m_sinceBlock = 0;
     }
 
     bool  periodValid() const { return m_periodValid; }

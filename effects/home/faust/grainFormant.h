@@ -76,7 +76,7 @@ public:
             Voice& v = m_v[vi];
             if (!v.active) continue;
             float ph = (float)v.k / (float)v.len;
-            float win = hannWindow(ph);
+            float win = 0.5f - 0.5f * cosf(2.0f * 3.14159265f * ph);
             double src = v.center + (double)(v.k - v.len / 2) * (double)m_fm;
             acc += win * readRing(src);
             v.k++;
@@ -86,26 +86,6 @@ public:
     }
 
 private:
-    static const int WIN_LUT = 2048;
-    static const float* hannLut() {
-        static float lut[WIN_LUT + 1];
-        static bool ready = false;
-        if (!ready) {
-            for (int i = 0; i <= WIN_LUT; i++)
-                lut[i] = 0.5f - 0.5f * cosf(2.0f * 3.14159265f * (float)i / (float)WIN_LUT);
-            ready = true;
-        }
-        return lut;
-    }
-    static inline float hannWindow(float ph) {
-        if (ph <= 0.0f) return 0.0f;
-        if (ph >= 1.0f) return 0.0f;
-        float fi = ph * (float)WIN_LUT;
-        int i = (int)fi;
-        float fr = fi - (float)i;
-        const float* l = hannLut();
-        return l[i] * (1.0f - fr) + l[i + 1] * fr;
-    }
     struct Voice { bool active; int k; int len; double center; };
     float  m_ring[RBUF];
     unsigned m_wr;

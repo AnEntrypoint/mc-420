@@ -193,8 +193,8 @@ public:
                 m_grainFormant.setScale(m_scale);
                 m_grainFormant.setInputPeriod((double)m_lastGoodPeriodF);
             }
-            bool grainAudible = m_grainMix > kGrainBypassFloor
-                                || m_grainMixTarget > kGrainBypassFloor;
+            bool grainAudible = m_formantDepth != 0.0f
+                                || m_grainMix > kGrainBypassFloor;
             float gOut;
             if (grainAudible) {
                 gOut = m_grainFormant.read();
