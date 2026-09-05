@@ -1971,11 +1971,14 @@ as free:
 Measured ladder after those, eight-key stress, peak `core_busy` and gap count:
 **12 modes ~73% / 2-3 gaps; 16 modes 70-73% / 5-7; 20 modes 82-85% / 8-13;
 24 modes will not build at all.** Every one of these reports zero xruns.
-Combined worst case at 16 (Resonode + guitar bank + lofi bank + 8 keys):
-41-81% peak depending on what the FX banks are set to, 0-6 gaps, zero xruns;
-Resonode engaged with no keys is zero to one gap. NOTE these numbers were
-taken WITH the sqrt and shape-weight changes in the build; both were later
-reverted, so the shipped 16-mode figure is the conservative end of that range.
+Re-measured on the SHIPPED build, i.e. after the sqrt and shape-weight
+changes were reverted and with only the Chebyshev sine remaining: Resonode
+engaged with no keys held is zero gaps; an eight-key Resonode stress is
+34-73% peak with 0-2 gaps; the combined worst case (Resonode + guitar bank
++ lofi bank + 8 keys) is 80% peak with 3 gaps. Zero xruns throughout, worst
+single gap 6.0ms against 2.3ms typical, zero crash-watchdog trips. So the
+two reverted optimisations were not load-bearing: the Chebyshev sine plus
+the 24 -> 16 mode reduction carry the budget on their own.
 
 **24 modes is now a build-time ceiling, not a CPU question.** With the
 Chebyshev sine in place the real `faust` compiler is killed by SIGALRM about
