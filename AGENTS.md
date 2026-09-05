@@ -782,9 +782,13 @@ wire count. Correct idiom: build the bus with `,` then pipe with `:`.
 
 Always read the real stdlib definition (`/usr/share/faust/*.lib`) before
 trusting a call site's own window/size argument — `ef.transpose` has a
-HARDCODED `maxDelay=65536` independent of the window argument passed, which
-is why `multitranspose.dsp` defines its own local `xpose` sized to its real
-usage ceiling instead.
+HARDCODED `maxDelay=65536` independent of the window argument passed. This
+is why `multitranspose.dsp` originally defined its own local `xpose` sized
+to its real usage ceiling instead of calling `ef.transpose` directly; that
+local shifter itself has since been replaced by the per-voice
+`EngineSoladSnac` C++ engine (see the `multitranspose.dsp` section below),
+so the concrete example is gone, but the underlying stdlib-footgun lesson
+still applies to any future `ef.transpose`/similarly-sized stdlib call.
 
 ## Faust compiler flags — currently shipped
 
@@ -848,11 +852,6 @@ proposing a manual hoist, check the real generated C++ call count first.
 Buffer sizes here are all "real usage ceiling + margin", verified bit-exact
 against the unsized-down original via DawDreamer JIT before shipping:
 
-- `multitranspose.dsp`'s `xposeMaxDelay = 2000` (real ring 2048 floats) — the
-  `xpose()` read index can mathematically never exceed `2*960=1920`
-  (`windowFor()`'s hard 960-sample ceiling); Faust's interval analyzer can't
-  narrow a `letrec`-recursive index, so the declared constant matters
-  directly.
 - `delay.dsp`'s `MAXD = 52000` (real ring 65536 floats) — `TIME`'s own
   `targetSamples()` caps the real usable delay at ~999.6ms (~47999 samples
   @ 48kHz), roughly half the previous `96000`.
@@ -909,74 +908,173 @@ is actually being played. Strictly additive with the existing mono SNAC
 engine (`fx/pitchbend`, CC52/mod wheel, `pitch_ffi.h`), which remains the
 mono "pedal ride" lane, untouched.
 
+**Shifter engine (current, post-`xpose` rewrite)**: each of the 6 voices
+now owns its own `EngineSoladSnac` instance (`pitch_poly.dsp` /
+`pitch_poly_ffi.h`, a `DubfxPolyVoice[6]` array) — the SAME SNAC-tracked
+splice-based PSOLA engine that already powers the mono "pedal ride" effect
+(`pitch.dsp`/`pitch_ffi.h`/`soladSnacOctaver.h`), made polyphonic. The
+OLD per-file two-tap delay-line `xpose()` shifter (pitch-synchronous
+window/crossfade sizing, `windowFor()`, `winSkewMul`/`formantXfSkew`,
+`xposeMaxDelay`) no longer exists anywhere in this file or the codebase —
+do not look for it. `shiftAmount = targetNote - heldDetNote` (still
+sampled once per voice at `attackEdge`, held for the whole sustain per the
+same absolute-pitch-lock design) converts to a ratio (`pow(2, shiftAmount
+/ 12)`) and is threaded straight into the per-voice engine as a plain
+signal argument, per the compile-time-cliff discipline below.
+
 **Current mechanism (absolute pitch-lock, per explicit user direction — an
 earlier "interval harmonizer" rearchitecture was tried and reverted)**:
-`shiftAmount = targetNote - heldDetNote`, where `heldDetNote` is sampled
-once per voice at `attackEdge` and held for the whole sustain (never
-re-tracked mid-note, so a mid-sustain plosive/burst cannot perturb an
-already-locked note). The detected pitch source is `freqDet = ba.if(
-extFreqDet > 0.5, extFreqDet, detectedFreq(sigIn))` — prefers the external
-`pitchtracker.lv2` autocorrelation tracker's reading (`fx/extfreqdet`, fed
-from `audio_thread.cpp` via `pitchTrackerFx`) when present, falls back to
-the internal zero-crossing tracker (`trackPitchHzAndHp`/`jumpGuard`)
-otherwise.
+unchanged from before the shifter rewrite. The detected pitch source is
+`freqDet = ba.if(extFreqDet > 0.5, extFreqDet, detectedFreq(sigIn))` —
+prefers the external `pitchtracker.lv2` autocorrelation tracker's reading
+(`fx/extfreqdet`, fed from `audio_thread.cpp` via `pitchTrackerFx`) when
+present, falls back to the internal zero-crossing tracker
+(`trackPitchHzAndHp`/`jumpGuard`) otherwise.
 
 **Known, disclosed, current limitation**: the internal zero-crossing
 fallback tracker (when `pitchtracker.lv2` is NOT loaded) has a real,
 unresolved note-selection accuracy problem — it can take well over 400ms to
-converge and can drift non-monotonically rather than settle. This does NOT
-affect `xpose`'s window/crossfade SIZING use of the same tracker (a wrong
-window only costs naturalness, never a wrong note). With `pitchtracker.lv2`
-genuinely loaded (the real, intended on-device configuration — see deploy
-section), lock is near-instant and accurate (~11-38 cents on real
-recordings spanning piano/violin/vocal/brass/woodwind/marimba/vibraphone).
-Do not attempt a timing-based heuristic fix for the fallback tracker's
-convergence in `multitranspose.dsp` itself — this file's own history (see
-`[[memory: faust-compile-time-cliff]]`) records the real, repeated risk of
-touching this file's tracker internals.
+converge and can drift non-monotonically rather than settle. With
+`pitchtracker.lv2` genuinely loaded (the real, intended on-device
+configuration — see deploy section), lock is near-instant and accurate
+(~11-38 cents on real recordings spanning piano/violin/vocal/brass/
+woodwind/marimba/vibraphone). Do not attempt a timing-based heuristic fix
+for the fallback tracker's convergence in `multitranspose.dsp` itself —
+this file's own history (see `[[memory: faust-compile-time-cliff]]`)
+records the real, repeated risk of touching this file's tracker internals.
 
 **Voice mechanics**: `an.pitchTracker`-derived detection runs on the live
 input once per sample (shared instance, not per-voice). Each voice's shift
-glides via `si.smooth(tau2pole(glide_ms=8))`, gated by `en.adsr` (3ms
-attack/30ms decay/sustain 1/50ms release — 50ms release is the verified
-click-free value), shifted by the local `xpose` (window sized
-pitch-synchronously from the detected period, capped at 20ms, with a
-mandatory `si.smooth(...) : max(64)` double-clamp to prevent a
-zero-window NaN poison). Gain staging: fixed per-voice gain (0.6) + static
-`ma.tanh` soft-clip on the summed bus (never a dynamic
-`1/sqrt(activeVoices)` renormalization — that pumps on every chord-note
-release). Voice allocation: round-robin/oldest-steal
+glides via a one-pole (`normalGlidePole`, `tau2pole(0.008)`), gated by
+`en.adsr` (3ms attack/30ms decay/sustain 1/50ms release — 50ms release is
+the verified click-free value), then shifted+formant-shaped by the
+per-voice `EngineSoladSnac`+`GrainFormant` engine (see below), block-
+buffered at 64 samples (~1.333ms), the same fixed algorithmic latency as
+the mono engine's wet effect regardless of pitch or formant. Gain staging:
+fixed per-voice gain (0.6) + static `ma.tanh` soft-clip on the summed bus
+(never a dynamic `1/sqrt(activeVoices)` renormalization — that pumps on
+every chord-note release). Voice allocation: round-robin/oldest-steal
 (`allocateTransposeVoice`/`releaseTransposeVoice` in `ApcGrid`) — a held
 note reuses its own slot, an unheld slot is preferred, oldest-triggered is
-stolen once all 6 are held (ADSR re-attacks). Note-off releases by GATE
-only, never a hard cut.
+stolen once all 6 are held (ADSR re-attacks, and each steal calls
+`EngineSoladSnac::reengage()` to reset that voice's read position/period
+tracking cleanly). Note-off releases by GATE only, never a hard cut.
 
-**Formant control** (`fx/formant`, CC53, -3..+3) reaches this engine too:
-`winSkewMul(formant) = pow(1.2, formant/3)` and
-`formantXfSkew(formant) = pow(4.0, formant/3)` skew `xpose`'s window/
-crossfade sizing (before the safety clamps, so the 960-sample ceiling is
-unaffected regardless of formant), plus a light `fi.low_shelf`/
-`fi.high_shelf` spectral tilt (`formantTiltDb(formant) = formant*2.5`,
-exact identity at 0). Real, measured, large expressiveness on real audio
-(tens to hundreds of Hz spectral-centroid spread depending on timbre).
-`applyFormantCC` in `apc_grid.cpp` is gated on `(m_liveEngaged ||
-m_keysMode==KeysMode::MultiKey)` — a genuine no-op when neither
-pitch-shift engine is active.
+**Formant control** (`fx/formant`, CC53) reaches this engine as a plain
+signal argument into `pitchPoly`'s `process()`; real-world CC range is
+`((data2-64)/63)*1.5` clamped to the `-3..3` hslider range in
+`effects_runtime.dsp`, so the practically reachable magnitude is ~1.5, not
+3 (`applyFormantCC` in `apc_grid.cpp`, gated on `(m_liveEngaged ||
+m_keysMode==KeysMode::MultiKey)` — a genuine no-op when neither pitch-shift
+engine is active).
 
-**Known, disclosed limitations of the underlying `xpose` shifter**: above
-~700Hz, the window becomes short relative to the sample rate and develops
-real crossfade-splice sidebands (costs naturalness, not pitch correctness).
-At extreme downward shifts (2+ octaves) combined with nonzero formant, the
-large per-sample delay-index step can itself become an audible tone.
-Neither is fixable without a shifter algorithm change; both are inherent to
-`xpose`'s own design, not introduced by any specific formant/lock change.
+**Investigated but NOT fixed this way — a tempting routing fix for "gappy"
+turned out to be unsafe, keep it that way**: `EngineSoladSnac::processBlock()`
+blends two internal signals — the phase-coherent splice/PSOLA reader (`y`)
+and `GrainFormant`'s independent overlap-add grain resynthesis (`gOut`, the
+ONLY path that moves formants independently of pitch) — and forces the mix
+to `1.0` (100% grain path) for ANY upward shift beyond `scale > 1.02`
+(~0.34 semitones) regardless of the formant setting. It looked like exactly
+the mechanism behind "pushing the pitch up a bit with neutral formant makes
+it gappy" (neutral formant silently still meant "use the grain path"), and
+also behind "some pitches/formants are more latent than others" (the grain
+path's own `targetLag = Tin*(3+fm)` scales with the detected period and the
+formant factor). **A real attempt to disable the forced-grain override for
+the polyphonic voices only (leaving the mono "pedal ride" engine's default
+untouched) was built, then reverted after direct measurement proved it
+unsafe**: a standalone C++ harness linking `soladSnacOctaver.h` directly
+(bypassing Faust/DawDreamer entirely — see the JIT-limitation note below)
+showed the splice-only path (`y` alone, `mixTgt` forced to 0) is NOT
+pitch-accurate for real shifts on a clean sine — up to **-200 cents**
+(nearly 2 semitones flat) at some frequency/shift combinations, worst around
++1-2 semitones at 110-220Hz, independent of any formant or vowel/sibilance
+work. This bug was never visible before because the `scale > 1.02` override
+ALWAYS routed every real shift through the (separately measured, ~1-5 cents
+accurate) grain path, on both engines, unconditionally — so "the splice path
+alone is high quality" (this file's own prior "0.99-1.00 spectral purity on
+a clean sweep" claim, which is about harmonic distortion, not frequency
+accuracy) was never actually tested at real shift amounts. **Do not disable
+or raise the `scale > 1.02` forced-grain threshold on either engine without
+first fixing this splice-path frequency bug** (most likely in
+`triggerSpliceByPeriod`'s period-multiple resplicing interacting with the
+active/passive crossfade) and re-verifying with the same kind of direct
+sine-frequency harness — a plausible next step for a session with more
+time, but out of scope for the fixes actually shipped here. The literal
+"gappy" root cause on real (non-sine) signal therefore remains OPEN — the
+grain path is confirmed pitch-accurate and free of gross amplitude dropouts
+on both synthetic sine and real vocal/piano/violin corpus content (measured
+via the same harness, zero-drop RMS-ratio check across neutral/±1.4 formant
+and 0.5-2 semitone shifts), so the remaining "gappy" quality is most likely
+a subtler artifact (grain-overlap phase drift when the SNAC period estimate
+`Tin` isn't exactly locked between its ~43ms `SNAC_HOP` updates) that needs
+real-hardware/real-mic listening to characterize further, per the project's
+own "compiling/synthetic-testing clean proves nothing" rule.
+
+**Real formant/vowel/sibilance shaping (new)**: `vowelFormant.h` adds a
+`VowelFormantShaper` (3 parallel RBJ peaking biquads tuned to F1/F2/F3 of a
+5-point vowel table — U/O/A/E/I, from
+`{300,870,2240}`/`{570,840,2410}`/`{730,1090,2440}`/`{530,1840,2480}`/
+`{270,2290,3010}` Hz) and a `SibilanceDetector` (a ~4kHz one-pole
+highpass energy ratio against a slower broadband envelope). Both are
+per-voice, applied in `pitch_poly_ffi.h`'s `dubfx_poly_shape_block()`
+right after `EngineSoladSnac::processBlock()` fills that voice's 64-sample
+output block — plain C++ math against the existing `formant` scalar and
+the block-aligned dry `inBuf`, so this needed NO new Faust UI primitive
+and carries none of the compile-time-cliff risk below. The existing
+`fx/formant` scalar now does double duty: its magnitude (normalized
+against the ~1.5 practical CC range) is both the `GrainFormant` mix depth
+(unchanged) and the vowel-filter blend depth, and its sign/position maps
+onto the U-O-A-I-E vowel continuum, so sweeping the one existing formant
+knob morphs through real vowel coloration on top of whatever `GrainFormant`
+mix the engine already settles on, instead of just a spectral-tilt
+brightness cue — at `formant=0` both new stages are fully bypassed (zero
+coloring, verified identity). Sibilance detection runs unconditionally (not
+formant-gated): a detected fricative/consonant crossfades the voice's
+output back toward its own raw dry input (up to 85%) so "s"/"sh"/"f"/"t"
+transients stay intelligible instead of being pitch/formant-warped.
+Verified via a standalone C++ harness (`pitch_poly_ffi.h` linked directly,
+no Faust JIT involved — see the DawDreamer-limits note below): finite/
+bounded output across the full formant/shift extremes (formant -3..+3,
+shift -24..+24 semitones), and pitch accuracy within ~5 cents at neutral
+and positive formant on a clean sine (matching the underlying engine's own
+accuracy, i.e. the vowel EQ does not itself perturb pitch). At strongly
+NEGATIVE formant (`d` near the practical -1.5 floor) the same harness shows
+a real, reproducible ~70-90 cents flat error that predates this session's
+changes (confirmed by testing raw `EngineSoladSnac`/`GrainFormant` with no
+vowel/sibilance code at all) — consistent with this file's own
+already-documented free-transpose-engine note that "negative side is
+flatter/more non-monotonic... an inherent asymmetry in the `factor=
+powf(2,d)` mapping, not an engine defect"; the vowel/sibilance addition
+does not make this worse or better. The vowel filter's exact Q/gain
+constants and the sibilance detector's HF-corner/ratio thresholds are a
+first real implementation, not by-ear-tuned on real hardware yet — needs a
+live-mic pass on the Pi 4 before calling the vowel/sibilance character
+final.
 
 **Compile-time-cliff discipline for this file**: `[[memory:
 faust-compile-time-cliff]]` — any new UI primitive declared inside
 `multitranspose.dsp` itself risks an unbounded real-`faust`-CLI compile
 time regardless of DawDreamer JIT results. New controls affecting this
 engine are declared elsewhere (e.g. `effects_runtime.dsp`) and threaded in
-as plain signal arguments.
+as plain signal arguments. This is why the vowel/sibilance shaping above
+lives entirely in the C++ FFI headers instead: it needed zero new Faust
+declarations.
+
+**DawDreamer JIT cannot compile `multitranspose.dsp` (or `pitch.dsp`)
+directly anymore** — `pitch_poly.dsp`'s `ffunction` declaration hits the
+same "calling foreign function ... is not allowed in this compilation
+mode" JIT limitation documented below for `pitch.dsp`. `test-audio-corpus/
+real_audio_cross_verify.py`'s direct `set_dsp(".../multitranspose.dsp")`
+call predated the `xpose`-to-`EngineSoladSnac` rewrite and stopped
+compiling once `multitranspose.dsp` started pulling in `pitch_poly.dsp`'s
+`ffunction` — fixed by porting it to the same pattern
+`free_transpose_harness.cpp` already used for the mono engine: a new
+`test-audio-corpus/multitranspose_harness.cpp` links `pitch_poly_ffi.h`
+directly (no Faust/DawDreamer involved) and `real_audio_cross_verify.py`
+now shells out to it per test case instead of calling `daw.RenderEngine`/
+`make_faust_processor` at all. This is also the pattern to reach for when
+verifying any future change to this file's shifter/formant/sibilance
+behavior — a standalone C++ harness against the real FFI, never the JIT.
 
 ## `pitchtracker.lv2`: standalone autocorrelation pitch tracker
 
@@ -1054,11 +1152,20 @@ independent-formant grain-playback-speed stage (`grainFormant.h`).
   cost accompanies brightening; a make-up-gain fix was measured
   (grain-path RMS ~57-73% of clean-reader RMS) but deliberately NOT
   implemented — needs by-ear tuning on real hardware, not a blind constant.
-- The `>700Hz` crossfade-splice-quality concern documented for
-  `multitranspose.dsp`'s `xpose()` does NOT transfer to this engine —
-  measured via a clean sine sweep, spectral purity stays 0.99-1.00 (0-1%
-  THD) at every tested frequency up to 5000Hz with no degradation near
-  700Hz. The two engines use structurally different splice algorithms.
+- Historical note: this bullet used to contrast this engine against
+  `multitranspose.dsp`'s OWN, now-removed, `xpose()` two-tap delay shifter
+  ("structurally different splice algorithms"). That's no longer true —
+  `multitranspose.dsp`'s 6 voices now each run this exact same
+  `EngineSoladSnac` class (see the `multitranspose.dsp` section above), so
+  there is only one splice/PSOLA implementation in the codebase now, shared
+  by both the mono and polyphonic engines. The measured spectral purity
+  (0.99-1.00 THD on a clean sine sweep up to 5000Hz, no degradation near
+  700Hz) still stands for this class in general, but see the
+  `multitranspose.dsp` section's "Investigated but NOT fixed" note for a
+  real, separately-discovered FREQUENCY-ACCURACY (not THD) bug in the
+  splice-only mixing mode (`mixTgt` forced to 0) that applies equally to
+  both engines and is currently masked on both by the `scale > 1.02`
+  forced-grain-mix default.
 
 **Open, disclosed bug**: a genuine SNAC period-tracker drift bug on
 tremolo/amplitude-modulated or dynamically-varying content (e.g. vibrato,

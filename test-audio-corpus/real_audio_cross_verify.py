@@ -1,19 +1,16 @@
 import os
 import sys
 import json
+import subprocess
 import numpy as np
-import dawdreamer as daw
 
 from corpus_common import load_to_48k_mono_f32, measure_freq_windowed, cents_diff
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DSP_PATH = os.path.abspath(os.path.join(HERE, "..", "effects", "home", "faust", "multitranspose.dsp"))
+HARNESS_SRC = os.path.join(HERE, "multitranspose_harness.cpp")
+HARNESS_BIN = os.path.join(HERE, "multitranspose_harness")
 
 SR = 48000
-BS = 64
-COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
-
-ROOT_NOTE = 60.0
 LOCK_SHIFT_SEMITONES = 7.0
 LEAD_IN_S = 0.15
 TAIL_S = 1.0
@@ -34,47 +31,42 @@ REAL_FILES = {
 }
 
 
-def make_engine():
-    engine = daw.RenderEngine(SR, BS)
-    faust = engine.make_faust_processor("faust")
-    faust.compile_flags = COMPILE_FLAGS
-    ok = faust.set_dsp(DSP_PATH)
-    assert ok, "set_dsp failed"
-    ok = faust.compile()
-    assert ok, "compile failed"
-    assert faust.get_num_input_channels() == 17
-    assert faust.get_num_output_channels() == 2
-    return engine, faust
+def ensure_harness():
+    if os.path.exists(HARNESS_BIN) and os.path.getmtime(HARNESS_BIN) > os.path.getmtime(HARNESS_SRC):
+        return
+    subprocess.run(
+        ["g++", "-O2", "-std=c++17", HARNESS_SRC, "-o", HARNESS_BIN],
+        cwd=HERE, check=True,
+    )
 
 
-def run_lock_test(filename, true_hz, target_note=None, shift_semitones=LOCK_SHIFT_SEMITONES):
+def run_harness(dry, scale, formant_depth=0.0, voice_idx=0):
+    in_path = os.path.join(HERE, "_rxv_in.f32")
+    out_path = os.path.join(HERE, "_rxv_out.f32")
+    dry.astype(np.float32).tofile(in_path)
+    subprocess.run(
+        [HARNESS_BIN, in_path, out_path, str(scale), str(formant_depth), str(voice_idx)],
+        cwd=HERE, check=True,
+    )
+    out = np.fromfile(out_path, dtype=np.float32)
+    os.remove(in_path)
+    os.remove(out_path)
+    return out
+
+
+def run_lock_test(filename, true_hz, shift_semitones=LOCK_SHIFT_SEMITONES, formant_depth=0.0):
     path = os.path.join(HERE, filename)
     dry = load_to_48k_mono_f32(path)
-    dur = len(dry) / SR + LEAD_IN_S + TAIL_S
-    n = int(dur * SR)
-
-    engine, faust = make_engine()
-
-    data = np.zeros((17, n), dtype=np.float32)
     lead_n = int(LEAD_IN_S * SR)
-    end_n = min(n, lead_n + len(dry))
-    data[0, lead_n:end_n] = dry[: end_n - lead_n]
-    data[4, :] = float(true_hz)
+    tail_n = int(TAIL_S * SR)
+    n = lead_n + len(dry) + tail_n
+    padded = np.zeros(n, dtype=np.float32)
+    padded[lead_n:lead_n + len(dry)] = dry
 
-    if target_note is None:
-        target_note = ROOT_NOTE + shift_semitones
-    data[5, :] = float(target_note)
-    data[6, lead_n:] = 1.0
+    scale = 2.0 ** (shift_semitones / 12.0)
+    wet = run_harness(padded, scale, formant_depth)
 
-    playback = engine.make_playback_processor("playback", data)
-    graph = [(playback, []), (faust, ["playback"])]
-    assert engine.load_graph(graph)
-    engine.render(dur)
-    audio = engine.get_audio()
-    wet = audio[0]
-
-    expected_hz = float(true_hz) * (2.0 ** ((target_note - ROOT_NOTE) / 12.0))
-
+    expected_hz = float(true_hz) * scale
     lo = max(20.0, expected_hz * 0.55)
     hi = min(SR / 2.0 - 100.0, expected_hz * 1.8)
     measured_hz = measure_freq_windowed(
@@ -85,8 +77,8 @@ def run_lock_test(filename, true_hz, target_note=None, shift_semitones=LOCK_SHIF
     return dict(
         file=filename,
         true_hz=true_hz,
-        target_note=target_note,
-        shift_semitones=target_note - ROOT_NOTE,
+        shift_semitones=shift_semitones,
+        formant_depth=formant_depth,
         expected_hz=expected_hz,
         measured_hz=measured_hz,
         cents=cents,
@@ -94,6 +86,12 @@ def run_lock_test(filename, true_hz, target_note=None, shift_semitones=LOCK_SHIF
 
 
 def main():
+    print("Testing the polyphonic key-lock shifter engine (EngineSoladSnac x6, "
+          "pitch_poly_ffi.h) directly via a standalone C++ harness -- DawDreamer's "
+          "JIT can no longer compile multitranspose.dsp directly since it pulls in "
+          "pitch_poly.dsp's ffunction (see AGENTS.md's multitranspose.dsp section).")
+    ensure_harness()
+
     results = []
     for fname, true_hz in REAL_FILES.items():
         path = os.path.join(HERE, fname)
@@ -106,6 +104,10 @@ def main():
             "%-32s true=%9.3fHz target=+%dst expected=%9.3fHz measured=%9.3fHz  %+8.2f cents"
             % (fname, r["true_hz"], r["shift_semitones"], r["expected_hz"], r["measured_hz"], r["cents"])
         )
+
+    if not results:
+        print("no corpus .aiff files present locally; nothing to verify")
+        return 0
 
     with open(os.path.join(HERE, "_real_audio_cross_verify_results.json"), "w") as f:
         json.dump(results, f, indent=2)

@@ -2,12 +2,17 @@
 #define DUBFX_PITCH_POLY_FFI_H
 
 #include "soladSnacOctaver.h"
+#include "vowelFormant.h"
 
 static const int DUBFX_POLY_VOICES = 6;
 static const int DUBFX_POLY_BS = 64;
+static const float DUBFX_POLY_SR = 48000.0f;
+static const float kFormantPracticalMax = 1.5f;
 
 struct DubfxPolyVoice {
     EngineSoladSnac eng;
+    VowelFormantShaper vowel;
+    SibilanceDetector sibilance;
     float lastScale = 1.0f;
     float lastFormant = 0.0f;
     bool  lastEngaged = false;
@@ -25,10 +30,33 @@ static DubfxPolyVoice& dubfx_poly_voice(int idx) {
 
 static inline void dubfx_poly_apply(DubfxPolyVoice& v, float scale, float formantDepth, float engaged) {
     if (scale != v.lastScale) { v.eng.setPitchScale(scale); v.lastScale = scale; }
-    if (formantDepth != v.lastFormant) { v.eng.setFormantDepth(formantDepth); v.lastFormant = formantDepth; }
+    if (formantDepth != v.lastFormant) {
+        v.eng.setFormantDepth(formantDepth);
+        v.lastFormant = formantDepth;
+        float norm = formantDepth / kFormantPracticalMax;
+        if (norm > 1.0f) norm = 1.0f; else if (norm < -1.0f) norm = -1.0f;
+        v.vowel.setVowelPos((norm + 1.0f) * 2.0f, DUBFX_POLY_SR);
+    }
     bool eng = engaged >= 0.5f;
     if (eng && !v.lastEngaged) v.eng.reengage();
     v.lastEngaged = eng;
+}
+
+static inline void dubfx_poly_shape_block(DubfxPolyVoice& v) {
+    float depth = fabsf(v.lastFormant) / kFormantPracticalMax;
+    if (depth > 1.0f) depth = 1.0f;
+    for (int i = 0; i < DUBFX_POLY_BS; i++) {
+        float wet = v.outBuf[i];
+        if (depth > 0.0f) {
+            float colored = v.vowel.process(wet);
+            wet = wet * (1.0f - depth) + colored * depth;
+        }
+        float sib = v.sibilance.update(v.inBuf[i]);
+        if (sib > 0.0f) {
+            wet = wet * (1.0f - sib * 0.85f) + v.inBuf[i] * (sib * 0.85f);
+        }
+        v.outBuf[i] = wet;
+    }
 }
 
 extern "C" inline float dubfx_pitch_tick_poly(float x, float voiceIdx, float scale, float formant, float engaged) {
@@ -42,6 +70,7 @@ extern "C" inline float dubfx_pitch_tick_poly(float x, float voiceIdx, float sca
     v.pos++;
     if (v.pos >= DUBFX_POLY_BS) {
         v.eng.processBlock(v.inBuf, v.outBuf, DUBFX_POLY_BS);
+        dubfx_poly_shape_block(v);
         v.pos = 0;
     }
     return y;
