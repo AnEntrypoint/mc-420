@@ -80,17 +80,19 @@ with {
     lastConvergedNoteRaw = lastConvergedNoteStep ~ _;
     lastConvergedNote = ba.if(ba.time == 0, targetNote, lastConvergedNoteRaw);
     smoothPole = ba.tau2pole(0.008);
-    trackingAllowed = (trustedTracker > 0.5) | inLockWarmup;
+    trackingAllowed = trustedTracker > 0.5;
     smoothedDetNoteStep(prev) = ba.if(attackEdge, lastConvergedNote,
                                   ba.if(trackingAllowed,
                                     prev * smoothPole + rawDetNote * (1.0 - smoothPole),
                                     prev));
     smoothedDetNote = smoothedDetNoteStep ~ _;
-    heldDetNoteStep(prev) = ba.if(trackingAllowed, smoothedDetNote, prev);
+    heldDetNoteStep(prev) = ba.if(trackingAllowed & inLockWarmup, smoothedDetNote, prev);
     heldDetNote = heldDetNoteStep ~ _;
     shiftTarget = targetNote - heldDetNote;
     shiftStep(prev) = ba.if(attackEdge, shiftTarget,
-                       prev * normalGlidePole + shiftTarget * (1.0 - normalGlidePole));
+                       ba.if(inLockWarmup,
+                         prev * normalGlidePole + shiftTarget * (1.0 - normalGlidePole),
+                         prev));
     shiftAmount = shiftStep ~ _;
     shiftRatio = pow(2.0, shiftAmount / 12.0);
     voiceEnv    = en.adsr(0.003, 0.03, 1, 0.05, gate);
