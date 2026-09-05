@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1aca00b488c7cf33e32f8f7be757f3d33f39e018">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1592f1b4273e29dca63aa97f23273e0ec2dced0d">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -449,8 +449,18 @@ the binary just deployed, BEFORE reading logs.</p>
 into <code class="language-plaintext highlighter-rouge">.netboot-update-work/{bin,lv2}</code>, calls <code class="language-plaintext highlighter-rouge">image/build-netboot.sh</code> when
 the combined SHA changes. State lives in <code class="language-plaintext highlighter-rouge">.netboot-update-sha</code>
 (<code class="language-plaintext highlighter-rouge">&lt;binSha&gt;:&lt;lv2Sha&gt;</code>) — matching SHA means the poll loop does nothing.</li>
-  <li><strong>Manual</strong>: <code class="language-plaintext highlighter-rouge">ALOOP_BIN=&lt;path&gt; LV2_DIR=&lt;path&gt; OUT=.netboot-serve
-NETBOOT_SERVER=192.168.137.1 bash image/build-netboot.sh</code>.</li>
+  <li><strong>Manual</strong>: <code class="language-plaintext highlighter-rouge">ALOOP_BIN=&lt;path&gt; LV2_DIR=&lt;path&gt; RESONODE_LV2_DIR=&lt;path&gt;
+PITCHTRACKER_LV2_DIR=&lt;path&gt; DELAYVERB_LV2_DIR=&lt;path&gt; OUT=.netboot-serve
+NETBOOT_SERVER=192.168.137.1 bash image/build-netboot.sh</code>. <strong>All three of the
+extra <code class="language-plaintext highlighter-rouge">*_LV2_DIR</code> vars are mandatory</strong> — <code class="language-plaintext highlighter-rouge">lib-boot-tree.sh</code> excludes
+<code class="language-plaintext highlighter-rouge">resonode.lv2</code>/<code class="language-plaintext highlighter-rouge">pitchtracker.lv2</code>/<code class="language-plaintext highlighter-rouge">delayverb.lv2</code> by name from the general
+<code class="language-plaintext highlighter-rouge">LV2_DIR</code> find and reads each from its own variable, so passing <code class="language-plaintext highlighter-rouge">LV2_DIR</code>
+alone silently ships a boot tree with none of those three bundles. It warns
+on stdout but still produces a complete-looking apkovl, so the omission is
+easy to miss. Prefer deleting <code class="language-plaintext highlighter-rouge">.netboot-update-sha</code> and letting
+<code class="language-plaintext highlighter-rouge">serve-netboot-win.js</code> rebuild (it passes all five correctly). Verify with
+<code class="language-plaintext highlighter-rouge">tar -tzf .netboot-serve/aloop.apkovl.tar.gz | grep -oE 'effects/[a-z]+/[a-z_]+[.]lv2' | sort -u</code>
+— expect delayverb, guitar_lofi_fx, pitchtracker, resonode.</li>
 </ul>
 
 <p><strong>The automatic path’s SHA-tracking is blind to changes in the packaging
@@ -517,8 +527,20 @@ New-NetIPAddress   -InterfaceAlias Ethernet -IPAddress 192.168.137.1 -PrefixLeng
 Set-NetIPInterface -InterfaceAlias Ethernet -InterfaceMetric 10
 ```
 
-The server resolves `SERVER_IP` once at startup — a running instance keeps
-serving the old address after an interface change; restart it.
+The server resolves `SERVER_IP` once at startup AND bakes it into the netboot
+root's `cmdline.txt` (the `alpine_repo`/`modloop`/`apkovl` URLs). Restarting the
+server rebinds its sockets to the new address but does NOT rewrite those URLs —
+a restart alone is NOT sufficient after an interface change; rebuild the root
+with `NETBOOT_SERVER` set correctly, then power-cycle the Pi.
+
+A stale baked-in IP has its own signature, distinct from the dead-option-66
+case above: the whole TFTP firmware+kernel chain serves correctly (option 66 is
+live), then ZERO HTTP hits follow and the Pi stalls in initramfs — it pings with
+TTL=64 but refuses port 22, because Alpine never comes up so sshd never starts.
+The `udp/4446` REBOOT path cannot recover this: `aloop` never started. Verify
+with `cat .netboot-serve/cmdline.txt` and check the three URLs name the intended
+host. One way to reach this state is an Ethernet link that is down at server
+startup — `resolveServerIp()` then auto-detects a different live interface.
 `pkill -f serve-netboot-win` does not always reap the listener; confirm
 ports are free (`netstat -ano | grep -E ':(67|69|8080)\s'`) before concluding
 a restart took.
