@@ -1112,6 +1112,25 @@ to an LPC spectral-envelope model (whiten, recolor), which shifts no pitch and
 adds no latency; the splice path now handles pitch correctly in both directions
 on its own, so the two concerns no longer need to share one mechanism.
 
+**Measured, real, but SECONDARY: `GrainFormant`'s epoch free-runs by `Tin`
+rather than locking to real pitch marks.** `m_inEpoch += Tin` between resplice
+corrections, while `Tin` itself only refreshes on a SNAC hop (~43ms) through the
+`maxDelta = period/8 + 2` slew clamp — so overlapping grains drift out of phase
+whenever the held `Tin` is stale or wrong, which shows up as amplitude
+modulation. Measured directly against `grainFormant.h` with a harmonic-rich
+input: with an EXACT per-sample period the mechanism is clean (modulation depth
+<=0.6% across 82-440Hz and fm 1.0-1.86), so the epoch machinery is not itself at
+fault. Feeding a deliberately stale/erroneous period reproduces the claim: +1%
+error -> 2.7%, +3% -> 2.6%, +8% -> 4.7% modulation depth; 3%/5Hz vibrato (which
+makes `Tin` stale between hops by construction) -> 2.6% at 110Hz and 4.9% at
+196Hz; the two combined -> 7.1%. So the cause is correctly identified, but at
+~0.6dB it is a secondary contributor, not the primary "gappy" mechanism — the
+splice path's total absence of an upward-shift resplice (envelope cv 0.46, 15
+amplitude drops) was an order of magnitude larger and is what actually got
+fixed. Real pitch-mark locking remains the proper fix and is NOT implemented;
+weigh it against retiring the grain path from the formant role entirely, which
+would make it moot.
+
 **Measured and REJECTED: reducing the grain path's `targetLag`.** The
 suggestion to cap the grain lag (it is `Tin*(3+fm)`, i.e. 40-60ms at low guitar
 notes) was implemented and swept against envelope stability across 3 frequencies
