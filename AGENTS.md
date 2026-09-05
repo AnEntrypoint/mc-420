@@ -354,8 +354,18 @@ the binary just deployed, BEFORE reading logs.
   into `.netboot-update-work/{bin,lv2}`, calls `image/build-netboot.sh` when
   the combined SHA changes. State lives in `.netboot-update-sha`
   (`<binSha>:<lv2Sha>`) — matching SHA means the poll loop does nothing.
-- **Manual**: `ALOOP_BIN=<path> LV2_DIR=<path> OUT=.netboot-serve
-  NETBOOT_SERVER=192.168.137.1 bash image/build-netboot.sh`.
+- **Manual**: `ALOOP_BIN=<path> LV2_DIR=<path> RESONODE_LV2_DIR=<path>
+  PITCHTRACKER_LV2_DIR=<path> DELAYVERB_LV2_DIR=<path> OUT=.netboot-serve
+  NETBOOT_SERVER=192.168.137.1 bash image/build-netboot.sh`. **All three of the
+  extra `*_LV2_DIR` vars are mandatory** — `lib-boot-tree.sh` excludes
+  `resonode.lv2`/`pitchtracker.lv2`/`delayverb.lv2` by name from the general
+  `LV2_DIR` find and reads each from its own variable, so passing `LV2_DIR`
+  alone silently ships a boot tree with none of those three bundles. It warns
+  on stdout but still produces a complete-looking apkovl, so the omission is
+  easy to miss. Prefer deleting `.netboot-update-sha` and letting
+  `serve-netboot-win.js` rebuild (it passes all five correctly). Verify with
+  `tar -tzf .netboot-serve/aloop.apkovl.tar.gz | grep -oE 'effects/[a-z]+/[a-z_]+[.]lv2' | sort -u`
+  — expect delayverb, guitar_lofi_fx, pitchtracker, resonode.
 
 **The automatic path's SHA-tracking is blind to changes in the packaging
 scripts themselves** — neither workflow lists `image/**` in its trigger
@@ -421,8 +431,20 @@ New-NetIPAddress   -InterfaceAlias Ethernet -IPAddress 192.168.137.1 -PrefixLeng
 Set-NetIPInterface -InterfaceAlias Ethernet -InterfaceMetric 10
 ```
 
-The server resolves `SERVER_IP` once at startup — a running instance keeps
-serving the old address after an interface change; restart it.
+The server resolves `SERVER_IP` once at startup AND bakes it into the netboot
+root's `cmdline.txt` (the `alpine_repo`/`modloop`/`apkovl` URLs). Restarting the
+server rebinds its sockets to the new address but does NOT rewrite those URLs —
+a restart alone is NOT sufficient after an interface change; rebuild the root
+with `NETBOOT_SERVER` set correctly, then power-cycle the Pi.
+
+A stale baked-in IP has its own signature, distinct from the dead-option-66
+case above: the whole TFTP firmware+kernel chain serves correctly (option 66 is
+live), then ZERO HTTP hits follow and the Pi stalls in initramfs — it pings with
+TTL=64 but refuses port 22, because Alpine never comes up so sshd never starts.
+The `udp/4446` REBOOT path cannot recover this: `aloop` never started. Verify
+with `cat .netboot-serve/cmdline.txt` and check the three URLs name the intended
+host. One way to reach this state is an Ethernet link that is down at server
+startup — `resolveServerIp()` then auto-detects a different live interface.
 `pkill -f serve-netboot-win` does not always reap the listener; confirm
 ports are free (`netstat -ano | grep -E ':(67|69|8080)\s'`) before concluding
 a restart took.
