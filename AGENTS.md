@@ -1451,6 +1451,26 @@ Known limits (see also `[[memory: faust-verification-discipline]]`,
   iteration, much cheaper than a full CI round-trip).
 - Warm delay-line-bearing files ~90000 samples before measuring.
 
+**BROKEN GATE, pre-existing on `main`, disclosed not fixed:
+`test/pitch-tracker-transient/verify_highoctave_transient.py` cannot pass in its
+current form.** It still calls `FaustProcessor.set_dsp(...multitranspose.dsp)` +
+`compile()`, i.e. the DawDreamer JIT — the exact path the `xpose` ->
+`EngineSoladSnac` rewrite made impossible. `real_audio_cross_verify.py` was
+ported to a standalone C++ harness for this reason; this second script was
+missed. Reproduced locally against BOTH the current branch and `main`'s
+`34cad6d`, failing identically, so it is not caused by any change here. Two
+distinct errors stack: from an arbitrary cwd it reports `unable to open file
+pitch_poly.dsp` (the `component()` path does not resolve), and once that is
+fixed by `faust_libraries_path` or a cwd change it reports `calling foreign
+function 'dubfx_pitch_tick_poly' is not allowed in this compilation mode` — the
+documented JIT `ffunction` limitation. So the path error masks a structural one:
+there is no configuration of the JIT under which this script can work. The fix
+is the same port `real_audio_cross_verify.py` already received (drive
+`multitranspose_harness.cpp` against the real FFI), which additionally requires
+that harness to grow the note/gate/extFreqDet state machine the Faust file
+currently owns. Until then `test-pitch-tracker` is red on every push touching
+`multitranspose.dsp` and its green/red state carries no information.
+
 `faust2bench` (real Linux host) is the CPU-measurement counterpart for any
 Faust-flag A/B. A mandatory `build-binary.yml` "Benchmark CPU usage" step that
 once ran it was REMOVED: its output was human-read-once diagnostics already
