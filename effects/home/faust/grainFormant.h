@@ -31,8 +31,18 @@ public:
     inline void write(float dry) { m_ring[m_wr & (RBUF - 1)] = dry; m_wr++; }
     inline float process(float dry) { write(dry); return read(); }
 
-    inline float read() {
+    inline void advanceFactor() {
         m_fm += (m_targetFm - m_fm) * kFormantGlideInvSamples;
+    }
+
+    void suspend() {
+        advanceFactor();
+        m_seeded = false;
+        for (int v = 0; v < VOICES; v++) m_v[v].active = false;
+    }
+
+    inline float read() {
+        advanceFactor();
         double Tin   = m_Tin;
         double outHop = Tin / (double)m_scale;
         double glenD  = (m_scale > 1.0f) ? (2.0 * outHop) : (2.0 * Tin);

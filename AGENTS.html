@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=34cad6de831891838eb5efd026267bf3e4ffd6e2">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1aca00b488c7cf33e32f8f7be757f3d33f39e018">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1155,47 +1155,171 @@ signal argument into `pitchPoly`'s `process()`; real-world CC range is
 m_keysMode==KeysMode::MultiKey)` — a genuine no-op when neither pitch-shift
 engine is active).
 
-**Investigated but NOT fixed this way — a tempting routing fix for "gappy"
-turned out to be unsafe, keep it that way**: `EngineSoladSnac::processBlock()`
-blends two internal signals — the phase-coherent splice/PSOLA reader (`y`)
-and `GrainFormant`'s independent overlap-add grain resynthesis (`gOut`, the
-ONLY path that moves formants independently of pitch) — and forces the mix
-to `1.0` (100% grain path) for ANY upward shift beyond `scale &gt; 1.02`
-(~0.34 semitones) regardless of the formant setting. It looked like exactly
-the mechanism behind "pushing the pitch up a bit with neutral formant makes
-it gappy" (neutral formant silently still meant "use the grain path"), and
-also behind "some pitches/formants are more latent than others" (the grain
-path's own `targetLag = Tin*(3+fm)` scales with the detected period and the
-formant factor). **A real attempt to disable the forced-grain override for
-the polyphonic voices only (leaving the mono "pedal ride" engine's default
-untouched) was built, then reverted after direct measurement proved it
-unsafe**: a standalone C++ harness linking `soladSnacOctaver.h` directly
-(bypassing Faust/DawDreamer entirely — see the JIT-limitation note below)
-showed the splice-only path (`y` alone, `mixTgt` forced to 0) is NOT
-pitch-accurate for real shifts on a clean sine — up to **-200 cents**
-(nearly 2 semitones flat) at some frequency/shift combinations, worst around
-+1-2 semitones at 110-220Hz, independent of any formant or vowel/sibilance
-work. This bug was never visible before because the `scale &gt; 1.02` override
-ALWAYS routed every real shift through the (separately measured, ~1-5 cents
-accurate) grain path, on both engines, unconditionally — so "the splice path
-alone is high quality" (this file's own prior "0.99-1.00 spectral purity on
-a clean sweep" claim, which is about harmonic distortion, not frequency
-accuracy) was never actually tested at real shift amounts. **Do not disable
-or raise the `scale &gt; 1.02` forced-grain threshold on either engine without
-first fixing this splice-path frequency bug** (most likely in
-`triggerSpliceByPeriod`'s period-multiple resplicing interacting with the
-active/passive crossfade) and re-verifying with the same kind of direct
-sine-frequency harness — a plausible next step for a session with more
-time, but out of scope for the fixes actually shipped here. The literal
-"gappy" root cause on real (non-sine) signal therefore remains OPEN — the
-grain path is confirmed pitch-accurate and free of gross amplitude dropouts
-on both synthetic sine and real vocal/piano/violin corpus content (measured
-via the same harness, zero-drop RMS-ratio check across neutral/±1.4 formant
-and 0.5-2 semitone shifts), so the remaining "gappy" quality is most likely
-a subtler artifact (grain-overlap phase drift when the SNAC period estimate
-`Tin` isn't exactly locked between its ~43ms `SNAC_HOP` updates) that needs
-real-hardware/real-mic listening to characterize further, per the project's
-own "compiling/synthetic-testing clean proves nothing" rule.
+**FIXED (supersedes the prior "splice path is mysteriously inaccurate" note):
+the splice path had no upward-shift mechanism at all.** `triggerSpliceByPeriod`
+fired only on `driftFromTarget &gt; trigger` — the reader falling BEHIND, which is
+what a downward shift produces. On any upward shift the reader gains on the
+writer, drift goes negative, and the periodic resplice could never fire. The
+only remaining path was the emergency branch at `gap &lt; SINC_HALF+2`, which was
+effectively a no-op (`newPos = wr - 64` sits within half a period of the reader,
+so the period-multiple rounding gave 0 and both crossfaded readers landed on the
+same position); the reader then overran the writer and read ring-stale audio.
+That, not a subtle resplice/crossfade interaction, was the measured -200 cents.
+The `scale &gt; 1.02` forced-grain override existed purely to paper over it, and the
+mono "pedal ride" lane never surfaced it because it is a downward effect.
+
+The root cause behind the root cause: `INITIAL_READ_OFFSET_DEFAULT` is 64
+samples, but one period at 110Hz is 436 — there was no headroom behind the
+writer to resplice backward INTO. Both halves are now fixed:
+`upshiftTargetLag()` raises the target lag to `kUpshiftLagPeriods (1.5) * period
++ SINC_HALF + 2` whenever `m_scale &gt; 1.0` and a period is known, and the drift
+test is symmetric (`driftFromTarget &lt; -trigger` jumps the passive reader BACKWARD
+by `n*per` through the same value+slope candidate search — textbook SOLA for
+pitch-up, repeating segments). `shrinkSpliceCount` bounds |n| on both sides.
+The added lag is engaged-only wet-path latency (covered by the Working Rules
+carve-out) and is SHORTER than the grain path it replaces: ~14ms vs ~36ms at
+110Hz.
+
+Measured on a clean sine via the standalone C++ harness (splice path isolated,
+`mixTgt` forced to 0), before -&gt; after: worst upward error **-204.7 cents -&gt;
++18.9 cents**; envelope-stability cv **0.46 -&gt; 0.044**; amplitude drops
+**15 -&gt; 0**. Downward and unity shifts are **bit-identical** across a 180-case
+sweep (6 frequencies x 6 ratios x 5 formant depths) — the mono engine is
+provably untouched. Because the splice path now beats the grain path on
+envelope stability at neutral formant (440Hz/+12: cv 0.122 -&gt; 0.023), the
+`scale &gt; 1.02` forced-grain override has been REMOVED; neutral formant now runs
+on the phase-coherent path, which is the fix for "gappy" on upward shifts.
+
+**Open, disclosed, NOT fixed: `GrainFormant` shifts pitch by an octave at high
+formant settings.** Measured at unity pitch on the shipped code, the output is
+correct for `fx/formant` depth &lt;= 0.7 and jumps to **+1193 cents (exactly 2x)**
+for depth &gt;= 0.9, at both 110Hz and 220Hz. The threshold is where `mixTgt`
+crosses ~0.5 and the grain path becomes the dominant term — so the grain engine
+has ALWAYS produced octave-up content at large `fm`; it was merely masked below
+half mix. Cause is structural, not a tuning error: the grain window is
+`2*Tin` long while its read span is `len*fm`, so at `fm ~ 2` each grain carries
+~4 input periods compressed into 2 output periods and the resampled periodicity
+dominates the OLA hop that is supposed to set the pitch. Shortening the window
+to keep the input span at ~2 periods would make it shorter than the hop and
+open real gaps — that window-vs-hop tension IS the "gappy" on the grain path.
+This is reachable in production (the CC maps to a practical +-1.5). The correct
+fix is to stop using time-domain grain resampling for formants at all and move
+to an LPC spectral-envelope model (whiten, recolor), which shifts no pitch and
+adds no latency; the splice path now handles pitch correctly in both directions
+on its own, so the two concerns no longer need to share one mechanism.
+
+**Measured, real, but SECONDARY: `GrainFormant`'s epoch free-runs by `Tin`
+rather than locking to real pitch marks.** `m_inEpoch += Tin` between resplice
+corrections, while `Tin` itself only refreshes on a SNAC hop (~43ms) through the
+`maxDelta = period/8 + 2` slew clamp — so overlapping grains drift out of phase
+whenever the held `Tin` is stale or wrong, which shows up as amplitude
+modulation. Measured directly against `grainFormant.h` with a harmonic-rich
+input: with an EXACT per-sample period the mechanism is clean (modulation depth
+&lt;=0.6% across 82-440Hz and fm 1.0-1.86), so the epoch machinery is not itself at
+fault. Feeding a deliberately stale/erroneous period reproduces the claim: +1%
+error -&gt; 2.7%, +3% -&gt; 2.6%, +8% -&gt; 4.7% modulation depth; 3%/5Hz vibrato (which
+makes `Tin` stale between hops by construction) -&gt; 2.6% at 110Hz and 4.9% at
+196Hz; the two combined -&gt; 7.1%. So the cause is correctly identified, but at
+~0.6dB it is a secondary contributor, not the primary "gappy" mechanism — the
+splice path's total absence of an upward-shift resplice (envelope cv 0.46, 15
+amplitude drops) was an order of magnitude larger and is what actually got
+fixed. Real pitch-mark locking remains the proper fix and is NOT implemented;
+weigh it against retiring the grain path from the formant role entirely, which
+would make it moot.
+
+**Measured and REJECTED: reducing the grain path's `targetLag`.** The
+suggestion to cap the grain lag (it is `Tin*(3+fm)`, i.e. 40-60ms at low guitar
+notes) was implemented and swept against envelope stability across 3 frequencies
+x 5 ratios x 6 formant depths. It makes the grain path WORSE, monotonically:
+mean cv 0.0231 at the shipped `periods=3.0, no ceiling`, 0.0347 with a 960-sample
+ceiling, 0.0515 at `periods=1.0`. Latency there is not free quality. The shipped
+constants are retained; the real latency win came instead from removing the
+forced-grain override, which takes the grain path out of the neutral-formant
+signal path entirely.
+
+## Formants are moved by an LPC spectral envelope, not by the grain resampler
+
+`vowelFormant.h`'s `LpcFormantShifter` replaces the three peaking-EQ boosts.
+Per analysis hop it fits an all-pole envelope to the raw wet signal, warps that
+envelope in frequency, refits, and filters through `A_src(z)` then
+`1/A_tgt(z)`. `pitch_poly_ffi.h` no longer calls `eng.setFormantDepth()` at all
+on the poly path, so `GrainFormant` is inert there (verified directly: max grain
+mix 0.000000000 across formant -1.5..+1.5). It remains for the mono pedal-ride
+engine, which still calls `setFormantDepth` via `pitch_ffi.h`.
+
+This retires the octave defect documented above. Measured over 72 cases with
+formant actually applied, worst error **1904 cents -&gt; 14.4 cents**, cases beyond
++-25c **9 -&gt; 0**. Over a wider 280-case sweep (f0 82-880Hz x 7 shifts x 5 formant
+depths, output 41Hz-1760Hz): **zero** new failures, zero cases worse than the
+previous build, 15 cases the previous build got wrong that are now right, total
+beyond +-25c **35 -&gt; 20** — and every one of the 20 remaining is also wrong in
+the previous build, so nothing regressed. Neutral formant is bit-identical over
+30 cases. 175 numerical stress cases (silence, +-DC, denormal, full-scale square,
+clipped noise, across formant +-3.0) give zero non-finite samples and nothing
+outside the structural ceiling.
+
+**Two design corrections that cost real investigation — do not re-derive them
+the wrong way.** First, LPC order 10-12 is the 8kHz SPEECH figure and is useless
+at 48kHz: at order 12 the stage measured as a complete no-op, and orders 20 and
+32 miss F2 (1090Hz) entirely; order 44 recovers `[698, 1086, 2441]` against a
+true `730/1090/2440`. Second, warping the autocorrelation in the LAG domain
+aliases past Nyquist — at a factor of 2 it produced spurious envelope peaks
+BELOW the source (326Hz from a 946Hz source). Warp the model power spectrum on
+an explicit bin grid with a band-limited HF fill instead. Cost is ~24
+MACs/sample/voice for the filtering alone, not the "well under 10" that was
+estimated.
+
+**Why a high fundamental broke it, and why bounding the LPC order does NOT fix
+that.** An LPC pair is a linear filter and cannot move a partial. When the
+fundamental is high, warping the envelope moves the modelled resonances off the
+only two or three harmonics that exist and ANNIHILATES H1 — measured at f0=880,
++7 semitones, formant +1.0: H1 drops 36dB and H2 becomes dominant, which is an
+octave percept. It fires in both warp directions (either direction moves the
+envelope off the fundamental) and tracks OUTPUT frequency rather than shift
+amount. Bounding the order by harmonic count was tried and refuted by
+measurement: at order 8-9 there is no harmonic-fitting left to do and the defect
+is undiminished (worst error 2407c, still 6-9 bad cases). The fix is three
+bounds — a warp taper against output pitch (full below 450Hz, zero by 900Hz),
+a fundamental-level protection clamping the warped spectrum to within 1.5dB of
+the source below 2x the fundamental, and an order bound (helpful, not
+sufficient). Output period comes from the shared SNAC tracker.
+
+**An autocorrelation/FFT-peak pitch metric octave-errors on exactly this
+signal** and will mis-attribute the defect as pre-existing. Measure on the
+harmonic grid instead: dominant partial within 6dB, plus H1's relative level and
+an off-grid energy check.
+
+**The trade, stated plainly.** Below 450Hz output the taper is 1.0 and the order
+bound never binds, so formant movement is full strength — which covers the whole
+useful range of a guitar/vocal pitch-lock. Between 450 and 900Hz the effect
+fades; above 900Hz it is gone. That converges to the OLD behaviour rather than
+degrading below it, because the old shaper never moved formants downward at any
+pitch. Measured on a formant-bearing vowel stimulus (F1/F2/F3 = 730/1090/2440,
+f0=150Hz): the old shaper commanded down 1.5 octaves moves F1 the WRONG WAY
+(764Hz -&gt; 855Hz) and is non-monotonic upward (1.130 at +0.5, 1.079 at +1.5); the
+LPC stage moves F1 down (610Hz at -0.5 where the old shaper sat at 761Hz) and is
+monotonic upward (1.173 -&gt; 1.395). Movement magnitude is compressed at the
+extremes and the negative extreme is the weaker direction. Widening the
+fundamental-protection span from 1.25x to 2.0x was needed to clear two cases at
+494Hz and 698Hz and cost downward movement at 330/440Hz (0.72/0.81 -&gt; 0.87/0.91)
+— correctness was chosen over movement magnitude there.
+
+**UNRESOLVED, and it gates shipping: CPU.** With formant engaged this costs
+about **1.8x the grain path it replaces** — 6 voices, x86_64 dev host:
+49.6/51.0us per block before, 87.6/97.7us after, against a 1333us budget. At
+neutral it is FREE and in fact cheaper than the old code overall (58.7 -&gt;
+37.3us) because the grain path is skipped entirely. Per this file's own rule an
+x86 number never clears an aarch64 RT path, and the engaged figure has not been
+witnessed on a real Pi 4. Staggering the per-voice analysis phase was necessary
+to get here at all: unstaggered, p99 was 280us and max 499us.
+
+**Known, disclosed, NOT fixed**: at f0=880 with -12 semitones the output reads
++1200c in BOTH builds including at formant 0 where they are bit-identical — a
+pre-existing splice-path failure at that corner, unrelated to formants. The LPC
+build drives H1 deeper there (-37.1dB vs -18.6dB) without changing the verdict.
+With SNAC unlocked the output period is held at its last valid value, so the
+taper uses a stale pitch; unpitched material has no harmonic comb for the defect
+to act on, but that is reasoning, not a measurement.
 
 **Real formant/vowel/sibilance shaping (new)**: `vowelFormant.h` adds a
 `VowelFormantShaper` (3 parallel RBJ peaking biquads tuned to F1/F2/F3 of a
@@ -1215,10 +1339,23 @@ onto the U-O-A-I-E vowel continuum, so sweeping the one existing formant
 knob morphs through real vowel coloration on top of whatever `GrainFormant`
 mix the engine already settles on, instead of just a spectral-tilt
 brightness cue — at `formant=0` both new stages are fully bypassed (zero
-coloring, verified identity). Sibilance detection runs unconditionally (not
-formant-gated): a detected fricative/consonant crossfades the voice's
+coloring, verified identity). Sibilance detection is gated on the SNAC
+tracker being UNLOCKED (`!periodOk()`, smoothed over ~5ms) as well as on the
+HF-energy ratio: a detected fricative/consonant crossfades the voice's
 output back toward its own raw dry input (up to 85%) so "s"/"sh"/"f"/"t"
 transients stay intelligible instead of being pitch/formant-warped.
+The HF-ratio test alone was a measured liability on the primary instrument —
+the ungated detector fired **full-scale (peak 1.0) on both a guitar pick
+attack and a sustained guitar note**, because a pick attack is exactly the
+broadband HF burst it looks for. Its one-pole highpass was also wrong rather
+than merely leaky (`hp = 0.30*(hpState + x - xPrev)` has a gain of only 0.46
+at Nyquist, so it attenuated the very band it was measuring, and real
+sibilance scored a mean of just 0.035). It is now a unity-at-Nyquist form
+(`hp = p*hpState + ((1+p)/2)*(x - xPrev)`, `p = 0.5925`, corner ~4kHz).
+Measured after: guitar pick attack and sustained guitar note both **0.000**,
+genuine unpitched sibilance **0.988 mean**. A pitched instrument holds its
+SNAC lock through a pick transient (`m_lockMiss` needs 3 consecutive misses),
+which is what makes the gate discriminate.
 Verified via a standalone C++ harness (`pitch_poly_ffi.h` linked directly,
 no Faust JIT involved — see the DawDreamer-limits note below): finite/
 bounded output across the full formant/shift extremes (formant -3..+3,
@@ -1262,6 +1399,104 @@ now shells out to it per test case instead of calling `daw.RenderEngine`/
 `make_faust_processor` at all. This is also the pattern to reach for when
 verifying any future change to this file's shifter/formant/sibilance
 behavior — a standalone C++ harness against the real FFI, never the JIT.
+
+## One shared SNAC period tracker serves all 6 poly voices
+
+`snacPeriodTracker.h` holds the SNAC sweep (buffer, `snacBegin`,
+`detectPitchStep`, period/validity/lock-miss state), extracted verbatim out of
+`EngineSoladSnac`. The extraction is provably behavior-preserving: a 108-case
+sweep (6 frequencies x 6 ratios x 3 formant depths) is **bit-identical** to the
+pre-refactor engine.
+
+`EngineSoladSnac` owns one (`m_ownSnac`) and uses it by default, so the mono
+free-transpose engine is unchanged. `attachSharedTracker()` points it at an
+external tracker instead; `pitch_poly_ffi.h` creates ONE shared instance, feeds
+it from voice 0's per-sample tick (which the Faust graph always evaluates —
+Faust has no runtime branching, so all 6 `voiceOut` calls run every sample
+regardless of gate) and attaches all 6 voices to it. Six identical sweeps over
+one identical `sigIn` became one.
+
+`reengage()` on a shared-tracker voice now INHERITS the locked period instead of
+falling back to `kReengageSeedPeriod` (600 samples / ~80Hz), which is what
+removes most of the per-note lock-time variance. Only an owned-tracker engine
+still resets its own tracker on reengage.
+
+**The shared tracker MUST step its sweep at the same point in the block as the
+engine's own tracker did, or it silently degrades on modulated material.**
+`stepSchedule` originally ran at `i == 0` inside `processBlock`, i.e. after the
+FIRST sample of a block reached the SNAC buffer. A `tick()` that instead stepped
+after the 64th sample put the sweep 63 samples out of phase, which shifts which
+1024-sample window `snacBegin` snapshots. On steady material that is invisible;
+on amplitude-modulated material it flips which autocorrelation peak wins.
+Measured on `vibraphone_mid_C5B5.wav` (motor tremolo — exactly the content the
+documented SNAC drift bug affects), envelope-tracking error against the input:
+own-tracker 0.057, misaligned shared tracker **0.239**, block-aligned shared
+tracker **0.057**. The misaligned version's period trace showed the classic
+`maxDelta = period/8` walk toward a wrong subharmonic
+(586-511-446-389-339-295-257-223-194-168-145); the aligned version goes straight
+to the correct ~91. Keep `tick()` stepping at `m_sinceBlock == 0`.
+
+**Measured and REJECTED while fixing the above: requiring a second sweep to
+confirm a large period jump.** It cleanly removed the subharmonic WALK from the
+period trace, but produced no corpus-wide benefit whatsoever (mean
+envelope-tracking error 0.0883 vs 0.0882 over 32 real-instrument cases) and left
+the vibraphone error at 0.251. The walk was a symptom, not the cause; the cause
+was window alignment. Do not re-propose without evidence that distinguishes it
+from the alignment fix. This joins the other rejected attempts on the documented
+SNAC tremolo-drift bug.
+
+**Measured and REJECTED: a Hann-window LUT in place of `GrainFormant`'s
+per-grain `cosf`.** It cost bit-exactness against the shipped engine for every
+formant-engaged case (max abs diff 5.4e-07) and bought no measurable CPU at all
+(6 voices, formant engaged: 49.8/48.9us with `cosf` vs 46.3/49.2us with the LUT
+— inside run-to-run noise). `cosf` is not the bottleneck here.
+
+**The grain-suspend condition is keyed on the DIALED formant depth
+(`m_formantDepth != 0.0f`), not on the smoothed mix.** Keying it on
+`m_grainMix`/`m_grainMixTarget` reads the PREVIOUS sample's mix, which is 0 on
+the very first sample even when formant is dialed in — so the grain clock
+re-seeded at a different `m_wr` and every formant-engaged case stopped being
+bit-identical. With the depth-keyed condition, all 180 downshift/unity cases
+(6 frequencies x 6 ratios x 5 formant depths) are bit-identical to the shipped
+engine.
+
+Measured on the 6-voice poly engine (x86_64 dev host — NOT the Pi 4 Cortex-A72;
+treat the ratios as indicative and the absolute microseconds as not
+transferable): mean per-block **60.4us -&gt; 37.5us** against the 1333us budget,
+and p99 per-block **208.6us -&gt; 68.2us**. The p99 number is the one that matters:
+it is the chord-attack case where six independent sweeps used to synchronize
+into the same blocks. Median rises slightly (27.9 -&gt; 32.8us) because the splice
+path now genuinely does the pitch-shifting work it previously skipped.
+
+Part of that win is a second change in the same area: `GrainFormant::read()` used
+to run its whole overlap-add voice loop every sample even when the grain mix was
+zero. With the forced-grain override gone, neutral formant means the mix really
+is zero, so the engine now calls `suspend()` instead (below `kGrainBypassFloor`),
+which drops the grain voices and clears `m_seeded` so the next engagement
+re-seeds cleanly. **The formant-factor glide must still advance while
+suspended** — `mixTgt` is derived from `factorNow()`, so freezing the glide
+would make small formant settings unable to ever re-cross the mix floor. That is
+why `advanceFactor()` is called from both `read()` and `suspend()`. The per-grain
+Hann window is also a LUT now rather than a per-sample `cosf`.
+
+## Every momentary voice must stay engaged through its own release tail
+
+`multitranspose.dsp` gated the shifter on `engaged = gate &gt; 0.5` while `voiceEnv`
+is an `en.adsr` with a 50ms release. So on every note-off the engine disengaged
+instantly, `dubfx_pitch_tick_poly` returned raw `x`, and the voice played a 50ms
+tail of UNSHIFTED dry input at full envelope — plus a discontinuity from the
+64-sample-delayed `outBuf` to an instantaneous sample. Measured: the release tail
+read **-492 cents** off the shifted target (i.e. it was the dry input pitch).
+`engaged` is now held by a linear release counter (`engageReleaseHoldS = 0.06`,
+mirroring the file's existing `anyGateHighRelease` idiom) that is guaranteed to
+reach exactly 0 — do NOT gate on `voiceEnv &gt; 0` directly, since an asymptotic
+envelope may never reach the threshold and the engine would never disengage or
+re-`reengage()` on the next note.
+
+`DubfxPolyVoice::pos`/`inBuf`/`outBuf` are also cleared on reengage. They were
+not, so a note-on replayed up to 64 stale samples of the PREVIOUS note: measured
+a **0.549 peak** burst into the first block of a new note whose own input was
+only 0.02 amplitude, a 27x onset blowout. Now exactly 0.
 
 ## `pitchtracker.lv2`: standalone autocorrelation pitch tracker
 
@@ -1373,11 +1608,10 @@ independent-formant grain-playback-speed stage (`grainFormant.h`).
   by both the mono and polyphonic engines. The measured spectral purity
   (0.99-1.00 THD on a clean sine sweep up to 5000Hz, no degradation near
   700Hz) still stands for this class in general, but see the
-  `multitranspose.dsp` section's "Investigated but NOT fixed" note for a
-  real, separately-discovered FREQUENCY-ACCURACY (not THD) bug in the
-  splice-only mixing mode (`mixTgt` forced to 0) that applies equally to
-  both engines and is currently masked on both by the `scale &gt; 1.02`
-  forced-grain-mix default.
+  `multitranspose.dsp` section's splice-path note for the upward-shift
+  frequency-accuracy defect that was found and FIXED there (it applied to
+  this class generally, not to one engine); the `scale &gt; 1.02`
+  forced-grain-mix default that used to mask it no longer exists.
 
 **Open, disclosed bug**: a genuine SNAC period-tracker drift bug on
 tremolo/amplitude-modulated or dynamically-varying content (e.g. vibrato,
@@ -1435,6 +1669,26 @@ Known limits (see also `[[memory: faust-verification-discipline]]`,
   for the compile-time-cliff class of bug (95-500+ real seconds per
   iteration, much cheaper than a full CI round-trip).
 - Warm delay-line-bearing files ~90000 samples before measuring.
+
+**BROKEN GATE, pre-existing on `main`, disclosed not fixed:
+`test/pitch-tracker-transient/verify_highoctave_transient.py` cannot pass in its
+current form.** It still calls `FaustProcessor.set_dsp(...multitranspose.dsp)` +
+`compile()`, i.e. the DawDreamer JIT — the exact path the `xpose` -&gt;
+`EngineSoladSnac` rewrite made impossible. `real_audio_cross_verify.py` was
+ported to a standalone C++ harness for this reason; this second script was
+missed. Reproduced locally against BOTH the current branch and `main`'s
+`34cad6d`, failing identically, so it is not caused by any change here. Two
+distinct errors stack: from an arbitrary cwd it reports `unable to open file
+pitch_poly.dsp` (the `component()` path does not resolve), and once that is
+fixed by `faust_libraries_path` or a cwd change it reports `calling foreign
+function 'dubfx_pitch_tick_poly' is not allowed in this compilation mode` — the
+documented JIT `ffunction` limitation. So the path error masks a structural one:
+there is no configuration of the JIT under which this script can work. The fix
+is the same port `real_audio_cross_verify.py` already received (drive
+`multitranspose_harness.cpp` against the real FFI), which additionally requires
+that harness to grow the note/gate/extFreqDet state machine the Faust file
+currently owns. Until then `test-pitch-tracker` is red on every push touching
+`multitranspose.dsp` and its green/red state carries no information.
 
 `faust2bench` (real Linux host) is the CPU-measurement counterpart for any
 Faust-flag A/B. A mandatory `build-binary.yml` "Benchmark CPU usage" step that
@@ -1651,6 +1905,97 @@ patch's identity) still stands — re-verify with
 `test/resonode-sweetspot/verify_musical_controls.py`'s
 `coupling_changes_output` AND `sustained_excitation_stability` checks
 before retuning either constant.
+
+**Coupling is now skew-symmetric energy exchange on peak-normalised states, and
+the clamp is genuinely a last resort.** The `tanh(x*0.25)*4.0` guard around
+`coupleAmt = couple*8.0` is gone. Each mode exports `rawOut*aliasGuard /
+modePeakGain(r)` — a peak-normalised state, so loop gain is decay-independent —
+the network computes `u_{k+1} - u_{k-1}` (skew, i.e. lossless exchange), scales
+by `couple*0.45`, and a hard `min/max` clamp at +-8 is the only guard.
+`modePeakGain(r) = sqrt(K(1+r)/(1-r))` was checked against the exact filter
+response over the whole (T60, f) range (max error 0.14%), so `2c &lt;= 0.901 &lt; 1`
+is a real small-gain bound.
+
+BOTH approaches the review named were built and measured over 72 sustained
+corners against a guard-free twin. Symmetric exchange at the same coefficient
+gives a 0.22% couple effect; **skew gives 12.84%** — ~58x the audible effect —
+with zero clamping and zero limiter saturation even at 4.4x the symmetric bound.
+`coupleSmallGainMax = 0.45` is kept anyway so the design holds under both the
+energy-conservation and small-gain guarantees, not just the empirical sweep.
+A hard clamp was chosen over `tanh` deliberately: `tanh` is never exactly
+identity, so "never engages" is unprovable, whereas a hard clamp is exactly
+identity below threshold. Probed over 150 corners, the SUM over all 24 modes of
+|normalised coupling read| peaks at 0.583 against the +-8.0 per-mode clamp —
+13.7x headroom on a quantity that upper-bounds any single mode.
+
+**A separation-aware coupling bound does NOT hold — do not re-propose it.**
+Making the coefficient frequency-aware via the Lorentzian bound
+`max|H_k*H_k'| &lt;= G_kG_k'/(1+(df/(B_k+B_k'))^2)` was tested over 4000 random
+(T60, f) pairs and is violated by up to 7619x; the `(1-z^-2)` numerator's
+far-field tails are not Lorentzian.
+
+**Bandwidth is frequency-proportional.** `modeInvT60 = (1/decay) *
+(f1/261.6Hz) * rho^p` with `p = 1.934*log2(1/damping)` and `rho` the mode's live
+frequency ratio, so mode overlap is note-invariant and `damping` is a real
+frequency power law rather than a mode-INDEX power law. The 1.934 slope
+(`5/log2(6)`) is calibrated to reproduce the shipped `damping^(k-1)` factor
+exactly at mode 6, preserving the knob's shipped meaning. `1 - r` comes directly
+from `6.907755/(SR*T60)` (relative error &lt; 3e-5), removing 24 `pow` calls per
+voice. Measured mode-1 overlap `BW/(f2-f1)` across notes 24-96 goes from a 64.0x
+spread to 1.000x at the old divergent corner's settings.
+
+**24 modes, five named ratio tables, loudness normalisation.** `string`
+(1..24, exactly harmonic, and the DEFAULT so the plugin is a harmonic bank with
+no C++ change), `bell` (11 measured church-bell partials plus a plate-density
+continuation), `plate` (`m^2+n^2`), `membrane` (Bessel zeros `j_mn/j_01`), `bar`
+(free-free `beta^2`). Blended convexly by five hsliders with a string fallback at
+zero sum, log-blended once and shared across all 4 voices (24 `log` call sites in
+the generated C++, not 96). Mode amplitude is `k^-0.85`; the old hand-tuned
+mode-6 `0.55` bump is deliberately NOT carried over — its documented
+justification was a `b0`/`r` interaction at long T60 that the new bandwidth law
+removes. `decayLoudnessNorm = 1.06*(decay/1.2)^0.17` cuts the decay-axis
+loudness spread from 7.5dB to 1.7dB while leaving the default patch level
+within 2.8%, so `outLevel = 25` still means what it did.
+
+Measured distinctness (note 52, decay 4.0, damping 0.97) — centroid /
+inharmonic fraction: string 1490Hz/0.21, bell 1393Hz/0.51, plate 1794Hz/0.53,
+membrane 703Hz/0.76, bar 2499Hz/0.59; minimum pairwise max-relative-feature
+difference 0.224. These are genuinely different instruments, not relabelled
+copies.
+
+**UNRESOLVED, and it gates shipping: the mode-count CPU cost.** Independently
+measured against the true pre-change baseline, 4 voices, 20s audio, one x86
+core: **6.29% -&gt; 14.24%, i.e. +7.95 percentage points (2.26x)**. Real generated
+C++ goes 2939 -&gt; 9812 lines with per-sample `cos 24-&gt;96, sin 24-&gt;96, exp 1-&gt;185,
+sqrt 6-&gt;192`. The review's estimate that "biquads are nearly free, a few percent
+of a core" is WRONG as applied: the biquads themselves are nearly free, but
+`freqGlide` and the glided knobs make every mode's coefficient recomputation
+sample-rate work, and that is the entire cost. Extrapolating at ~3.5x for a
+Cortex-A72 puts this near 0.5ms of the 1.333ms block — Resonode is only computed
+when engaged, but this needs a real on-device witness before it can be trusted.
+`modeCount` is a single constant on line 8 and the measured curve is
+6 modes 4.2% / 12 modes 6.0% / 16 modes 7.7% / 24 modes 10.4% (agent's harness,
+which subtracts its floor), so dropping to 16 or 12 is one edit and the 24-entry
+tables stay complete either way.
+
+**`modes_2_to_6_are_not_starved` FAILS as literally written after this change
+(28.0x against a 15x bound), and that is a measurement artifact, proven by
+isolation.** With `positionDriftAmt` set to 0 the worst ratio across all 20
+measurable modes drops to 8.7x, inside the bound; `stretchJitter` contributes
+nothing (bit-identical). The shipped position-drift envelope sweeps
+`positionLive` from ~0.24 to 0.08 across the check's own 10-90ms window, so
+high-index modes cross a `sin(pi*position*k)` null and partially cancel in the
+windowed FFT. The baseline passed at 9.7x only because of the mode-6 `0.55`
+bump (2.5x; 9.7 x 2.5 = 24, matching). Restoring a mode-6-shaped bump would turn
+the check green without fixing anything real, which is why it was not done.
+
+**Control wiring**: the five `fx/resonode/shape/*` names MUST be `ps.bind()`-ed
+in `ApcGrid::bindAll` — `ParamStore::setByName` is a silent no-op on an unbound
+name, and this exact bug class has already hit `fx/resonode/engaged` and
+`fx/resonode/collision`. They reach the plugin through the existing
+`fx/resonode/` prefix match in `audio_thread.cpp` (the lambda at line 136), and
+`Lv2Host::setControl`'s mangled-prefix match resolves them uniquely because none
+of `fx_resonode_shape_{string,bell,plate,membrane,bar}` is a prefix of another.
 
 **Scope note on "doesn't quite sound like Objekt" (disclosed, not fully
 addressed)**: the numerical-instability fix above addresses "feeds back
@@ -2001,6 +2346,68 @@ additive over the prior patch-only behavior:
   `pitchSprayCents`, a full octave of per-grain random pitch scatter at
   the extreme.
 
+**Fixed: the 48-grain pool was reachably exhaustible, and starvation silently
+collapsed the level.** `MAX_GRAINS = 48` is shared across all 16 voices, while
+Density (knob 6) reaches 200Hz and the patch table carries a 200ms grain length
+— `200ms x 200Hz` demands ~42 concurrent grains for ONE voice, measured. A
+second voice then stole grains mid-window, which is a real discontinuity, not a
+soft degrade: measured 735 mid-life thefts at 2 voices, 6350 at 16. Across the
+full production-reachable knob space (grainMs 14-200 x 2-200Hz x 1-16 voices,
+336 configs) the shipped code stole in 68 configs for 34,726 total thefts.
+`_recomputePerVoiceGrainBudget()` now divides the pool by the active granular
+voice count once per block, `_renderGranularVoice` raises the spawn period to
+fit that share, and `_spawnGrain` refuses to exceed it — which makes
+`_stealMostFinishedGrainSlot()` structurally unreachable. Measured after: **0
+thefts in all 336 configs**, and 0 across a 200-config randomized sweep of the
+wider `setGrainPatch` clamp range. On a 2-voice 220Hz sine case, broadband click
+energy above 8kHz drops **-54.9dB -&gt; -88.6dB**.
+
+The second half was a level bug the first exposed: `m_grainGainComp` divided by
+the REQUESTED overlap while far fewer grains actually sounded, so adding notes
+faded the granulator out — measured -16.67dBFS at 4 voices, -33.47 at 8,
+**-48.34 at 16**, a 43dB collapse with no indication why. Gain compensation now
+tracks the budgeted spawn period, giving -4.98/-5.02/-5.13dBFS, flat within
+0.5dB of the 1-voice level. Note this removes what had been acting as an
+accidental -43dB limiter: with 16 held keys the summed output already exceeds
+int16 full scale with the granulator OFF, so the extreme case is now as loud as
+the non-granular path and downstream headroom matters.
+
+**`MAX_GRAINS` was deliberately NOT raised.** Measured worst case is ~11.9ns per
+grain-sample on x86 -O3, so 48 grains is ~37-49us of the 1333us block budget
+(2.8-3.7%); growing the pool 4x multiplies that worst case by 4, and an x86
+number cannot clear an aarch64 RT path. The measurement also says the pool is
+not the binding constraint: one voice never demands more than 42 even at the
+extreme, and the fair shares (24/16/12/6/3 at 2/3/4/8/16 voices) match or beat
+what contention was already delivering (40/26/17/8/4) — with zero thefts and
+correct level. Raising it later is a one-line change; everything scales off it.
+
+**Grain pitch can be quantized to musical intervals (the Clouds trick), at zero
+CPU.** `GrainPitchQuantize` adds Octaves / Fifths / Minor Triad / Minor
+Pentatonic beside the original continuous `pitchSprayCents`, held in a
+lock-free `std::atomic<int>`. Measured spawned-grain pitch distribution with the
+spray knob at 700 cents: continuous gives **601 distinct pitches** spanning
+-676..+664 cents, while Octaves gives exactly 3, Fifths 5, Minor Triad 5,
+Pentatonic 7. Rendered FFT on a 220Hz source: set members sit within ~6dB of the
+fundamental and non-members at the -45..-51dB floor, where continuous mode is a
+smear with no discrete structure. `pitchSprayCents` is inert while quantized,
+which is what lets one physical knob carry both.
+
+Control surface: knob 7 is segmented rather than taking a new knob (all 8 LofiFx
+granulator knobs were already assigned). `v01 &lt;= 0.5` is continuous spray over
+the full original 0-1200 cent range; above 0.5 selects the four interval sets in
+equal quarters. An untouched knob 7 leaves the mode at Continuous, so prior
+behavior is exact. `kGranPitchContinuousSprayMode` in `apc_grid.h` duplicates
+the enum's zero value because `Sampler` is only forward-declared there; a
+`static_assert` in `apc_grid.cpp` fails the build if the two ever drift.
+
+**Additivity is byte-verified, with a precise exception.** Over a 200-config
+randomized sweep at default quantize, 108 configs are byte-identical to the
+shipped header and 90 differ — and in every differing case the baseline was
+actively stealing grains. So output is byte-identical everywhere EXCEPT where
+total grain demand exceeds the shared pool, which is exactly the failure being
+fixed. The interval-quantize feature contributes zero delta at its default: it
+consumes no RNG and multiplies the rate by exactly 1.0 on that path.
+
 **Fixed: mechanically regular grain-spawn timing** (a second, independent
 "boring" contributor) — `_renderGranularVoice` fired grains at an exactly
 regular period derived from `grainRateHz`/velocity, with zero timing
@@ -2275,7 +2682,7 @@ Prefer the Markdown sources over the built HTML for LLM-friendly content.
 - [About](https://faustlibraries.grame.fr/about/)
 
 @.gm/next-step.md
-</uint64_t></portIndex></tid></tid></AloopLoopDsp></ip></fresh-empty-dir></fresh-empty-dir>
+</uint64_t></int></portIndex></tid></tid></AloopLoopDsp></ip></fresh-empty-dir></fresh-empty-dir>
 
 
       </section>

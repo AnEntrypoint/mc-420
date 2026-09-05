@@ -64,6 +64,8 @@ detectedFreq(sig) = trackPitchHzAndHp(trackerHarmonics, trackerTau, sig)
 
 normalGlidePole = ba.tau2pole(0.008);
 
+engageReleaseHoldS = 0.06;
+
 lockDelayMs = 80.0;
 lockDelaySamples = lockDelayMs * 0.001 * ma.SR;
 
@@ -92,7 +94,10 @@ with {
     shiftAmount = shiftStep ~ _;
     shiftRatio = pow(2.0, shiftAmount / 12.0);
     voiceEnv    = en.adsr(0.003, 0.03, 1, 0.05, gate);
-    engaged = gate > 0.5;
+    engageHoldStep(prev) = ba.if(gate > 0.5, 1.0,
+                             max(0.0, prev - (1.0/(engageReleaseHoldS*ma.SR))));
+    engageHold = engageHoldStep ~ _;
+    engaged = engageHold > 0.0;
     pitchPolyOut = sig, voiceIdx, shiftRatio, formant, engaged : pitchPoly;
     shifted = pitchPolyOut : (_, !);
     wet = shifted * voiceEnv * 0.6;
