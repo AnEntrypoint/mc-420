@@ -1870,7 +1870,7 @@ from `6.907755/(SR*T60)` (relative error < 3e-5), removing 24 `pow` calls per
 voice. Measured mode-1 overlap `BW/(f2-f1)` across notes 24-96 goes from a 64.0x
 spread to 1.000x at the old divergent corner's settings.
 
-**24 modes, five named ratio tables, loudness normalisation.** `string`
+**16 modes (of 24-entry tables), five named ratio tables, loudness normalisation.** `string`
 (1..24, exactly harmonic, and the DEFAULT so the plugin is a harmonic bank with
 no C++ change), `bell` (11 measured church-bell partials plus a plate-density
 continuation), `plate` (`m^2+n^2`), `membrane` (Bessel zeros `j_mn/j_01`), `bar`
@@ -1889,20 +1889,73 @@ membrane 703Hz/0.76, bar 2499Hz/0.59; minimum pairwise max-relative-feature
 difference 0.224. These are genuinely different instruments, not relabelled
 copies.
 
-**UNRESOLVED, and it gates shipping: the mode-count CPU cost.** Independently
-measured against the true pre-change baseline, 4 voices, 20s audio, one x86
-core: **6.29% -> 14.24%, i.e. +7.95 percentage points (2.26x)**. Real generated
-C++ goes 2939 -> 9812 lines with per-sample `cos 24->96, sin 24->96, exp 1->185,
-sqrt 6->192`. The review's estimate that "biquads are nearly free, a few percent
-of a core" is WRONG as applied: the biquads themselves are nearly free, but
-`freqGlide` and the glided knobs make every mode's coefficient recomputation
-sample-rate work, and that is the entire cost. Extrapolating at ~3.5x for a
-Cortex-A72 puts this near 0.5ms of the 1.333ms block — Resonode is only computed
-when engaged, but this needs a real on-device witness before it can be trusted.
-`modeCount` is a single constant on line 8 and the measured curve is
-6 modes 4.2% / 12 modes 6.0% / 16 modes 7.7% / 24 modes 10.4% (agent's harness,
-which subtracts its floor), so dropping to 16 or 12 is one edit and the 24-entry
-tables stay complete either way.
+**RESOLVED on real hardware: the mode-count CPU cost was real, and 24 modes
+shipped audible static.** The on-device witness this section used to ask for
+was taken and it confirmed the concern rather than clearing it. At 24 modes,
+Resonode engaged with FOUR voices held ran at 94% `core_busy` with `readi`
+gaps up to 8.06ms against the 1.333ms budget and 70 xruns in 15s; under an
+eight-key stress it reached 101-110%. The decisive measurement is that
+engaging Resonode with ZERO keys held still cost 122 `diag-gap` events and
+42 xruns per 10s against exactly zero disengaged, bracketed twice — cost is
+flat across 1-4 voices held, because Faust has no runtime branching and all
+four voices' banks compute every sample whatever the player does.
+
+Three exact, sound-preserving optimisations then removed most of that cost,
+each verified against the real generated C++ via the `faust-codegen-probe`
+workflow (`workflow_dispatch` only) rather than argued from the source:
+
+- **The two per-mode `sqrt` calls cancel.** `b0 = sqrt(K(1-r^2))` divided by
+  `modePeakGain = sqrt(K(1+r)/(1-r))` is exactly `1-r` for `0<=r<1` (max
+  relative error 4.9e-13 over 300000 values of r). The resonator now runs
+  unscaled, the coupling path multiplies by `(1-r)`, and the weighted path
+  keeps the numerator gain it needs. `sqrt` 192 -> 96.
+- **The position sine is a polynomial.** `sin(pi*pos*(i+1))`'s multiplier is
+  the MODE INDEX, always integer whatever the ratio table holds, so
+  `sin(k*t) = sin(t)*U_{k-1}(cos t)` applies exactly (max absolute error
+  8.3e-15) and leaves every mode independent — no change to the bank's
+  routing. `sin` 64 -> 4.
+- **The five shape weights left the audio-rate path.** Each was piped through
+  `morphGlide`, a `letrec`, so they compiled to recursive `fRec` variables
+  rather than `fSlow` constants and dragged `modeLogRatio` — and `log`/`exp`/
+  `cos`/`sqrt` behind it — into the sample loop. `log` 12 -> 1.
+
+Measured ladder after those, eight-key stress, peak `core_busy` and gap count:
+**12 modes ~73% / 2-3 gaps; 16 modes 70-73% / 5-7; 20 modes 82-85% / 8-13;
+24 modes will not build at all.** Every one of these reports zero xruns.
+Combined worst case at 16 (Resonode + guitar bank + lofi bank + 8 keys):
+81% peak, 6 gaps, zero xruns; Resonode engaged with no keys is zero gaps.
+
+**24 modes is now a build-time ceiling, not a CPU question.** With the
+Chebyshev sine in place the real `faust` compiler is killed by SIGALRM about
+two minutes into codegenning `resonode_synth.dsp` (exit 142, `Alarm clock`,
+on the `-i -a lv2.cpp` invocation) — this file's documented compile-time
+cliff, reproduced rather than assumed. `modeCount` ships at **16**: it holds
+roughly ten points more headroom than 20 for four fewer partials, and that
+margin is what covers the load a Resonode-only bench does not simulate.
+
+**Three optimisations were tried and REFUTED by measurement — do not
+re-propose without new evidence.** Rewriting `exp(modeLogRatio*e)` as
+`pow(modeRatio, e)` is numerically exact but made it WORSE (per-sample
+transcendentals 576 -> 679), because `pow` expands to `log`+`exp`
+internally. Applying the Chebyshev recurrence to the resonator's
+`cos(2*pi*f/SR)` is exact only for INTEGER mode ratios: against the bell
+table it errs by 5.6e-3, and only `string` is integer, so it would have
+broken four of the five timbres. Un-gliding the six morph knobs
+(`position`/`tone`/`decay`/`damping`/`stretch`/`collision`) bought
+576 -> 573, nothing, and would have cost zipper-free knob sweeps.
+
+**The remaining ~120 per-sample `exp` calls are NOT hoistable**, and the
+reason is worth recording so it is not re-investigated: they are all
+`exp(fSlow_k * fZec[i])`, and the generated C++ shows
+`ratioExponent = fRec22 + 0.02*fRec73 + 1.0` where `fRec22` is glided
+`stretch` and `fRec73` is `stretchJitter`'s sample-and-hold. BOTH are
+recursive, so removing the jitter would not free them — `stretch`'s own
+glide keeps the term audio-rate regardless. Moving the jitter onto the
+fundamental instead was also considered and rejected on sound: in the
+exponent it leaves the fundamental dead in tune (0.0 cents) while
+smearing upper partials up to 107 cents per strike, which is a timbral
+variation; on the fundamental it becomes a rigid 34-cent retune of the
+whole note, which reads as pitch instability.
 
 **`modes_2_to_6_are_not_starved` FAILS as literally written after this change
 (28.0x against a 15x bound), and that is a measurement artifact, proven by
