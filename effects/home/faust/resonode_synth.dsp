@@ -163,9 +163,9 @@ couplingNetwork(n) = par(i, n, coupleGuard) : neighbourExchange(n) : par(i, n, *
 
 modeStage(i, coupledIn, exc, freqFund, ratioExponent, positionLive) = normalisedOut, weightedOut
 with {
-    modeRatioLive = pow(modeRatio(i), ratioExponent);
-    freqMode = freqFund*modeRatioLive;
-    poleRadius = modePole(freqFund, pow(modeRatioLive, highFreqDampExponent));
+    modeLogRatioLive = ratioExponent*modeLogRatio(i);
+    freqMode = freqFund*exp(modeLogRatioLive);
+    poleRadius = modePole(freqFund, exp(highFreqDampExponent*modeLogRatioLive));
     modeAliasGuard = aliasGuard(freqMode);
     rawOut = modeResonator(poleRadius, freqMode, exc + coupledIn);
     normalisedOut = rawOut*modeAliasGuard/modePeakGain(poleRadius);
