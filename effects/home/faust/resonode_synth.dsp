@@ -1,11 +1,11 @@
 declare name "Resonode";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Mic-excited modal resonator instrument, packaged as the standalone resonode.lv2 bundle. Four voices, twenty-four coupled modes per voice, convex-blended string/bell/plate/membrane/bar partial-ratio tables, constant-Q mode bandwidth, and nearest-neighbour mode coupling bounded below unity loop gain by peak-gain normalisation.";
+declare description "Mic-excited modal resonator instrument, packaged as the standalone resonode.lv2 bundle. Four voices, sixteen coupled modes per voice, convex-blended string/bell/plate/membrane/bar partial-ratio tables, constant-Q mode bandwidth, and nearest-neighbour mode coupling bounded below unity loop gain by peak-gain normalisation.";
 
 import("stdfaust.lib");
 
-modeCount = 24;
+modeCount = 16;
 
 morphGlidePole = ba.tau2pole(0.015);
 morphIsFirstSample = ba.time == 0;
