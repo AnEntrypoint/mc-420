@@ -131,7 +131,8 @@ modeT60Floor = 0.004;
 invT60Floor = 1.0/modeT60Ceiling;
 invT60Ceiling = 1.0/modeT60Floor;
 
-highFreqDampExponent = 0.0 - log(max(0.05, damping))/log(2.0);
+highFreqDampSlope = 1.934264;
+highFreqDampExponent = highFreqDampSlope*(0.0 - log(max(0.05, damping)))/log(2.0);
 invDecayTime = 1.0/max(0.05, decayTime);
 noteDampScale(freqFund) = max(20.0, freqFund)*invConstantQRefHz;
 modeInvT60(freqFund, modeHfDampFactor) = max(invT60Floor, min(invT60Ceiling, invDecayTime*noteDampScale(freqFund)*modeHfDampFactor));
