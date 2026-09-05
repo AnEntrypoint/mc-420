@@ -1,0 +1,38 @@
+name: faust-codegen-probe
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Faust
+        run: sudo apt-get update && sudo apt-get install -y faust
+      - name: Generate real C++ for resonode and count per-sample transcendentals
+        run: |
+          set -x
+          mkdir -p /tmp/probe && cp effects/home/faust/*.dsp effects/home/faust/*.h /tmp/probe/
+          cd /tmp/probe
+          faust -vec -fun -dfs -vs 32 -nvi -ct 0 -cn ResonodeProbe -lang cpp resonode_synth.dsp -o resonode_gen.cpp
+          echo "=== total generated lines ==="
+          wc -l resonode_gen.cpp
+          echo "=== transcendental call counts (whole file) ==="
+          for f in expf logf sinf cosf sqrtf powf tanhf; do
+            printf '%-8s %s\n' "$f" "$(grep -c "\b$f(" resonode_gen.cpp || true)"
+          done
+          echo "=== compute() body only (per-sample hot path) ==="
+          awk '/virtual void compute/,0' resonode_gen.cpp > compute_body.cpp
+          wc -l compute_body.cpp
+          for f in expf logf sinf cosf sqrtf powf tanhf; do
+            printf '%-8s %s\n' "$f" "$(grep -c "\b$f(" compute_body.cpp || true)"
+          done
+          echo "=== fSlow (block-rate) vs per-sample split ==="
+          echo "fSlow decls: $(grep -c 'fSlow' resonode_gen.cpp || true)"
+          echo "=== transcendentals on fSlow lines (already hoisted) ==="
+          grep -E 'fSlow' resonode_gen.cpp | grep -cE '\b(expf|logf|sinf|cosf|sqrtf|powf)\(' || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resonode-codegen
+          path: /tmp/probe/resonode_gen.cpp
+          retention-days: 3
