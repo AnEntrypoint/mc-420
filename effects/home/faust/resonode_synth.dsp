@@ -131,13 +131,11 @@ modeT60Floor = 0.004;
 invT60Floor = 1.0/modeT60Ceiling;
 invT60Ceiling = 1.0/modeT60Floor;
 
-highFreqDampAmt = (1.0/max(0.05, damping)) - 1.0;
-highFreqDampNorm = 1.0/(1.0 + highFreqDampAmt);
+highFreqDampExponent = 0.0 - log(max(0.05, damping))/log(2.0);
 invDecayTime = 1.0/max(0.05, decayTime);
-freqDampExponent = 0.6;
-noteDampScale(freqFund) = pow(max(20.0, freqFund)*invConstantQRefHz, freqDampExponent);
-modeInvT60(freqFund, modeRatioLive) = max(invT60Floor, min(invT60Ceiling, invDecayTime*noteDampScale(freqFund)*highFreqDampNorm*(modeRatioLive + highFreqDampAmt*modeRatioLive*modeRatioLive)));
-modePole(freqFund, modeRatioLive) = 1.0 - poleFromInvT60*modeInvT60(freqFund, modeRatioLive);
+noteDampScale(freqFund) = max(20.0, freqFund)*invConstantQRefHz;
+modeInvT60(freqFund, modeHfDampFactor) = max(invT60Floor, min(invT60Ceiling, invDecayTime*noteDampScale(freqFund)*modeHfDampFactor));
+modePole(freqFund, modeHfDampFactor) = 1.0 - poleFromInvT60*modeInvT60(freqFund, modeHfDampFactor);
 
 peakGainRefT60 = 0.15;
 peakGainRefPole = 1.0 - poleFromInvT60/peakGainRefT60;
@@ -164,9 +162,9 @@ couplingNetwork(n) = par(i, n, coupleGuard) : neighbourSum(n) : par(i, n, *(coup
 
 modeStage(i, coupledIn, exc, freqFund, ratioExponent, positionLive) = normalisedOut, weightedOut
 with {
-    modeRatioLive = exp(ratioExponent*modeLogRatio(i));
-    freqMode = freqFund*modeRatioLive;
-    poleRadius = modePole(freqFund, modeRatioLive);
+    modeLogRatioLive = ratioExponent*modeLogRatio(i);
+    freqMode = freqFund*exp(modeLogRatioLive);
+    poleRadius = modePole(freqFund, exp(highFreqDampExponent*modeLogRatioLive));
     rawOut = modeResonator(poleRadius, freqMode, exc + coupledIn);
     normalisedOut = rawOut/modePeakGain(poleRadius);
     weightedOut = rawOut
@@ -198,8 +196,8 @@ with {
 };
 
 loudnessRefDecayS = 1.2;
-loudnessNormExp = 0.0;
-bankOutputTrim = 1.0;
+loudnessNormExp = 0.17;
+bankOutputTrim = 1.06;
 decayLoudnessNorm = bankOutputTrim*pow(max(0.05, min(8.0, decayTime))/loudnessRefDecayS, loudnessNormExp);
 
 process(exciteIn) =
