@@ -1545,6 +1545,22 @@ stereo would mean carrying a second channel through the whole pipeline,
 not a local change to this file. Left open for a dedicated audio-thread
 architecture change, not attempted here.
 
+**Defense-in-depth: a NaN/Inf guard now sits at the C++ call site too**
+(`audio_thread.cpp`, right after `resonodeFx.process(resonodeInBuf.data(),
+N)`), independent of the `coupleFeedback` fix above. If Resonode's LV2
+plugin ever emits a non-finite sample for any reason (a future patch/
+preset landing outside the coupling fix's safety margin, a bug in a
+different Resonode code path entirely, or simply defense against a class
+of bug this audit didn't anticipate), the block is detected and zeroed
+before it reaches the shared mix, with a rate-limited (max 1/second),
+wall-clock-timestamped `[diag-resonode]` log line — matching the
+project's existing `[diag-gap]`/`[diag-pitchguard]` logging convention and
+the "diagnostic logging must carry wall-clock timestamps" working rule.
+This is pure safety-net C++ with zero DSP/latency change; keep it even
+after the coupling fix, the same way the project already treats crash
+isolation at LV2 load time (ADR-002) as permanent defense-in-depth rather
+than something to remove once a specific crash cause is fixed.
+
 **Per-voice structural modulation** (new, cheap, reuses the existing
 attack-edge envelope idiom `pitchEnv` already used for pitch-mod): `position`
 gets a small live per-voice drift, `positionDriftEnv`, that starts every
