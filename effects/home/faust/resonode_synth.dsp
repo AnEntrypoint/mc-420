@@ -1,11 +1,11 @@
 declare name "Resonode";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Mic-excited modal resonator instrument, packaged as the standalone resonode.lv2 bundle. Four voices, twelve coupled modes per voice, convex-blended string/bell/plate/membrane/bar partial-ratio tables, constant-Q mode bandwidth, and nearest-neighbour mode coupling bounded below unity loop gain by peak-gain normalisation.";
+declare description "Mic-excited modal resonator instrument, packaged as the standalone resonode.lv2 bundle. Four voices, twenty-four coupled modes per voice, convex-blended string/bell/plate/membrane/bar partial-ratio tables, constant-Q mode bandwidth, and nearest-neighbour mode coupling bounded below unity loop gain by peak-gain normalisation.";
 
 import("stdfaust.lib");
 
-modeCount = 12;
+modeCount = 24;
 
 morphGlidePole = ba.tau2pole(0.015);
 morphIsFirstSample = ba.time == 0;
@@ -23,11 +23,11 @@ collision = hslider("fx/resonode/collision", 0.0, 0.0, 1.0, 0.001) : morphGlide;
 outLevel  = hslider("fx/resonode/level", 25.0, 0.0, 60.0, 0.001) : morphGlide;
 couple    = hslider("fx/resonode/couple", 0.15, 0.0, 1.0, 0.001) : morphGlide;
 
-shapeStringWeight   = hslider("fx/resonode/shape/string",   1.0, 0.0, 1.0, 0.001) : morphGlide;
-shapeBellWeight     = hslider("fx/resonode/shape/bell",     0.0, 0.0, 1.0, 0.001) : morphGlide;
-shapePlateWeight    = hslider("fx/resonode/shape/plate",    0.0, 0.0, 1.0, 0.001) : morphGlide;
-shapeMembraneWeight = hslider("fx/resonode/shape/membrane", 0.0, 0.0, 1.0, 0.001) : morphGlide;
-shapeBarWeight      = hslider("fx/resonode/shape/bar",      0.0, 0.0, 1.0, 0.001) : morphGlide;
+shapeStringWeight   = hslider("fx/resonode/shape/string",   1.0, 0.0, 1.0, 0.001);
+shapeBellWeight     = hslider("fx/resonode/shape/bell",     0.0, 0.0, 1.0, 0.001);
+shapePlateWeight    = hslider("fx/resonode/shape/plate",    0.0, 0.0, 1.0, 0.001);
+shapeMembraneWeight = hslider("fx/resonode/shape/membrane", 0.0, 0.0, 1.0, 0.001);
+shapeBarWeight      = hslider("fx/resonode/shape/bar",      0.0, 0.0, 1.0, 0.001);
 
 note0 = hslider("fx/resonodevoice0/note", -1.0, -1.0, 127.0, 1.0);
 gate0 = hslider("fx/resonodevoice0/gate", 0.0, 0.0, 1.0, 1.0);

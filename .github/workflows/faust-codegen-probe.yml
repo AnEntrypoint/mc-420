@@ -9,28 +9,30 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Faust
         run: sudo apt-get update && sudo apt-get install -y faust
-      - name: Generate real C++ for resonode and count per-sample transcendentals
+      - name: Count per-sample transcendentals in the real generated C++
         run: |
-          set -x
           mkdir -p /tmp/probe && cp effects/home/faust/*.dsp effects/home/faust/*.h /tmp/probe/
           cd /tmp/probe
           faust -vec -fun -dfs -vs 32 -nvi -ct 0 -cn ResonodeProbe -lang cpp resonode_synth.dsp -o resonode_gen.cpp
-          echo "=== total generated lines ==="
           wc -l resonode_gen.cpp
-          echo "=== transcendental call counts (whole file) ==="
-          for f in expf logf sinf cosf sqrtf powf tanhf; do
-            printf '%-8s %s\n' "$f" "$(grep -c "\b$f(" resonode_gen.cpp || true)"
-          done
-          echo "=== compute() body only (per-sample hot path) ==="
-          awk '/virtual void compute/,0' resonode_gen.cpp > compute_body.cpp
-          wc -l compute_body.cpp
-          for f in expf logf sinf cosf sqrtf powf tanhf; do
-            printf '%-8s %s\n' "$f" "$(grep -c "\b$f(" compute_body.cpp || true)"
-          done
-          echo "=== fSlow (block-rate) vs per-sample split ==="
-          echo "fSlow decls: $(grep -c 'fSlow' resonode_gen.cpp || true)"
-          echo "=== transcendentals on fSlow lines (already hoisted) ==="
-          grep -E 'fSlow' resonode_gen.cpp | grep -cE '\b(expf|logf|sinf|cosf|sqrtf|powf)\(' || true
+          node -e '
+            const fs=require("fs");const L=fs.readFileSync("resonode_gen.cpp","utf8").split("\n");
+            let inFun=false,depth=0,inLoop=false,per={},blk={};
+            const M=/std::(exp|log|sin|cos|sqrt|pow)\(|tanhf\(/g;
+            for(const l of L){
+              if(/^\tvoid fun\d+\w*\(/.test(l)){inFun=true;inLoop=false;continue;}
+              if(!inFun)continue;
+              if(/^\t\}$/.test(l)){inFun=false;continue;}
+              if(/for \(int i = 0; i < vsize/.test(l)){inLoop=true;depth=0;continue;}
+              if(inLoop){if(/\{/.test(l))depth++;if(/\}/.test(l)){if(depth===0){inLoop=false;continue;}depth--;}}
+              for(const m of (l.match(M)||[])){const k=m.replace("(","");
+                if(inLoop)per[k]=(per[k]||0)+1;else blk[k]=(blk[k]||0)+1;}
+            }
+            const tot=Object.values(per).reduce((a,b)=>a+b,0);
+            console.log("PER-SAMPLE:",JSON.stringify(per));
+            console.log("BLOCK-RATE:",JSON.stringify(blk));
+            console.log("PER_SAMPLE_TOTAL="+tot);
+          '
       - uses: actions/upload-artifact@v4
         with:
           name: resonode-codegen
