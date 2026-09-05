@@ -2075,6 +2075,68 @@ additive over the prior patch-only behavior:
   `pitchSprayCents`, a full octave of per-grain random pitch scatter at
   the extreme.
 
+**Fixed: the 48-grain pool was reachably exhaustible, and starvation silently
+collapsed the level.** `MAX_GRAINS = 48` is shared across all 16 voices, while
+Density (knob 6) reaches 200Hz and the patch table carries a 200ms grain length
+— `200ms x 200Hz` demands ~42 concurrent grains for ONE voice, measured. A
+second voice then stole grains mid-window, which is a real discontinuity, not a
+soft degrade: measured 735 mid-life thefts at 2 voices, 6350 at 16. Across the
+full production-reachable knob space (grainMs 14-200 x 2-200Hz x 1-16 voices,
+336 configs) the shipped code stole in 68 configs for 34,726 total thefts.
+`_recomputePerVoiceGrainBudget()` now divides the pool by the active granular
+voice count once per block, `_renderGranularVoice` raises the spawn period to
+fit that share, and `_spawnGrain` refuses to exceed it — which makes
+`_stealMostFinishedGrainSlot()` structurally unreachable. Measured after: **0
+thefts in all 336 configs**, and 0 across a 200-config randomized sweep of the
+wider `setGrainPatch` clamp range. On a 2-voice 220Hz sine case, broadband click
+energy above 8kHz drops **-54.9dB -> -88.6dB**.
+
+The second half was a level bug the first exposed: `m_grainGainComp` divided by
+the REQUESTED overlap while far fewer grains actually sounded, so adding notes
+faded the granulator out — measured -16.67dBFS at 4 voices, -33.47 at 8,
+**-48.34 at 16**, a 43dB collapse with no indication why. Gain compensation now
+tracks the budgeted spawn period, giving -4.98/-5.02/-5.13dBFS, flat within
+0.5dB of the 1-voice level. Note this removes what had been acting as an
+accidental -43dB limiter: with 16 held keys the summed output already exceeds
+int16 full scale with the granulator OFF, so the extreme case is now as loud as
+the non-granular path and downstream headroom matters.
+
+**`MAX_GRAINS` was deliberately NOT raised.** Measured worst case is ~11.9ns per
+grain-sample on x86 -O3, so 48 grains is ~37-49us of the 1333us block budget
+(2.8-3.7%); growing the pool 4x multiplies that worst case by 4, and an x86
+number cannot clear an aarch64 RT path. The measurement also says the pool is
+not the binding constraint: one voice never demands more than 42 even at the
+extreme, and the fair shares (24/16/12/6/3 at 2/3/4/8/16 voices) match or beat
+what contention was already delivering (40/26/17/8/4) — with zero thefts and
+correct level. Raising it later is a one-line change; everything scales off it.
+
+**Grain pitch can be quantized to musical intervals (the Clouds trick), at zero
+CPU.** `GrainPitchQuantize` adds Octaves / Fifths / Minor Triad / Minor
+Pentatonic beside the original continuous `pitchSprayCents`, held in a
+lock-free `std::atomic<int>`. Measured spawned-grain pitch distribution with the
+spray knob at 700 cents: continuous gives **601 distinct pitches** spanning
+-676..+664 cents, while Octaves gives exactly 3, Fifths 5, Minor Triad 5,
+Pentatonic 7. Rendered FFT on a 220Hz source: set members sit within ~6dB of the
+fundamental and non-members at the -45..-51dB floor, where continuous mode is a
+smear with no discrete structure. `pitchSprayCents` is inert while quantized,
+which is what lets one physical knob carry both.
+
+Control surface: knob 7 is segmented rather than taking a new knob (all 8 LofiFx
+granulator knobs were already assigned). `v01 <= 0.5` is continuous spray over
+the full original 0-1200 cent range; above 0.5 selects the four interval sets in
+equal quarters. An untouched knob 7 leaves the mode at Continuous, so prior
+behavior is exact. `kGranPitchContinuousSprayMode` in `apc_grid.h` duplicates
+the enum's zero value because `Sampler` is only forward-declared there; a
+`static_assert` in `apc_grid.cpp` fails the build if the two ever drift.
+
+**Additivity is byte-verified, with a precise exception.** Over a 200-config
+randomized sweep at default quantize, 108 configs are byte-identical to the
+shipped header and 90 differ — and in every differing case the baseline was
+actively stealing grains. So output is byte-identical everywhere EXCEPT where
+total grain demand exceeds the shared pool, which is exactly the failure being
+fixed. The interval-quantize feature contributes zero delta at its default: it
+consumes no RNG and multiplies the rate by exactly 1.0 on that path.
+
 **Fixed: mechanically regular grain-spawn timing** (a second, independent
 "boring" contributor) — `_renderGranularVoice` fired grains at an exactly
 regular period derived from `grainRateHz`/velocity, with zero timing

@@ -815,6 +815,20 @@ static const GranDirectKnobRange kGranDirectKnobRanges[kGranDirectKnobCount] = {
     { 0.0f, 1200.0f, false },
 };
 
+static_assert(kGranPitchContinuousSprayMode == Sampler::kGrainPitchContinuousSpray,
+              "apc_grid's granulator pitch-quantize default must match Sampler's enum");
+
+static constexpr float kGranPitchSprayKnobSpan = 0.5f;
+
+static int granPitchIntervalSetFromKnob(float v01) {
+    const int intervalSetCount = Sampler::kGrainPitchQuantizeCount - 1;
+    float t = (v01 - kGranPitchSprayKnobSpan) / (1.0f - kGranPitchSprayKnobSpan);
+    int idx = (int)(t * (float)intervalSetCount);
+    if (idx < 0) idx = 0;
+    if (idx >= intervalSetCount) idx = intervalSetCount - 1;
+    return Sampler::kGrainPitchOctaves + idx;
+}
+
 struct ResonodePatch { float position, decay, damping, stretch, collision; };
 
 constexpr int kResonodePatchCount = 4;
@@ -887,6 +901,9 @@ void ApcGrid::applyGranulatorMorph(Sampler* sampler) {
     if (m_lofiFxKnobTouched[1 + kGranPatchCount])     blend.scanRate        = m_granDirectScanRate;
     if (m_lofiFxKnobTouched[2 + kGranPatchCount])     blend.grainRateHz     = m_granDirectDensityHz;
     if (m_lofiFxKnobTouched[3 + kGranPatchCount])     blend.pitchSprayCents = m_granDirectSprayCents;
+    sampler->setGrainPitchQuantize(m_lofiFxKnobTouched[3 + kGranPatchCount]
+                                   ? m_granPitchQuantize
+                                   : kGranPitchContinuousSprayMode);
     sampler->setGrainPatch(blend.grainMs, blend.grainRateHz, blend.pitchSprayCents,
                             blend.posJitterMs, blend.scanRate, blend.reverseProb, blend.envShape);
 }
@@ -899,7 +916,15 @@ void ApcGrid::applyGranulatorDirectKnob(int knobIdx, float v01, Sampler* sampler
     switch (i) {
         case 0: m_granDirectScanRate   = v; break;
         case 1: m_granDirectDensityHz  = v; break;
-        case 2: m_granDirectSprayCents = v; break;
+        case 2:
+            if (v01 <= kGranPitchSprayKnobSpan) {
+                m_granDirectSprayCents = (v01 / kGranPitchSprayKnobSpan) * r.hi;
+                m_granPitchQuantize = kGranPitchContinuousSprayMode;
+            } else {
+                m_granDirectSprayCents = 0.0f;
+                m_granPitchQuantize = granPitchIntervalSetFromKnob(v01);
+            }
+            break;
         default: break;
     }
     applyGranulatorMorph(sampler);

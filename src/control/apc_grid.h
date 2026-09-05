@@ -29,6 +29,7 @@ constexpr int kApcBtnDubFx    = 67;
 constexpr int kApcBtnGuitarFx = 68;
 constexpr int kApcBtnLofiFx   = 69;
 constexpr int kFxKnobCount = 8;
+constexpr int kGranPitchContinuousSprayMode = 0;
 
 enum class FxKnobKind : uint8_t { FaustZone, Lv2Control, SamplerAttackMs, SamplerReleaseMs,
                                    SamplerGranPatchWeight, Unused,
@@ -181,6 +182,7 @@ private:
     float m_granDirectScanRate = 1.0f;
     float m_granDirectDensityHz = 20.0f;
     float m_granDirectSprayCents = 0.0f;
+    int   m_granPitchQuantize = kGranPitchContinuousSprayMode;
     void applyGranulatorMorph(Sampler* sampler);
     void applyGranulatorDirectKnob(int knobIdx, float v01, Sampler* sampler);
 

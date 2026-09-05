@@ -25,6 +25,15 @@ public:
     static const int MAX_GRAINS     = 48;
     static constexpr float kGrainTimingJitterAmt = 0.15f;
 
+    enum GrainPitchQuantize {
+        kGrainPitchContinuousSpray = 0,
+        kGrainPitchOctaves,
+        kGrainPitchFifths,
+        kGrainPitchMinorTriad,
+        kGrainPitchMinorPentatonic,
+        kGrainPitchQuantizeCount
+    };
+
     enum EvType { EV_NONE = 0, EV_NOTE_ON, EV_NOTE_OFF,
                   EV_REC_START, EV_REC_STOP };
 
@@ -146,6 +155,29 @@ public:
         _rebuildGrainWindowLut();
     }
 
+    void setGrainPitchQuantize(int mode)
+    {
+        if (mode < 0) mode = kGrainPitchContinuousSpray;
+        if (mode >= kGrainPitchQuantizeCount) mode = kGrainPitchQuantizeCount - 1;
+        m_grainPitchQuantize.store(mode, std::memory_order_relaxed);
+    }
+
+    int grainPitchQuantize() const
+    {
+        return m_grainPitchQuantize.load(std::memory_order_relaxed);
+    }
+
+    static const char *grainPitchQuantizeName(int mode)
+    {
+        switch (mode) {
+            case kGrainPitchOctaves:          return "Octaves";
+            case kGrainPitchFifths:           return "Fifths";
+            case kGrainPitchMinorTriad:       return "Minor Triad";
+            case kGrainPitchMinorPentatonic:  return "Minor Pentatonic";
+            default:                          return "Continuous Spray";
+        }
+    }
+
     void _rebuildGrainWindowLut()
     {
         float (&dst)[129] = m_grainWinLutBuf[1 - m_grainWinLutLive.load(std::memory_order_relaxed)];
@@ -172,6 +204,7 @@ public:
     void renderInto(int *inout, int n)
     {
         _drainEvents();
+        _recomputePerVoiceGrainBudget();
 
         for (int v = 0; v < VOICES; v++) {
             Voice &vo = m_voice[v];
@@ -408,6 +441,51 @@ private:
         return 0.5f * (_randBipolar() + _randBipolar());
     }
 
+    float _randUnitInterval()
+    {
+        return _randBipolar() * 0.5f + 0.5f;
+    }
+
+    static constexpr float kGrainOctaveCents[]          = { -1200.0f, 0.0f, 1200.0f };
+    static constexpr float kGrainFifthCents[]           = { -1200.0f, -500.0f, 0.0f, 700.0f, 1200.0f };
+    static constexpr float kGrainMinorTriadCents[]      = { -1200.0f, 0.0f, 300.0f, 700.0f, 1200.0f };
+    static constexpr float kGrainMinorPentatonicCents[] = { -1200.0f, 0.0f, 300.0f, 500.0f, 700.0f, 1000.0f, 1200.0f };
+
+    struct GrainPitchDegrees { const float *cents; int count; };
+
+    static constexpr GrainPitchDegrees kGrainPitchDegreeTable[kGrainPitchQuantizeCount] = {
+        { nullptr,                     0 },
+        { kGrainOctaveCents,           (int)(sizeof(kGrainOctaveCents) / sizeof(float)) },
+        { kGrainFifthCents,            (int)(sizeof(kGrainFifthCents) / sizeof(float)) },
+        { kGrainMinorTriadCents,       (int)(sizeof(kGrainMinorTriadCents) / sizeof(float)) },
+        { kGrainMinorPentatonicCents,  (int)(sizeof(kGrainMinorPentatonicCents) / sizeof(float)) },
+    };
+
+    double _grainPitchRatio()
+    {
+        const GrainPitchDegrees &degrees =
+            kGrainPitchDegreeTable[m_grainPitchQuantize.load(std::memory_order_relaxed)];
+        if (degrees.count > 0) {
+            int pick = (int)(_randUnitInterval() * (float)degrees.count);
+            if (pick < 0) pick = 0;
+            if (pick >= degrees.count) pick = degrees.count - 1;
+            return pow(2.0, (double)degrees.cents[pick] / 1200.0);
+        }
+        if (m_pitchSprayCents > 0.0f)
+            return pow(2.0, (double)(_randTriangular() * m_pitchSprayCents) / 1200.0);
+        return 1.0;
+    }
+
+    void _recomputePerVoiceGrainBudget()
+    {
+        int granularVoices = 0;
+        for (int v = 0; v < VOICES; v++)
+            if (m_voice[v].active && m_voice[v].granular) granularVoices++;
+        if (granularVoices < 1) granularVoices = 1;
+        int budget = MAX_GRAINS / granularVoices;
+        m_perVoiceGrainBudget = budget < 1 ? 1 : budget;
+    }
+
     static float _blackmanWindow(float phase)
     {
         const float pi = 3.14159265f;
@@ -506,6 +584,7 @@ private:
     void _spawnGrain(int vSlot, double scanPos)
     {
         Voice &vo = m_voice[vSlot];
+        if (vo.grainCount >= m_perVoiceGrainBudget) return;
         int slot = -1;
         for (int g = 0; g < MAX_GRAINS; g++) { if (!m_grains[g].active) { slot = g; break; } }
         if (slot < 0) slot = _stealMostFinishedGrainSlot();
@@ -530,8 +609,7 @@ private:
         if (p > (double)(vo.len - 1)) p = (double)(vo.len - 1);
         gr.pos = p;
 
-        float pitchSprayCentsOffset = (m_pitchSprayCents > 0.0f) ? (_randTriangular() * m_pitchSprayCents) : 0.0f;
-        gr.rate = vo.rate * pow(2.0, (double)pitchSprayCentsOffset / 1200.0);
+        gr.rate = vo.rate * _grainPitchRatio();
 
         bool grainReversed = (m_reverseProb > 0.0f) && ((_randBipolar() * 0.5f + 0.5f) < m_reverseProb);
         if (grainReversed) gr.rate = -gr.rate;
@@ -551,6 +629,15 @@ private:
 
         float densityFromVel = 0.4f + 0.6f * vo.velGain;
         double spawnPeriod = (double)SR / ((double)m_grainRateHz * (double)densityFromVel);
+        double grainLifeSamples = (double)(m_grainMs * 0.001f) * (double)SR;
+        double budgetSpawnPeriod = grainLifeSamples / (double)m_perVoiceGrainBudget;
+        double spawnPeriodFloor = 0.0;
+        float grainGainComp = m_grainGainComp;
+        if (budgetSpawnPeriod > spawnPeriod) {
+            grainGainComp *= sqrtf((float)(budgetSpawnPeriod / spawnPeriod));
+            spawnPeriod = budgetSpawnPeriod;
+            spawnPeriodFloor = budgetSpawnPeriod;
+        }
         if (vo.grainNextPeriod < 0.0) vo.grainNextPeriod = spawnPeriod;
 
         for (int i = 0; i < n; i++) {
@@ -575,6 +662,7 @@ private:
                     _spawnGrain(vSlot, vo.pos);
                     float jitter = 1.0f + kGrainTimingJitterAmt * _randBipolar();
                     vo.grainNextPeriod = spawnPeriod * (double)jitter;
+                    if (vo.grainNextPeriod < spawnPeriodFloor) vo.grainNextPeriod = spawnPeriodFloor;
                 }
                 vo.pos += vo.rate * (double)m_scanRate;
                 if (vo.pos >= (double)(vo.len - 1)) vo.pos = 0.0;
@@ -615,7 +703,7 @@ private:
             }
 
             float finalGain = chrom ? (envLevel * vo.velGain) : envLevel;
-            inout[i] += (int)(mixed * finalGain * m_grainGainComp);
+            inout[i] += (int)(mixed * finalGain * grainGainComp);
 
             bool done = chrom ? (vo.ampPhase == kAdsrIdle) : (vo.gain <= 0.0f && vo.target == 0.0f);
             if (done) {
@@ -848,6 +936,8 @@ private:
     float    m_grainWinLutBuf[2][129] = {{0.0f}, {0.0f}};
     std::atomic<int> m_grainWinLutLive{0};
     float    m_grainGainComp = 1.0f;
+    std::atomic<int> m_grainPitchQuantize{kGrainPitchContinuousSpray};
+    int      m_perVoiceGrainBudget = MAX_GRAINS;
     uint32_t m_grainRngState = 2463534242u;
 };
 
