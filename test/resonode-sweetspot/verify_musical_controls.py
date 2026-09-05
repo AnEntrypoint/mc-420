@@ -325,6 +325,38 @@ def check_modes_2_to_6_are_not_starved():
     return all(r < 15.0 for r in ratios_to_mode1[1:])
 
 
+def check_sustained_excitation_stability():
+    print("=== sustained-excitation stability sweep (real mic input, not a short burst) ===")
+    n = int(3.0 * SAMPLE_RATE)
+    rng = np.random.default_rng(0)
+    excite = (rng.standard_normal(n) * 0.05).astype(np.float32)
+    gate = np.zeros(n, dtype=np.float32)
+    gate[int(0.05 * SAMPLE_RATE):int(2.5 * SAMPLE_RATE)] = 1.0
+    corners = [
+        dict(position=0.08, decay=0.15, damping=0.97, stretch=-0.4, collision=0.0, couple=1.0, note=36.0),
+        dict(position=0.08, decay=0.15, damping=0.97, stretch=-0.4, collision=1.0, couple=1.0, note=36.0),
+        dict(position=0.95, decay=8.0, damping=0.15, stretch=1.5, collision=1.0, couple=1.0, note=84.0),
+        dict(position=0.95, decay=8.0, damping=0.97, stretch=1.5, collision=0.0, couple=1.0, note=36.0),
+        dict(position=0.08, decay=8.0, damping=0.97, stretch=-0.4, collision=1.0, couple=1.0, note=36.0),
+    ]
+    ok = True
+    for c in corners:
+        params = {
+            "fx_resonode_position": c["position"], "fx_resonode_decay": c["decay"],
+            "fx_resonode_damping": c["damping"], "fx_resonode_stretch": c["stretch"],
+            "fx_resonode_collision": c["collision"], "fx_resonode_couple": c["couple"],
+            "fx_resonodevoice0_note": c["note"], "fx_resonodevoice0_vel": 1.0,
+        }
+        audio = render(DSP_PATH.read_text(), excite, 3.0, params=params,
+                        automation={"fx_resonodevoice0_gate": gate})
+        finite = bool(np.all(np.isfinite(audio)))
+        peak = float(np.max(np.abs(audio))) if finite else float("inf")
+        print(f"{c}: finite={finite} peak={peak:.4f}")
+        if not finite or peak > 1.001:
+            ok = False
+    return ok
+
+
 def check_coupling_changes_output():
     print("=== mode-coupling regression check (couple knob must audibly change the resonator's behavior) ===")
     n = int(0.6 * SAMPLE_RATE)
@@ -363,6 +395,7 @@ def main():
         "dance_bass_shipped_patch": check_dance_bass_shipped_patch(),
         "modes_2_to_6_are_not_starved": check_modes_2_to_6_are_not_starved(),
         "coupling_changes_output": check_coupling_changes_output(),
+        "sustained_excitation_stability": check_sustained_excitation_stability(),
     }
     print()
     print("=== summary ===")

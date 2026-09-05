@@ -1401,16 +1401,58 @@ documents' own cost-vs-richness guidance. `coupleScale = 8.0` is the
 internal knob-to-coefficient multiplier (the user-facing `couple` knob is
 0..1); every per-mode filter here is inherently damped (`r<1` always, no
 delay-line unity-feedback loop the way Resonarium's own coupling math
-assumes), so — unlike Resonarium's knife-edge `-2/G` lossless-junction
-coefficient — this topology cannot diverge by construction and was verified
-stable (no NaN/Inf, peak never exceeding the final `ma.tanh` ceiling) across
-`coupleScale` up to 40 and the full extreme corners of decay/damping/
-position/stretch/collision/couple. `8.0` was chosen empirically as the
-smallest value producing a clearly audible (~20% peak-sample difference,
-measurable spectral-centroid shift) effect at `couple=1.0` without
-dominating a patch's own identity — re-verify with
+assumes) — but the earlier claim here that this topology "cannot diverge by
+construction" was WRONG, and has been corrected: each mode filter alone
+(`r<1`) is stable, but a real linear feedback LOOP through two or more
+coupled modes can still have combined loop gain above unity for some
+parameter corner even when every individual pole is damped, and a real one
+was found. `test/resonode-sweetspot/verify_musical_controls.py`'s older
+checks only ever used a short (~15ms) burst excitation into silence, so
+they could never see a divergence that only emerges after continuous
+excitation — a real mic input, unlike a burst, never stops exciting the
+loop. A direct DawDreamer sweep using SUSTAINED noise excitation over a
+multi-second held gate (matching how Resonode is actually played — see
+`check_sustained_excitation_stability` below) found a genuine NaN/Inf
+runaway at `position=0.08, decay=0.15, damping=0.97, stretch=-0.4,
+couple=1.0, note=36` (and other nearby corners), diverging to non-finite
+output roughly 1.5s into a held note, not instantly — a real, slow
+numerical blow-up, not a one-sample glitch. Fixed by wrapping every
+mode-to-mode coupling READ (never a mode's own primary output into the
+sum) in a bounded soft-clip, `coupleFeedback(x) = tanh(x*0.25)*4.0`
+(`coupleFeedbackKnee`/`coupleFeedbackCeil` in `resonode_synth.dsp`) —
+near-identity for normal in-range signal levels (slope 1 at the origin, so
+`coupling_changes_output`'s measured couple=0-vs-1 diff/peaks are
+unchanged bit-for-bit-close after the fix) but strictly bounded for large
+values, which — combined with every mode filter already being BIBO-stable
+for a bounded input (`r<1`) — makes the whole coupled network provably
+unable to diverge to infinity regardless of parameter corner, closing the
+actual gap in the old "cannot diverge by construction" reasoning (that
+reasoning was true for the isolated per-mode filters, never extended to
+prove the closed-loop coupled system). Re-verified: the same DawDreamer
+sweep that found 2 diverging corners out of 288 now finds zero, and every
+pre-existing `verify_musical_controls.py` check still passes unchanged
+(`coupling_changes_output`'s couple=1.0-vs-0.0 diff/peak numbers are
+identical to before the fix). `coupleScale = 8.0` is unchanged and its own
+empirical rationale (smallest value giving a clearly audible ~20%
+peak-sample/spectral-centroid effect at `couple=1.0` without dominating a
+patch's identity) still stands — re-verify with
 `test/resonode-sweetspot/verify_musical_controls.py`'s
-`coupling_changes_output` check before retuning.
+`coupling_changes_output` AND `sustained_excitation_stability` checks
+before retuning either constant.
+
+**Scope note on "doesn't quite sound like Objekt" (disclosed, not fully
+addressed)**: the numerical-instability fix above addresses "feeds back
+easily"/"unpredictable" directly (a real divergence bug, now closed). It
+does not itself close the broader tonal-character gap against Objekt/
+Resonarium. One structural difference both reference instruments lean on —
+stereo diffusion across the mode bank — is architecturally out of reach
+here without a much larger change: `resonode_synth.dsp` is mono in/out,
+and the ENTIRE aloop signal path is mono end-to-end (the OTG gadget mirror
+already averages capture L/R to mono, `dsp/loop.dsp`'s rings are mono,
+`audio_thread.cpp` carries one channel throughout) — giving Resonode real
+stereo would mean carrying a second channel through the whole pipeline,
+not a local change to this file. Left open for a dedicated audio-thread
+architecture change, not attempted here.
 
 **Per-voice structural modulation** (new, cheap, reuses the existing
 attack-edge envelope idiom `pitchEnv` already used for pitch-mod): `position`
