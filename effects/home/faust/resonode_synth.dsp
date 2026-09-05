@@ -122,14 +122,18 @@ with {
     b0 = sqrt(burstGainRefFactor * (1.0 - r*r));
 };
 
+coupleFeedbackKnee = 0.25;
+coupleFeedbackCeil = 4.0;
+coupleFeedback(x) = ma.tanh(x*coupleFeedbackKnee) * coupleFeedbackCeil;
+
 bank(freqHz, exc, positionLive, stretchLive) = mode1Out+mode2Out+mode3Out+mode4Out+mode5Out+mode6Out
 letrec {
-    'mode1Out = modeFilterR(r1, freqHz, modeGain1*aliasGuard(freqHz)*bassBoost(freqHz), exc + coupleAmt*mode2Out);
-    'mode2Out = modeFilterR(r2, f2,     modeGain2*aliasGuard(f2),                       exc + coupleAmt*(mode1Out + mode3Out));
-    'mode3Out = modeFilterR(r3, f3,     modeGain3*aliasGuard(f3),                       exc + coupleAmt*(mode2Out + mode4Out));
-    'mode4Out = modeFilterR(r4, f4,     modeGain4*aliasGuard(f4),                       exc + coupleAmt*(mode3Out + mode5Out));
-    'mode5Out = modeFilterR(r5, f5,     modeGain5*aliasGuard(f5),                       exc + coupleAmt*(mode4Out + mode6Out));
-    'mode6Out = modeFilterR(r6, f6,     modeGain6*aliasGuard(f6),                       exc + coupleAmt*mode5Out);
+    'mode1Out = modeFilterR(r1, freqHz, modeGain1*aliasGuard(freqHz)*bassBoost(freqHz), exc + coupleAmt*coupleFeedback(mode2Out));
+    'mode2Out = modeFilterR(r2, f2,     modeGain2*aliasGuard(f2),                       exc + coupleAmt*(coupleFeedback(mode1Out) + coupleFeedback(mode3Out)));
+    'mode3Out = modeFilterR(r3, f3,     modeGain3*aliasGuard(f3),                       exc + coupleAmt*(coupleFeedback(mode2Out) + coupleFeedback(mode4Out)));
+    'mode4Out = modeFilterR(r4, f4,     modeGain4*aliasGuard(f4),                       exc + coupleAmt*(coupleFeedback(mode3Out) + coupleFeedback(mode5Out)));
+    'mode5Out = modeFilterR(r5, f5,     modeGain5*aliasGuard(f5),                       exc + coupleAmt*(coupleFeedback(mode4Out) + coupleFeedback(mode6Out)));
+    'mode6Out = modeFilterR(r6, f6,     modeGain6*aliasGuard(f6),                       exc + coupleAmt*coupleFeedback(mode5Out));
 }
 with {
     stretchRatio2 = pow(2.0, 1.0+stretchLive);

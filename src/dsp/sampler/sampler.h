@@ -23,6 +23,7 @@ public:
     static const int PREROLL        = 32;
     static const int LEAD_DECLICK   = 8;
     static const int MAX_GRAINS     = 48;
+    static constexpr float kGrainTimingJitterAmt = 0.15f;
 
     enum EvType { EV_NONE = 0, EV_NOTE_ON, EV_NOTE_OFF,
                   EV_REC_START, EV_REC_STOP };
@@ -308,6 +309,7 @@ private:
         bool   isChrom;
         bool   granular;
         double grainAccum;
+        double grainNextPeriod;
         float  velGain;
         int    grainIdx[MAX_GRAINS];
         int    grainCount;
@@ -549,6 +551,7 @@ private:
 
         float densityFromVel = 0.4f + 0.6f * vo.velGain;
         double spawnPeriod = (double)SR / ((double)m_grainRateHz * (double)densityFromVel);
+        if (vo.grainNextPeriod < 0.0) vo.grainNextPeriod = spawnPeriod;
 
         for (int i = 0; i < n; i++) {
             float envLevel;
@@ -567,9 +570,11 @@ private:
 
             if (sounding) {
                 vo.grainAccum += 1.0;
-                if (vo.grainAccum >= spawnPeriod) {
-                    vo.grainAccum -= spawnPeriod;
+                if (vo.grainAccum >= vo.grainNextPeriod) {
+                    vo.grainAccum -= vo.grainNextPeriod;
                     _spawnGrain(vSlot, vo.pos);
+                    float jitter = 1.0f + kGrainTimingJitterAmt * _randBipolar();
+                    vo.grainNextPeriod = spawnPeriod * (double)jitter;
                 }
                 vo.pos += vo.rate * (double)m_scanRate;
                 if (vo.pos >= (double)(vo.len - 1)) vo.pos = 0.0;
@@ -704,6 +709,7 @@ private:
         vo.isChrom = isChrom;
         vo.granular = false;
         vo.grainAccum = 0.0;
+        vo.grainNextPeriod = -1.0;
         vo.velGain = velGain;
         _killGrainsOwnedByVoice(slot);
 

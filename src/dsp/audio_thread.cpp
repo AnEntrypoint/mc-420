@@ -983,6 +983,25 @@ static void* worker(void*) {
             if (resonodeEngagedNow && resonodeFx.hasPlugins()) {
                 std::copy(fin.begin(), fin.end(), resonodeInBuf.begin());
                 resonodeFx.process(resonodeInBuf.data(), N);
+                bool resonodeNonFinite = false;
+                for (int i = 0; i < N; i++) {
+                    if (!std::isfinite(resonodeInBuf[i])) { resonodeNonFinite = true; break; }
+                }
+                if (resonodeNonFinite) {
+                    std::fill(resonodeInBuf.begin(), resonodeInBuf.end(), 0.0f);
+                    static unsigned resonodeNonFiniteCount = 0;
+                    static timespec resonodeNonFiniteLastLogTs{};
+                    resonodeNonFiniteCount++;
+                    timespec nowTs; clock_gettime(CLOCK_MONOTONIC, &nowTs);
+                    double sinceLastLogMs = (resonodeNonFiniteLastLogTs.tv_sec == 0) ? 1e9 :
+                        (nowTs.tv_sec - resonodeNonFiniteLastLogTs.tv_sec) * 1000.0 +
+                        (nowTs.tv_nsec - resonodeNonFiniteLastLogTs.tv_nsec) / 1e6;
+                    if (sinceLastLogMs > 1000.0) {
+                        fprintf(stderr, "[diag-resonode] t=%ld.%03ld non-finite output block (count=%u), zeroed\n",
+                                (long)nowTs.tv_sec, nowTs.tv_nsec / 1000000, resonodeNonFiniteCount);
+                        resonodeNonFiniteLastLogTs = nowTs;
+                    }
+                }
             } else {
                 std::fill(resonodeInBuf.begin(), resonodeInBuf.end(), 0.0f);
             }

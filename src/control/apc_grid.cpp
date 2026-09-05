@@ -792,21 +792,27 @@ static const FxKnobTarget kLofiFxTargets[kFxKnobCount] = {
     { FxKnobKind::SamplerGranPatchWeight, nullptr },
     { FxKnobKind::SamplerGranPatchWeight, nullptr },
     { FxKnobKind::SamplerGranPatchWeight, nullptr },
-    { FxKnobKind::SamplerGranPatchWeight, nullptr },
-    { FxKnobKind::SamplerGranPatchWeight, nullptr },
+    { FxKnobKind::Unused, nullptr },
+    { FxKnobKind::Unused, nullptr },
     { FxKnobKind::Unused, nullptr },
 };
 
 struct GranPatch { float grainMs, grainRateHz, pitchSprayCents, posJitterMs, scanRate, reverseProb, envShape; };
 
-constexpr int kGranPatchCount = 6;
+constexpr int kGranPatchCount = 4;
 static const GranPatch kGranPatches[kGranPatchCount] = {
-    { 200.0f,   8.0f,  0.0f,   0.0f, 1.0f, 0.00f, 0.00f },
     {  90.0f,  35.0f, 25.0f,  35.0f, 0.4f, 0.10f, 0.15f },
-    {  55.0f,  22.0f,  8.0f,   0.0f, 0.0f, 0.15f, 0.00f },
+    { 200.0f,   8.0f,  0.0f,   0.0f, 1.0f, 0.00f, 0.00f },
     {  22.0f,  70.0f,  0.0f,   0.0f, 2.5f, 0.00f, 0.85f },
-    { 130.0f,  14.0f, 15.0f,  25.0f, 1.0f, 0.75f, 0.35f },
     {  14.0f, 150.0f, 90.0f, 300.0f, 4.5f, 0.50f, 1.00f },
+};
+
+struct GranDirectKnobRange { float lo; float hi; bool logTaper; };
+constexpr int kGranDirectKnobCount = 3;
+static const GranDirectKnobRange kGranDirectKnobRanges[kGranDirectKnobCount] = {
+    { 0.0f, 3.0f, false },
+    { 2.0f, 200.0f, true },
+    { 0.0f, 1200.0f, false },
 };
 
 struct ResonodePatch { float position, decay, damping, stretch, collision; };
@@ -878,8 +884,25 @@ void ApcGrid::applyGranulatorMorph(Sampler* sampler) {
             blend.envShape        += wn * kGranPatches[p].envShape;
         }
     }
+    if (m_lofiFxKnobTouched[1 + kGranPatchCount])     blend.scanRate        = m_granDirectScanRate;
+    if (m_lofiFxKnobTouched[2 + kGranPatchCount])     blend.grainRateHz     = m_granDirectDensityHz;
+    if (m_lofiFxKnobTouched[3 + kGranPatchCount])     blend.pitchSprayCents = m_granDirectSprayCents;
     sampler->setGrainPatch(blend.grainMs, blend.grainRateHz, blend.pitchSprayCents,
                             blend.posJitterMs, blend.scanRate, blend.reverseProb, blend.envShape);
+}
+
+void ApcGrid::applyGranulatorDirectKnob(int knobIdx, float v01, Sampler* sampler) {
+    int i = knobIdx - 1 - kGranPatchCount;
+    if (i < 0 || i >= kGranDirectKnobCount) return;
+    const GranDirectKnobRange& r = kGranDirectKnobRanges[i];
+    float v = r.logTaper ? r.lo * std::pow(r.hi / r.lo, v01) : r.lo + v01 * (r.hi - r.lo);
+    switch (i) {
+        case 0: m_granDirectScanRate   = v; break;
+        case 1: m_granDirectDensityHz  = v; break;
+        case 2: m_granDirectSprayCents = v; break;
+        default: break;
+    }
+    applyGranulatorMorph(sampler);
 }
 
 static void applySamplerFxKnob(FxKnobKind kind, float v01, Sampler* sampler) {
@@ -931,7 +954,8 @@ void ApcGrid::onFxKnobCC(int ccNumber, uint8_t data2, ParamStore& ps, Sampler* s
             if (knobIdx <= kResonodePatchCount) applyResonodePatchMorph(ps);
             else applyResonodeDirectKnob(knobIdx, v, ps);
         } else {
-            applyGranulatorMorph(sampler);
+            if (knobIdx <= kGranPatchCount) applyGranulatorMorph(sampler);
+            else applyGranulatorDirectKnob(knobIdx, v, sampler);
         }
         return;
     }
