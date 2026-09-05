@@ -43,6 +43,9 @@ static DubfxPolyVoice& dubfx_poly_voice(int idx) {
 
 static inline void dubfx_poly_apply(DubfxPolyVoice& v, float scale, float formantDepth, float engaged) {
     if (scale != v.lastScale) { v.eng.setPitchScale(scale); v.lastScale = scale; }
+    const SnacPeriodTracker& snac = dubfx_poly_shared_snac();
+    if (snac.m_periodValid && snac.m_periodF > 0.0f && scale > 0.0f)
+        v.formant.setOutputPeriodSamples(snac.m_periodF / scale);
     if (formantDepth != v.lastFormant) {
         v.lastFormant = formantDepth;
         v.formant.setFormantOctaves(formantDepth);

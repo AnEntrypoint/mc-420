@@ -8,6 +8,13 @@ struct LpcFormantShifter {
     static const int kFrameMask = kFrame - 1;
     static const int kAnalysisHop = 2048;
     static const int kSpectrumBins = 128;
+    static const int kOrderMin = 8;
+    static const int kOrderPitchUnknown = 24;
+    static constexpr float kOrderPeriodDivisor = 4.0f;
+    static constexpr float kFundamentalProtectSpan = 2.0f;
+    static constexpr float kFundamentalProtectGainDb = 1.5f;
+    static constexpr float kWarpFullBelowHz = 450.0f;
+    static constexpr float kWarpZeroAboveHz = 900.0f;
     static constexpr float kOctavesMax = 3.0f;
     static constexpr float kReflectionMagnitudeCeil = 0.985f;
     static constexpr float kPoleContraction = 0.995f;
@@ -45,6 +52,7 @@ struct LpcFormantShifter {
         binTables();
         for (int n = 0; n < kFrame; n++)
             m_analysisWindow[n] = 0.5f - 0.5f * cosf(2.0f * (float)M_PI * (float)n / (float)kFrame);
+        m_sampleRate = sampleRate;
         for (int k = 0; k <= kOrder; k++) {
             float w = 2.0f * (float)M_PI * kLagWindowBandwidthHz * (float)k / sampleRate;
             m_lagWindow[k] = expf(-0.5f * w * w);
@@ -69,6 +77,18 @@ struct LpcFormantShifter {
         m_gainTarget = 1.0f;
         m_gainNow = 1.0f;
         m_octaves = 0.0f;
+        m_outputPeriodSamples = -1.0f;
+        m_analysisOrder = kOrderPitchUnknown;
+    }
+
+    int orderForOutputPeriod() const {
+        int order = kOrderPitchUnknown;
+        if (m_outputPeriodSamples > 0.0f) {
+            order = (int)(m_outputPeriodSamples / kOrderPeriodDivisor);
+            if (order > kOrder) order = kOrder;
+        }
+        if (order < kOrderMin) order = kOrderMin;
+        return order;
     }
 
     void resetFilterState() {
@@ -79,6 +99,8 @@ struct LpcFormantShifter {
         if (voiceCount < 1) voiceCount = 1;
         m_analysisPhase = (voiceIndex * kAnalysisHop) / voiceCount;
     }
+
+    void setOutputPeriodSamples(float samples) { m_outputPeriodSamples = samples; }
 
     void setFormantOctaves(float octaves) {
         if (octaves > kOctavesMax) octaves = kOctavesMax;
@@ -130,6 +152,8 @@ struct LpcFormantShifter {
 
     bool envelopeReady() const { return m_haveEnvelope; }
     float gainNow() const { return m_gainNow; }
+    int analysisOrderNow() const { return m_analysisOrder; }
+    float warpTaperNow() const { return m_warpTaper; }
     float reflectionPeak() const {
         float p = 0.0f;
         for (int i = 0; i < kOrder; i++) {
@@ -140,13 +164,14 @@ struct LpcFormantShifter {
     }
 
 private:
-    static bool levinson(const float* r, float* reflection, float* direct, float& residualEnergy) {
+    static bool levinson(const float* r, int order, float* reflection, float* direct, float& residualEnergy) {
         float a[kOrder];
         for (int i = 0; i < kOrder; i++) a[i] = 0.0f;
+        for (int i = 0; i < kOrder; i++) reflection[i] = 0.0f;
         float energy = r[0];
         if (!(energy > 0.0f)) return false;
         const float energyFloor = r[0] * kResidualEnergyFloorRatio;
-        for (int i = 0; i < kOrder; i++) {
+        for (int i = 0; i < order; i++) {
             float acc = r[i + 1];
             for (int j = 0; j < i; j++) acc -= a[j] * r[i - j];
             float k = acc / energy;
@@ -178,26 +203,52 @@ private:
         for (int i = 0; i < kOrder; i++) direct[i] *= contraction[i];
     }
 
+    float warpTaperForOutputPitch() const {
+        if (!(m_outputPeriodSamples > 0.0f)) return 1.0f;
+        float outputHz = m_sampleRate / m_outputPeriodSamples;
+        if (outputHz <= kWarpFullBelowHz) return 1.0f;
+        if (outputHz >= kWarpZeroAboveHz) return 0.0f;
+        return (kWarpZeroAboveHz - outputHz) / (kWarpZeroAboveHz - kWarpFullBelowHz);
+    }
+
+    void holdFundamentalLevel(const float* sourcePower, float* shiftedPower) const {
+        if (!(m_outputPeriodSamples > 0.0f)) return;
+        float fundamentalBin = (float)(kSpectrumBins - 1) * 2.0f / m_outputPeriodSamples;
+        int protect = (int)(fundamentalBin * kFundamentalProtectSpan) + 1;
+        if (protect > kSpectrumBins) protect = kSpectrumBins;
+        const float ceilRatio = powf(10.0f, kFundamentalProtectGainDb / 10.0f);
+        const float floorRatio = 1.0f / ceilRatio;
+        for (int i = 0; i < protect; i++) {
+            float lo = sourcePower[i] * floorRatio;
+            float hi = sourcePower[i] * ceilRatio;
+            if (shiftedPower[i] < lo) shiftedPower[i] = lo;
+            else if (shiftedPower[i] > hi) shiftedPower[i] = hi;
+        }
+    }
+
     void estimateEnvelopes() {
         float frame[kFrame];
         int oldest = m_historyWrite;
         for (int n = 0; n < kFrame; n++)
             frame[n] = m_history[(oldest + n) & kFrameMask] * m_analysisWindow[n];
 
+        m_analysisOrder = orderForOutputPeriod();
+        const int order = m_analysisOrder;
+
         float r[kOrder + 1];
-        for (int k = 0; k <= kOrder; k++) {
+        for (int k = 0; k <= order; k++) {
             float acc = 0.0f;
             for (int n = k; n < kFrame; n++) acc += frame[n] * frame[n - k];
             r[k] = acc;
         }
         if (!(r[0] > kFrameEnergyFloor)) return;
-        for (int k = 1; k <= kOrder; k++) r[k] *= m_lagWindow[k];
+        for (int k = 1; k <= order; k++) r[k] *= m_lagWindow[k];
         r[0] *= kWhiteNoiseCorrection;
 
         float reflSource[kOrder];
         float directSource[kOrder];
         float energySource;
-        if (!levinson(r, reflSource, directSource, energySource)) return;
+        if (!levinson(r, order, reflSource, directSource, energySource)) return;
 
         const BinTables& tb = binTables();
         float modelPower[kSpectrumBins];
@@ -210,7 +261,8 @@ private:
             modelPower[i] = energySource / (re * re + im * im + kSpectrumFloor);
         }
 
-        float alpha = powf(2.0f, m_octaves);
+        m_warpTaper = warpTaperForOutputPitch();
+        float alpha = powf(2.0f, m_octaves * m_warpTaper);
         float shiftedPower[kSpectrumBins];
         for (int i = 0; i < kSpectrumBins; i++) {
             float src = (float)i / alpha;
@@ -220,21 +272,23 @@ private:
             shiftedPower[i] = modelPower[lo] * (1.0f - frac) + modelPower[lo + 1] * frac;
         }
 
+        holdFundamentalLevel(modelPower, shiftedPower);
+
         float shiftedAuto[kOrder + 1];
         const float binScale = 1.0f / (float)(kSpectrumBins - 1);
-        for (int k = 0; k <= kOrder; k++) {
+        for (int k = 0; k <= order; k++) {
             float acc = 0.0f;
             for (int i = 0; i < kSpectrumBins; i++)
                 acc += shiftedPower[i] * tb.trapezoid[i] * tb.cosLag[i][k];
             shiftedAuto[k] = acc * binScale;
         }
         if (!(shiftedAuto[0] > 0.0f)) return;
-        for (int k = 1; k <= kOrder; k++) shiftedAuto[k] *= m_lagWindow[k];
+        for (int k = 1; k <= order; k++) shiftedAuto[k] *= m_lagWindow[k];
         shiftedAuto[0] *= kWhiteNoiseCorrection;
 
         float reflShifted[kOrder];
         float energyShifted;
-        if (!levinson(shiftedAuto, reflShifted, nullptr, energyShifted)) return;
+        if (!levinson(shiftedAuto, order, reflShifted, nullptr, energyShifted)) return;
 
         float gain = sqrtf(energyShifted / energySource);
         if (!(gain > kGainMin)) gain = kGainMin;
@@ -263,6 +317,10 @@ private:
     float m_whitenState[kOrder], m_recolorState[kOrder];
     float m_gainTarget, m_gainNow;
     float m_octaves;
+    float m_outputPeriodSamples;
+    float m_sampleRate = 48000.0f;
+    float m_warpTaper = 1.0f;
+    int   m_analysisOrder;
 };
 
 struct SibilanceDetector {

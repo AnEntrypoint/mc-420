@@ -1141,6 +1141,90 @@ constants are retained; the real latency win came instead from removing the
 forced-grain override, which takes the grain path out of the neutral-formant
 signal path entirely.
 
+## Formants are moved by an LPC spectral envelope, not by the grain resampler
+
+`vowelFormant.h`'s `LpcFormantShifter` replaces the three peaking-EQ boosts.
+Per analysis hop it fits an all-pole envelope to the raw wet signal, warps that
+envelope in frequency, refits, and filters through `A_src(z)` then
+`1/A_tgt(z)`. `pitch_poly_ffi.h` no longer calls `eng.setFormantDepth()` at all
+on the poly path, so `GrainFormant` is inert there (verified directly: max grain
+mix 0.000000000 across formant -1.5..+1.5). It remains for the mono pedal-ride
+engine, which still calls `setFormantDepth` via `pitch_ffi.h`.
+
+This retires the octave defect documented above. Measured over 72 cases with
+formant actually applied, worst error **1904 cents -> 14.4 cents**, cases beyond
++-25c **9 -> 0**. Over a wider 280-case sweep (f0 82-880Hz x 7 shifts x 5 formant
+depths, output 41Hz-1760Hz): **zero** new failures, zero cases worse than the
+previous build, 15 cases the previous build got wrong that are now right, total
+beyond +-25c **35 -> 20** — and every one of the 20 remaining is also wrong in
+the previous build, so nothing regressed. Neutral formant is bit-identical over
+30 cases. 175 numerical stress cases (silence, +-DC, denormal, full-scale square,
+clipped noise, across formant +-3.0) give zero non-finite samples and nothing
+outside the structural ceiling.
+
+**Two design corrections that cost real investigation — do not re-derive them
+the wrong way.** First, LPC order 10-12 is the 8kHz SPEECH figure and is useless
+at 48kHz: at order 12 the stage measured as a complete no-op, and orders 20 and
+32 miss F2 (1090Hz) entirely; order 44 recovers `[698, 1086, 2441]` against a
+true `730/1090/2440`. Second, warping the autocorrelation in the LAG domain
+aliases past Nyquist — at a factor of 2 it produced spurious envelope peaks
+BELOW the source (326Hz from a 946Hz source). Warp the model power spectrum on
+an explicit bin grid with a band-limited HF fill instead. Cost is ~24
+MACs/sample/voice for the filtering alone, not the "well under 10" that was
+estimated.
+
+**Why a high fundamental broke it, and why bounding the LPC order does NOT fix
+that.** An LPC pair is a linear filter and cannot move a partial. When the
+fundamental is high, warping the envelope moves the modelled resonances off the
+only two or three harmonics that exist and ANNIHILATES H1 — measured at f0=880,
++7 semitones, formant +1.0: H1 drops 36dB and H2 becomes dominant, which is an
+octave percept. It fires in both warp directions (either direction moves the
+envelope off the fundamental) and tracks OUTPUT frequency rather than shift
+amount. Bounding the order by harmonic count was tried and refuted by
+measurement: at order 8-9 there is no harmonic-fitting left to do and the defect
+is undiminished (worst error 2407c, still 6-9 bad cases). The fix is three
+bounds — a warp taper against output pitch (full below 450Hz, zero by 900Hz),
+a fundamental-level protection clamping the warped spectrum to within 1.5dB of
+the source below 2x the fundamental, and an order bound (helpful, not
+sufficient). Output period comes from the shared SNAC tracker.
+
+**An autocorrelation/FFT-peak pitch metric octave-errors on exactly this
+signal** and will mis-attribute the defect as pre-existing. Measure on the
+harmonic grid instead: dominant partial within 6dB, plus H1's relative level and
+an off-grid energy check.
+
+**The trade, stated plainly.** Below 450Hz output the taper is 1.0 and the order
+bound never binds, so formant movement is full strength — which covers the whole
+useful range of a guitar/vocal pitch-lock. Between 450 and 900Hz the effect
+fades; above 900Hz it is gone. That converges to the OLD behaviour rather than
+degrading below it, because the old shaper never moved formants downward at any
+pitch. Measured on a formant-bearing vowel stimulus (F1/F2/F3 = 730/1090/2440,
+f0=150Hz): the old shaper commanded down 1.5 octaves moves F1 the WRONG WAY
+(764Hz -> 855Hz) and is non-monotonic upward (1.130 at +0.5, 1.079 at +1.5); the
+LPC stage moves F1 down (610Hz at -0.5 where the old shaper sat at 761Hz) and is
+monotonic upward (1.173 -> 1.395). Movement magnitude is compressed at the
+extremes and the negative extreme is the weaker direction. Widening the
+fundamental-protection span from 1.25x to 2.0x was needed to clear two cases at
+494Hz and 698Hz and cost downward movement at 330/440Hz (0.72/0.81 -> 0.87/0.91)
+— correctness was chosen over movement magnitude there.
+
+**UNRESOLVED, and it gates shipping: CPU.** With formant engaged this costs
+about **1.8x the grain path it replaces** — 6 voices, x86_64 dev host:
+49.6/51.0us per block before, 87.6/97.7us after, against a 1333us budget. At
+neutral it is FREE and in fact cheaper than the old code overall (58.7 ->
+37.3us) because the grain path is skipped entirely. Per this file's own rule an
+x86 number never clears an aarch64 RT path, and the engaged figure has not been
+witnessed on a real Pi 4. Staggering the per-voice analysis phase was necessary
+to get here at all: unstaggered, p99 was 280us and max 499us.
+
+**Known, disclosed, NOT fixed**: at f0=880 with -12 semitones the output reads
++1200c in BOTH builds including at formant 0 where they are bit-identical — a
+pre-existing splice-path failure at that corner, unrelated to formants. The LPC
+build drives H1 deeper there (-37.1dB vs -18.6dB) without changing the verdict.
+With SNAC unlocked the output period is held at its last valid value, so the
+taper uses a stale pitch; unpitched material has no harmonic comb for the defect
+to act on, but that is reasoning, not a measurement.
+
 **Real formant/vowel/sibilance shaping (new)**: `vowelFormant.h` adds a
 `VowelFormantShaper` (3 parallel RBJ peaking biquads tuned to F1/F2/F3 of a
 5-point vowel table — U/O/A/E/I, from
