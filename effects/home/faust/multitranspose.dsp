@@ -115,12 +115,11 @@ freeMeter = hbargraph("freediag", 0.0, 1.0);
 
 process(dry, loopSum, free, formant, extFreqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = dryWet, loopWet
 with {
-    freeSmooth = free : si.smoo;
+    freeSmooth = attach(free, free : freeMeter) : si.smoo;
     sigIn      = dry*(1.0-freeSmooth) + loopSum*freeSmooth;
     freqDetInternal = detectedFreq(sigIn);
     extFreqDetDiagRaw = attach(extFreqDet, extFreqDet : rawExtFreqDetMeter);
-    freeDiagRaw = attach(free, free : freeMeter);
-    extFreqDetApplies = (extFreqDetDiagRaw > (minTrackHz + 1.0)) & (freeDiagRaw < 0.5);
+    extFreqDetApplies = extFreqDetDiagRaw > (minTrackHz + 1.0);
     freqDet    = ba.if(extFreqDetApplies, extFreqDetDiagRaw, freqDetInternal) : max(minTrackHz);
     trustedTracker = attach(extFreqDetApplies, extFreqDetApplies : trustedTrackerMeter);
     freqDetDiag = attach(freqDet, freqDet : freqDetMeter);
