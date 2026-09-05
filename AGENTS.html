@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=15fb984bff1d3473406c099469ca464810bfebb2">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8a2549dd3a234b33aa7ddcb3138320ddcd636390">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1125,9 +1125,10 @@ splice-based PSOLA engine that already powers the mono "pedal ride" effect
 OLD per-file two-tap delay-line `xpose()` shifter (pitch-synchronous
 window/crossfade sizing, `windowFor()`, `winSkewMul`/`formantXfSkew`,
 `xposeMaxDelay`) no longer exists anywhere in this file or the codebase —
-do not look for it. `shiftAmount = targetNote - heldDetNote` (still
-sampled once per voice at `attackEdge`, held for the whole sustain per the
-same absolute-pitch-lock design) converts to a ratio (`pow(2, shiftAmount
+do not look for it. `shiftAmount = targetNote - heldDetNote` (sampled during the
+`inLockWarmup` window at `attackEdge` and then frozen for the rest of the
+sustain, per the absolute-pitch-lock design — see the FIXED entry below,
+where the code had drifted from this sentence) converts to a ratio (`pow(2, shiftAmount
 / 12)`) and is threaded straight into the per-voice engine as a plain
 signal argument, per the compile-time-cliff discipline below.
 
@@ -1139,6 +1140,43 @@ prefers the external `pitchtracker.lv2` autocorrelation tracker's reading
 (`fx/extfreqdet`, fed from `audio_thread.cpp` via `pitchTrackerFx`) when
 present, falls back to the internal zero-crossing tracker
 (`trackPitchHzAndHp`/`jumpGuard`) otherwise.
+
+**FIXED: the pitch lock did not actually lock, and every fresh note was
+seeded from the worst available estimate.** Two independent defects, both
+reported from real playing as "key based transpose is glitching" and
+"latent sounding transients when we go du du du":
+
+- `shiftAmount` was documented here as "sampled once per voice at
+  `attackEdge`, held for the whole sustain", and the code did not do it.
+  `shiftStep` glided toward `shiftTarget` EVERY SAMPLE for the whole note,
+  and `shiftTarget = targetNote - heldDetNote` with `heldDetNote` still
+  following the detected input pitch. So the locked output tracked whatever
+  the input did: on a +-30 cent input wobble (ordinary vibrato or decay
+  drift) the shift target swings 58 cents. `heldDetNote` and `shiftStep`
+  now both freeze once the `inLockWarmup` window closes.
+- `trackingAllowed` was `(trustedTracker &gt; 0.5) | inLockWarmup`, so during
+  warmup the detected pitch was taken WHETHER OR NOT the tracker was
+  trusted. `pitchtracker.lv2` deliberately holds its output at 0.0 for the
+  first ~35ms of any fresh onset, which makes `extFreqDetApplies` false and
+  sends `freqDet` to the internal zero-crossing fallback — the tracker this
+  same section documents as taking &gt;400ms to converge and drifting
+  non-monotonically. Every fresh note was therefore seeded from it. Now
+  `trackingAllowed = trustedTracker &gt; 0.5`, so the lock waits for the real
+  tracker instead of latching onto the fallback's worst reading.
+
+Failure mode of the fix is strictly better than what it replaced: if the
+tracker never becomes trusted inside the 80ms window, `heldDetNote` holds
+`lastConvergedNote`, seeded at `attackEdge` from the previous converged
+note — stale but plausible, rather than actively wrong. The tracker's own
+spec is ~35ms against an 80ms window, so there is 45ms of margin.
+
+**The general lesson, and it is the expensive one: this file's prose was
+right and the code had drifted from it.** The "sampled once at attackEdge"
+sentence had been sitting here describing behaviour the code stopped
+having. That is exactly the failure this document's own working rule
+("Never trust an in-repo comment as ground truth") warns about, one level
+up — the rule says read the code rather than the comment, and here reading
+the code against its own spec is what found the bug.
 
 **Known, disclosed, current limitation**: the internal zero-crossing
 fallback tracker (when `pitchtracker.lv2` is NOT loaded) has a real,
