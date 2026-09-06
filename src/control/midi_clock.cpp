@@ -58,8 +58,7 @@ struct OutputSet {
             count--;
             handles[count] = nullptr;
             names[count][0] = 0;
-            fprintf(stderr, "[midi-clock] released %s back to the control surface
-", name);
+            fprintf(stderr, "[midi-clock] released %s back to the control surface\n", name);
             return;
         }
     }
