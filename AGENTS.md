@@ -621,6 +621,34 @@ Ableton Link"):
   threshold on a large tempo mismatch, and that is correct — the C++ trim is
   the sync authority there.
 
+## `weOwnTempo` guards `proposeTempo` only, never playback varispeed
+
+`proposeTempo` sets `g_weSetTempo` the instant the FIRST loop finishes
+recording, and `resetTempoAuthority` is only called on erase or clear-all. So
+after recording anything, that flag stays true for the rest of the session.
+Gating `linkSpeedRatio` on `!weOwnTempo` therefore disabled the varispeed
+permanently once a loop existed — reported as "we changed the tempo, no change
+in pitch on the playing loops", and fixed 2026-09-06.
+
+The flag exists to stop `setTempo` rewriting the session tempo out from under
+other peers, which is what the Ableton Link checklist above documents it for.
+Playback varispeed is a different concern: if a peer moves the session tempo we
+must follow it whoever set it originally. Keep the flag on `proposeTempo`, and
+keep it off the ratio.
+
+**The phase trim must only run while the ratio is genuinely engaged**
+(`linkVarispeedEngaged`). `recorded_bpm` is written only when the first take
+FINISHES, so before any take the ratio is legitimately 1.0 — and with the ratio
+at 1.0 the master phase can never track the Link grid, so the phase error grows
+without bound and the trim saturates at its clamp. That shipped briefly and
+showed up as `eff_speed` 0.9700 with nothing playing at all: a permanent 3
+percent, 51 cent detune on anything subsequently played.
+
+**Quick check that needs no recording:** read `/run/aloop/status.json`.
+`eff_speed` must be exactly `1.0000` when no loop is recorded, whatever Link is
+doing. A value sitting at 0.97 or 1.03 with nothing playing means the trim is
+saturating because the ratio is not engaged.
+
 ## Link transport start must anchor beat 0 to the quantum
 
 `LinkBridge::setTransportPlaying(true)` uses
