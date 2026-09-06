@@ -614,12 +614,28 @@ Ableton Link"):
   i.e. `N * linkSpeedRatio`, not a bare `N`. Advancing it at 1.0x while the
   loopers ran at the Link ratio made the two re-diverge as fast as any
   correction closed them, so the jump re-fired forever.
-- **Any new trim stays well under `loop.dsp`'s `manualPunchActive` threshold**
-  (`abs(effSpeed - 1.0) > 0.3`), which deliberately disables the DSP-internal
-  resync so a manual half/double-speed press is not fought. The 0.03 clamp is
-  an order of magnitude clear of it. Note the ratio ITSELF can exceed that
-  threshold on a large tempo mismatch, and that is correct — the C++ trim is
-  the sync authority there.
+- **The trim must YIELD to a manual punch, not merely be small.** An earlier
+  version of this note claimed the 0.03 clamp was "an order of magnitude clear"
+  of `loop.dsp`'s `manualPunchActive` threshold (`abs(effSpeed - 1.0) > 0.3`).
+  That checked the wrong quantity: `effSpeed` is `manualSpeedMul * (ratio +
+  trim)`, so a half/double-speed press pushes it past the threshold regardless
+  of how small the trim is. Because `masterPhaseSamples` advanced at
+  `linkSpeedRatio` alone, a punch halved the read rate while the target timeline
+  kept full rate, the error grew at once, the trim saturated, and the punch was
+  dragged back within a fraction of a second — reported as "the punch varispeed
+  buttons change right back". The trim is now suspended while
+  `abs(g_manualSpeedMul - 1.0) > 0.3`, mirroring the DSP rule rather than
+  duplicating a different one, and `masterPhaseSamples` advances at
+  `linkSpeedRatio * g_manualSpeedMul` so the target follows the punch. Verified
+  live: `eff_speed` holds 0.5000 and 2.0000 across 1.5s and returns to exactly
+  1.0000 on release.
+- **The trim belongs on `effSpeed` and NOT on the `masterPhaseSamples`
+  advance.** That advance is the TARGET timeline — what Link says the position
+  should be — and the trim is the correction applied to the READER to walk it
+  toward that target. Adding the trim to both makes the target run away from the
+  reader and the loop never converges.
+- The ratio ITSELF can exceed the 0.3 threshold on a large tempo mismatch, and
+  that is correct — the C++ trim is the sync authority there.
 
 ## `weOwnTempo` guards `proposeTempo` only, never playback varispeed
 
