@@ -1643,6 +1643,58 @@ so do not re-tune them without new evidence:
   it was added for.
 - The slope-match weight of 80.0 in the candidate error is flat across
   20-400 (2.213-2.215), so it is not worth churning.
+- The crossfade LENGTH MULTIPLIER is best at exactly one period: 1.0 gives
+  2.215 against 0.5 (2.220), 0.75 (2.218), 1.5 (2.665) and 2.0 (2.821).
+  Longer fades are much worse, which is the same effect as the undivided
+  fade above seen from the other direction.
+- The crossfade SHAPE stays linear. A smoothstep (`w*w*(3-2w)`) ramp, which
+  has zero slope at both ends and might have been expected to remove a
+  derivative discontinuity, measures marginally WORSE (2.219 vs 2.215) —
+  the equal-gain-linear reasoning above is correct and should not be
+  revisited without new evidence.
+
+**`DUBFX_POLY_BS` is 16, not 64, and the reduction is free.** The poly
+FFI buffers input before calling `processBlock`, and that buffer IS the
+engine's algorithmic latency. Measured onset latency 1.35-1.40ms at 64 ->
+**0.35-0.38ms at 16**, a 4x cut, against: CPU 2.5% of one x86 core at 64,
+32 AND 16 (6 voices, 10s of audio — identical, the per-block scheduling is
+not the cost); corpus degradation 2.215 / 2.212 / 2.211 (marginally BETTER
+at 16, since the engine resplices against fresher input); clicks 0/112 at
+both. The SNAC sweep cadence is untouched and that was verified rather
+than assumed — `snacPeriodTracker.h` keeps its OWN `BLOCK = 64` for the
+shared-tracker `tick()` path, decoupled from `DUBFX_POLY_BS`, so the
+block-start alignment rule above still holds; period tracking measures
+bit-identical at 196Hz across the two. `EngineSoladSnac::processBlock`
+takes `n` and forwards it to `stepSchedule(n)`, so it is block-size
+agnostic by construction. The mono `DUBFX_BS` stays 64: its latency is
+dominated by downshift reader geometry, not buffering, so the same change
+buys it nothing.
+
+**The crossfade fix trades slightly against barely-pitched material, and
+that trade is the right way round.** On the instrument corpus it is a
+clear win (2.821 -> 2.215). On the speech/noise wavs at the corpus root it
+splits: `dingle` improves 3.58 -> 3.32 while `cleetus` regresses
+1.80 -> 2.03. Measuring voiced fraction explains it — `cleetus` is only
+19% voiced against `dingle`'s 31% and `machine1`'s 69%. On unpitched
+content there is no true period, so a shorter fade gives the reader less
+averaging over noise. This engine is a pitch-lock for pitched playing, so
+the pitched case is the one that matters; the regression is confined to
+material the effect is not for. `DUBFX_POLY_BS` is neutral on all of these
+(2.03 -> 2.02, 2.23 -> 2.23), so the split is attributable to the
+crossfade change alone.
+
+**Measured and NOT acted on: the SNAC period carries a systematic bias
+that grows with frequency** — median error -4.2c at 82Hz, +4.3c at 110Hz,
++13.8c at 261Hz, -17.0c at 587Hz, -42.7c at 880Hz, with a spread of only
+~0.1c (so it is bias, not jitter). The cause is the parabolic
+interpolator on a narrowing autocorrelation peak: at 880Hz a period is
+54.5 samples, so the peak spans ~7 samples and the 1-sample lag grid is
+15% of the peak width. It is deliberately left alone because the
+consequence is small where it matters: converted to splice phase error it
+is under 3 degrees across the whole musical range (0.9 degrees at 82-110Hz,
+2.9 at 261Hz), and `triggerSpliceByPeriod`'s value+slope candidate search
+already corrects for it. Only the 880Hz corner reaches 8.8 degrees, which
+is above the useful range for this effect.
 - `m_transientHold` holds off resplicing for ~2 grains after a detected
   transient, avoiding a double-played attack. The separate snap-to-live
   transient-response mechanism is DISABLED in shipped code (introduced a
