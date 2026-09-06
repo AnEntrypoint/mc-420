@@ -744,15 +744,18 @@ static void* worker(void*) {
             if (!linkDrivingLength && g_params) {
                 if (mlbZone) *mlbZone = masterLenVal > 0.0f ? (masterLenVal / (float)N) : 0.0f;
             }
+            static double linkPhaseTrim = 0.0;
+            constexpr double kLinkPhaseTrimPerSample = 0.00005;
+            constexpr double kLinkPhaseTrimMax = 0.03;
             float linkSpeedRatio = 1.0f;
             if (linkDrivingLength && g_params && g_link) {
                 float recordedBpm = recordedBpmVal;
                 if (!linkSnap.weOwnTempo && recordedBpm > 1.0f && linkSnap.bpm > 1.0) {
-                    linkSpeedRatio = recordedBpm / (float)linkSnap.bpm;
+                    linkSpeedRatio = (float)linkSnap.bpm / recordedBpm;
                 }
             }
             {
-                float effSpeed = g_manualSpeedMul * linkSpeedRatio;
+                float effSpeed = g_manualSpeedMul * (linkSpeedRatio + (float)linkPhaseTrim);
                 std::fill(speedBuf.begin(), speedBuf.end(), effSpeed);
                 g_telem.effSpeed = effSpeed;
             }
@@ -778,7 +781,7 @@ static void* worker(void*) {
                 double fourBeatLenShared = beatLenSamplesShared * 4.0;
 
                 if (masterLen > 0.0f) {
-                    masterPhaseSamples += (double)N;
+                    masterPhaseSamples += (double)N * (double)linkSpeedRatio;
                     if (linkDrivingLength && g_link) {
                         double curBpm = linkSnap.bpm;
                         bool bpmChanged = lastLinkBpmSeen > 0.0 && std::fabs(curBpm - lastLinkBpmSeen) > 0.05;
@@ -802,14 +805,21 @@ static void* worker(void*) {
                             double delta = std::fmod(linkTargetSamples - masterPhaseSamples + halfLen, (double)masterLen);
                             if (delta < 0.0) delta += masterLen;
                             delta -= halfLen;
-                            bool largeDrift = std::fabs(delta) > halfLen * 0.5;
                             bool tempoStable = tempoStableBlocks >= kTempoStableBlocksThreshold;
-                            masterPhaseSamples += (largeDrift && tempoStable) ? delta : delta * 0.02;
+                            if (tempoStable) {
+                                double trim = delta * kLinkPhaseTrimPerSample;
+                                if (trim >  kLinkPhaseTrimMax) trim =  kLinkPhaseTrimMax;
+                                if (trim < -kLinkPhaseTrimMax) trim = -kLinkPhaseTrimMax;
+                                linkPhaseTrim = trim;
+                            } else {
+                                linkPhaseTrim = 0.0;
+                            }
                         }
                     } else {
                         lastLinkBpmSeen = 0.0;
                         tempoStableBlocks = 0;
                         lastLinkPhaseMicroBeats = -1;
+                        linkPhaseTrim = 0.0;
                     }
                     masterPhaseSamples = std::fmod(masterPhaseSamples, (double)masterLen);
                     if (masterPhaseSamples < 0.0) masterPhaseSamples += masterLen;
