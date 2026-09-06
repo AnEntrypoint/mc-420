@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=059fa76fbea91d2129401113a19a07948a20534d">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=ad4dfb7d5a0ef54d60fc6b0da0b75d0fc983a76f">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1696,6 +1696,49 @@ independent-formant grain-playback-speed stage (`grainFormant.h`).
 - Crossfade is EQUAL-GAIN LINEAR, never equal-power cosine — the two
   readers being crossfaded are correlated (one period apart on a
   quasi-periodic signal), so cosine fades sum to up to +3dB mid-fade.
+- **The crossfade LENGTH is divided by the pitch ratio on upward shifts,
+  and that division is what makes the correlation assumption above true.**
+  `m_xfadeLen` is set from one input period but counted down in OUTPUT
+  samples, while the readers advance `m_scale` input samples per output
+  sample. Left undivided, the readers travel `per*scale` during the fade and
+  drift apart by `(scale-1)` periods before it ends, so by the end they are
+  NOT one period apart and the equal-gain fade is summing two uncorrelated
+  reads. That was a real, reported microclick: measured at 40x the signal's
+  own median slew rate, appearing at +10 semitones (exactly where the drift
+  crosses three quarters of a period) and worsening monotonically to +14,
+  clean at +9 and below, concentrated at low input pitches where the period
+  is long. Instrumenting the engine put 30 of 30 clicks adjacent to a splice
+  and none away from one. Dividing by the ratio keeps reader travel at one
+  period regardless of shift: clicks go to zero across 112 synthetic cases
+  and the whole 70-200Hz boundary sweep. The divisor is clamped to never go
+  below 1.0, so downshift and unity keep their original fade length and are
+  bit-identical over 40 cases — the mono pedal-ride path is untouched.
+  Onset latency is unchanged at 1.35-1.40ms across every pitch and shift.
+
+**Splice-parameter sweeps, all measured against the real instrument corpus
+using degradation ratio (output roughness / that file's own input
+roughness, which is the metric that does not punish breathy sources for
+being breathy — the vocal files score 0.34-0.45 roughness at the INPUT and
+the engine only adds ~7%, whereas violin input is 0.017 and the shipped
+engine took it to 0.106).** Mean degradation over 16 instruments fell from
+**2.82 to 2.21** with the crossfade fix, worst cases improving most: violin
+low 6.10 -&gt; 3.03, violin high 4.78 -&gt; 2.83, cello 4.06 -&gt; 2.70. Four
+further knobs were swept and every one of them is ALREADY at its optimum,
+so do not re-tune them without new evidence:
+
+- `m_respliceFrac` 1.0 is best (2.215) against 1.5 (3.176) and 2.0 (2.996).
+  Letting drift accumulate before correcting is clearly worse.
+- `SINC_TAPS` 16 vs 32 is a dead heat (2.215 vs 2.216). Doubling the kernel
+  doubles the interpolation cost for nothing; the residual is splice
+  quality, not interpolation quality.
+- The splice candidate search width of +-3 is best (2.215) against +-6
+  (2.223) and +-10 (2.249) — a wider search finds candidates that match on
+  value but sit further from the ideal period.
+- `m_transientHold` at 2 periods is neutral (2.215 / 2.217 / 2.216 for
+  2 / 1 / 0 periods), so it is kept for the double-played-attack protection
+  it was added for.
+- The slope-match weight of 80.0 in the candidate error is flat across
+  20-400 (2.213-2.215), so it is not worth churning.
 - `m_transientHold` holds off resplicing for ~2 grains after a detected
   transient, avoiding a double-played attack. The separate snap-to-live
   transient-response mechanism is DISABLED in shipped code (introduced a
