@@ -6,7 +6,7 @@
 #include "snacPeriodTracker.h"
 
 static const int DUBFX_POLY_VOICES = 6;
-static const int DUBFX_POLY_BS = 64;
+static const int DUBFX_POLY_BS = 16;
 static const float DUBFX_POLY_SR = 48000.0f;
 
 struct DubfxPolyVoice {
