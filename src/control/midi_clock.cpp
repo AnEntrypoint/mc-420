@@ -106,9 +106,23 @@ bool cardHasRawmidi(int card) {
     return found;
 }
 
+bool cardIsAkaiSurface(int card) {
+    char path[64];
+    snprintf(path, sizeof path, "/proc/asound/card%d/usbid", card);
+    FILE* f = fopen(path, "r");
+    if (!f) return false;
+    char id[32] = {0};
+    bool got = fgets(id, sizeof id, f) != nullptr;
+    fclose(f);
+    if (!got) return false;
+    for (char* c = id; *c; c++) if (*c == 0x0a || *c == 0x0d) { *c = 0; break; }
+    return strcmp(id, "09e8:0027") == 0;
+}
+
 void rescan(OutputSet& outs, int excludeCard) {
     for (int card = 0; card < 8; card++) {
         if (card == excludeCard) continue;
+        if (cardIsAkaiSurface(card)) continue;
         if (outs.count >= kMaxOutputs) break;
         if (!cardHasRawmidi(card)) continue;
         char name[16];

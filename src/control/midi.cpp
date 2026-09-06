@@ -47,6 +47,19 @@ static unsigned nowMs() {
     return (unsigned)(ts.tv_sec * 1000u + ts.tv_nsec / 1000000u);
 }
 
+static bool cardIsControlSurface(int card) {
+    char path[64];
+    snprintf(path, sizeof path, "/proc/asound/card%d/usbid", card);
+    FILE* f = fopen(path, "r");
+    if (!f) return false;
+    char id[32] = {0};
+    bool got = fgets(id, sizeof id, f) != nullptr;
+    fclose(f);
+    if (!got) return false;
+    for (char* c = id; *c; c++) if (*c == '\n' || *c == '\r') { *c = 0; break; }
+    return strcmp(id, "09e8:0027") == 0;
+}
+
 static bool samplerPrepped(AudioThread* audio) {
     Sampler* s = audio ? audio->sampler() : nullptr;
     return s && s->chromaticLoaded();
@@ -137,12 +150,16 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
             snd_rawmidi_open(&in, nullptr, devbuf, SND_RAWMIDI_SYNC);
         }
     } else {
-        for (int card = 0; card < 8 && !in; card++) {
-            snprintf(devbuf, sizeof devbuf, "hw:%d,0,0", card);
-            if (snd_rawmidi_open(&in, &out, devbuf, SND_RAWMIDI_SYNC) == 0) break;
-            in = nullptr; out = nullptr;
-            if (snd_rawmidi_open(&in, nullptr, devbuf, SND_RAWMIDI_SYNC) == 0) break;
-            in = nullptr;
+        for (int pass = 0; pass < 2 && !in; pass++) {
+            const bool preferSurface = (pass == 0);
+            for (int card = 0; card < 8 && !in; card++) {
+                if (preferSurface && !cardIsControlSurface(card)) continue;
+                snprintf(devbuf, sizeof devbuf, "hw:%d,0,0", card);
+                if (snd_rawmidi_open(&in, &out, devbuf, SND_RAWMIDI_SYNC) == 0) break;
+                in = nullptr; out = nullptr;
+                if (snd_rawmidi_open(&in, nullptr, devbuf, SND_RAWMIDI_SYNC) == 0) break;
+                in = nullptr;
+            }
         }
     }
     if (in) {
