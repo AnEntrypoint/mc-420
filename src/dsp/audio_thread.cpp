@@ -748,12 +748,15 @@ static void* worker(void*) {
             constexpr double kLinkPhaseTrimPerSample = 0.00005;
             constexpr double kLinkPhaseTrimMax = 0.03;
             float linkSpeedRatio = 1.0f;
+            bool linkVarispeedEngaged = false;
             if (linkDrivingLength && g_params && g_link) {
                 float recordedBpm = recordedBpmVal;
-                if (!linkSnap.weOwnTempo && recordedBpm > 1.0f && linkSnap.bpm > 1.0) {
+                if (recordedBpm > 1.0f && linkSnap.bpm > 1.0) {
                     linkSpeedRatio = (float)linkSnap.bpm / recordedBpm;
+                    linkVarispeedEngaged = true;
                 }
             }
+            if (!linkVarispeedEngaged) linkPhaseTrim = 0.0;
             {
                 float effSpeed = g_manualSpeedMul * (linkSpeedRatio + (float)linkPhaseTrim);
                 std::fill(speedBuf.begin(), speedBuf.end(), effSpeed);
@@ -806,7 +809,7 @@ static void* worker(void*) {
                             if (delta < 0.0) delta += masterLen;
                             delta -= halfLen;
                             bool tempoStable = tempoStableBlocks >= kTempoStableBlocksThreshold;
-                            if (tempoStable) {
+                            if (tempoStable && linkVarispeedEngaged) {
                                 double trim = delta * kLinkPhaseTrimPerSample;
                                 if (trim >  kLinkPhaseTrimMax) trim =  kLinkPhaseTrimMax;
                                 if (trim < -kLinkPhaseTrimMax) trim = -kLinkPhaseTrimMax;
