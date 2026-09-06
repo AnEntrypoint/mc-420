@@ -16,6 +16,7 @@ namespace {
 constexpr int    kPulsesPerQuarter   = 24;
 constexpr int    kMaxOutputs         = 8;
 constexpr double kRescanSeconds      = 2.0;
+constexpr double kSurfaceGraceSeconds = 15.0;
 constexpr double kMaxCatchUpPulses   = 4.0;
 constexpr long   kSleepFloorNs       = 250000;
 constexpr long   kSleepCeilingNs     = 5000000;
@@ -42,6 +43,25 @@ struct OutputSet {
             names[i][0] = '\0';
         }
         count = 0;
+    }
+
+    void release(int card) {
+        char name[16];
+        snprintf(name, sizeof name, "hw:%d,0,0", card);
+        for (int i = 0; i < count; i++) {
+            if (strcmp(names[i], name) != 0) continue;
+            if (handles[i]) snd_rawmidi_close(handles[i]);
+            for (int j = i; j + 1 < count; j++) {
+                handles[j] = handles[j + 1];
+                snprintf(names[j], sizeof names[j], "%s", names[j + 1]);
+            }
+            count--;
+            handles[count] = nullptr;
+            names[count][0] = 0;
+            fprintf(stderr, "[midi-clock] released %s back to the control surface
+", name);
+            return;
+        }
     }
 
     bool holds(const char* name) const {
@@ -138,10 +158,16 @@ void MidiClock::run() {
     double lastPulse = 0.0;
     bool   havePulseRef = false;
 
+    const double startedAt = monotonicSeconds();
+
     while (run_.load(std::memory_order_acquire)) {
         const double nowSec = monotonicSeconds();
-        if (nowSec >= nextRescan) {
-            rescan(outs, controlSurfaceCard());
+        const int surfaceCard = controlSurfaceCard();
+        const bool surfaceSettled = surfaceCard >= 0
+            || (nowSec - startedAt) >= kSurfaceGraceSeconds;
+        if (surfaceCard >= 0) outs.release(surfaceCard);
+        if (surfaceSettled && nowSec >= nextRescan) {
+            rescan(outs, surfaceCard);
             nextRescan = nowSec + kRescanSeconds;
         }
 
