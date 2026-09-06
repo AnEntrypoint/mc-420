@@ -1126,6 +1126,32 @@ not from the raw control that nominally sets it.** A guard that was correct
 when written is silently invalidated by any later change to what the audio
 path does, and nothing in the type system or the build will notice.
 
+**Where the residual degradation actually comes from, measured three ways
+after the crossfade fix, and why it is NOT further reducible at the engine
+level.** The corpus degradation ratio settles around 2.21 at +12 semitones,
+and it is tempting to read that as distortion the engine adds. It is not:
+
+- **Spurious energy on a pure tone is -64 to -67dB at every shift** (unity
+  -66.9, +7 -64.0, +12 -66.3). Crucially it is no worse at shift than at
+  unity, so the shifter itself contributes essentially nothing audible.
+- **Roughness is no longer splice-localised.** Comparing windows inside the
+  crossfade against windows between splices gives a ratio of 1.00-1.01 at
+  110/196/440Hz. Before the crossfade fix the splices WERE the defect; after
+  it they are indistinguishable from the surrounding signal.
+- **Clicks are gone**: 0/112 synthetic cases, clean 70-200Hz boundary sweep.
+
+So the residual is PSOLA legitimately restructuring harmonically rich
+material -- splicing a waveform every period necessarily changes its
+short-window second derivative -- rather than an artifact to be tuned out.
+Two attempts to build a sharper metric were both REFUTED and are recorded so
+they are not repeated: off-harmonic-grid energy flagged `piano_mid_C4` at
++9.6dB, but its partials cluster at 257.8/260.7/263.7/266.6Hz because a piano
+C4 has three slightly detuned unison strings, so that metric was measuring
+the instrument own beating; and envelope-deviation-from-ideal-shift reports
+12-15dB rms on every file, because PSOLA deliberately PRESERVES the formant
+envelope instead of shifting it, so that metric penalises exactly the
+behaviour the engine exists to provide.
+
 **Measured: `pitchtracker.lv2` is accurate below 500Hz and unreliable
 above it.** Driven through DawDreamer's Faust JIT (which DOES compile
 `pitchtracker_ac.dsp` — unlike `multitranspose.dsp`, it declares no
