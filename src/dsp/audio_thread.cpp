@@ -583,7 +583,6 @@ static void* worker(void*) {
             if (r < 0) { g_telem.xruns++; snd_pcm_recover(cap, (int)r, 1); continue; }
 
 #ifdef ALOOP_HAVE_FAUST_LOOP
-            static float foldGain = 0.0f;
             float monitorFoldVal = 0.0f;
             float microrepeatDivVal = 0.0f;
             float masterLenVal = 0.0f;
@@ -686,7 +685,7 @@ static void* worker(void*) {
                     std::fill(xposeNoteBuf[v].begin(), xposeNoteBuf[v].end(), g_params->getBySlot(xposeNoteSlot[v]));
                     std::fill(xposeGateBuf[v].begin(), xposeGateBuf[v].end(), g_params->getBySlot(xposeGateSlot[v]));
                 }
-                std::fill(freeXposeBuf.begin(), freeXposeBuf.end(), foldGain);
+                std::fill(freeXposeBuf.begin(), freeXposeBuf.end(), monitorFoldVal > 0.5f ? 1.0f : 0.0f);
                 float staticSemis = g_params->getBySlot(pitchSlot);
                 if (g_params->getBySlot(pitchbendEngagedSlot) > 0.5f) {
                     if (semisZone) *semisZone = staticSemis + g_params->getBySlot(pitchbendSlot);
@@ -929,6 +928,7 @@ static void* worker(void*) {
             g_sampler->renderInto(samplerBuf.data(), N);
             for (int i = 0; i < N; i++) fin[i] = (float)samplerBuf[(size_t)i] / 32768.0f;
             if (g_params) {
+                static float foldGain = 0.0f;
                 bool anyXposeVoiceGatedNow = false;
                 for (int v = 0; v < kTransposeVoices; v++) {
                     if (g_params->getBySlot(xposeGateSlot[v]) > 0.5f) { anyXposeVoiceGatedNow = true; break; }
