@@ -140,6 +140,22 @@ void LinkBridge::resetTempoAuthority() {
     g_weSetTempo.store(false, std::memory_order_relaxed);
 }
 
+LinkBridge::BeatNow LinkBridge::beatNow() const {
+    BeatNow b;
+#ifdef ALOOP_HAVE_LINK
+    if (!link_) return b;
+    auto* l = (ableton::Link*)link_;
+    auto state = l->captureAppSessionState();
+    const auto now = l->clock().micros();
+    b.valid     = true;
+    b.isPlaying = state.isPlaying();
+    b.beat      = state.beatAtTime(now, kLinkQuantum);
+    b.bpm       = state.tempo();
+    b.peerCount = (int)l->numPeers();
+#endif
+    return b;
+}
+
 void LinkBridge::setTransportPlaying(bool playing) {
 #ifdef ALOOP_HAVE_LINK
     if (!link_) return;

@@ -3,6 +3,7 @@
 #include "control/telemetry.h"
 #include "control/midi.h"
 #include "control/remote_control.h"
+#include "control/midi_clock.h"
 #include "storage/usb_recorder.h"
 
 #include <sys/mman.h>
@@ -173,6 +174,9 @@ int main(int argc, char** argv) {
     aloop::RemoteControl remote;
     remote.start(4446, cfg.remoteToken);
 
+    aloop::MidiClock midiClock;
+    midiClock.start(&link);
+
     printf("[aloop] ready.\n");
 
     while (g_run.load()) {
@@ -187,6 +191,7 @@ int main(int argc, char** argv) {
     audio.stop();
     telem.stop();
     remote.stop();
+    midiClock.stop();
     link.stop();
     return 0;
 }

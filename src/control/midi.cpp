@@ -1,4 +1,6 @@
 #include "midi.h"
+
+#include <atomic>
 #include "apc_grid.h"
 #include "apc_leds.h"
 #include "../dsp/audio_thread.h"
@@ -43,6 +45,10 @@ static unsigned nowMs() {
     struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
     return (unsigned)(ts.tv_sec * 1000u + ts.tv_nsec / 1000000u);
 }
+
+static std::atomic<int> g_controlSurfaceCard{-1};
+
+int controlSurfaceCard() { return g_controlSurfaceCard.load(std::memory_order_relaxed); }
 
 void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBridge* link) {
     std::unordered_map<uint32_t, std::string> map;
@@ -127,6 +133,11 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
             if (snd_rawmidi_open(&in, nullptr, devbuf, SND_RAWMIDI_SYNC) == 0) break;
             in = nullptr;
         }
+    }
+    if (in) {
+        int openedCard = -1;
+        if (sscanf(devbuf, "hw:%d", &openedCard) == 1)
+            g_controlSurfaceCard.store(openedCard, std::memory_order_relaxed);
     }
     if (!in) {
         if (!warnedNoDevice) {

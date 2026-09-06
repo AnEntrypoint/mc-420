@@ -40,6 +40,7 @@ set(DSP_SOURCES
   control/midi.cpp        # ALSA rawmidi + the control mapping
   control/apc_grid.cpp    # APC Key25 grid/tap-hold/preset/live-pitch/microrepeat engine
   control/apc_leds.cpp    # APC Key25 LED output (grid/preset/transport/live-pitch colors)
+  control/midi_clock.cpp  # 24ppqn MIDI clock fan-out to every other rawmidi output, phase-locked to Link
   control/remote_control.cpp  # remote reboot + log-tail (udp/4446, token-authenticated)
   storage/usb_recorder.cpp    # continuous USB-drive ring recorder (lock-free handoff from the RT thread)
   storage/clip_exporter.cpp   # REC-button clip export: per-looper WAV + Ableton/FL project files

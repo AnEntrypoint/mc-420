@@ -32,6 +32,15 @@ public:
 
     void setTransportPlaying(bool playing);
 
+    struct BeatNow {
+        bool   valid     = false;
+        bool   isPlaying = false;
+        double beat      = 0.0;
+        double bpm       = 120.0;
+        int    peerCount = 0;
+    };
+    BeatNow beatNow() const;
+
 private:
     void* link_ = nullptr;
     LinkSnapshot buf_[2];

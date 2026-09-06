@@ -49,5 +49,7 @@ struct ParamStore {
 
 void runMidiLoop(ParamStore& ps, const char* device, class AudioThread* audioForLedLevels = nullptr, class LinkBridge* linkForTempoPropose = nullptr);
 
+int controlSurfaceCard();
+
 }
 #endif
