@@ -102,13 +102,19 @@ with {
     recordingGateNow = gateNow;
 
     writeVal = prevFiltIn * recordingGateNow * (1.0 - wipe);
-    ring = rwtable(MAXLEN, 0.0, widxRaw, writeVal, int(readPos) % MAXLEN);
-
-    readIdx0 = int(readPos) % MAXLEN;
-    readIdx1 = (int(readPos) + 1) % MAXLEN;
+    readBase = int(readPos);
     readFrac = readPos - floor(readPos);
-    ringCeil = rwtable(MAXLEN, 0.0, widxRaw, writeVal, readIdx1);
-    delayed = ring + (ringCeil - ring) * readFrac;
+    tapAt(k) = rwtable(MAXLEN, 0.0, widxRaw, writeVal,
+                       int(wrapAbs(float(readBase + k), wrapLen)) % MAXLEN);
+    tapM1 = tapAt(-1);
+    tapP0 = tapAt(0);
+    tapP1 = tapAt(1);
+    tapP2 = tapAt(2);
+    catmullRom(fr, ym1, y0, y1, y2) =
+        y0 + 0.5 * fr * ((y1 - ym1)
+                       + fr * ((2.0*ym1 - 5.0*y0 + 4.0*y1 - y2)
+                             + fr * (3.0*(y0 - y1) + y2 - ym1)));
+    delayed = catmullRom(readFrac, tapM1, tapP0, tapP1, tapP2);
     hold = delayed * (1.0 - recordingGateNow) * (1.0 - wipe);
     record = writeVal;
     loopSig = record + hold;
