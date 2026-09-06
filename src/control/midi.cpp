@@ -4,6 +4,7 @@
 #include "apc_grid.h"
 #include "apc_leds.h"
 #include "../dsp/audio_thread.h"
+#include "../dsp/sampler/sampler.h"
 #include "../link/link_bridge.h"
 
 #include <cstdio>
@@ -44,6 +45,16 @@ static uint32_t midiKey(bool isNote, int num) { return ((uint32_t)isNote << 8) |
 static unsigned nowMs() {
     struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
     return (unsigned)(ts.tv_sec * 1000u + ts.tv_nsec / 1000000u);
+}
+
+static bool samplerPrepped(AudioThread* audio) {
+    Sampler* s = audio ? audio->sampler() : nullptr;
+    return s && s->chromaticLoaded();
+}
+
+static bool samplerDrumsLoaded(AudioThread* audio) {
+    Sampler* s = audio ? audio->sampler() : nullptr;
+    return s && s->drumLoadedCount() > 0;
 }
 
 static std::atomic<int> g_controlSurfaceCard{-1};
@@ -211,14 +222,14 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
                 unsigned n = nowMs();
                 grid.pollHolds(n, ps, link, audio);
                 auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0);
+                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
                 continue;
             }
             if (pr < 0) {
                 unsigned n = nowMs();
                 grid.pollHolds(n, ps, link, audio);
                 auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0);
+                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
                 continue;
             }
             if (!realReady) continue;
@@ -233,7 +244,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         grid.pollHolds(now, ps, link, audio);
         {
             auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-            leds.refresh(now, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0);
+            leds.refresh(now, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
         }
 
         if (type == 0xB0 && d1 == 64) { grid.onSustainPedal(d2 >= 64, ps); continue; }

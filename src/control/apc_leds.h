@@ -20,11 +20,13 @@ enum ApcLedVel : uint8_t {
 constexpr int kApcBtnStopAll = 0x51;
 constexpr int kApcBtnPlay    = 0x5B;
 constexpr int kApcLiveLedNote = 0x40;
+constexpr int kApcBtnSampleRec = 65;
+constexpr int kApcBtnDrumRec   = 66;
 
 class ApcLeds {
 public:
     template <typename WriteFn>
-    void refresh(unsigned now_ms, const ApcGrid& grid, bool liveEngaged, WriteFn&& write, const float* looperLevels = nullptr, int gridBeatIndex = -1, int clipExportState = 0) {
+    void refresh(unsigned now_ms, const ApcGrid& grid, bool liveEngaged, WriteFn&& write, const float* looperLevels = nullptr, int gridBeatIndex = -1, int clipExportState = 0, bool samplePrepped = false, bool drumsLoaded = false) {
         if (!bootMs_) bootMs_ = now_ms ? now_ms : 1;
         if (now_ms - bootMs_ < kBootDelayMs) return;
 
@@ -92,6 +94,8 @@ public:
             grid.granulatorLatched() ? kLedGreen :
                                         kLedOff,
             write);
+        sendCoalesced(kApcBtnSampleRec, samplePrepped ? kLedGreen : kLedOff, write);
+        sendCoalesced(kApcBtnDrumRec,   drumsLoaded   ? kLedGreen : kLedOff, write);
     }
 
     void invalidate() { cacheValid_.fill(false); }
