@@ -440,7 +440,8 @@ private:
             m_splicePhaseErrAccum += fabs(frac) * per;
             m_splicePhaseN++;
         }
-        int len = (int)per;
+        double xfadeDiv = (double)m_scale > 1.0 ? (double)m_scale : 1.0;
+        int len = (int)(per / xfadeDiv);
         if (len < 32) len = 32;
         if (len > 2048) len = 2048;
         m_xfadeLen = len;
