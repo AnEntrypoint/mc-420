@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=ebc77715514e243998adff6c9a8f2bac1c6654e9">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=950ac14902ad20b6f6062e0f87d8cfee714889a5">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -685,6 +685,86 @@ interacts with the SHIFT-fold latency compensation and one-control-tick
 audio-thread snapshot staleness — the levers if it ever fails are a shorter
 publish interval or explicit output-latency compensation, never added
 buffering.
+
+## Link tempo matching is VARISPEED, never a read-position jump
+
+When Link drives the loop length, `audio_thread.cpp` matches playback to the
+session tempo by scaling the read RATE — `linkSpeedRatio = linkBpm /
+recordedBpm`, folded into `effSpeed`. That direction matters and is easy to
+invert: `dsp/loop.dsp` advances `rposNext` by `speedClamped` per sample, so
+`effSpeed &gt; 1` reads FASTER, and a 100bpm loop on a 120bpm session needs 1.2,
+not 0.833.
+
+Three rules hold this together, and all three were violated at once in the
+code that shipped before 2026-09-06 (reported as "glitches when connected to
+Ableton Link"):
+
+- **Never correct phase by assigning to the read position.**
+  `masterPhaseSamples += delta` is a discontinuity in the read pointer and is
+  a click by construction. The residual phase error becomes a BOUNDED SPEED
+  TRIM instead (`kLinkPhaseTrimPerSample = 0.00005` per sample of error,
+  clamped by `kLinkPhaseTrimMax = 0.03`), so the loop walks into alignment.
+  Three percent is 51 cents — a brief varispeed glide, which is the intended
+  pitch-based strategy.
+- **`masterPhaseSamples` must advance at the rate the loopers actually read**,
+  i.e. `N * linkSpeedRatio`, not a bare `N`. Advancing it at 1.0x while the
+  loopers ran at the Link ratio made the two re-diverge as fast as any
+  correction closed them, so the jump re-fired forever.
+- **Any new trim stays well under `loop.dsp`'s `manualPunchActive` threshold**
+  (`abs(effSpeed - 1.0) &gt; 0.3`), which deliberately disables the DSP-internal
+  resync so a manual half/double-speed press is not fought. The 0.03 clamp is
+  an order of magnitude clear of it. Note the ratio ITSELF can exceed that
+  threshold on a large tempo mismatch, and that is correct — the C++ trim is
+  the sync authority there.
+
+## Link transport start must anchor beat 0 to the quantum
+
+`LinkBridge::setTransportPlaying(true)` uses
+`setIsPlayingAndRequestBeatAtTime(true, now, 0.0, kLinkQuantum)`, never a bare
+`setIsPlaying`. Without the anchor a peer joining while we play maps its beat 0
+to whatever free-running phase exists and lands mid-metronome — the symptom
+reported before 2026-09-06, which appeared to "fix itself" only when the remote
+device was stopped and restarted.
+
+The API choice is deliberate on both sides: with no peers the start happens
+immediately, and with peers the beat maps to the next time whose session phase
+matches, rather than `forceBeatAtTime`, which would rudely re-map the shared
+timeline for everyone. The stop path keeps plain `setIsPlaying` — stopping has
+no beat to anchor.
+
+The INBOUND direction was already correct and still is:
+`ApcGrid::applyRemoteTransport` waits for a quantum wrap before starting
+loopers. Only the outbound announcement was unanchored, which is why the
+manual stop/start on the remote appeared to be the fix.
+
+## MIDI clock fan-out (`src/control/midi_clock.cpp`)
+
+24 PPQN `0xF8` plus `0xFA`/`0xFC` transport to every hardware MIDI output
+except the control surface's own, so external arps, the US-2x2 and the KO2
+follow the Link sync. Two constraints are structural, not preferences:
+
+- **There is no `/dev/snd/seq` on this device.** `snd_seq_device` is loaded
+  only as a dependency of `snd_rawmidi` and the sequencer node does not exist,
+  so enumeration walks `/proc/asound/card*/midi*` and opens `hw:CARD,0,0`
+  through `snd_rawmidi`. Never reach for `snd_seq` here. The rescan runs every
+  2s so a device plugged in later is picked up without a restart.
+- **Neither existing loop can carry the tick rate.** `midi.cpp` polls with a
+  100ms timeout and `main.cpp` runs at 5Hz, against 20.8ms per tick at 120bpm
+  and 10.4ms at 240bpm. The clock owns a thread and derives every tick from
+  Link's beat timeline via `LinkBridge::beatNow()`, never a local timer —
+  otherwise it drifts away from the sync it exists to distribute. Catch-up
+  after a scheduling hiccup is bounded to 4 pulses so a stall cannot dump a
+  burst into a hardware arp.
+
+**The control surface is excluded by the card the MIDI loop actually opened**
+(`controlSurfaceCard()`), not by parsing `midi_device` from the config — that
+value is normally the literal string `auto`, so parsing it silently excludes
+nothing. This bit for real: the clock raced the MIDI loop's auto-scan, opened
+`hw:1,0,0` (the APC Key 25) and card1's Tx byte count went from 31599 to 0 —
+the LED writer had lost its port. The clock now waits for the surface to be
+identified (15s grace so a device with no surface still gets clock) and
+releases any port that later turns out to be the surface, e.g. across a replug
+onto a different card.
 
 ## `pinLinkThreadsToControlCore`
 
