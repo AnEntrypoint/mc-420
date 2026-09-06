@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d001c0f48eaa29c4e40301fd66a72c26b9bcfe09">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=08367e05344e51c45c479dfeaafcfbb41174884f">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1221,6 +1221,45 @@ that flag is derived from the same quantity the audio path actually uses,
 not from the raw control that nominally sets it.** A guard that was correct
 when written is silently invalidated by any later change to what the audio
 path does, and nothing in the type system or the build will notice.
+
+**Measured: `pitchtracker.lv2` is accurate below 500Hz and unreliable
+above it.** Driven through DawDreamer's Faust JIT (which DOES compile
+`pitchtracker_ac.dsp` — unlike `multitranspose.dsp`, it declares no
+`ffunction`, so the JIT limitation documented elsewhere in this file does
+not apply to it) against all 16 real instrument recordings, cross-checked
+against an FFT harmonic-comb score rather than a single autocorrelation
+reference:
+
+  accurate within 50 cents   9 files, spanning 66Hz to 706Hz
+  genuinely wrong            3 files, ALL at or above 500Hz
+  reference/range artefacts  4 files
+
+The three real failures are `oboe_mid_C5B5` (reads 262.9Hz against a true
+527Hz — an exact octave-down subharmonic lock, comb score 296.9 for 527 vs
+214.9 for 263), `violin_high_sulE_C7E7` (reads 436.4Hz against ~1035Hz,
+comb score 9.6 vs 173 — not even a subharmonic, just a bad lock), and
+`trumpet_high_C6` (-63.9 cents). `piano_low_A1` correctly returns 0: its
+f0 is ~55Hz, below the tracker's own 60Hz `minTrackHz` floor, so the
+no-lock is right rather than a failure.
+
+`subharmonicPromote` exists for exactly the oboe case and does not catch
+it, and the reason is structural rather than a mistuned constant: it
+requires `c2 &gt; cCoarse + subharmDominanceMargin`, but at a TRUE subharmonic
+lag the normalised autocorrelation is genuinely higher than at the
+fundamental on a periodic signal, so that test can never fire for the
+octave-down case it was meant to fix. `subharmDominanceMargin` is only
+0.004, so widening it is not the answer.
+
+This is deliberately NOT fixed. Below 500Hz — which is guitar, bass, and
+both vocal ranges, i.e. everything this pitch-lock is played with — the
+tracker is accurate everywhere measured (-3.7c bassoon, -6.1c cello, -6.6c
+violin low, +6.3c trumpet low, -12.7c piano mid, -2.5c marimba mid, -3.6c
+vibraphone, +6.6c piano high, +22.9c vocal). The failures are confined to a
+register the effect is not used in, and `pitchtracker_ac.dsp` is on the
+wrong side of this file's own compile-time-cliff warning — its own
+description records a multi-GB codegen blowup from one attempted change to
+per-candidate tau selection. Re-opening this needs a real measured win that
+justifies that risk.
 
 **Known, disclosed, current limitation**: the internal zero-crossing
 fallback tracker (when `pitchtracker.lv2` is NOT loaded) has a real,
