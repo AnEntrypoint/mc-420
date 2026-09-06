@@ -16,6 +16,7 @@ struct LpcFormantShifter {
     static constexpr float kWarpFullBelowHz = 450.0f;
     static constexpr float kWarpZeroAboveHz = 900.0f;
     static constexpr float kOctavesMax = 3.0f;
+    static constexpr float kUpwardWarpKnee = 0.8f;
     static constexpr float kReflectionMagnitudeCeil = 0.985f;
     static constexpr float kPoleContraction = 0.995f;
     static constexpr float kLagWindowBandwidthHz = 120.0f;
@@ -262,7 +263,9 @@ private:
         }
 
         m_warpTaper = warpTaperForOutputPitch();
-        float alpha = powf(2.0f, m_octaves * m_warpTaper);
+        float warpOct = m_octaves * m_warpTaper;
+        if (warpOct > 0.0f) warpOct = kUpwardWarpKnee * tanhf(warpOct / kUpwardWarpKnee);
+        float alpha = powf(2.0f, warpOct);
         float shiftedPower[kSpectrumBins];
         for (int i = 0; i < kSpectrumBins; i++) {
             float src = (float)i / alpha;
