@@ -784,7 +784,7 @@ static void* worker(void*) {
                 double fourBeatLenShared = beatLenSamplesShared * 4.0;
 
                 if (masterLen > 0.0f) {
-                    masterPhaseSamples += (double)N * (double)linkSpeedRatio * (double)g_manualSpeedMul;
+                    masterPhaseSamples += (double)N * (double)linkSpeedRatio;
                     if (linkDrivingLength && g_link) {
                         double curBpm = linkSnap.bpm;
                         bool bpmChanged = lastLinkBpmSeen > 0.0 && std::fabs(curBpm - lastLinkBpmSeen) > 0.05;
