@@ -756,7 +756,8 @@ static void* worker(void*) {
                     linkVarispeedEngaged = true;
                 }
             }
-            if (!linkVarispeedEngaged) linkPhaseTrim = 0.0;
+            const bool manualPunchActive = std::fabs(g_manualSpeedMul - 1.0f) > 0.3f;
+            if (!linkVarispeedEngaged || manualPunchActive) linkPhaseTrim = 0.0;
             {
                 float effSpeed = g_manualSpeedMul * (linkSpeedRatio + (float)linkPhaseTrim);
                 std::fill(speedBuf.begin(), speedBuf.end(), effSpeed);
@@ -784,7 +785,7 @@ static void* worker(void*) {
                 double fourBeatLenShared = beatLenSamplesShared * 4.0;
 
                 if (masterLen > 0.0f) {
-                    masterPhaseSamples += (double)N * (double)linkSpeedRatio;
+                    masterPhaseSamples += (double)N * (double)linkSpeedRatio * (double)g_manualSpeedMul;
                     if (linkDrivingLength && g_link) {
                         double curBpm = linkSnap.bpm;
                         bool bpmChanged = lastLinkBpmSeen > 0.0 && std::fabs(curBpm - lastLinkBpmSeen) > 0.05;
@@ -809,7 +810,7 @@ static void* worker(void*) {
                             if (delta < 0.0) delta += masterLen;
                             delta -= halfLen;
                             bool tempoStable = tempoStableBlocks >= kTempoStableBlocksThreshold;
-                            if (tempoStable && linkVarispeedEngaged) {
+                            if (tempoStable && linkVarispeedEngaged && !manualPunchActive) {
                                 double trim = delta * kLinkPhaseTrimPerSample;
                                 if (trim >  kLinkPhaseTrimMax) trim =  kLinkPhaseTrimMax;
                                 if (trim < -kLinkPhaseTrimMax) trim = -kLinkPhaseTrimMax;
