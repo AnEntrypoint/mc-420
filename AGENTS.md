@@ -1029,10 +1029,10 @@ splice-based PSOLA engine that already powers the mono "pedal ride" effect
 OLD per-file two-tap delay-line `xpose()` shifter (pitch-synchronous
 window/crossfade sizing, `windowFor()`, `winSkewMul`/`formantXfSkew`,
 `xposeMaxDelay`) no longer exists anywhere in this file or the codebase —
-do not look for it. `shiftAmount = targetNote - heldDetNote` (sampled during the
-`inLockWarmup` window at `attackEdge` and then frozen for the rest of the
-sustain, per the absolute-pitch-lock design — see the FIXED entry below,
-where the code had drifted from this sentence) converts to a ratio (`pow(2, shiftAmount
+do not look for it. `shiftAmount = targetNote - heldDetNote` (continuously re-tracked for the
+whole sustain whenever the external tracker is trusted — note this differs
+from an earlier description in this file that called it latched at
+`attackEdge`; a change to make it latch was built and REVERTED, see below) converts to a ratio (`pow(2, shiftAmount
 / 12)`) and is threaded straight into the per-voice engine as a plain
 signal argument, per the compile-time-cliff discipline below.
 
@@ -1045,10 +1045,11 @@ prefers the external `pitchtracker.lv2` autocorrelation tracker's reading
 present, falls back to the internal zero-crossing tracker
 (`trackPitchHzAndHp`/`jumpGuard`) otherwise.
 
-**FIXED: the pitch lock did not actually lock, and every fresh note was
-seeded from the worst available estimate.** Two independent defects, both
-reported from real playing as "key based transpose is glitching" and
-"latent sounding transients when we go du du du":
+**PROPOSED AND REVERTED — the real cause was the SHIFT/free-guard bug
+recorded above, not this.** Two candidate defects were identified here and
+a fix was built and shipped for them, then reverted when the user reported
+the lock was still not working. They are recorded because the reasoning is
+still worth knowing, NOT because the change is in the tree:
 
 - `shiftAmount` was documented here as "sampled once per voice at
   `attackEdge`, held for the whole sustain", and the code did not do it.
@@ -1081,6 +1082,49 @@ having. That is exactly the failure this document's own working rule
 ("Never trust an in-repo comment as ground truth") warns about, one level
 up — the rule says read the code rather than the comment, and here reading
 the code against its own spec is what found the bug.
+
+**FIXED: holding SHIFT silently disabled the key pitch-lock entirely.**
+Reported from real playing as "key based transpose is glitching",
+"glitching except on certain pitches and tones", and "its not pitch
+locking the keys". The transpose engine was not at fault and that was
+established before touching it: the standalone harness
+(`test-audio-corpus/multitranspose_harness.cpp`, built directly with
+`g++ -std=c++17 -O2 -D_USE_MATH_DEFINES -I effects/home/faust` — the
+`_USE_MATH_DEFINES` is required on MinGW or `vowelFormant.h` fails on
+`M_PI`) tracks its commanded ratio within 17 cents across 60 cases
+(6 fundamentals x pure/harmonic x 5 shifts) with zero failures. So the
+fault was in WHICH ratio got commanded.
+
+`extFreqDetApplies` carried an extra term, `freeDiagRaw < 0.5`, and
+`audio_thread.cpp` filled `freeXposeBuf` straight from `monitorFoldVal` —
+whether SHIFT is PHYSICALLY HELD. Engaging MultiKey mode is itself a SHIFT
+gesture, so in ordinary use that guard was false, `pitchtracker.lv2` was
+bypassed, and `freqDet` fell through to the internal zero-crossing tracker
+described just below. That tracker's accuracy is pitch-dependent, which is
+precisely why the glitching appeared on some pitches and tones and not
+others.
+
+The guard's intent was defensible — in free mode the DSP analyses
+`loopSum` while the tracker analyses live input, so the reading would not
+describe what is being shifted. It had simply stopped matching reality: the
+fold at the top of the audio block already crossfades `fin` toward
+`prevLoopSum` by `foldGain`, and the tracker copies `fin` AFTER that fold,
+so it had been analysing the correct blended signal all along.
+
+The real inconsistency was that `freeXpose` used the raw button state while
+the audio fold used `foldGain`, which is deliberately forced to zero when a
+transpose voice is gated (holding SHIFT and playing a key must not fold, see
+the SHIFT fold section). So the DSP switched its analysis source to
+`loopSum` in exactly the case where the audio path did not. `freeXpose` now
+follows `foldGain` and the redundant guard is gone; `foldGain` is hoisted
+above both uses and is `static`, so the earlier read sees the previous
+block, matching the one-block relationship the fold already had.
+
+**The transferable rule: when a signal-path guard tests a mode flag, verify
+that flag is derived from the same quantity the audio path actually uses,
+not from the raw control that nominally sets it.** A guard that was correct
+when written is silently invalidated by any later change to what the audio
+path does, and nothing in the type system or the build will notice.
 
 **Known, disclosed, current limitation**: the internal zero-crossing
 fallback tracker (when `pitchtracker.lv2` is NOT loaded) has a real,
