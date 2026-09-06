@@ -146,9 +146,16 @@ void LinkBridge::setTransportPlaying(bool playing) {
     auto* l = (ableton::Link*)link_;
     auto state = l->captureAppSessionState();
     if (state.isPlaying() == playing) return;
-    state.setIsPlaying(playing, l->clock().micros());
+    const auto when = l->clock().micros();
+    if (playing) {
+        state.setIsPlayingAndRequestBeatAtTime(true, when, 0.0, kLinkQuantum);
+    } else {
+        state.setIsPlaying(false, when);
+    }
     l->commitAppSessionState(state);
-    fprintf(stderr, "[link] set session transport %s\n", playing ? "PLAYING" : "STOPPED");
+    fprintf(stderr, "[link] set session transport %s%s\n",
+            playing ? "PLAYING" : "STOPPED",
+            playing ? " (beat 0 anchored to the quantum)" : "");
 #else
     (void)playing;
 #endif
