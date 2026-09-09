@@ -28,6 +28,7 @@ struct LpcFormantShifter {
     static constexpr float kGainMax = 2.0f;
     static constexpr float kGainGlidePerSample = 1.0f / 240.0f;
     static constexpr float kReflectionGlidePerBlock = 0.2f;
+    static const int kCoeffUpdateHopSamples = 64;
     static constexpr float kOutputMagnitudeCeil = 4.0f;
 
     struct BinTables {
@@ -68,6 +69,7 @@ struct LpcFormantShifter {
         m_historyWrite = 0;
         m_sinceAnalysis = kAnalysisHop;
         m_analysisPhaseApplied = false;
+        m_samplesSinceCoeffUpdate = 0;
         m_haveEnvelope = false;
         for (int i = 0; i < kOrder; i++) {
             m_reflSourceTarget[i] = 0.0f; m_reflShiftedTarget[i] = 0.0f;
@@ -109,15 +111,20 @@ struct LpcFormantShifter {
         m_octaves = octaves;
     }
 
-    void beginBlock() {
+    void beginBlock(int blockSamples = kCoeffUpdateHopSamples) {
         if (m_sinceAnalysis >= kAnalysisHop) {
             m_sinceAnalysis = m_analysisPhaseApplied ? 0 : m_analysisPhase;
             m_analysisPhaseApplied = true;
             estimateEnvelopes();
         }
+        m_samplesSinceCoeffUpdate += blockSamples;
+        if (m_samplesSinceCoeffUpdate < kCoeffUpdateHopSamples) return;
+        int steps = m_samplesSinceCoeffUpdate / kCoeffUpdateHopSamples;
+        m_samplesSinceCoeffUpdate -= steps * kCoeffUpdateHopSamples;
+        float glide = 1.0f - powf(1.0f - kReflectionGlidePerBlock, (float)steps);
         for (int i = 0; i < kOrder; i++) {
-            m_reflSourceNow[i]  += (m_reflSourceTarget[i]  - m_reflSourceNow[i])  * kReflectionGlidePerBlock;
-            m_reflShiftedNow[i] += (m_reflShiftedTarget[i] - m_reflShiftedNow[i]) * kReflectionGlidePerBlock;
+            m_reflSourceNow[i]  += (m_reflSourceTarget[i]  - m_reflSourceNow[i])  * glide;
+            m_reflShiftedNow[i] += (m_reflShiftedTarget[i] - m_reflShiftedNow[i]) * glide;
         }
         reflectionToDirect(m_reflSourceNow, m_contraction, m_whitenCoeff);
         reflectionToDirect(m_reflShiftedNow, m_contraction, m_recolorCoeff);
@@ -311,6 +318,7 @@ private:
     float m_history[kFrame];
     int   m_historyWrite;
     int   m_sinceAnalysis;
+    int   m_samplesSinceCoeffUpdate;
     int   m_analysisPhase = 0;
     bool  m_analysisPhaseApplied;
     bool  m_haveEnvelope;

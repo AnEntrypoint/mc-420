@@ -62,7 +62,7 @@ static inline void dubfx_poly_apply(DubfxPolyVoice& v, float scale, float forman
 
 static inline void dubfx_poly_shape_block(DubfxPolyVoice& v) {
     bool shiftFormants = v.lastFormant != 0.0f;
-    if (shiftFormants) v.formant.beginBlock();
+    if (shiftFormants) v.formant.beginBlock(DUBFX_POLY_BS);
     for (int i = 0; i < DUBFX_POLY_BS; i++) {
         float wet = v.outBuf[i];
         if (shiftFormants) wet = v.formant.process(wet);
