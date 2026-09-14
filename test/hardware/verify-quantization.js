@@ -68,16 +68,14 @@ async function recordLooper(looperIndex, holdMs) {
   return { holdMs, wrapLenSamples, wrapLenSeconds };
 }
 
-function nearestPow2Candidate(rawSamples, masterLenSamples) {
-  let ratio = rawSamples / masterLenSamples;
-  if (ratio < 1 / 16) ratio = 1 / 16;
-  const lowerExp = Math.floor(Math.log2(ratio));
+function ceilingPow2Candidate(effectiveSamples, masterLenSamples) {
+  const gridPickEps = 0.0001;
+  const log2Ratio = Math.log2(effectiveSamples / masterLenSamples);
+  let lowerExp = Math.floor(log2Ratio + gridPickEps);
+  if (lowerExp < -4.0) lowerExp = -4.0;
   const lowerCand = masterLenSamples * Math.pow(2, lowerExp);
   const upperCand = masterLenSamples * Math.pow(2, lowerExp + 1);
-  const span = upperCand - lowerCand;
-  if (span <= 0) return lowerCand;
-  const frac = (rawSamples - lowerCand) / span;
-  return frac >= 0.68 ? upperCand : lowerCand;
+  return lowerCand >= effectiveSamples ? lowerCand : upperCand;
 }
 
 async function main() {
@@ -100,7 +98,7 @@ async function main() {
       console.log(`[verify-quant] loop0 (FIRST): held=${r.holdMs}ms expected=${r.expectedSamples.toFixed(0)}samp actual=${r.wrapLenSamples}samp err=${r.errMs.toFixed(1)}ms ${r.pass ? 'PASS' : 'FAIL -- check for musical-snapping regression'}`);
     } else {
       const rawSamplesEstimate = (r.holdMs / 1000) * 48000;
-      const expectedCandidate = nearestPow2Candidate(rawSamplesEstimate, masterLenSamples);
+      const expectedCandidate = ceilingPow2Candidate(rawSamplesEstimate, masterLenSamples);
       const errSamples = Math.abs(r.wrapLenSamples - expectedCandidate);
       const errRatio = errSamples / expectedCandidate;
       r.expectedCandidate = expectedCandidate;
