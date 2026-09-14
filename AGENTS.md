@@ -2518,6 +2518,26 @@ when auditing hardcoded `setByName` call sites alone — grep the config file
 too). Any new internal (non-MIDI-mapped) C++ flag reaching Faust via
 `setByName` needs an explicit `bind()` audit before being trusted.
 
+## `config/controls.conf` regression guardrails
+
+`cmd/halfspeed`/`cmd/doublespeed` must stay bound as `note70`/`note71`,
+never `cc70`/`cc71` — the real APC Key25 sends NOTES 70/71 on channel 0 for
+the momentary speed-scrub buttons (`apcKey25.cpp:142-143,187-188`, a
+`channel==0 && data1==70/71` check, not a CC lookup). A `cc70`/`cc71`
+binding matches nothing the real hardware transmits, so half/double-speed
+silently never worked before this was caught and fixed.
+
+`note91` must never be (re-)bound to `cmd/clearall` in this file. It was
+once live here, racing `ApcGrid`'s own shadow-state reset: `midi.cpp`'s
+note-91 intercept used to be gated on `!grid.shiftHeld()`, so a PLAY press
+during a SHIFT-held gesture fell through to this flat binding, wiping the
+DSP's loop content and `cmd/master_len` while `ApcGrid`'s shadow state
+(`m_looperHasContent`, `m_masterLenSamples`) stayed stale — producing a
+"recording" that was never actually armed, with no diagnosable clear-all
+event anywhere. Fixed by making `midi.cpp`'s note-91 intercept
+unconditional on shift (`ApcGrid::onClearAll` always runs first); do not
+re-add a live `note91` binding here.
+
 ## delayverb: a separate, conditionally-called LV2 bundle
 
 `effects/delayverb-src/delayverb.dsp` (delay + reverb stages) is extracted out
