@@ -30,6 +30,7 @@ struct LpcFormantShifter {
     static constexpr float kReflectionGlidePerBlock = 0.2f;
     static const int kCoeffUpdateHopSamples = 64;
     static constexpr float kOutputMagnitudeCeil = 4.0f;
+    static constexpr float kOutputSaturationKnee = 1.5f;
 
     struct BinTables {
         float cosLag[kSpectrumBins][kOrder + 1];
@@ -149,9 +150,12 @@ struct LpcFormantShifter {
         float y = residual * m_gainNow;
         for (int j = 0; j < kOrder; j++) y += m_recolorCoeff[j] * m_recolorState[j];
 
-        if (!(y > -kOutputMagnitudeCeil && y < kOutputMagnitudeCeil)) {
-            if (y != y) { resetFilterState(); return x; }
-            y = (y > 0.0f) ? kOutputMagnitudeCeil : -kOutputMagnitudeCeil;
+        if (y != y) { resetFilterState(); return x; }
+        if (y > kOutputSaturationKnee || y < -kOutputSaturationKnee) {
+            const float span = kOutputMagnitudeCeil - kOutputSaturationKnee;
+            const float sign = (y > 0.0f) ? 1.0f : -1.0f;
+            const float over = fabsf(y) - kOutputSaturationKnee;
+            y = sign * (kOutputSaturationKnee + span * tanhf(over / span));
         }
         for (int j = kOrder - 1; j > 0; j--) m_recolorState[j] = m_recolorState[j - 1];
         m_recolorState[0] = y;
