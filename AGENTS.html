@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=eef7d38f57193f17f26c731807f84b934ba50cda">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=da26152dbffed6df18e0214ee4ed30671d69d98b">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -2208,134 +2208,48 @@ live mic signal — there is NO synthetic exciter anywhere (a held key with
 silent live input renders bit-exact silence) — keys drive voice
 note/gate/vel only, the mic is the only sound source ("reactor mode").
 
-**The exciter is broadband, not a note-locked bandpass.** The original
-design pre-filtered the shared mic tap through a per-voice
-`fi.resonbp(freqHz, 15.0, 1.0)` — a Q=15 bandpass locked to the played
-note's fundamental, BEFORE splitting into the 6-mode bank. Measured via
-DawDreamer JIT (`test/resonode-sweetspot/`): this made modes 2-6 receive
-30-190x less excitation energy than mode 1 at the same excitation instant,
-regardless of `position`/`stretch`/`damping` — the "6-mode" bank was
-functionally a single resonant filter, which is why patches built from
-different mode-shape/stretch settings measured audibly indistinguishable
-(spectral centroid pinned to the fundamental for every patch, even ones
-documented as "bright/inharmonic") and why the instrument read as
-narrowband audio-feedback-like ringing rather than a struck object.
-`sharedExciteIn` is now a shared (not per-voice) highpass(60Hz)+lowpass(tone)
-only — each mode's own resonant filter performs 100% of the frequency
-selection, matching both Gabriel Soule's Resonarium thesis and Reason
-Studios' Objekt manual's documented architecture (exciter modules are
-deliberately broadband; the resonator bank, not the exciter, does mode
-selection). `modeFilterR`'s biquad still has the `(1-r)` numerator gain
-normalization from before (unnormalized, it was permanently
-`ma.tanh`-saturating regardless of input); `modeGain6`'s base coefficient
-was raised from `0.16` to `0.55` to close a remaining ~30x mode6 gap that
-survives the bandpass removal (a `b0`/`r`-interaction the numerator
-normalization does not fully equalize at very long T60) — this is an
-empirically-tuned constant, re-verify with `test/resonode-sweetspot/verify_musical_controls.py`'s
-`modes_2_to_6_are_not_starved` check before changing mode-gain coefficients.
+**The exciter is broadband, not a note-locked bandpass.** `sharedExciteIn`
+is a SHARED (not per-voice) highpass(60Hz)+lowpass(tone) only — each mode's
+own resonant filter performs 100% of the frequency selection, matching both
+Gabriel Soule's Resonarium thesis and Reason Studios' Objekt manual's
+documented architecture (exciter modules are deliberately broadband; the
+resonator bank, not the exciter, does mode selection). `modeGain6`'s base
+coefficient is `0.55` (an empirically-tuned constant closing a mode-6 gain
+gap; re-verify with `test/resonode-sweetspot/verify_musical_controls.py`'s
+`modes_2_to_6_are_not_starved` check before changing mode-gain
+coefficients). `[[memory: resonode-exciter-coupling-cpu-history]]` for the
+per-voice-bandpass design this replaced and why.
 
 **The exciter envelope is a percussive strike shape, not a sustained-open
-gate.** It was `en.asr(0.02, 1.0, 0.3, xgate)` — attack 20ms then a FULL
-sustain level of 1.0 for as long as the key stayed held, meaning a
-continuously-open high-Q filter kept re-processing whatever the live mic
-was doing for the whole note — structurally the same shape as an audio
-feedback loop. It is now `en.adsr(0.004, 0.11, 0.09, 0.25, xgate)`: a 4ms
-attack, decaying to a 9%-of-peak sustain floor over 110ms, releasing over
-250ms on note-off. Measured via DawDreamer against a continuous moderate
-broadband-noise input (a stand-in for room tone/mic bleed): the settled
-long-hold RMS relative to the onset peak dropped from ~92% (old, effectively
-still wide open) to ~40% (new), with a genuine dip to ~14% in the 100-300ms
-window right after the strike — a real, measured "hit-then-settle" contour
-that did not exist before. `xgate` gating and voice-steal
-retrigger/`stealEvent` timing are unchanged.
+gate**: `en.adsr(0.004, 0.11, 0.09, 0.25, xgate)` — 4ms attack, decaying to
+a 9%-of-peak sustain floor over 110ms, releasing over 250ms on note-off.
+`xgate` gating and voice-steal retrigger/`stealEvent` timing are unchanged.
+`[[memory: resonode-exciter-coupling-cpu-history]]` for the sustained-gate
+shape this replaced and the RMS measurements behind the change.
 
 **`couple` — nearest-neighbor mode coupling** (`fx/resonode/couple`, knob
-slot 7): each mode's excitation now also receives a scaled sum of its
-immediate chain-neighbors' PREVIOUS-sample output (mode `k` couples with
-`k-1`/`k+1`, a 6-node chain, mode1 and mode6 as the two end nodes with a
-single neighbor each — implemented as one Faust `letrec` block over all 6
-mode outputs, the general mechanism for mutually-recursive signal networks;
-a scattered `x'` reference across independent `with{}` bindings does NOT
-work here — Faust's box-language evaluator hits an "endless evaluation
-cycle" trying to elaborate it, confirmed via real `faust compile()`
-failures during development). Modeled on Resonarium's "interlinked" and
-Objekt's "Coupling: On/X-Over" resonator-bank topologies — both reference
-documents independently name mode coupling as the single highest-leverage
-lever for timbral distinctiveness beyond a purely parallel bank (Resonarium:
-"coupling-mode choice... reshape[s] the timbre... moreso than any other
-exposed parameter"). A FULLY-CONNECTED coupling matrix (every mode fed by
-every other mode, `O(modes^2)`) was considered and rejected in favor of
-nearest-neighbor (`O(modes)`, 5 cross-terms/voice instead of 30) per both
-documents' own cost-vs-richness guidance. `coupleScale = 8.0` is the
-internal knob-to-coefficient multiplier (the user-facing `couple` knob is
-0..1); every per-mode filter here is inherently damped (`r&lt;1` always, no
-delay-line unity-feedback loop the way Resonarium's own coupling math
-assumes) — but the earlier claim here that this topology "cannot diverge by
-construction" was WRONG, and has been corrected: each mode filter alone
-(`r&lt;1`) is stable, but a real linear feedback LOOP through two or more
-coupled modes can still have combined loop gain above unity for some
-parameter corner even when every individual pole is damped, and a real one
-was found. `test/resonode-sweetspot/verify_musical_controls.py`'s older
-checks only ever used a short (~15ms) burst excitation into silence, so
-they could never see a divergence that only emerges after continuous
-excitation — a real mic input, unlike a burst, never stops exciting the
-loop. A direct DawDreamer sweep using SUSTAINED noise excitation over a
-multi-second held gate (matching how Resonode is actually played — see
-`check_sustained_excitation_stability` below) found a genuine NaN/Inf
-runaway at `position=0.08, decay=0.15, damping=0.97, stretch=-0.4,
-couple=1.0, note=36` (and other nearby corners), diverging to non-finite
-output roughly 1.5s into a held note, not instantly — a real, slow
-numerical blow-up, not a one-sample glitch. Fixed by wrapping every
-mode-to-mode coupling READ (never a mode's own primary output into the
-sum) in a bounded soft-clip, `coupleFeedback(x) = tanh(x*0.25)*4.0`
-(`coupleFeedbackKnee`/`coupleFeedbackCeil` in `resonode_synth.dsp`) —
-near-identity for normal in-range signal levels (slope 1 at the origin, so
-`coupling_changes_output`'s measured couple=0-vs-1 diff/peaks are
-unchanged bit-for-bit-close after the fix) but strictly bounded for large
-values, which — combined with every mode filter already being BIBO-stable
-for a bounded input (`r&lt;1`) — makes the whole coupled network provably
-unable to diverge to infinity regardless of parameter corner, closing the
-actual gap in the old "cannot diverge by construction" reasoning (that
-reasoning was true for the isolated per-mode filters, never extended to
-prove the closed-loop coupled system). Re-verified: the same DawDreamer
-sweep that found 2 diverging corners out of 288 now finds zero, and every
-pre-existing `verify_musical_controls.py` check still passes unchanged
-(`coupling_changes_output`'s couple=1.0-vs-0.0 diff/peak numbers are
-identical to before the fix). `coupleScale = 8.0` is unchanged and its own
-empirical rationale (smallest value giving a clearly audible ~20%
-peak-sample/spectral-centroid effect at `couple=1.0` without dominating a
-patch's identity) still stands — re-verify with
-`test/resonode-sweetspot/verify_musical_controls.py`'s
-`coupling_changes_output` AND `sustained_excitation_stability` checks
-before retuning either constant.
+slot 7): each mode's excitation also receives a scaled sum of its immediate
+chain-neighbors' PREVIOUS-sample output (mode `k` couples with `k-1`/`k+1`,
+a 6-node chain, modes 1 and 6 as end nodes with a single neighbor each —
+implemented as one Faust `letrec` block over all 6 mode outputs; a
+scattered `x'` reference across independent `with{}` bindings hits an
+"endless evaluation cycle" Faust compile failure, so it must stay one
+`letrec` block). Nearest-neighbor (`O(modes)`, 5 cross-terms/voice) over a
+fully-connected matrix, per Resonarium/Objekt's own cost-vs-richness
+guidance. `coupleScale = 8.0` is the internal knob-to-coefficient
+multiplier (user-facing `couple` knob is 0..1).
 
-**Coupling is now skew-symmetric energy exchange on peak-normalised states, and
-the clamp is genuinely a last resort.** The `tanh(x*0.25)*4.0` guard around
-`coupleAmt = couple*8.0` is gone. Each mode exports `rawOut*aliasGuard /
-modePeakGain(r)` — a peak-normalised state, so loop gain is decay-independent —
-the network computes `u_{k+1} - u_{k-1}` (skew, i.e. lossless exchange), scales
-by `couple*0.45`, and a hard `min/max` clamp at +-8 is the only guard.
-`modePeakGain(r) = sqrt(K(1+r)/(1-r))` was checked against the exact filter
-response over the whole (T60, f) range (max error 0.14%), so `2c &lt;= 0.901 &lt; 1`
-is a real small-gain bound.
-
-BOTH approaches the review named were built and measured over 72 sustained
-corners against a guard-free twin. Symmetric exchange at the same coefficient
-gives a 0.22% couple effect; **skew gives 12.84%** — ~58x the audible effect —
-with zero clamping and zero limiter saturation even at 4.4x the symmetric bound.
-`coupleSmallGainMax = 0.45` is kept anyway so the design holds under both the
-energy-conservation and small-gain guarantees, not just the empirical sweep.
-A hard clamp was chosen over `tanh` deliberately: `tanh` is never exactly
-identity, so "never engages" is unprovable, whereas a hard clamp is exactly
-identity below threshold. Probed over 150 corners, the SUM over all modes of
-|normalised coupling read| peaks at 0.583 against the +-8.0 per-mode clamp —
-13.7x headroom on a quantity that upper-bounds any single mode.
-
-**A separation-aware coupling bound does NOT hold — do not re-propose it.**
-Making the coefficient frequency-aware via the Lorentzian bound
-`max|H_k*H_k'| &lt;= G_kG_k'/(1+(df/(B_k+B_k'))^2)` was tested over 4000 random
-(T60, f) pairs and is violated by up to 7619x; the `(1-z^-2)` numerator's
-far-field tails are not Lorentzian.
+Coupling is skew-symmetric energy exchange on peak-normalised states,
+guarded only as a last resort. Each mode exports `rawOut*aliasGuard /
+modePeakGain(r)` — a peak-normalised state, so loop gain is
+decay-independent — the network computes `u_{k+1} - u_{k-1}` (skew,
+lossless exchange), scales by `couple*0.45` (`coupleSmallGainMax`), and a
+hard `min/max` clamp at +-8 is the only guard (chosen over `tanh` because a
+hard clamp is exactly identity below threshold, provably). `modePeakGain(r)
+= sqrt(K(1+r)/(1-r))`. `[[memory: resonode-exciter-coupling-cpu-history]]`
+for the two coupling-mechanism generations (a `tanh` soft-clip guard, then
+this skew-symmetric redesign), the real divergence bug that motivated
+both, and the rejected fully-connected/frequency-aware alternatives.
 
 **Bandwidth is frequency-proportional.** `modeInvT60 = (1/decay) *
 (f1/261.6Hz) * rho^p` with `p = 1.934*log2(1/damping)` and `rho` the mode's live
@@ -2366,124 +2280,31 @@ membrane 703Hz/0.76, bar 2499Hz/0.59; minimum pairwise max-relative-feature
 difference 0.224. These are genuinely different instruments, not relabelled
 copies.
 
-**RESOLVED on real hardware: the mode-count CPU cost was real, and 24 modes
-shipped audible static.** The on-device witness this section used to ask for
-was taken and it confirmed the concern rather than clearing it. At 24 modes,
-Resonode engaged with FOUR voices held ran at 94% `core_busy` with `readi`
-gaps up to 8.06ms against the 1.333ms budget and 70 xruns in 15s; under an
-eight-key stress it reached 101-110%. The decisive measurement is that
-engaging Resonode with ZERO keys held still cost 122 `diag-gap` events and
-42 xruns per 10s against exactly zero disengaged, bracketed twice — cost is
-flat across 1-4 voices held, because Faust has no runtime branching and all
-four voices' banks compute every sample whatever the player does.
-
-Three exact, sound-preserving optimisations then removed most of that cost,
-each verified against the real generated C++ via the `faust-codegen-probe`
-workflow (`workflow_dispatch` only) rather than argued from the source:
-
-- **The position sine is a polynomial. THIS ONE SHIPPED.**
-  `sin(pi*pos*(i+1))`'s multiplier is the MODE INDEX, always integer whatever
-  the ratio table holds, so `sin(k*t) = sin(t)*U_{k-1}(cos t)` applies with
-  `k = i+1`, i.e. `U_i`, and leaves every mode independent — no change to the
-  bank's routing. `sin` 64 -&gt; 4. Max absolute error 1.03e-14 in double over
-  `pos` 0..1.2 and `i` 0..15; the shipped build is `float`, where the same
-  sweep gives 4.6e-6, about -107 dBFS and inaudible. That float figure is the
-  one to re-check if `modeCount` is ever raised, since the recurrence's error
-  grows with mode index. Safe because `modePositionSin` is a plain output
-  MULTIPLIER in `weightedOut`'s product chain, never a filter coefficient —
-  see the `sqrt` entry below for why that distinction decides everything.
-
-**Two further optimisations were built, measured, and then REVERTED on
-review, because both were exact only while the knobs were still.** Both are
-recorded here with their real numbers so the same trade is not re-proposed
-as free:
-
-- **The two per-mode `sqrt` calls do cancel algebraically, but the refactor
-  that exploits it is NOT sound-preserving.** The identity is real:
-  `b0 = sqrt(K(1-r^2))` divided by `modePeakGain = sqrt(K(1+r)/(1-r))` is
-  `|1-r|`, and `r` is hard-clamped to [0.96402, 0.99998] by `modeInvT60`'s
-  `max`/`min` (so `r&gt;=1` and `r&lt;=0` are both structurally unreachable and
-  `|1-r| = 1-r`); max relative error 7.4e-13 over 300000 values of `r` across
-  that true range. The catch is that exploiting it requires moving `b0` from
-  a NUMERATOR COEFFICIENT INSIDE `fi.tf2` to a post-multiply outside. That
-  commutes only for a CONSTANT `b0`. `b0` derives from `poleRadius`, hence
-  from `decayTime` and `damping`, both of which are `morphGlide`d and so move
-  at audio rate on every knob sweep. In a transposed-direct-form-II biquad the
-  numerator taps feed the state registers, so a coefficient changing between
-  samples is applied to different state in the two forms: measured divergence
-  **8.4% of peak** while a pole glides, against 3.6e-12% at rest, and it
-  persists well past the 15ms glide because it decays through the resonator's
-  own multi-second tail. Keeping `b0` inside and rewriting only the divisor
-  does not help — `(1-r)/b0` is itself `sqrt((1-r)/(K(1+r)))`, so the count
-  goes back to two square roots and the win evaporates entirely. The win and
-  the correctness are mutually exclusive here; correctness was chosen.
-- **De-gliding the five shape weights hoists `log` 12 -&gt; 1, and was reverted
-  anyway.** They were piped through `morphGlide`, a `letrec`, so they compile
-  to recursive `fRec` variables rather than `fSlow` constants and drag
-  `modeLogRatio` — and `log`/`exp`/`cos`/`sqrt` behind it — into the sample
-  loop. But those weights feed `modeLogRatioLive`, which feeds BOTH `freqMode`
-  AND `poleRadius`, so an ungated slider step moves `a1` and `a2` in one
-  sample on a resonator holding up to 8.5s of stored energy at r ~ 0.96-0.99998.
-  That is a step change in a very-high-Q pole against a live ringing state, and
-  these are LV2 control ports written per control tick from `ApcGrid`, so real
-  sweeps genuinely do step. This file already rejects un-gliding the MORPH
-  knobs for costing zipper-free sweeps; the same objection applies here with
-  a ringing filter behind it.
-
-Measured ladder after those, eight-key stress, peak `core_busy` and gap count:
-**12 modes ~73% / 2-3 gaps; 16 modes 70-73% / 5-7; 20 modes 82-85% / 8-13;
-24 modes will not build at all.** Every one of these reports zero xruns.
-Re-measured on the SHIPPED build, i.e. after the sqrt and shape-weight
-changes were reverted and with only the Chebyshev sine remaining: Resonode
-engaged with no keys held is zero gaps; an eight-key Resonode stress is
-34-73% peak with 0-2 gaps; the combined worst case (Resonode + guitar bank
-+ lofi bank + 8 keys) is 80% peak with 3 gaps. Zero xruns throughout, worst
-single gap 6.0ms against 2.3ms typical, zero crash-watchdog trips. So the
-two reverted optimisations were not load-bearing: the Chebyshev sine plus
-the 24 -&gt; 16 mode reduction carry the budget on their own.
-
-**24 modes is now a build-time ceiling, not a CPU question.** With the
-Chebyshev sine in place the real `faust` compiler is killed by SIGALRM about
-two minutes into codegenning `resonode_synth.dsp` (exit 142, `Alarm clock`,
-on the `-i -a lv2.cpp` invocation) — this file's documented compile-time
-cliff, reproduced rather than assumed. `modeCount` ships at **16**: it holds
-roughly ten points more headroom than 20 for four fewer partials, and that
-margin is what covers the load a Resonode-only bench does not simulate.
-
-**Three optimisations were tried and REFUTED by measurement — do not
-re-propose without new evidence.** Rewriting `exp(modeLogRatio*e)` as
-`pow(modeRatio, e)` is numerically exact but made it WORSE (per-sample
-transcendentals 576 -&gt; 679), because `pow` expands to `log`+`exp`
-internally. Applying the Chebyshev recurrence to the resonator's
-`cos(2*pi*f/SR)` is exact only for INTEGER mode ratios: against the bell
-table it errs by 5.6e-3, and only `string` is integer, so it would have
-broken four of the five timbres. Un-gliding the six morph knobs
-(`position`/`tone`/`decay`/`damping`/`stretch`/`collision`) bought
-576 -&gt; 573, nothing, and would have cost zipper-free knob sweeps.
-
-**The remaining ~120 per-sample `exp` calls are NOT hoistable**, and the
-reason is worth recording so it is not re-investigated: they are all
-`exp(fSlow_k * fZec[i])`, and the generated C++ shows
-`ratioExponent = fRec22 + 0.02*fRec73 + 1.0` where `fRec22` is glided
-`stretch` and `fRec73` is `stretchJitter`'s sample-and-hold. BOTH are
-recursive, so removing the jitter would not free them — `stretch`'s own
-glide keeps the term audio-rate regardless. Moving the jitter onto the
-fundamental instead was also considered and rejected on sound: in the
-exponent it leaves the fundamental dead in tune (0.0 cents) while
-smearing upper partials up to 107 cents per strike, which is a timbral
-variation; on the fundamental it becomes a rigid 34-cent retune of the
-whole note, which reads as pitch instability.
-
-**`modes_2_to_6_are_not_starved` FAILS as literally written after this change
-(28.0x against a 15x bound), and that is a measurement artifact, proven by
-isolation.** With `positionDriftAmt` set to 0 the worst ratio across all 20
-measurable modes drops to 8.7x, inside the bound; `stretchJitter` contributes
-nothing (bit-identical). The shipped position-drift envelope sweeps
-`positionLive` from ~0.24 to 0.08 across the check's own 10-90ms window, so
-high-index modes cross a `sin(pi*position*k)` null and partially cancel in the
-windowed FFT. The baseline passed at 9.7x only because of the mode-6 `0.55`
-bump (2.5x; 9.7 x 2.5 = 24, matching). Restoring a mode-6-shaped bump would turn
-the check green without fixing anything real, which is why it was not done.
+**`modeCount` ships at 16, capped by BOTH real CPU cost and a Faust
+compile-time ceiling.** Cost is flat across 1-4 voices held (Faust has no
+runtime branching — every voice's bank computes every sample regardless).
+At 24 modes the real `faust` compiler is killed by SIGALRM ~2 minutes into
+`resonode_synth.dsp`'s `-i -a lv2.cpp` codegen (exit 142, "Alarm clock") —
+independent of whether the CPU cost itself would have been acceptable.
+Measured ladder (8-key stress, peak `core_busy`/gaps): 12 modes ~73%/2-3,
+16 modes 70-73%/5-7, 20 modes 82-85%/8-13, 24 modes will not build at all.
+Shipped build: Resonode engaged with no keys held is zero gaps; 8-key
+Resonode stress is 34-73% peak/0-2 gaps; worst combined case (Resonode +
+guitar + lofi + 8 keys) is 80% peak/3 gaps, zero xruns throughout. Only one
+of several attempted micro-optimizations is shipped — the position sine is
+computed via a Chebyshev-polynomial identity (`sin` call count 64 → 4,
+inaudible float error) since it's a plain output multiplier, never a filter
+coefficient. `[[memory: resonode-exciter-coupling-cpu-history]]` for the
+full optimization ladder: two further optimizations that were built,
+measured exact-in-isolation, and REVERTED because they weren't
+sound-preserving once the morph knobs actually glide (a `sqrt`-cancellation
+refactor moving a coefficient outside the biquad's numerator, and
+de-gliding the five shape weights); three more that were tried and
+REFUTED by measurement (a `pow`-based exp rewrite, applying the Chebyshev
+identity to the resonator's own `cos()`, un-gliding the morph knobs); why
+the remaining ~120 per-sample `exp` calls aren't hoistable; and why
+`modes_2_to_6_are_not_starved` failing after the position-drift change is
+a measurement artifact (isolated and confirmed), not a regression.
 
 **Control wiring**: the five `fx/resonode/shape/*` names MUST be `ps.bind()`-ed
 in `ApcGrid::bindAll` — `ParamStore::setByName` is a silent no-op on an unbound
