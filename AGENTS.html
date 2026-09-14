@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=da26152dbffed6df18e0214ee4ed30671d69d98b">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fd3f2b3b1259e7d00a8a2220ce8ed2923143d5fc">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1265,151 +1265,40 @@ prefers the external `pitchtracker.lv2` autocorrelation tracker's reading
 present, falls back to the internal zero-crossing tracker
 (`trackPitchHzAndHp`/`jumpGuard`) otherwise.
 
-**PROPOSED AND REVERTED — the real cause was the SHIFT/free-guard bug
-recorded above, not this.** Two candidate defects were identified here and
-a fix was built and shipped for them, then reverted when the user reported
-the lock was still not working. They are recorded because the reasoning is
-still worth knowing, NOT because the change is in the tree:
+**Current SHIFT/free-guard behavior**: `freeXpose` follows `foldGain`
+(hoisted above both uses as `static`, so the earlier read sees the previous
+block) rather than the raw SHIFT button state — the two must track the same
+quantity the audio fold actually uses, or holding SHIFT can silently
+disable the key pitch-lock. `[[memory: multitranspose-investigation-history]]`
+for the full SHIFT/free-guard bug history (reported as "key based transpose
+is glitching"/"its not pitch locking the keys", root-caused to this exact
+mismatch) and a separately-reverted `attackEdge`-latching attempt that
+turned out not to be the real cause.
 
-- `shiftAmount` was documented here as "sampled once per voice at
-  `attackEdge`, held for the whole sustain", and the code did not do it.
-  `shiftStep` glided toward `shiftTarget` EVERY SAMPLE for the whole note,
-  and `shiftTarget = targetNote - heldDetNote` with `heldDetNote` still
-  following the detected input pitch. So the locked output tracked whatever
-  the input did: on a +-30 cent input wobble (ordinary vibrato or decay
-  drift) the shift target swings 58 cents. `heldDetNote` and `shiftStep`
-  now both freeze once the `inLockWarmup` window closes.
-- `trackingAllowed` was `(trustedTracker &gt; 0.5) | inLockWarmup`, so during
-  warmup the detected pitch was taken WHETHER OR NOT the tracker was
-  trusted. `pitchtracker.lv2` deliberately holds its output at 0.0 for the
-  first ~35ms of any fresh onset, which makes `extFreqDetApplies` false and
-  sends `freqDet` to the internal zero-crossing fallback — the tracker this
-  same section documents as taking &gt;400ms to converge and drifting
-  non-monotonically. Every fresh note was therefore seeded from it. Now
-  `trackingAllowed = trustedTracker &gt; 0.5`, so the lock waits for the real
-  tracker instead of latching onto the fallback's worst reading.
+**Residual splice degradation is not an engine defect.** Corpus degradation
+ratio settles ~2.21 at +12 semitones and is PSOLA legitimately restructuring
+harmonically rich material (splicing every period changes short-window
+second derivative), confirmed three ways: spurious energy on a pure tone is
+-64 to -67dB at every shift (no worse than at unity), roughness is no
+longer splice-localised (1.00-1.01 ratio inside vs. between splices), and
+clicks are 0/112 synthetic cases. `[[memory:
+multitranspose-investigation-history]]` for the full measurement and two
+refuted sharper-metric attempts.
 
-Failure mode of the fix is strictly better than what it replaced: if the
-tracker never becomes trusted inside the 80ms window, `heldDetNote` holds
-`lastConvergedNote`, seeded at `attackEdge` from the previous converged
-note — stale but plausible, rather than actively wrong. The tracker's own
-spec is ~35ms against an 80ms window, so there is 45ms of margin.
-
-**The general lesson, and it is the expensive one: this file's prose was
-right and the code had drifted from it.** The "sampled once at attackEdge"
-sentence had been sitting here describing behaviour the code stopped
-having. That is exactly the failure this document's own working rule
-("Never trust an in-repo comment as ground truth") warns about, one level
-up — the rule says read the code rather than the comment, and here reading
-the code against its own spec is what found the bug.
-
-**FIXED: holding SHIFT silently disabled the key pitch-lock entirely.**
-Reported from real playing as "key based transpose is glitching",
-"glitching except on certain pitches and tones", and "its not pitch
-locking the keys". The transpose engine was not at fault and that was
-established before touching it: the standalone harness
-(`test-audio-corpus/multitranspose_harness.cpp`, built directly with
-`g++ -std=c++17 -O2 -D_USE_MATH_DEFINES -I effects/home/faust` — the
-`_USE_MATH_DEFINES` is required on MinGW or `vowelFormant.h` fails on
-`M_PI`) tracks its commanded ratio within 17 cents across 60 cases
-(6 fundamentals x pure/harmonic x 5 shifts) with zero failures. So the
-fault was in WHICH ratio got commanded.
-
-`extFreqDetApplies` carried an extra term, `freeDiagRaw &lt; 0.5`, and
-`audio_thread.cpp` filled `freeXposeBuf` straight from `monitorFoldVal` —
-whether SHIFT is PHYSICALLY HELD. Engaging MultiKey mode is itself a SHIFT
-gesture, so in ordinary use that guard was false, `pitchtracker.lv2` was
-bypassed, and `freqDet` fell through to the internal zero-crossing tracker
-described just below. That tracker's accuracy is pitch-dependent, which is
-precisely why the glitching appeared on some pitches and tones and not
-others.
-
-The guard's intent was defensible — in free mode the DSP analyses
-`loopSum` while the tracker analyses live input, so the reading would not
-describe what is being shifted. It had simply stopped matching reality: the
-fold at the top of the audio block already crossfades `fin` toward
-`prevLoopSum` by `foldGain`, and the tracker copies `fin` AFTER that fold,
-so it had been analysing the correct blended signal all along.
-
-The real inconsistency was that `freeXpose` used the raw button state while
-the audio fold used `foldGain`, which is deliberately forced to zero when a
-transpose voice is gated (holding SHIFT and playing a key must not fold, see
-the SHIFT fold section). So the DSP switched its analysis source to
-`loopSum` in exactly the case where the audio path did not. `freeXpose` now
-follows `foldGain` and the redundant guard is gone; `foldGain` is hoisted
-above both uses and is `static`, so the earlier read sees the previous
-block, matching the one-block relationship the fold already had.
-
-**The transferable rule: when a signal-path guard tests a mode flag, verify
-that flag is derived from the same quantity the audio path actually uses,
-not from the raw control that nominally sets it.** A guard that was correct
-when written is silently invalidated by any later change to what the audio
-path does, and nothing in the type system or the build will notice.
-
-**Where the residual degradation actually comes from, measured three ways
-after the crossfade fix, and why it is NOT further reducible at the engine
-level.** The corpus degradation ratio settles around 2.21 at +12 semitones,
-and it is tempting to read that as distortion the engine adds. It is not:
-
-- **Spurious energy on a pure tone is -64 to -67dB at every shift** (unity
-  -66.9, +7 -64.0, +12 -66.3). Crucially it is no worse at shift than at
-  unity, so the shifter itself contributes essentially nothing audible.
-- **Roughness is no longer splice-localised.** Comparing windows inside the
-  crossfade against windows between splices gives a ratio of 1.00-1.01 at
-  110/196/440Hz. Before the crossfade fix the splices WERE the defect; after
-  it they are indistinguishable from the surrounding signal.
-- **Clicks are gone**: 0/112 synthetic cases, clean 70-200Hz boundary sweep.
-
-So the residual is PSOLA legitimately restructuring harmonically rich
-material -- splicing a waveform every period necessarily changes its
-short-window second derivative -- rather than an artifact to be tuned out.
-Two attempts to build a sharper metric were both REFUTED and are recorded so
-they are not repeated: off-harmonic-grid energy flagged `piano_mid_C4` at
-+9.6dB, but its partials cluster at 257.8/260.7/263.7/266.6Hz because a piano
-C4 has three slightly detuned unison strings, so that metric was measuring
-the instrument own beating; and envelope-deviation-from-ideal-shift reports
-12-15dB rms on every file, because PSOLA deliberately PRESERVES the formant
-envelope instead of shifting it, so that metric penalises exactly the
-behaviour the engine exists to provide.
-
-**Measured: `pitchtracker.lv2` is accurate below 500Hz and unreliable
-above it.** Driven through DawDreamer's Faust JIT (which DOES compile
-`pitchtracker_ac.dsp` — unlike `multitranspose.dsp`, it declares no
-`ffunction`, so the JIT limitation documented elsewhere in this file does
-not apply to it) against all 16 real instrument recordings, cross-checked
-against an FFT harmonic-comb score rather than a single autocorrelation
-reference:
-
-  accurate within 50 cents   9 files, spanning 66Hz to 706Hz
-  genuinely wrong            3 files, ALL at or above 500Hz
-  reference/range artefacts  4 files
-
-The three real failures are `oboe_mid_C5B5` (reads 262.9Hz against a true
-527Hz — an exact octave-down subharmonic lock, comb score 296.9 for 527 vs
-214.9 for 263), `violin_high_sulE_C7E7` (reads 436.4Hz against ~1035Hz,
-comb score 9.6 vs 173 — not even a subharmonic, just a bad lock), and
-`trumpet_high_C6` (-63.9 cents). `piano_low_A1` correctly returns 0: its
-f0 is ~55Hz, below the tracker's own 60Hz `minTrackHz` floor, so the
-no-lock is right rather than a failure.
-
-`subharmonicPromote` exists for exactly the oboe case and does not catch
-it, and the reason is structural rather than a mistuned constant: it
-requires `c2 &gt; cCoarse + subharmDominanceMargin`, but at a TRUE subharmonic
-lag the normalised autocorrelation is genuinely higher than at the
-fundamental on a periodic signal, so that test can never fire for the
-octave-down case it was meant to fix. `subharmDominanceMargin` is only
-0.004, so widening it is not the answer.
-
-This is deliberately NOT fixed. Below 500Hz — which is guitar, bass, and
-both vocal ranges, i.e. everything this pitch-lock is played with — the
-tracker is accurate everywhere measured (-3.7c bassoon, -6.1c cello, -6.6c
-violin low, +6.3c trumpet low, -12.7c piano mid, -2.5c marimba mid, -3.6c
-vibraphone, +6.6c piano high, +22.9c vocal). The failures are confined to a
-register the effect is not used in, and `pitchtracker_ac.dsp` is on the
-wrong side of this file's own compile-time-cliff warning — its own
-description records a multi-GB codegen blowup from one attempted change to
-per-candidate tau selection. Re-opening this needs a real measured win that
-justifies that risk.
+**`pitchtracker.lv2` is accurate below 500Hz and unreliable above it** —
+verified against all 16 real instrument recordings cross-checked against an
+FFT harmonic-comb score: accurate within 50 cents on 9 files (66-706Hz),
+genuinely wrong on 3 files, all &gt;=500Hz (an octave-down subharmonic lock on
+oboe, a bad lock on violin, -63.9c on trumpet). Below 500Hz — guitar, bass,
+both vocal ranges, everything this pitch-lock is actually played with — the
+tracker is accurate everywhere measured (-3.7c to +22.9c across
+bassoon/cello/violin/trumpet/piano/marimba/vibraphone/vocal). Deliberately
+NOT fixed: `pitchtracker_ac.dsp` is on the wrong side of this file's own
+compile-time-cliff warning (a multi-GB codegen blowup from one attempted
+per-candidate-tau-selection change); re-opening needs a real measured win
+that justifies that risk. `[[memory: multitranspose-investigation-history]]`
+for the full per-file measurement and why `subharmonicPromote` structurally
+cannot catch the oboe case.
 
 **Known, disclosed, current limitation**: the internal zero-crossing
 fallback tracker (when `pitchtracker.lv2` is NOT loaded) has a real,
@@ -1427,10 +1316,11 @@ records the real, repeated risk of touching this file's tracker internals.
 input once per sample (shared instance, not per-voice). Each voice's shift
 glides via a one-pole (`normalGlidePole`, `tau2pole(0.008)`), gated by
 `en.adsr` (3ms attack/30ms decay/sustain 1/50ms release — 50ms release is
-the verified click-free value), then shifted+formant-shaped by the
-per-voice `EngineSoladSnac`+`GrainFormant` engine (see below), block-
-buffered at 64 samples (~1.333ms), the same fixed algorithmic latency as
-the mono engine's wet effect regardless of pitch or formant. Gain staging:
+the verified click-free value), then pitch-shifted by the per-voice
+`EngineSoladSnac` engine and formant-shaped by `LpcFormantShifter` (see
+below), block-buffered at 16 samples (~0.33ms onset latency), the same
+fixed algorithmic latency as the mono engine's wet effect regardless of
+pitch or formant. Gain staging:
 fixed per-voice gain (0.6) + static `ma.tanh` soft-clip on the summed bus
 (never a dynamic `1/sqrt(activeVoices)` renormalization — that pumps on
 every chord-note release). Voice allocation: round-robin/oldest-steal
@@ -1448,87 +1338,37 @@ signal argument into `pitchPoly`'s `process()`; real-world CC range is
 m_keysMode==KeysMode::MultiKey)` — a genuine no-op when neither pitch-shift
 engine is active).
 
-**FIXED (supersedes the prior "splice path is mysteriously inaccurate" note):
-the splice path had no upward-shift mechanism at all.** `triggerSpliceByPeriod`
-fired only on `driftFromTarget &gt; trigger` — the reader falling BEHIND, which is
-what a downward shift produces. On any upward shift the reader gains on the
-writer, drift goes negative, and the periodic resplice could never fire. The
-only remaining path was the emergency branch at `gap &lt; SINC_HALF+2`, which was
-effectively a no-op (`newPos = wr - 64` sits within half a period of the reader,
-so the period-multiple rounding gave 0 and both crossfaded readers landed on the
-same position); the reader then overran the writer and read ring-stale audio.
-That, not a subtle resplice/crossfade interaction, was the measured -200 cents.
-The `scale &gt; 1.02` forced-grain override existed purely to paper over it, and the
-mono "pedal ride" lane never surfaced it because it is a downward effect.
+**Current splice-path upward-shift mechanism** (supersedes an earlier
+"splice path is mysteriously inaccurate" note): `upshiftTargetLag()` raises
+the target lag to `kUpshiftLagPeriods (1.5) * period + SINC_HALF + 2`
+whenever `m_scale &gt; 1.0` and a period is known, and the drift test is
+symmetric (`driftFromTarget &lt; -trigger` jumps the passive reader BACKWARD by
+`n*per` through the same value+slope candidate search — textbook SOLA for
+pitch-up, repeating segments); `shrinkSpliceCount` bounds `|n|` on both
+sides. This closed a real gap: without it, an upward shift's drift never
+went positive so the periodic resplice could never fire at all. The added
+lag is engaged-only wet-path latency (covered by the Working Rules
+carve-out) and is SHORTER than the grain path it replaces: ~14ms vs ~36ms
+at 110Hz. Downward and unity shifts are bit-identical to before across a
+180-case sweep — the mono engine is provably untouched. Because the splice
+path now beats the grain path on envelope stability at neutral formant, the
+`scale &gt; 1.02` forced-grain override that used to paper over the missing
+upward mechanism has been REMOVED; neutral formant now runs on the
+phase-coherent splice path. `[[memory: multitranspose-investigation-history]]`
+for the root-cause trace and before/after measurements (worst upward error
+-204.7c -&gt; +18.9c).
 
-The root cause behind the root cause: `INITIAL_READ_OFFSET_DEFAULT` is 64
-samples, but one period at 110Hz is 436 — there was no headroom behind the
-writer to resplice backward INTO. Both halves are now fixed:
-`upshiftTargetLag()` raises the target lag to `kUpshiftLagPeriods (1.5) * period
-+ SINC_HALF + 2` whenever `m_scale &gt; 1.0` and a period is known, and the drift
-test is symmetric (`driftFromTarget &lt; -trigger` jumps the passive reader BACKWARD
-by `n*per` through the same value+slope candidate search — textbook SOLA for
-pitch-up, repeating segments). `shrinkSpliceCount` bounds |n| on both sides.
-The added lag is engaged-only wet-path latency (covered by the Working Rules
-carve-out) and is SHORTER than the grain path it replaces: ~14ms vs ~36ms at
-110Hz.
-
-Measured on a clean sine via the standalone C++ harness (splice path isolated,
-`mixTgt` forced to 0), before -&gt; after: worst upward error **-204.7 cents -&gt;
-+18.9 cents**; envelope-stability cv **0.46 -&gt; 0.044**; amplitude drops
-**15 -&gt; 0**. Downward and unity shifts are **bit-identical** across a 180-case
-sweep (6 frequencies x 6 ratios x 5 formant depths) — the mono engine is
-provably untouched. Because the splice path now beats the grain path on
-envelope stability at neutral formant (440Hz/+12: cv 0.122 -&gt; 0.023), the
-`scale &gt; 1.02` forced-grain override has been REMOVED; neutral formant now runs
-on the phase-coherent path, which is the fix for "gappy" on upward shifts.
-
-**Open, disclosed, NOT fixed: `GrainFormant` shifts pitch by an octave at high
-formant settings.** Measured at unity pitch on the shipped code, the output is
-correct for `fx/formant` depth &lt;= 0.7 and jumps to **+1193 cents (exactly 2x)**
-for depth &gt;= 0.9, at both 110Hz and 220Hz. The threshold is where `mixTgt`
-crosses ~0.5 and the grain path becomes the dominant term — so the grain engine
-has ALWAYS produced octave-up content at large `fm`; it was merely masked below
-half mix. Cause is structural, not a tuning error: the grain window is
-`2*Tin` long while its read span is `len*fm`, so at `fm ~ 2` each grain carries
-~4 input periods compressed into 2 output periods and the resampled periodicity
-dominates the OLA hop that is supposed to set the pitch. Shortening the window
-to keep the input span at ~2 periods would make it shorter than the hop and
-open real gaps — that window-vs-hop tension IS the "gappy" on the grain path.
-This is reachable in production (the CC maps to a practical +-1.5). The correct
-fix is to stop using time-domain grain resampling for formants at all and move
-to an LPC spectral-envelope model (whiten, recolor), which shifts no pitch and
-adds no latency; the splice path now handles pitch correctly in both directions
-on its own, so the two concerns no longer need to share one mechanism.
-
-**Measured, real, but SECONDARY: `GrainFormant`'s epoch free-runs by `Tin`
-rather than locking to real pitch marks.** `m_inEpoch += Tin` between resplice
-corrections, while `Tin` itself only refreshes on a SNAC hop (~43ms) through the
-`maxDelta = period/8 + 2` slew clamp — so overlapping grains drift out of phase
-whenever the held `Tin` is stale or wrong, which shows up as amplitude
-modulation. Measured directly against `grainFormant.h` with a harmonic-rich
-input: with an EXACT per-sample period the mechanism is clean (modulation depth
-&lt;=0.6% across 82-440Hz and fm 1.0-1.86), so the epoch machinery is not itself at
-fault. Feeding a deliberately stale/erroneous period reproduces the claim: +1%
-error -&gt; 2.7%, +3% -&gt; 2.6%, +8% -&gt; 4.7% modulation depth; 3%/5Hz vibrato (which
-makes `Tin` stale between hops by construction) -&gt; 2.6% at 110Hz and 4.9% at
-196Hz; the two combined -&gt; 7.1%. So the cause is correctly identified, but at
-~0.6dB it is a secondary contributor, not the primary "gappy" mechanism — the
-splice path's total absence of an upward-shift resplice (envelope cv 0.46, 15
-amplitude drops) was an order of magnitude larger and is what actually got
-fixed. Real pitch-mark locking remains the proper fix and is NOT implemented;
-weigh it against retiring the grain path from the formant role entirely, which
-would make it moot.
-
-**Measured and REJECTED: reducing the grain path's `targetLag`.** The
-suggestion to cap the grain lag (it is `Tin*(3+fm)`, i.e. 40-60ms at low guitar
-notes) was implemented and swept against envelope stability across 3 frequencies
-x 5 ratios x 6 formant depths. It makes the grain path WORSE, monotonically:
-mean cv 0.0231 at the shipped `periods=3.0, no ceiling`, 0.0347 with a 960-sample
-ceiling, 0.0515 at `periods=1.0`. Latency there is not free quality. The shipped
-constants are retained; the real latency win came instead from removing the
-forced-grain override, which takes the grain path out of the neutral-formant
-signal path entirely.
+**Historical, now superseded: `GrainFormant` is entirely inert on this
+(poly) path** — `pitch_poly_ffi.h` no longer calls `eng.setFormantDepth()`
+at all (verified: max grain mix 0.000000000 across formant -1.5..+1.5),
+since formants moved to the LPC spectral-envelope shifter below. It remains
+active on the MONO pedal-ride engine (`pitch_ffi.h`).
+`[[memory: multitranspose-investigation-history]]` for three now-inapplicable
+findings from when this engine still drove formants here: an exact-octave
+pitch defect at high formant depth (structural, from the grain window vs.
+OLA-hop relationship), a secondary epoch-drift amplitude-modulation
+contributor, and a rejected `targetLag`-reduction attempt that made envelope
+stability monotonically worse.
 
 ## Formants are moved by an LPC spectral envelope, not by the grain resampler
 
