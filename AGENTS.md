@@ -1865,6 +1865,17 @@ for the two coupling-mechanism generations (a `tanh` soft-clip guard, then
 this skew-symmetric redesign), the real divergence bug that motivated
 both, and the rejected fully-connected/frequency-aware alternatives.
 
+**Verified with real recorded excitation, not just synthetic noise.**
+`test/resonode-sweetspot/real_corpus_excitation.py` drives this engine
+with real instrument/vocal recordings from `test-audio-corpus/instruments/`
+as the exciter (the original divergence bug was found via sustained
+synthetic noise, which has different spectral/temporal structure than real
+material) at the two highest divergence-risk named patches (`metal_glass`/
+`strings`: `decay=7.0, damping=0.97`) with `couple=1.0` — the exact corner
+the historical bug lived in. 12/12 configs (6 representative instruments
+spanning low/percussive to high/sustained/vibrato content) render finite,
+unclipped output.
+
 **Bandwidth is frequency-proportional.** `modeInvT60 = (1/decay) *
 (f1/261.6Hz) * rho^p` with `p = 1.934*log2(1/damping)` and `rho` the mode's live
 frequency ratio, so mode overlap is note-invariant and `damping` is a real
