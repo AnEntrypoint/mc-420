@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=b0e80054f169d4cfcc86205fb870a011f1ef7fcf">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5ed149c1078fde8ab4e25409d5172a63d8edd6e1">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1675,101 +1675,30 @@ independent-formant grain-playback-speed stage (`grainFormant.h`).
 - Crossfade is EQUAL-GAIN LINEAR, never equal-power cosine — the two
   readers being crossfaded are correlated (one period apart on a
   quasi-periodic signal), so cosine fades sum to up to +3dB mid-fade.
-- **The crossfade LENGTH is divided by the pitch ratio on upward shifts,
-  and that division is what makes the correlation assumption above true.**
+- **The crossfade LENGTH is divided by the pitch ratio on upward shifts** —
   `m_xfadeLen` is set from one input period but counted down in OUTPUT
   samples, while the readers advance `m_scale` input samples per output
-  sample. Left undivided, the readers travel `per*scale` during the fade and
-  drift apart by `(scale-1)` periods before it ends, so by the end they are
-  NOT one period apart and the equal-gain fade is summing two uncorrelated
-  reads. That was a real, reported microclick: measured at 40x the signal's
-  own median slew rate, appearing at +10 semitones (exactly where the drift
-  crosses three quarters of a period) and worsening monotonically to +14,
-  clean at +9 and below, concentrated at low input pitches where the period
-  is long. Instrumenting the engine put 30 of 30 clicks adjacent to a splice
-  and none away from one. Dividing by the ratio keeps reader travel at one
-  period regardless of shift: clicks go to zero across 112 synthetic cases
-  and the whole 70-200Hz boundary sweep. The divisor is clamped to never go
-  below 1.0, so downshift and unity keep their original fade length and are
-  bit-identical over 40 cases — the mono pedal-ride path is untouched.
-  Onset latency is unchanged at 1.35-1.40ms across every pitch and shift.
+  sample; dividing by the ratio keeps reader travel at one period regardless
+  of shift, which is what makes the equal-gain-linear crossfade's
+  correlation assumption true. The divisor is clamped to never go below
+  1.0, so downshift and unity keep their original fade length and are
+  bit-identical — only upshifts are affected. `[[memory:
+  free-transpose-engine-history]]` for the microclick this fixed (measured
+  at 40x median slew rate, worsening from +10 to +14 semitones) and the
+  full splice-parameter sweep confirming every other tunable (`m_respliceFrac`,
+  `SINC_TAPS`, candidate search width, `m_transientHold`, slope-match
+  weight, crossfade length/shape) is already at its measured optimum — do
+  not re-tune any of them without new evidence.
 
-**Splice-parameter sweeps, all measured against the real instrument corpus
-using degradation ratio (output roughness / that file's own input
-roughness, which is the metric that does not punish breathy sources for
-being breathy — the vocal files score 0.34-0.45 roughness at the INPUT and
-the engine only adds ~7%, whereas violin input is 0.017 and the shipped
-engine took it to 0.106).** Mean degradation over 16 instruments fell from
-**2.82 to 2.21** with the crossfade fix, worst cases improving most: violin
-low 6.10 -&gt; 3.03, violin high 4.78 -&gt; 2.83, cello 4.06 -&gt; 2.70. Four
-further knobs were swept and every one of them is ALREADY at its optimum,
-so do not re-tune them without new evidence:
+Mean corpus degradation over 16 instruments is 2.21 with this fix (down
+from 2.82); the fix trades slightly against barely-pitched/unpitched
+material (a real, expected tradeoff for a pitch-lock effect — see the
+memory entry). The SNAC period tracker carries a small, deliberately
+unfixed systematic frequency-dependent bias (a few cents, converting to
+well under 3 degrees of splice phase error across the musical range) —
+already corrected for by `triggerSpliceByPeriod`'s value+slope candidate
+search.
 
-- `m_respliceFrac` 1.0 is best (2.215) against 1.5 (3.176) and 2.0 (2.996).
-  Letting drift accumulate before correcting is clearly worse.
-- `SINC_TAPS` 16 vs 32 is a dead heat (2.215 vs 2.216). Doubling the kernel
-  doubles the interpolation cost for nothing; the residual is splice
-  quality, not interpolation quality.
-- The splice candidate search width of +-3 is best (2.215) against +-6
-  (2.223) and +-10 (2.249) — a wider search finds candidates that match on
-  value but sit further from the ideal period.
-- `m_transientHold` at 2 periods is neutral (2.215 / 2.217 / 2.216 for
-  2 / 1 / 0 periods), so it is kept for the double-played-attack protection
-  it was added for.
-- The slope-match weight of 80.0 in the candidate error is flat across
-  20-400 (2.213-2.215), so it is not worth churning.
-- The crossfade LENGTH MULTIPLIER is best at exactly one period: 1.0 gives
-  2.215 against 0.5 (2.220), 0.75 (2.218), 1.5 (2.665) and 2.0 (2.821).
-  Longer fades are much worse, which is the same effect as the undivided
-  fade above seen from the other direction.
-- The crossfade SHAPE stays linear. A smoothstep (`w*w*(3-2w)`) ramp, which
-  has zero slope at both ends and might have been expected to remove a
-  derivative discontinuity, measures marginally WORSE (2.219 vs 2.215) —
-  the equal-gain-linear reasoning above is correct and should not be
-  revisited without new evidence.
-
-**`DUBFX_POLY_BS` is 16, not 64, and the reduction is free.** The poly
-FFI buffers input before calling `processBlock`, and that buffer IS the
-engine's algorithmic latency. Measured onset latency 1.35-1.40ms at 64 -&gt;
-**0.35-0.38ms at 16**, a 4x cut, against: CPU 2.5% of one x86 core at 64,
-32 AND 16 (6 voices, 10s of audio — identical, the per-block scheduling is
-not the cost); corpus degradation 2.215 / 2.212 / 2.211 (marginally BETTER
-at 16, since the engine resplices against fresher input); clicks 0/112 at
-both. The SNAC sweep cadence is untouched and that was verified rather
-than assumed — `snacPeriodTracker.h` keeps its OWN `BLOCK = 64` for the
-shared-tracker `tick()` path, decoupled from `DUBFX_POLY_BS`, so the
-block-start alignment rule above still holds; period tracking measures
-bit-identical at 196Hz across the two. `EngineSoladSnac::processBlock`
-takes `n` and forwards it to `stepSchedule(n)`, so it is block-size
-agnostic by construction. The mono `DUBFX_BS` stays 64: its latency is
-dominated by downshift reader geometry, not buffering, so the same change
-buys it nothing.
-
-**The crossfade fix trades slightly against barely-pitched material, and
-that trade is the right way round.** On the instrument corpus it is a
-clear win (2.821 -&gt; 2.215). On the speech/noise wavs at the corpus root it
-splits: `dingle` improves 3.58 -&gt; 3.32 while `cleetus` regresses
-1.80 -&gt; 2.03. Measuring voiced fraction explains it — `cleetus` is only
-19% voiced against `dingle`'s 31% and `machine1`'s 69%. On unpitched
-content there is no true period, so a shorter fade gives the reader less
-averaging over noise. This engine is a pitch-lock for pitched playing, so
-the pitched case is the one that matters; the regression is confined to
-material the effect is not for. `DUBFX_POLY_BS` is neutral on all of these
-(2.03 -&gt; 2.02, 2.23 -&gt; 2.23), so the split is attributable to the
-crossfade change alone.
-
-**Measured and NOT acted on: the SNAC period carries a systematic bias
-that grows with frequency** — median error -4.2c at 82Hz, +4.3c at 110Hz,
-+13.8c at 261Hz, -17.0c at 587Hz, -42.7c at 880Hz, with a spread of only
-~0.1c (so it is bias, not jitter). The cause is the parabolic
-interpolator on a narrowing autocorrelation peak: at 880Hz a period is
-54.5 samples, so the peak spans ~7 samples and the 1-sample lag grid is
-15% of the peak width. It is deliberately left alone because the
-consequence is small where it matters: converted to splice phase error it
-is under 3 degrees across the whole musical range (0.9 degrees at 82-110Hz,
-2.9 at 261Hz), and `triggerSpliceByPeriod`'s value+slope candidate search
-already corrects for it. Only the 880Hz corner reaches 8.8 degrees, which
-is above the useful range for this effect.
 - `m_transientHold` holds off resplicing for ~2 grains after a detected
   transient, avoiding a double-played attack. The separate snap-to-live
   transient-response mechanism is DISABLED in shipped code (introduced a
@@ -1781,30 +1710,21 @@ is above the useful range for this effect.
   bloated `RubberBandWrapper`'s single allocation and corrupted on the Pi's
   32-bit-pointer build.
 - `MIN_PERIOD=48` (1000Hz tracking ceiling) — raising to 32 was measured
-  and REJECTED: it genuinely raises the ceiling but real wet-output pitch
-  accuracy got WORSE (short-period candidates jitter between adjacent SNAC
-  values sweep-to-sweep, injecting real phase error into splice cadence
-  that a stable-but-technically-"wrong" subharmonic lock never had).
-- Formant control: real, strong, measured on real audio — positive-side
-  brightening is large and clean; negative side is flatter/more
-  non-monotonic in short windows (an inherent asymmetry in the `factor=
-  powf(2,d)` mapping, not an engine defect). A real monotonic RMS loudness
-  cost accompanies brightening; a make-up-gain fix was measured
-  (grain-path RMS ~57-73% of clean-reader RMS) but deliberately NOT
-  implemented — needs by-ear tuning on real hardware, not a blind constant.
-- Historical note: this bullet used to contrast this engine against
-  `multitranspose.dsp`'s OWN, now-removed, `xpose()` two-tap delay shifter
-  ("structurally different splice algorithms"). That's no longer true —
-  `multitranspose.dsp`'s 6 voices now each run this exact same
-  `EngineSoladSnac` class (see the `multitranspose.dsp` section above), so
-  there is only one splice/PSOLA implementation in the codebase now, shared
-  by both the mono and polyphonic engines. The measured spectral purity
-  (0.99-1.00 THD on a clean sine sweep up to 5000Hz, no degradation near
-  700Hz) still stands for this class in general, but see the
-  `multitranspose.dsp` section's splice-path note for the upward-shift
-  frequency-accuracy defect that was found and FIXED there (it applied to
-  this class generally, not to one engine); the `scale &gt; 1.02`
-  forced-grain-mix default that used to mask it no longer exists.
+  and REJECTED (real wet-output pitch accuracy got worse). `[[memory:
+  free-transpose-engine-history]]` for why.
+- Formant control is real and strong on real audio, with a known
+  positive/negative asymmetry (an inherent `factor=powf(2,d)` mapping
+  property, not a defect) and an un-implemented make-up-gain idea for the
+  brightening-side loudness cost — needs by-ear tuning, not a blind
+  constant.
+- This engine and `multitranspose.dsp`'s 6 voices now run the exact same
+  `EngineSoladSnac` class (see the `multitranspose.dsp` section above) —
+  there is only one splice/PSOLA implementation in the codebase, with
+  measured spectral purity 0.99-1.00 THD on a clean sine sweep to 5000Hz.
+  `DUBFX_POLY_BS=16` (the multitranspose.dsp poly path's block size) and
+  its `beginBlock` cadence history are documented there; the mono
+  `DUBFX_BS` here stays 64 unchanged since its latency is dominated by
+  downshift reader geometry, not buffering.
 
 **Open, disclosed bug**: a genuine SNAC period-tracker drift bug on
 tremolo/amplitude-modulated or dynamically-varying content (e.g. vibrato,
