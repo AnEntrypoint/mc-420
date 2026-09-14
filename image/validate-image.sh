@@ -111,10 +111,6 @@ if [ "$BOARD" = "opi-prime" ]; then
         echo "$EXT" | grep -q 'isolcpus' && ok "extlinux.conf APPEND has isolcpus (RT core isolation)" \
           || bad "extlinux.conf APPEND missing isolcpus tuning"
       fi
-      # Armbian's own compiled U-Boot bootcmd sources /boot/boot.scr directly by
-      # fixed filename and never touches extlinux.conf -- this is the real,
-      # hardware-witnessed boot path for this project's Armbian-sourced U-Boot
-      # binary, so boot.scr presence is a hard requirement, not optional.
       if [ -f "$MNT/boot/boot.scr" ]; then
         ok "boot file: boot.scr (mkimage-compiled, the real Armbian bootcmd entry point)"
         BOOTSCR_MAGIC=$(dd if="$MNT/boot/boot.scr" bs=1 count=4 2>/dev/null | od -An -tx1 | tr -d ' ')

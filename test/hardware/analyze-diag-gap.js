@@ -1,19 +1,4 @@
 #!/usr/bin/env node
-// Parses timestamped [diag-gap] log lines (src/dsp/audio_thread.cpp's
-// wall-clock-stamped gap logging, added this session specifically because
-// line-count density is NOT a reliable proxy for real elapsed time -- see
-// AGENTS.md's "Diagnosing periodic audio stalls" caveat) and computes the
-// REAL inter-event period automatically, instead of eyeballing timestamps by
-// hand every time. Built for the 1Hz-stall bisection: run once against a
-// baseline build's log and once against a candidate fix's log, compare.
-//
-// Usage:
-//   node ssh-exec.js <host> "cat /var/log/aloop.log" > /tmp/log.txt
-//   node analyze-diag-gap.js /tmp/log.txt
-//
-// Or pipe directly:
-//   node ssh-exec.js <host> "cat /var/log/aloop.log" | node analyze-diag-gap.js -
-
 const fs = require('fs');
 
 const [, , inputPath] = process.argv;
@@ -27,9 +12,6 @@ function readInput() {
   return fs.readFileSync(inputPath, 'utf8');
 }
 
-// Matches BOTH diag-gap line shapes this session's logging emits:
-//   [diag-gap] t=26.037 readi gap=33.437ms (expected ~1.333ms)
-//   [diag-gap] t=26.039 readi ITSELF took=2.291ms (expected ~1.333ms)
 const LINE_RE = /\[diag-gap\] t=(\d+)\.(\d+) readi (gap|ITSELF took)=([\d.]+)ms \(expected ~([\d.]+)ms\)/;
 
 function parse(text) {
@@ -49,11 +31,8 @@ function analyze(events) {
     console.log('No [diag-gap] lines found -- either a clean run (good) or the log format changed.');
     return;
   }
-  // Focus on the "big" events (gap events specifically, since ITSELF-took
-  // lines are paired 1:1 with most gap lines and would double-count the
-  // same underlying stall).
   const gapEvents = events.filter((e) => e.kind === 'gap');
-  const bigThresholdMs = 10; // anything under 10ms is routine block-scheduling noise, not the stall being hunted
+  const bigThresholdMs = 10;
   const bigEvents = gapEvents.filter((e) => e.magnitudeMs >= bigThresholdMs);
 
   console.log(`Total diag-gap lines: ${events.length} (${gapEvents.length} gap, ${events.length - gapEvents.length} ITSELF-took)`);

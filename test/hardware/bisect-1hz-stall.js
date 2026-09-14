@@ -1,33 +1,4 @@
 #!/usr/bin/env node
-// Fully automated 1Hz-stall bisection using the disable_core3_lv2 config
-// toggle added this session (src/dsp/audio_thread.h/config/aloop.conf) --
-// no manual editing/restarting/log-reading required. Compares the
-// [diag-gap] timestamped stall pattern (analyze-diag-gap.js) WITH and
-// WITHOUT the Core-3 LV2 host's per-block process() calls, to isolate
-// whether that code path is involved in the ~30-37ms/~1.000s periodic
-// stall (CPU governor and Ableton Link already ruled out this session via
-// direct A/B tests).
-//
-// Usage: node bisect-1hz-stall.js <host> [captureSeconds=15]
-//
-// What it does, in order:
-//   1. Read /etc/aloop.conf, confirm disable_core3_lv2 is NOT already set
-//      (or warn + use whatever state it finds -- never silently assumes).
-//   2. Clear /var/log/aloop.log's rotation point by restarting the service
-//      fresh (rc-service aloop restart), wait for it to report "started".
-//   3. Capture ~captureSeconds of the BASELINE log (disable_core3_lv2
-//      absent/0 -- Core-3 host active, matching current shipped default).
-//   4. Append "disable_core3_lv2 = 1" to /etc/aloop.conf, restart, capture
-//      the same window with the Core-3 host path skipped.
-//   5. Restore /etc/aloop.conf to its original content (byte-for-byte,
-//      via a saved backup) and restart ONE more time, so the device is
-//      left in its normal, un-modified state regardless of the bisection
-//      result.
-//   6. Run analyze-diag-gap.js's own parsing/verdict logic against both
-//      captures and print a side-by-side comparison.
-//
-// Requires `npm install` in this directory first (ssh2 dependency).
-
 const { Client } = require('ssh2');
 const fs = require('fs');
 const path = require('path');
@@ -62,11 +33,6 @@ function execOnce(conn, command) {
   });
 }
 
-// Writes config content via SFTP (deploy.js's own proven pattern), never by
-// shell-quoting arbitrary file content into an exec() command -- avoids any
-// risk of a stray quote/special character in aloop.conf breaking a
-// hand-escaped printf string, and needs no escaping logic to reason about
-// at all.
 function writeFileContent(conn, remotePath, content) {
   return new Promise((resolve, reject) => {
     conn.sftp((err, sftp) => {
@@ -74,21 +40,7 @@ function writeFileContent(conn, remotePath, content) {
       const tmpPath = remotePath + '.tmp-bisect';
       const writeStream = sftp.createWriteStream(tmpPath);
       writeStream.on('close', () => {
-        // WITNESSED live against this device's OpenSSH sftp-server:
-        // sftp.rename() onto an EXISTING destination fails with a bare
-        // "Failure" status -- SFTPv3's rename has no atomic-overwrite
-        // guarantee (unlike POSIX rename(2)), so a target that already
-        // exists (remotePath always does here, aloop.conf is never
-        // missing) must be unlinked first. This is why the CANDIDATE
-        // write step failed every run: the FIRST writeFileContent call in
-        // a given process (the candidate write) is renaming onto the
-        // pre-existing real config for the first time, since Node's own
-        // sftp client has no prior successful rename in this connection
-        // to have already cleared the target.
         sftp.unlink(remotePath, () => {
-          // Ignore the unlink error/success either way -- remotePath may
-          // not exist on a first-ever run, and rename() below is the real
-          // arbiter of success.
           sftp.rename(tmpPath, remotePath, (err2) => (err2 ? reject(err2) : resolve()));
         });
       });
@@ -100,9 +52,6 @@ function writeFileContent(conn, remotePath, content) {
 
 async function restartAndWait(conn) {
   await execOnce(conn, 'rc-service aloop restart');
-  // Poll for "started" -- bounded retries, matching this session's own
-  // documented dead-watcher-recovery discipline (never an unbounded/blind
-  // wait). 20 tries * 1.5s = 30s max, generous for a real service restart.
   for (let i = 0; i < 20; i++) {
     const r = await execOnce(conn, 'rc-service aloop status');
     if (/started/.test(r.out)) return true;
@@ -112,9 +61,6 @@ async function restartAndWait(conn) {
 }
 
 async function captureLogWindow(conn, seconds) {
-  // Truncate the log, wait the capture window, then read it -- gives a
-  // clean, bounded sample instead of re-parsing however much history
-  // happened to accumulate before this run.
   await execOnce(conn, `: > ${LOG_PATH}`);
   console.log(`[bisect] capturing ${seconds}s of log...`);
   await new Promise((res) => setTimeout(res, seconds * 1000));
@@ -122,10 +68,6 @@ async function captureLogWindow(conn, seconds) {
   return r.out;
 }
 
-// Inlined from analyze-diag-gap.js (kept as a single self-contained script
-// so this bisection tool has no cross-file require() path issues over an
-// SSH-driven remote workflow) -- see that file for the fuller comment
-// explaining WHY wall-clock timestamps matter here.
 const LINE_RE = /\[diag-gap\] t=(\d+)\.(\d+) readi (gap|ITSELF took)=([\d.]+)ms \(expected ~([\d.]+)ms\)/;
 function parseDiagGap(text) {
   const events = [];
@@ -162,11 +104,8 @@ async function main() {
     const confRead = await execOnce(conn, `cat ${CONF_PATH}`);
     if (confRead.code !== 0) throw new Error(`could not read ${CONF_PATH}: ${confRead.errOut}`);
     const originalConf = confRead.out;
-    // Match only an ACTIVE (uncommented) assignment -- WITNESSED live: the
-    // shipped aloop.conf's own reference comment ("# disable_core3_lv2 = 1
-    // # DIAGNOSTIC ONLY: ...") matched a bare /disable_core3_lv2\s*=\s*1/,
-    // producing a false-positive warning on every normal, unmodified config.
-    if (/^\s*disable_core3_lv2\s*=\s*1/m.test(originalConf)) {
+    const disableCore3ActivelySet = /^\s*disable_core3_lv2\s*=\s*1/m.test(originalConf);
+    if (disableCore3ActivelySet) {
       console.warn('[bisect] WARNING: disable_core3_lv2=1 already present in the live config -- this run will still restore whatever was there, but the "baseline" capture below is NOT a true Core-3-enabled baseline.');
     }
     const backupPath = path.join(__dirname, `aloop.conf.backup.${Date.now()}`);

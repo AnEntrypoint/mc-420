@@ -125,17 +125,10 @@ def measure_freq(samples, sr, min_hz=50.0, max_hz=2000.0):
         return float("nan")
     global_max = float(np.max(search))
     peak_idx_local = int(np.argmax(search))
-    # Prefer the SHORTEST-lag (highest-frequency) local maximum that still
-    # clears 90% of the window's own global-max correlation, rather than
-    # the bare global argmax -- a periodic tone correlates near-perfectly
-    # at every integer multiple of its true period too, so an unqualified
-    # argmax silently locks onto a subharmonic half as often as the true
-    # fundamental. Mirrors this project's own documented "first-strong-peak"
-    # discipline (see AGENTS.md's pitchtracker_ac.dsp history) rather than
-    # inventing a new heuristic.
-    thresh = global_max * 0.90
+    first_strong_peak_threshold = global_max * 0.90
     for i in range(1, len(search) - 1):
-        if search[i] >= thresh and search[i] >= search[i - 1] and search[i] >= search[i + 1]:
+        is_local_max = search[i] >= search[i - 1] and search[i] >= search[i + 1]
+        if search[i] >= first_strong_peak_threshold and is_local_max:
             peak_idx_local = i
             break
     peak_lag = min_lag + peak_idx_local

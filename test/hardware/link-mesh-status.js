@@ -1,22 +1,4 @@
 #!/usr/bin/env node
-// Poll BOTH sides of the aloop <-> esp-idf-link Ableton Link mesh and print one
-// comparable row per device, so docs/LINK-MESH-TESTING.md's Tests 1-3 can be run
-// as a command instead of by eyeballing a serial console next to a curl.
-//
-// aloop side: reads /run/aloop/status.json over the existing ssh2 channel
-//   (root/aloop) -- link.{synced,bpm,peers,playing} plus wifi ap|sta.
-// esp side:   one UDP datagram to the status responder on port 20812
-//   (main/link_sync.cpp status_responder_task) -- replies with one JSON line
-//   carrying peers/bpm/playing/beat/phase/quantum/ap.
-//
-// Usage:
-//   node link-mesh-status.js --aloop 192.168.4.1 --esp 192.168.4.2
-//   node link-mesh-status.js --aloop 192.168.137.100 --esp 192.168.4.3 --watch
-//
-// Either side may be omitted; whatever is given is polled. --watch repolls every
-// 2s until interrupted, which is what you want while power-cycling devices to
-// check that exactly one AP wins and everyone converges on the same tempo.
-
 const dgram = require('dgram');
 
 const ESP_STATUS_PORT = 20812;
@@ -32,7 +14,6 @@ function parseArgs(argv) {
   return a;
 }
 
-// One UDP round-trip to the ESP status responder. Any payload triggers a reply.
 function queryEsp(host, timeoutMs) {
   return new Promise((resolve) => {
     const sock = dgram.createSocket('udp4');
@@ -57,7 +38,6 @@ function queryEsp(host, timeoutMs) {
   });
 }
 
-// Read aloop's status.json over ssh2 (same credentials the other tools here use).
 function queryAloop(host, timeoutMs) {
   return new Promise((resolve) => {
     let Client;

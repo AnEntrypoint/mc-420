@@ -1,18 +1,4 @@
 #!/usr/bin/env node
-// image/aloop-logtail.js — stream aloop's on-device log (/var/log/aloop.log)
-// to the dev host, live.
-//
-// Ported from looper's syslog-listener.js (UDP syslog capture + panic/crash
-// highlighting), adapted for aloop's actual mechanism: aloop's stdout/stderr
-// already land in a real file (OpenRC output_log/error_log), so there is no
-// syslog protocol to reassemble — this script just polls the device's
-// LOGTAIL verb (src/control/remote_control.cpp, udp/4446) at a fixed interval
-// and prints whatever new bytes come back, highlighting panic/crash/fatal
-// lines the same way looper's syslog-listener.js does.
-//
-// Usage:
-//   node image/aloop-logtail.js --host 192.168.137.100 --token <secret>
-//   PI_HOST=... PI_TOKEN=... node image/aloop-logtail.js [--interval 1000]
 
 const dgram = require('dgram');
 

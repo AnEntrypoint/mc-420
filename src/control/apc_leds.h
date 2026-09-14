@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <array>
 #include "apc_grid.h"
+#include "../storage/clip_exporter.h"
 
 namespace aloop {
 
@@ -31,9 +32,11 @@ public:
         if (now_ms - bootMs_ < kBootDelayMs) return;
 
         if (clipExportState != lastClipExportState_) {
-            if (clipExportState == 2 /* Done */ || clipExportState == 3 /* Failed */) {
+            bool clipExportDone = clipExportState == static_cast<int>(ClipExportState::Done);
+            bool clipExportFailed = clipExportState == static_cast<int>(ClipExportState::Failed);
+            if (clipExportDone || clipExportFailed) {
                 clipFlashReleaseAt_ = now_ms + kClipFlashMs;
-                clipFlashIsError_ = clipExportState == 3;
+                clipFlashIsError_ = clipExportFailed;
             }
             lastClipExportState_ = clipExportState;
         }

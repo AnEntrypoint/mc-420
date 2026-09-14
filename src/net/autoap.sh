@@ -1,50 +1,13 @@
 #!/bin/sh
-# aloop autoAP — WiFi mode-switching (ADR-007, docs/ARCHITECTURE.md).
-#
-# WHY this exists: every device (this Pi and every ../esp-idf-link ESP32) must
-# end up on ONE shared L2 network so Ableton Link's multicast peer discovery can
-# reach all of them. There is no credential provisioning: the devices form an
-# ad-hoc single-AP mesh around the open SSID `ticker`. Exactly one device hosts
-# that AP; everyone else joins it as a station. This is mode SWITCHING, not
-# simultaneous AP+STA (flaky on a single Pi radio).
-#
-# This mirrors ../esp-idf-link's own boot decision + supervisor (its
-# main.cpp app_main and wifi_config.cpp wifi_supervisor_task) so a Pi and an
-# ESP32 elect a host by the SAME rules and can never split the mesh:
-#
-#   scan for `ticker`
-#     found    -> join as STA
-#     not found-> MAC-ordered hold (lower MAC waits less), rescanning each
-#                 second; join the instant a peer's AP appears, else host it
-#
-# Supervisor (this same loop, forever):
-#   STA role: bounded reconnect on drop; if the host stays gone, re-host so the
-#             mesh survives the host powering off.
-#   AP  role: rescan; if another `ticker` AP with a strictly-LOWER BSSID exists
-#             (two devices both ended up hosting), drop ours and join the lower
-#             one so exactly one host wins. Never yield while clients are
-#             attached — that would drop peers mid-session.
-#
-# The election key is the interface MAC, compared as a plain hex string, and the
-# convention (LOWEST wins) is identical on both projects. See AGENTS.md
-# "aloop <-> esp-idf-link mesh: paired invariants".
-#
-# POSIX sh only (busybox ash on Alpine) — no bashisms. In particular no
-# process substitution: `grep -qFf <(...)` is a hard syntax error under ash and
-# silently broke this script's AP-mode rescan before.
-
 set -eu
 IFACE="${IFACE:-wlan0}"
-# The net configs (hostapd/wpa_supplicant/dnsmasq) are installed by the image at
-# /etc/aloop-net (image/build-image.sh: src/net/config -> /etc/aloop-net). Default
-# there; env-overridable for a dev checkout (CONF_DIR=src/net/config ./autoap.sh).
 CONF_DIR="${CONF_DIR:-/etc/aloop-net}"
 AP_IP="192.168.4.1/24"
 MESH_SSID="${MESH_SSID:-ticker}"
-SCAN_INTERVAL="${SCAN_INTERVAL:-15}"       # seconds between supervisor checks
-STA_RETRY_LIMIT="${STA_RETRY_LIMIT:-6}"    # reconnect attempts before re-hosting
-ASSOC_WAIT="${ASSOC_WAIT:-12}"             # seconds to wait for association+DHCP
-HOLD_MAX="${HOLD_MAX:-6}"                  # max MAC-ordered host hold, seconds
+SCAN_INTERVAL="${SCAN_INTERVAL:-15}"
+STA_RETRY_LIMIT="${STA_RETRY_LIMIT:-6}"
+ASSOC_WAIT="${ASSOC_WAIT:-12}"
+HOLD_MAX="${HOLD_MAX:-6}"
 
 log() { echo "[autoap] $*"; }
 
@@ -52,15 +15,10 @@ own_mac() {
     cat "/sys/class/net/$IFACE/address" 2>/dev/null || echo ""
 }
 
-# Normalize a MAC/BSSID to lowercase hex with no separators, so string compare
-# IS numeric compare (fixed width, same convention as esp-idf-link's byte-wise
-# lowest-BSSID tie-break).
 mac_key() {
     echo "$1" | tr 'A-F' 'a-f' | tr -d ':-'
 }
 
-# Lowest BSSID currently advertising MESH_SSID, or empty if none in range.
-# `iw scan` output pairs a "BSS <bssid>" line with a later "SSID: <name>" line.
 scan_mesh_bssid() {
     iw dev "$IFACE" scan 2>/dev/null | awk -v want="$MESH_SSID" '
         /^BSS /        { bss = $2; sub(/\(.*/, "", bss) }
@@ -82,7 +40,6 @@ write_role_state() {
         mv /run/aloop/wifi_role.tmp /run/aloop/wifi_role 2>/dev/null
 }
 
-# Try to join the mesh as a station. Returns 0 only on association + IP.
 join_sta() {
     pkill dnsmasq 2>/dev/null || true
     pkill hostapd 2>/dev/null || true
@@ -141,15 +98,6 @@ ap_has_clients() {
     [ -n "$(iw dev "$IFACE" station dump 2>/dev/null)" ]
 }
 
-# ---- Boot decision: join if the mesh exists, else MAC-ordered hold then host --
-#
-# WHY the hold instead of "host if the scan found nothing": two devices booting
-# together can each scan before the other's AP exists, so both would host and
-# the mesh splits into two L2 domains Link can never cross. The hold is strictly
-# monotonic in our own MAC, so the lowest-MAC device hosts first and everyone
-# else — still rescanning every second — sees that AP appear and joins it. No
-# cross-device visibility is required during the hold. A genuinely lone device
-# just hosts when its own hold expires.
 ip link set "$IFACE" up 2>/dev/null || true
 MAC="$(own_mac)"
 MACKEY="$(mac_key "$MAC")"
@@ -168,7 +116,6 @@ if [ -n "$peer_bssid" ]; then
         state="AP"
     fi
 else
-    # Scale the low 3 MAC bytes into 0..HOLD_MAX seconds. Lowest MAC ~0s.
     rank_hex="$(echo "$MACKEY" | tail -c 7)"
     rank="$(printf '%d' "0x${rank_hex:-0}" 2>/dev/null || echo 0)"
     hold=$(( rank * HOLD_MAX / 16777215 ))
@@ -197,7 +144,6 @@ else
     fi
 fi
 
-# ---- Supervisor: self-heal forever ------------------------------------------
 retries=0
 while true; do
     sleep "$SCAN_INTERVAL"
@@ -220,16 +166,12 @@ while true; do
             fi
             ;;
         AP)
-            # Dual-host resolution: if another `ticker` AP exists with a
-            # strictly-lower BSSID, we lost the tie-break — yield to it so
-            # exactly one host remains. Never yield with clients attached.
             if ap_has_clients; then
                 continue
             fi
             other="$(scan_mesh_bssid)"
             [ -n "$other" ] || continue
             otherkey="$(mac_key "$other")"
-            # Our own AP may appear in our scan on some drivers; ignore ourselves.
             [ "$otherkey" != "$MACKEY" ] || continue
             if [ "$otherkey" \< "$MACKEY" ]; then
                 log "lower-BSSID '$MESH_SSID' host $other exists — yielding AP and joining it"

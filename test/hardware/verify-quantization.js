@@ -1,35 +1,4 @@
 #!/usr/bin/env node
-// Scripted, byte-level reproduction of aloop's quantization behavior, built
-// to verify the loop-length fixes from a real live-hardware session without
-// needing a human to press pads (see midi-inject.js's own header comment
-// and gm's skill guidance on preferring byte-level injection over asking a
-// human to reproduce input).
-//
-// What this verifies against the CONFIRMED spec (this session's own grilling):
-//   - Loop 1 (first recording on a clear rig): its FINAL length must equal
-//     its raw played duration EXACTLY (within one block's worth of sample
-//     accuracy) -- no musical/tempo snapping at all. This is what sets the
-//     shared master phrase M (and separately proposes an Ableton Link tempo
-//     derived FROM that exact length, never the reverse).
-//   - Loop 2+ (every subsequent recording): its final length must snap to
-//     the NEAREST power-of-2 candidate in {M/16, M/8, M/4, M/2, M, 2M, 4M,
-//     8M, ...} (floored at M/16), using a 68% extend-vs-trim threshold
-//     between the bracketing pair.
-//
-// Reads back the ACTUAL latched length via udp/4445's new "wraplen" field
-// (src/control/telemetry.cpp), not by ear -- see dsp/loop.dsp's "wraplen"
-// hbargraph comment for why this zone was added.
-//
-// Usage:
-//   node verify-quantization.js <host> [holdMs1] [holdMs2] [holdMs3...]
-//   e.g. node verify-quantization.js 192.168.137.100 2000 600 8100
-//        (records loop 0 for ~2s, loop 1 for ~0.6s, loop 2 for ~8.1s)
-//
-// Requires the device to already be on a CLEAR rig (no existing loop
-// content) before running -- this script does not clear/erase anything
-// itself, to avoid accidentally wiping real work; run cmd/clearall via the
-// SHIFT+STOP_ALL note sequence yourself first if needed.
-
 const net = require('net');
 const dgram = require('dgram');
 
@@ -40,13 +9,6 @@ if (!host) {
 }
 const holds = (holdArgs.length ? holdArgs : ['2000', '600', '8100']).map(Number);
 
-// WITNESSED live (this session): a bare net.connect() with no explicit
-// timeout can hang for the OS's own default TCP connect timeout (well over
-// a minute on Windows) against an unreachable host -- far too long for a
-// test script that should fail fast and clearly. sock.setTimeout() bounds
-// this to a sane few seconds; 'timeout' fires WITHOUT closing the socket
-// (Node's own documented behavior), so this handler destroys it manually to
-// force the 'error'/reject path instead of hanging past the bound.
 function sendBytes(bytes) {
   return new Promise((resolve, reject) => {
     const sock = net.connect({ host, port: 9401 }, () => {
@@ -63,11 +25,6 @@ function sendBytes(bytes) {
 }
 
 function padNote(looperIndex) {
-  // gridLooperIndex's inverse: row*4+(col-2) = looperIndex, row=0 for the
-  // first 4 loopers -- note = row*8+col. For looperIndex 0..3, row=0,
-  // col=2..5, so note = 2..5. This only covers the first row (loopers 0-3);
-  // extend with the real row/col math (apc_grid.h's gridLooperIndex) if a
-  // test ever needs looper 4+.
   if (looperIndex < 0 || looperIndex > 3) {
     throw new Error(`padNote only covers loopers 0-3 (row 0); got ${looperIndex}`);
   }
@@ -93,8 +50,6 @@ function queryTelemetry() {
       catch (e) { reject(e); }
     });
     sock.on('error', (e) => { clearTimeout(timeout); reject(e); });
-    // The exact query string telemetry.cpp expects -- see its recvfrom/
-    // sendto pair; empty/any non-empty request triggers a status reply.
     sock.send('status', 4445, host);
   });
 }
@@ -106,11 +61,6 @@ async function recordLooper(looperIndex, holdMs) {
   await new Promise((r) => setTimeout(r, holdMs));
   console.log(`[verify-quant] looper${looperIndex}: FINISH`);
   await releasePad(note);
-  // Give the control thread's ~5Hz poll loop (main.cpp's usleep(200ms))
-  // time to both (a) apply finishtarget/finishreq via applyRecPlayCycle and
-  // (b) publish a FRESH telemetry snapshot reflecting the post-finish
-  // wrapLen -- worst case is just under 2 full poll periods (one to apply,
-  // one to publish), so wait comfortably past that.
   await new Promise((r) => setTimeout(r, 500));
   const t = await queryTelemetry();
   const wrapLenSamples = t.loopers.wraplen[looperIndex];
@@ -145,14 +95,8 @@ async function main() {
       const errMs = (errSamples / 48000) * 1000;
       r.expectedSamples = expectedSamples;
       r.errMs = errMs;
-      // Loosely tolerant: real press-to-press timing has genuine, small
-      // MIDI-round-trip + control-thread-poll jitter (~5Hz = up to ~200ms
-      // worst case) that this script itself introduces -- NOT the thing
-      // being verified (that's the DSP's own sample-accurate writeIdx
-      // latch, which this test can't isolate from its own injection
-      // latency without a hardware timestamp). Flag anything wildly off
-      // (>250ms) as a likely real regression, not just injection jitter.
-      r.pass = errMs < 250;
+      const injectionJitterToleranceMs = 250;
+      r.pass = errMs < injectionJitterToleranceMs;
       console.log(`[verify-quant] loop0 (FIRST): held=${r.holdMs}ms expected=${r.expectedSamples.toFixed(0)}samp actual=${r.wrapLenSamples}samp err=${r.errMs.toFixed(1)}ms ${r.pass ? 'PASS' : 'FAIL -- check for musical-snapping regression'}`);
     } else {
       const rawSamplesEstimate = (r.holdMs / 1000) * 48000;

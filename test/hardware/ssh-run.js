@@ -1,9 +1,4 @@
 #!/usr/bin/env node
-// Run a remote command on the aloop device over SSH using the ssh2 npm
-// package directly (no shelling out to an ssh/sshpass binary) -- avoids
-// Windows Git-Bash/OpenSSH quoting and process-spawning quirks entirely.
-//
-// Usage: node ssh-run.js <host> "<command>" [user=root] [password=aloop]
 const { Client } = require('ssh2');
 
 const [, , host, command, user = 'root', password = 'aloop'] = process.argv;

@@ -1,21 +1,4 @@
 #!/usr/bin/env node
-// image/dsp-hotdeploy.js — fast DSP-only iteration: push .dsp edits to CI,
-// wait for the real musl/aarch64 cross-compile, then SSH the changed
-// artifact straight onto a live device and restart only the aloop service.
-//
-// Skips image/build-netboot.sh's full image assembly and any reboot: a pure
-// DSP edit needs neither. Never bypasses the CI cross-compile (see AGENTS.md
-// "the device runs Alpine/musl/aarch64" -- a host-built .so silently fails
-// to load), it only skips everything downstream of "artifact is green".
-//
-// Usage:
-//   node image/dsp-hotdeploy.js --target home       (dsp/*.dsp -> aloop binary, home-fx-lv2)
-//   node image/dsp-hotdeploy.js --target guitar     (guitar_lofi_fx.dsp -> guitar-lofi-fx-lv2)
-//   node image/dsp-hotdeploy.js --target both
-//
-// Requires: gh CLI authenticated (gh auth status), ssh2 (already a repo
-// devDependency), a pushed commit containing the .dsp edit (this script
-// polls the run CI started for that commit -- it does not create a run).
 
 const { execFileSync } = require('child_process');
 const fs = require('fs');

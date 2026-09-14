@@ -1,15 +1,4 @@
 #!/usr/bin/env node
-// image/aloop-reboot.js — remote-reboot the aloop Pi over the network.
-//
-// Ported from looper's reboot.js (send a UDP REBOOT packet to the Pi), adapted
-// for aloop's token-authenticated protocol (src/control/remote_control.cpp):
-// looper's original has NO authentication (a bare "REBOOT" string reboots any
-// Pi on the LAN), so aloop requires a shared secret configured in aloop.conf's
-// [remote] token= — this script sends "REBOOT:<token>" to udp/4446.
-//
-// Usage:
-//   node image/aloop-reboot.js --host 192.168.137.100 --token <secret>
-//   PI_HOST=192.168.137.100 PI_TOKEN=<secret> node image/aloop-reboot.js
 
 const dgram = require('dgram');
 

@@ -1,30 +1,4 @@
 #!/usr/bin/env node
-// image/serve-netboot-win.js — native Windows DHCP + TFTP + HTTP netboot server for
-// the aloop Alpine diskless netboot root. Modeled on the WITNESSED-working looper
-// tftp-server.js: WSL dnsmasq loses the DHCP race to Windows ICS (ICS answers :67
-// first with no boot-filename, so the Pi never asks for TFTP). A native Windows
-// server binds :67 with reuseAddr and answers WITH option 66 (TFTP server) + 67
-// (bootfile bootcode.bin), so the Pi 4 fetches its firmware over TFTP even while ICS
-// is running. It also serves the Alpine HTTP root on :8080 (apks/modloop/apkovl).
-//
-// SELF-UPDATE (mirrors looper's tftp-server.js checkAndUpdate): looper polls
-// GitHub Releases every 30s for a new looper-sd.zip and rewrites its SD-resident
-// kernel; aloop has no Releases (CI artifacts only) and boots diskless (the WHOLE
-// root is re-fetched fresh every power-cycle, not just a kernel file), so the
-// equivalent here polls the latest GREEN build-binary + build-lv2 Actions runs,
-// downloads their artifacts when the head_sha changes, rebuilds the netboot root
-// in place (image/build-netboot.sh) with the new binary+lv2, and sends REBOOT to
-// the already-running Pi (src/control/remote_control.cpp, udp/4446) so it picks
-// up the new build on its next boot. aloop's repo is PRIVATE, so a GITHUB_TOKEN
-// (env, or --token) is REQUIRED for this (unlike looper's public-repo Releases,
-// which need no auth) — the loop refuses to start without one, loudly, rather
-// than silently never finding anything.
-//
-// Run from an ADMIN shell (ports 67 + 69 need privilege):
-//   GITHUB_TOKEN=<token> node image/serve-netboot-win.js [--root <netboot-root>] [--server 192.168.137.1]
-//   ALOOP_NO_AUTO_UPDATE=1 to disable the poll loop (matches looper's LOOPER_NO_AUTO_UPDATE).
-//
-// Default root is .netboot-serve/ (build-netboot.sh OUT). Ctrl-C stops everything.
 
 const fs = require('fs');
 const path = require('path');
@@ -40,7 +14,7 @@ const extractZip = require('extract-zip');
 function arg(name, def) { const i = process.argv.indexOf(name); return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : def; }
 
 const LOG_FILE = arg('--log', path.join(__dirname, '..', '.netboot-serve.log'));
-const LOG_MAX_BYTES = parseInt(arg('--log-max-bytes', String(10 * 1024 * 1024)));   // 10 MiB
+const LOG_MAX_BYTES = parseInt(arg('--log-max-bytes', String(10 * 1024 * 1024)));
 try { fs.writeFileSync(LOG_FILE, ''); } catch (e) {}
 const _log = (...a) => {
   const line = a.join(' ');
@@ -99,18 +73,18 @@ function resolveServerIp() {
 
 const SERVER_IP = resolveServerIp();
 
-// ---- self-update config (see the file header comment) -----------------------
 const REPO           = 'AnEntrypoint/aloop';
 const GITHUB_TOKEN    = arg('--token', process.env.GITHUB_TOKEN || process.env.ALOOP_GITHUB_TOKEN || '');
 const AUTO_UPDATE     = process.env.ALOOP_NO_AUTO_UPDATE !== '1';
-const UPDATE_INTERVAL_MS = parseInt(arg('--update-interval', '30000'));   // matches looper's 30s poll
+const UPDATE_INTERVAL_MS = parseInt(arg('--update-interval', '30000'));
 const SHA_FILE  = path.join(path.dirname(ROOT), '.netboot-update-sha');
 const PI_HOST   = arg('--pi', '192.168.137.100');
 const PI_TOKEN  = arg('--pi-token', process.env.PI_TOKEN || '');
-const NETBOOT_SERVER = SERVER_IP;   // build-netboot.sh's NETBOOT_SERVER = the same IP we serve HTTP on
+const NETBOOT_SERVER = SERVER_IP;
 
-if (!fs.existsSync(path.join(ROOT, 'start4.elf'))) {
-  console.error('[serve] netboot root looks wrong: no start4.elf in ' + ROOT + ' (run image/build-netboot.sh)');
+const BOARD = arg('--board', process.env.BOARD || 'pi4');
+if (!fs.existsSync(path.join(ROOT, 'bootcode.bin'))) {
+  console.error('[serve] netboot root looks wrong: no bootcode.bin in ' + ROOT + ' (run BOARD=' + BOARD + ' image/build-netboot.sh)');
   process.exit(2);
 }
 console.log('[serve] netboot root: ' + ROOT);
@@ -130,9 +104,6 @@ function allocate(mac) {
   throw new Error('DHCP pool exhausted on ' + NETBOOT_SUBNET_PREFIX + '0/24');
 }
 
-// ---- TFTP -------------------------------------------------------------------
-// The Pi 4 requests files under its BOARD-SERIAL subdir (<serial>/start4.elf). We
-// serve the flat root; if <serial>/foo is missing, fall back to foo at the root.
 function parseOpts(msg, offset) {
   const opts = {};
   while (offset < msg.length) {
@@ -201,9 +172,6 @@ tftp.on('message', (msg, rinfo) => {
 tftp.on('error', err => { if (err.code === 'EACCES') { console.error('[TFTP] need ADMIN: port 69'); process.exit(1); } console.error('[TFTP]', err.message); });
 tftp.bind(69, '0.0.0.0', () => console.log('[TFTP] listening :69'));
 
-// ---- DHCP -------------------------------------------------------------------
-// Race diagnostics: how many REQUESTs each MAC has sent, and whether ANY TFTP
-// read has happened. Many REQUESTs + zero TFTP reads is the ICS-wins signature.
 const dhcpRequestCount = new Map();
 let tftpReadCount = 0;
 let bootOptionWarned = false;
@@ -218,21 +186,28 @@ for (const addrs of Object.values(os.networkInterfaces())) {
   }
 }
 const localMacWarned = new Set();
-// reuseAddr lets us share :67 with Windows ICS; we answer WITH the boot options ICS
-// omits, so the Pi accepts our offer and proceeds to TFTP.
+const DHCP_OPT_MSG_TYPE = 53;
+const DHCP_OPT_SERVER_ID = 54;
+const DHCP_OPT_LEASE_TIME = 51;
+const DHCP_OPT_SUBNET_MASK = 1;
+const DHCP_OPT_TFTP_SERVER = 66;
+const DHCP_OPT_BOOTFILE = 67;
+const DHCP_OPT_END = 255;
 function buildDhcpReply(type, xid, mac, offeredIp) {
   const buf = Buffer.alloc(576);
   buf[0] = 2; buf[1] = 1; buf[2] = 6; buf.writeUInt32BE(xid, 4); buf.writeUInt16BE(0x8000, 10);
   ip2buf(offeredIp).copy(buf, 16); ip2buf(SERVER_IP).copy(buf, 20); mac.copy(buf, 28);
   buf.writeUInt32BE(0x63825363, 236);
   let o = 240;
-  buf[o++] = 53; buf[o++] = 1; buf[o++] = type;                                   // msg type
-  buf[o++] = 54; buf[o++] = 4; ip2buf(SERVER_IP).copy(buf, o); o += 4;            // server id
-  buf[o++] = 51; buf[o++] = 4; buf.writeUInt32BE(LEASE_SECS, o); o += 4;          // lease
-  buf[o++] = 1;  buf[o++] = 4; Buffer.from(SUBNET).copy(buf, o); o += 4;          // subnet mask
-  const ti = Buffer.from(SERVER_IP); buf[o++] = 66; buf[o++] = ti.length; ti.copy(buf, o); o += ti.length; // TFTP server (opt 66)
-  const boot = Buffer.from(BOOTFILE + '\0'); buf[o++] = 67; buf[o++] = boot.length; boot.copy(buf, o); o += boot.length; // bootfile (opt 67)
-  buf[o++] = 255;
+  buf[o++] = DHCP_OPT_MSG_TYPE; buf[o++] = 1; buf[o++] = type;
+  buf[o++] = DHCP_OPT_SERVER_ID; buf[o++] = 4; ip2buf(SERVER_IP).copy(buf, o); o += 4;
+  buf[o++] = DHCP_OPT_LEASE_TIME; buf[o++] = 4; buf.writeUInt32BE(LEASE_SECS, o); o += 4;
+  buf[o++] = DHCP_OPT_SUBNET_MASK; buf[o++] = 4; Buffer.from(SUBNET).copy(buf, o); o += 4;
+  const tftpServerAddr = Buffer.from(SERVER_IP);
+  buf[o++] = DHCP_OPT_TFTP_SERVER; buf[o++] = tftpServerAddr.length; tftpServerAddr.copy(buf, o); o += tftpServerAddr.length;
+  const bootfileName = Buffer.from(BOOTFILE + '\0');
+  buf[o++] = DHCP_OPT_BOOTFILE; buf[o++] = bootfileName.length; bootfileName.copy(buf, o); o += bootfileName.length;
+  buf[o++] = DHCP_OPT_END;
   return buf.slice(0, o);
 }
 const dhcp = dgram.createSocket({ type: 'udp4', reuseAddr: true });
@@ -252,12 +227,13 @@ dhcp.on('message', (msg) => {
     let msgType = 0, o = 240;
     while (o < msg.length) {
       const opt = msg[o++];
-      if (opt === 255) break;
+      if (opt === DHCP_OPT_END) break;
       if (opt === 0) continue;
-      if (o >= msg.length) break;                 // truncated: a length byte was promised but absent
+      const lengthBytePromisedButAbsent = o >= msg.length;
+      if (lengthBytePromisedButAbsent) break;
       const len = msg[o++];
-      if (opt === 53 && o < msg.length) msgType = msg[o];
-      o += len;                                    // may overshoot msg.length; the while-guard ends the loop next iteration
+      if (opt === DHCP_OPT_MSG_TYPE && o < msg.length) msgType = msg[o];
+      o += len;
     }
     const offeredIp = allocate(macStr);
     console.log('[DHCP] ' + (msgType === 1 ? 'DISCOVER' : msgType === 3 ? 'REQUEST' : 'type' + msgType) + ' from ' + macStr + ' -> ' + offeredIp + ' (boot=' + BOOTFILE + ', tftp=' + SERVER_IP + ')');
@@ -301,7 +277,6 @@ dhcp.bind(67, '0.0.0.0', () => {
   console.log('[DHCP] listening :67 (replies via ' + SERVER_IP + ' to ' + SUBNET_DIRECTED_BROADCAST + ')');
 });
 
-// ---- HTTP root (Alpine initramfs fetches apks/modloop/apkovl over HTTP) ------
 const mime = { '.tar': 'application/x-tar', '.gz': 'application/gzip' };
 const httpSrv = http.createServer((req, res) => {
   const safe = path.normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^(\.\.[/\\])+/, '');
@@ -315,9 +290,9 @@ const httpSrv = http.createServer((req, res) => {
 httpSrv.on('error', err => console.error('[HTTP]', err.message));
 httpSrv.listen(HTTP_PORT, SERVER_IP, () => console.log('[HTTP] listening http://' + SERVER_IP + ':' + HTTP_PORT + '/'));
 
-// ---- self-update (mirrors looper's tftp-server.js checkAndUpdate) -----------
 let currentSha = null, rateLimitedUntil = 0;
-const knownExpiredShas = new Set();
+const EXPIRED_SHA_RETRY_MS = 5 * 60 * 1000;
+const knownExpiredShas = new Map();
 try { currentSha = fs.readFileSync(SHA_FILE, 'utf8').trim(); console.log('[update] last-built sha: ' + currentSha); } catch (e) {}
 
 function ghGet(apiPath) {
@@ -330,21 +305,6 @@ function ghGet(apiPath) {
     }).on('error', reject);
   });
 }
-// Artifact downloads are a zip; write it, unzip via the pure-JS extract-zip
-// package. WITNESSED live: PowerShell's Expand-Archive can hang indefinitely
-// on this host under real system load (multiple unrelated powershell.exe
-// invocations from other tools also observed stuck the same session) --
-// extract-zip has no shell/PowerShell dependency and avoids that failure
-// mode entirely, matching this codebase's own ssh2-over-Windows-ssh.exe
-// precedent for the same "flaky native Windows tooling" reason.
-//
-// GitHub's artifact endpoint answers with a 303 (not 301/302) to a pre-signed
-// Azure Blob Storage URL (the SAS token is IN the query string, e.g.
-// productionresultsNN.blob.core.windows.net/...&sig=...). WITNESSED: sending
-// our GitHub `Authorization: token ...` header on to that redirect target
-// makes Azure return 403 (it sees an auth header it doesn't recognize on a
-// URL that's already authorized via its own signature) -- the header must be
-// stripped once we leave api.github.com, only ever sent to the ORIGINAL host.
 function downloadArtifactZip(archiveUrl, destZip) {
   return new Promise((resolve, reject) => {
     const originalHost = new URL(archiveUrl).host;
@@ -357,7 +317,7 @@ function downloadArtifactZip(archiveUrl, destZip) {
         if (res.statusCode !== 200) return reject(new Error('artifact download HTTP ' + res.statusCode));
         const tmp = destZip + '.tmp', out = fs.createWriteStream(tmp);
         const cleanupAndReject = err => { fs.rmSync(tmp, { force: true }); reject(err); };
-        res.on('error', cleanupAndReject);   // a mid-stream socket error on the readable itself, not just the write side
+        res.on('error', cleanupAndReject);
         res.pipe(out);
         out.on('finish', () => { fs.renameSync(tmp, destZip); resolve(); });
         out.on('error', cleanupAndReject);
@@ -394,25 +354,11 @@ function sendPiReboot() {
 }
 let updateInFlight = false;
 let updateInFlightSince = 0;
-// WITNESSED live: this guard wedged and the server then answered TFTP/HTTP with
-// a STALE netboot root for 19+ hours while logging nothing but "rebuild already
-// in progress" -- a freshly written SD card looked like a broken fix because the
-// Pi netbooted that stale image instead. The finally below and the child's own
-// REBUILD_TIMEOUT_MS only bound the CHILD PROCESS; they cannot save us if the
-// surrounding async flow itself stops making progress (hung await, suspended
-// process). So the guard is also time-bounded here: held far past any legitimate
-// rebuild means it is wedged, and a wedged updater must recover loudly rather
-// than silently serve yesterday's image forever.
-const IN_FLIGHT_WEDGE_MS = 12 * 60 * 1000;   // 2.4x the 5min child timeout
+const CHILD_REBUILD_TIMEOUT_MS = 5 * 60 * 1000;
+const IN_FLIGHT_WEDGE_MS = CHILD_REBUILD_TIMEOUT_MS * 2.4;
 async function checkAndUpdate() {
   if (!AUTO_UPDATE) return;
   if (!GITHUB_TOKEN) { console.error('[update] no GITHUB_TOKEN/ALOOP_GITHUB_TOKEN/--token set — aloop/aloop is PRIVATE, auto-update cannot list runs or download artifacts without one. Set the env var or pass --token, or set ALOOP_NO_AUTO_UPDATE=1 to silence this.'); return; }
-  // WITNESSED live: making the rebuild async (so it no longer blocks the
-  // event loop, see the execFileAsync comment below) means the 30s
-  // setInterval tick can now fire again WHILE a rebuild from a prior tick is
-  // still running — without a guard this spawns a second (and third...)
-  // concurrent build-netboot.sh writing the SAME output directory,
-  // corrupting the in-progress tar/apkovl assembly. One rebuild at a time.
   if (updateInFlight) {
     const heldMs = Date.now() - updateInFlightSince;
     if (heldMs < IN_FLIGHT_WEDGE_MS) {
@@ -433,51 +379,29 @@ async function checkAndUpdate() {
     if (!binRun || !lv2Run) { console.log('[update] no green build-binary/build-lv2 run found yet'); return; }
     sha = binRun.head_sha + ':' + lv2Run.head_sha;
     if (sha === currentSha) { console.log('[update] up to date (sha ' + sha.slice(0, 16) + '...)'); return; }
-    if (knownExpiredShas.has(sha)) { console.log('[update] sha ' + sha.slice(0, 16) + '... has expired artifacts, waiting for a newer build'); return; }
+    const expiredAt = knownExpiredShas.get(sha);
+    if (expiredAt !== undefined) {
+      const retryInMs = expiredAt + EXPIRED_SHA_RETRY_MS - Date.now();
+      if (retryInMs > 0) {
+        console.log('[update] sha ' + sha.slice(0, 16) + '... had expired artifacts, retrying in ' + Math.ceil(retryInMs / 1000) + 's (a rerun of the same commit can refresh them)');
+        return;
+      }
+      knownExpiredShas.delete(sha);
+    }
     console.log('[update] new build found: ' + sha.slice(0, 16) + '... (was ' + (currentSha ? currentSha.slice(0, 16) + '...' : 'none') + ')');
 
     const work = path.join(path.dirname(ROOT), '.netboot-update-work');
     fs.rmSync(work, { recursive: true, force: true });
     const binDir = await downloadRunArtifact(binRun.id, 'aloop-aarch64-musl', path.join(work, 'bin'));
-    // Both LV2 artifacts land in the SAME lv2Dir -- lib-boot-tree.sh's own
-    // packing step (`find "${LV2_DIR}" -maxdepth 2 -name '*.lv2' -exec cp -r
-    // ...`) already copies every *.lv2 bundle it finds under this one dir, so
-    // downloading a second artifact here needs no downstream script change.
-    // guitar-lofi-fx-lv2 (Core-3 redesign: guitar_lofi_fx.dsp, the always-on
-    // guitar+lofi-fx chain moved off Core 1) is a SEPARATE build-lv2.yml job
-    // from home-fx-lv2 (see .github/workflows/build-lv2.yml) — WITNESSED:
-    // before this fix, checkAndUpdate only ever fetched home-fx-lv2, so the
-    // real device never received guitar_lofi_fx.lv2 at all even after a
-    // successful rebuild+reboot cycle (confirmed live: apkovl only ever
-    // contained aloop.lv2, guitar_lofi_fx.lv2 missing on the running device).
     const lv2Dir = await downloadRunArtifact(lv2Run.id, 'home-fx-lv2', path.join(work, 'lv2'));
     await downloadRunArtifact(lv2Run.id, 'guitar-lofi-fx-lv2', lv2Dir);
-    // resonode-lv2 is a SEPARATE artifact into its OWN directory (never
-    // merged into lv2Dir) -- lib-boot-tree.sh's own home-FX find explicitly
-    // excludes resonode.lv2 by name and only lays it in via RESONODE_LV2_DIR,
-    // since it must never be loaded by the general homeFx/userFx hosts (see
-    // audio_thread.cpp's dedicated resonodeFx Lv2Host, only ever process()'d
-    // when fx/resonode/engaged is true).
     const resonodeDir = await downloadRunArtifact(lv2Run.id, 'resonode-lv2', path.join(work, 'resonode'));
     const pitchTrackerDir = await downloadRunArtifact(lv2Run.id, 'pitchtracker-lv2', path.join(work, 'pitchtracker'));
-    // delayverb-lv2: same isolation reasoning as resonode -- lib-boot-tree.sh's
-    // home-FX find excludes delayverb.lv2 by name, only laid in via
-    // DELAYVERB_LV2_DIR, since it's hosted by its own dedicated Lv2Host
-    // instances in audio_thread.cpp (cue/master), never the general
-    // homeFx/userFx hosts.
     const delayVerbDir = await downloadRunArtifact(lv2Run.id, 'delayverb-lv2', path.join(work, 'delayverb'));
     const aloopBin = path.join(binDir, 'aloop');
     if (!fs.existsSync(aloopBin)) throw new Error('aloop binary not found in downloaded artifact at ' + aloopBin);
 
     console.log('[update] rebuilding netboot root -> ' + ROOT);
-    // Windows commonly has THREE different "bash.exe" on PATH: Git-Bash
-    // (understands native C:/... paths), the WSL launcher stub under
-    // System32, and a WindowsApps alias. Plain execFileSync('bash', ...)
-    // resolves whichever one PATH lists first for the CURRENT process/shell —
-    // WITNESSED live: under this script's launch environment that resolved to
-    // the WSL stub, which cannot see C:/dev/... at all ("No such file or
-    // directory" on a path that verifiably exists). Pin the real Git-Bash
-    // install explicitly so this doesn't depend on PATH order.
     const gitBashCandidates = [
       'C:\\Program Files\\Git\\bin\\bash.exe',
       'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
@@ -485,23 +409,7 @@ async function checkAndUpdate() {
     ];
     const bashExe = gitBashCandidates.find(p => fs.existsSync(p)) || 'bash';
     const buildScript = path.join(__dirname, 'build-netboot.sh').replace(/\\/g, '/');
-    // WITNESSED live: a SYNCHRONOUS execFileSync rebuild call freezes the
-    // ENTIRE Node event loop for as long as it runs — no more DHCP/TFTP/HTTP
-    // serving, no more checkAndUpdate ticks, nothing, even on a successful
-    // rebuild that just takes a while (tar/gzip a real apkovl is not
-    // instant). Worse, with no timeout, a genuinely stuck child (a hung
-    // apk-fetch, a hung subprocess waiting on stdin) freezes the server
-    // indefinitely with zero error, zero log line — indistinguishable from
-    // "still working" until someone checks wall-clock time against the last
-    // log line (exactly what happened here). Unlike looper's own
-    // checkAndUpdate (a simple download+unzip+file-copy, no long subprocess
-    // at all), aloop's rebuild genuinely shells out to a multi-step bash
-    // script — so run it ASYNC (execFile, awaited) so the event loop keeps
-    // serving DHCP/TFTP/HTTP throughout, AND cap it with an explicit
-    // timeout so a stuck child is killed and the catch below logs a real
-    // error and retries next tick — matching looper's "any failure is
-    // caught, next tick tries again" self-healing design.
-    const REBUILD_TIMEOUT_MS = 5 * 60 * 1000;
+    const REBUILD_TIMEOUT_MS = CHILD_REBUILD_TIMEOUT_MS;
     const alpineVersion = process.env.ALPINE_VERSION || '3.20.3';
     const alpineTarball = path.join(path.dirname(ROOT), '.netboot-cache', 'alpine-rpi-' + alpineVersion + '-aarch64.tar.gz');
     if (!fs.existsSync(alpineTarball)) {
@@ -513,17 +421,11 @@ async function checkAndUpdate() {
     }
     await execFileAsync(bashExe, [buildScript], {
       cwd: path.join(__dirname, '..'),
-      env: Object.assign({}, process.env, { OUT: ROOT, ALOOP_BIN: aloopBin, LV2_DIR: lv2Dir, RESONODE_LV2_DIR: resonodeDir, PITCHTRACKER_LV2_DIR: pitchTrackerDir, DELAYVERB_LV2_DIR: delayVerbDir, NETBOOT_SERVER: NETBOOT_SERVER, ALPINE_VERSION: alpineVersion, ALPINE_TARBALL: alpineTarball }),
+      env: Object.assign({}, process.env, { OUT: ROOT, BOARD: BOARD, ALOOP_BIN: aloopBin, LV2_DIR: lv2Dir, RESONODE_LV2_DIR: resonodeDir, PITCHTRACKER_LV2_DIR: pitchTrackerDir, DELAYVERB_LV2_DIR: delayVerbDir, NETBOOT_SERVER: NETBOOT_SERVER, ALPINE_VERSION: alpineVersion, ALPINE_TARBALL: alpineTarball }),
       timeout: REBUILD_TIMEOUT_MS,
       killSignal: 'SIGKILL',
       maxBuffer: 64 * 1024 * 1024
     });
-    // Verify the rebuild actually replaced the served payload before recording
-    // it as current. AGENTS.md already documents stale-comparison incidents in
-    // this exact pipeline; the failure mode that bit us live was subtler --
-    // the served root silently stayed on an old build while the updater
-    // believed it was current. Comparing the apkovl the Pi will actually fetch
-    // against the binary we just laid in closes that gap.
     try {
       const servedOvl = path.join(ROOT, 'aloop.apkovl.tar.gz');
       const st = fs.statSync(servedOvl);
@@ -542,9 +444,9 @@ async function checkAndUpdate() {
     sendPiReboot();
   } catch (e) {
     if (e instanceof ArtifactExpiredError && sha) {
-      knownExpiredShas.add(sha);
+      knownExpiredShas.set(sha, Date.now());
       console.error('[update] ' + sha.slice(0, 16) + '... artifacts expired before this Pi netbooted (retention-days: 3) -- ' +
-                     'will wait for a newer green build instead of retrying this one every tick: ' + e.message);
+                     'will wait ' + (EXPIRED_SHA_RETRY_MS / 1000) + 's before retrying (a rerun of the same run can refresh the artifacts) instead of retrying every tick: ' + e.message);
     } else {
       console.error('[update] failed:', e.message);
     }
