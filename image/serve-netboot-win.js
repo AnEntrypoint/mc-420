@@ -32,7 +32,7 @@ const HTTP_PORT = parseInt(arg('--http', '8080'));
 const BOOTFILE  = 'bootcode.bin';
 const POOL_START = [192, 168, 137, 100];
 const SUBNET     = [255, 255, 255, 0];
-const LEASE_SECS = 3600;
+const LEASE_SECS = 86400;
 const NETBOOT_SUBNET_PREFIX = '192.168.137.';
 
 function localAddressesOnNetbootSubnet() {
