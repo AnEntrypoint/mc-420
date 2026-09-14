@@ -21,6 +21,13 @@ board_wifi_irq_name() {
   esac
 }
 
+board_firmware_names() {
+  case "$1" in
+    pi3) echo "start.elf fixup.dat bcm2837-rpi-3-b-plus.dtb" ;;
+    *)   echo "start4.elf fixup4.dat bcm2711-rpi-4-b.dtb" ;;
+  esac
+}
+
 boot_tree_fetch() {
   case "$BOARD" in
     opi-prime) boot_tree_fetch_opi "$1" "$2" ;;

@@ -11,6 +11,12 @@ board_supports_usb_gadget() {
     *) return 1 ;;
   esac
 }
+board_firmware_names() {
+  case "$1" in
+    pi3) echo "start.elf fixup.dat bcm2837-rpi-3-b-plus.dtb" ;;
+    *)   echo "start4.elf fixup4.dat bcm2711-rpi-4-b.dtb" ;;
+  esac
+}
 note() { echo "[validate-netboot] $*"; }
 ok()   { echo "  OK   $*"; }
 bad()  { echo "  FAIL $*"; FAIL=1; }
@@ -22,7 +28,8 @@ if [ "$BOARD" = "opi-prime" ]; then
 fi
 note "netboot root: $DIR ($(du -sh "$DIR" | cut -f1))"
 
-for f in bootcode.bin start4.elf fixup4.dat bcm2711-rpi-4-b.dtb; do
+_fw="$(board_firmware_names "$BOARD")"
+for f in bootcode.bin $(echo "$_fw"); do
   [ -f "$DIR/$f" ] && ok "firmware: $f" || bad "missing Pi firmware file: $f"
 done
 

@@ -47,9 +47,6 @@ fi
 gzip -f "$NBOVL_TAR"
 mv "$NBOVL_TAR.gz" "$BOOT/aloop.apkovl.tar.gz"
 
-# Extraction on Windows loses the exec bit regardless of what the archive
-# stores (NTFS has no exec bit), so modes are always read from the tar
-# LISTING here, never from an extracted copy -- see AGENTS.md.
 NB_LASTMODE=$(tar -tzvf "$BOOT/aloop.apkovl.tar.gz" 2>/dev/null | grep 'opt/aloop/aloop$' | tail -1 | cut -c1-10)
 if [ "$NB_LASTMODE" = "-rwxr-xr-x" ]; then
   echo "[netboot] overlay: added eth0 dhcp + networking service [aloop binary confirmed +x after repack]"
@@ -88,9 +85,12 @@ fi
 [ -f "$BOOT/boot/modloop-rpi" ]        || { echo "[netboot] ERROR: modloop-rpi missing from boot tree"; exit 1; }
 [ -f "$BOOT/boot/initramfs-rpi" ]      || { echo "[netboot] ERROR: initramfs-rpi missing";            exit 1; }
 [ -f "$BOOT/aloop.apkovl.tar.gz" ]     || { echo "[netboot] ERROR: apkovl missing from boot tree";    exit 1; }
-[ -f "$BOOT/start4.elf" ]              || { echo "[netboot] ERROR: start4.elf (Pi4 firmware) missing"; exit 1; }
-[ -f "$BOOT/fixup4.dat" ]              || { echo "[netboot] ERROR: fixup4.dat (Pi4 firmware) missing"; exit 1; }
-[ -f "$BOOT/bcm2711-rpi-4-b.dtb" ]     || { echo "[netboot] ERROR: Pi4 DTB missing";                  exit 1; }
+[ -f "$BOOT/bootcode.bin" ]            || { echo "[netboot] ERROR: bootcode.bin missing";              exit 1; }
+_fw="$(board_firmware_names "$BOARD")"
+_fw_start="$(echo "$_fw" | cut -d' ' -f1)"; _fw_fixup="$(echo "$_fw" | cut -d' ' -f2)"; _fw_dtb="$(echo "$_fw" | cut -d' ' -f3)"
+[ -f "$BOOT/$_fw_start" ] || { echo "[netboot] ERROR: $_fw_start (BOARD=$BOARD firmware) missing"; exit 1; }
+[ -f "$BOOT/$_fw_fixup" ] || { echo "[netboot] ERROR: $_fw_fixup (BOARD=$BOARD firmware) missing"; exit 1; }
+[ -f "$BOOT/$_fw_dtb" ]   || { echo "[netboot] ERROR: $_fw_dtb (BOARD=$BOARD DTB) missing"; exit 1; }
 
 OUT_NEW="${OUT}.new.$$"
 OUT_OLD="${OUT}.old.$$"
