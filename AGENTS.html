@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fd3f2b3b1259e7d00a8a2220ce8ed2923143d5fc">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=b0e80054f169d4cfcc86205fb870a011f1ef7fcf">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1380,148 +1380,98 @@ on the poly path, so `GrainFormant` is inert there (verified directly: max grain
 mix 0.000000000 across formant -1.5..+1.5). It remains for the mono pedal-ride
 engine, which still calls `setFormantDepth` via `pitch_ffi.h`.
 
-This retires the octave defect documented above. Measured over 72 cases with
-formant actually applied, worst error **1904 cents -&gt; 14.4 cents**, cases beyond
-+-25c **9 -&gt; 0**. Over a wider 280-case sweep (f0 82-880Hz x 7 shifts x 5 formant
-depths, output 41Hz-1760Hz): **zero** new failures, zero cases worse than the
-previous build, 15 cases the previous build got wrong that are now right, total
-beyond +-25c **35 -&gt; 20** — and every one of the 20 remaining is also wrong in
-the previous build, so nothing regressed. Neutral formant is bit-identical over
-30 cases. 175 numerical stress cases (silence, +-DC, denormal, full-scale square,
-clipped noise, across formant +-3.0) give zero non-finite samples and nothing
-outside the structural ceiling.
+This retires the octave defect a peaking-EQ/grain-based approach had.
+Worst error over a 72-case formant-applied sweep dropped from 1904 cents to
+14.4 cents; a wider 280-case sweep found zero regressions against the
+previous build. `[[memory: lpc-formant-shifter-history]]` for the full
+accuracy measurement, two LPC design corrections (order must be ~44 at
+48kHz, not the 8kHz-speech figure of 10-12; warping must happen on the
+power-spectrum bin grid, not the autocorrelation lag domain, or it aliases
+past Nyquist), and why bounding the LPC order alone doesn't fix it.
 
-**Two design corrections that cost real investigation — do not re-derive them
-the wrong way.** First, LPC order 10-12 is the 8kHz SPEECH figure and is useless
-at 48kHz: at order 12 the stage measured as a complete no-op, and orders 20 and
-32 miss F2 (1090Hz) entirely; order 44 recovers `[698, 1086, 2441]` against a
-true `730/1090/2440`. Second, warping the autocorrelation in the LAG domain
-aliases past Nyquist — at a factor of 2 it produced spurious envelope peaks
-BELOW the source (326Hz from a 946Hz source). Warp the model power spectrum on
-an explicit bin grid with a band-limited HF fill instead. Cost is ~24
-MACs/sample/voice for the filtering alone, not the "well under 10" that was
-estimated.
+**High-fundamental defect and its current fix**: an LPC pair is a linear
+filter and cannot move a partial, so at a high fundamental, warping the
+envelope moves the modelled resonances off the only two or three harmonics
+that exist and can annihilate H1 (an octave percept). Current mitigation is
+three bounds: a warp taper against output pitch (full below 450Hz, zero by
+900Hz — covering the whole useful range of a guitar/vocal pitch-lock),
+fundamental-level protection (clamps the warped spectrum to within 1.5dB of
+the source below 2x the fundamental), and an LPC-order bound (helpful, not
+sufficient alone). `[[memory: lpc-formant-shifter-history]]` for the
+measurement that found this and a refuted order-only-bound attempt.
 
-**Why a high fundamental broke it, and why bounding the LPC order does NOT fix
-that.** An LPC pair is a linear filter and cannot move a partial. When the
-fundamental is high, warping the envelope moves the modelled resonances off the
-only two or three harmonics that exist and ANNIHILATES H1 — measured at f0=880,
-+7 semitones, formant +1.0: H1 drops 36dB and H2 becomes dominant, which is an
-octave percept. It fires in both warp directions (either direction moves the
-envelope off the fundamental) and tracks OUTPUT frequency rather than shift
-amount. Bounding the order by harmonic count was tried and refuted by
-measurement: at order 8-9 there is no harmonic-fitting left to do and the defect
-is undiminished (worst error 2407c, still 6-9 bad cases). The fix is three
-bounds — a warp taper against output pitch (full below 450Hz, zero by 900Hz),
-a fundamental-level protection clamping the warped spectrum to within 1.5dB of
-the source below 2x the fundamental, and an order bound (helpful, not
-sufficient). Output period comes from the shared SNAC tracker.
+**Known, disclosed corner (unrelated to formants)**: at f0=880 with -12
+semitones the output reads +1200c in both the old and current builds,
+including at formant=0 where they're bit-identical — a pre-existing
+splice-path failure at that corner. `[[memory: lpc-formant-shifter-history]]`
+for the numbers.
 
-**An autocorrelation/FFT-peak pitch metric octave-errors on exactly this
-signal** and will mis-attribute the defect as pre-existing. Measure on the
-harmonic grid instead: dominant partial within 6dB, plus H1's relative level and
-an off-grid energy check.
+**Real-hardware CPU cost, current measurement**: driving MultiKey transpose
+with 6 held keys via byte-level MIDI injection and sweeping `fx/formant`
+(CC53) across its range gives 46-63% peak `core_busy` with zero xruns
+across the whole sweep — see the `LpcFormantShifter::beginBlock` section
+below for why an earlier 80-83% figure regressed and was fixed.
+`[[memory: lpc-formant-shifter-history]]` for that earlier measurement's own
+history and the x86-vs-aarch64 discrepancy it originally reported.
 
-**The trade, stated plainly.** Below 450Hz output the taper is 1.0 and the order
-bound never binds, so formant movement is full strength — which covers the whole
-useful range of a guitar/vocal pitch-lock. Between 450 and 900Hz the effect
-fades; above 900Hz it is gone. That converges to the OLD behaviour rather than
-degrading below it, because the old shaper never moved formants downward at any
-pitch. Measured on a formant-bearing vowel stimulus (F1/F2/F3 = 730/1090/2440,
-f0=150Hz): the old shaper commanded down 1.5 octaves moves F1 the WRONG WAY
-(764Hz -&gt; 855Hz) and is non-monotonic upward (1.130 at +0.5, 1.079 at +1.5); the
-LPC stage moves F1 down (610Hz at -0.5 where the old shaper sat at 761Hz) and is
-monotonic upward (1.173 -&gt; 1.395). Movement magnitude is compressed at the
-extremes and the negative extreme is the weaker direction. Widening the
-fundamental-protection span from 1.25x to 2.0x was needed to clear two cases at
-494Hz and 698Hz and cost downward movement at 330/440Hz (0.72/0.81 -&gt; 0.87/0.91)
-— correctness was chosen over movement magnitude there.
+**`SibilanceDetector`** (a unity-at-Nyquist ~4kHz one-pole highpass energy
+ratio against a slower broadband envelope, `kHpPole = 0.5925`) is per-voice,
+applied in `pitch_poly_ffi.h`'s `dubfx_poly_shape_block()` right after
+`EngineSoladSnac::processBlock()` fills that voice's output block. Gated on
+the SNAC tracker being UNLOCKED (`!periodOk()`, smoothed over ~5ms) as well
+as on the HF-energy ratio: a detected fricative/consonant crossfades the
+voice's output back toward its own raw dry input (up to 85%) so
+"s"/"sh"/"f"/"t" transients stay intelligible instead of being
+pitch/formant-warped. A pitched instrument holds its SNAC lock through a
+pick transient (`m_lockMiss` needs 3 consecutive misses), which is what
+makes the gate discriminate real sibilance from a percussive attack.
+`[[memory: lpc-formant-shifter-history]]` for the superseded
+`VowelFormantShaper` peaking-EQ mechanism this file used to also describe
+here (retired by `LpcFormantShifter` itself, not by anything sibilance-
+related) and the HF-ratio detector's own gain-bug history. This vowel/
+sibilance character is a first real implementation, not by-ear-tuned on
+real hardware yet — needs a live-mic pass on the Pi 4 before calling it
+final. At strongly NEGATIVE formant (near the practical -1.5 floor) a
+standalone C++ harness shows a real, reproducible ~70-90 cents flat error
+that predates this shaping work (confirmed against the raw shifter engine
+with no vowel/sibilance code at all) — consistent with the free-transpose
+engine's own documented negative-side asymmetry, not a defect this
+shaping introduced.
 
-**RESOLVED on real hardware: the engaged formant cost does NOT reproduce on
-aarch64.** This section stood as UNRESOLVED and gating shipping on the
-strength of an x86 figure — about 1.8x the grain path it replaces, 6 voices,
-x86_64 dev host: 49.6/51.0us per block before, 87.6/97.7us after, against a
-1333us budget — with the note that an x86 number never clears an aarch64 RT
-path. That witness has now been taken on the real Pi 4, driving MultiKey
-transpose with 6 held keys via byte-level MIDI injection and sweeping
-`fx/formant` (CC53) across its range:
+**`LpcFormantShifter::beginBlock`'s coefficient-update cadence must be
+decoupled from the caller's block size, not called once per FFI-block
+call.** `beginBlock()` glides the reflection-coefficient state toward the
+latest LPC analysis and runs two O(order²) `reflectionToDirect` conversions
+every time it's called. When `1b70abb` cut `DUBFX_POLY_BS` from 64 to 16
+samples (a real, independently-good latency win), `beginBlock()` kept
+firing every FFI-block call, so this fixed per-call cost ran 4x more often
+in real time, and the glide constant (`kReflectionGlidePerBlock = 0.2`,
+tuned for ~64-sample calls) converged the resonant recolor filter's
+coefficients 4x faster in wall-clock time — a near-instant coefficient
+snap on a high-Q filter every ~43ms LPC-analysis hop, audible as a click.
+Fixed: `beginBlock(int blockSamples)` accumulates real elapsed samples and
+only runs the coefficient update once per `kCoeffUpdateHopSamples = 64`
+regardless of the caller's block size, restoring the original ~64-sample
+real-time cadence. Verified via an instrumented harness against the real
+code: reflection-coefficient convergence to 95% takes ~208 samples
+(~4.3ms) pre-fix vs. ~832 samples (~17ms) post-fix for the identical
+coefficient sequence, matching the originally-tuned glide time.
 
-  formant neutral (CC 64)   80% peak core_busy   3 gaps   0 xruns
-  formant maximum (CC 127)  83% peak core_busy   3 gaps   0 xruns
-  formant minimum (CC 0)    82% peak core_busy   2 gaps   0 xruns
-
-Engaging the formant stage at either extreme costs about **three percentage
-points**, not the 1.8x the x86 measurement predicted, and produces no xruns
-at any setting. The per-voice analysis-phase staggering (without which x86
-p99 was 280us and max 499us) is doing its job on the target. Transpose is
-not a CPU problem on this hardware; a separate measurement driving 6 voices
-with no formant showed the gap count moving only 26 -&gt; 28 across engage,
-play and release combined.
-
-At neutral the stage remains FREE and cheaper than the old code overall
-(x86: 58.7 -&gt; 37.3us) because the grain path is skipped entirely.
-
-**Known, disclosed, NOT fixed**: at f0=880 with -12 semitones the output reads
-+1200c in BOTH builds including at formant 0 where they are bit-identical — a
-pre-existing splice-path failure at that corner, unrelated to formants. The LPC
-build drives H1 deeper there (-37.1dB vs -18.6dB) without changing the verdict.
-With SNAC unlocked the output period is held at its last valid value, so the
-taper uses a stale pitch; unpitched material has no harmonic comb for the defect
-to act on, but that is reasoning, not a measurement.
-
-**Real formant/vowel/sibilance shaping (new)**: `vowelFormant.h` adds a
-`VowelFormantShaper` (3 parallel RBJ peaking biquads tuned to F1/F2/F3 of a
-5-point vowel table — U/O/A/E/I, from
-`{300,870,2240}`/`{570,840,2410}`/`{730,1090,2440}`/`{530,1840,2480}`/
-`{270,2290,3010}` Hz) and a `SibilanceDetector` (a ~4kHz one-pole
-highpass energy ratio against a slower broadband envelope). Both are
-per-voice, applied in `pitch_poly_ffi.h`'s `dubfx_poly_shape_block()`
-right after `EngineSoladSnac::processBlock()` fills that voice's 64-sample
-output block — plain C++ math against the existing `formant` scalar and
-the block-aligned dry `inBuf`, so this needed NO new Faust UI primitive
-and carries none of the compile-time-cliff risk below. The existing
-`fx/formant` scalar now does double duty: its magnitude (normalized
-against the ~1.5 practical CC range) is both the `GrainFormant` mix depth
-(unchanged) and the vowel-filter blend depth, and its sign/position maps
-onto the U-O-A-I-E vowel continuum, so sweeping the one existing formant
-knob morphs through real vowel coloration on top of whatever `GrainFormant`
-mix the engine already settles on, instead of just a spectral-tilt
-brightness cue — at `formant=0` both new stages are fully bypassed (zero
-coloring, verified identity). Sibilance detection is gated on the SNAC
-tracker being UNLOCKED (`!periodOk()`, smoothed over ~5ms) as well as on the
-HF-energy ratio: a detected fricative/consonant crossfades the voice's
-output back toward its own raw dry input (up to 85%) so "s"/"sh"/"f"/"t"
-transients stay intelligible instead of being pitch/formant-warped.
-The HF-ratio test alone was a measured liability on the primary instrument —
-the ungated detector fired **full-scale (peak 1.0) on both a guitar pick
-attack and a sustained guitar note**, because a pick attack is exactly the
-broadband HF burst it looks for. Its one-pole highpass was also wrong rather
-than merely leaky (`hp = 0.30*(hpState + x - xPrev)` has a gain of only 0.46
-at Nyquist, so it attenuated the very band it was measuring, and real
-sibilance scored a mean of just 0.035). It is now a unity-at-Nyquist form
-(`hp = p*hpState + ((1+p)/2)*(x - xPrev)`, `p = 0.5925`, corner ~4kHz).
-Measured after: guitar pick attack and sustained guitar note both **0.000**,
-genuine unpitched sibilance **0.988 mean**. A pitched instrument holds its
-SNAC lock through a pick transient (`m_lockMiss` needs 3 consecutive misses),
-which is what makes the gate discriminate.
-Verified via a standalone C++ harness (`pitch_poly_ffi.h` linked directly,
-no Faust JIT involved — see the DawDreamer-limits note below): finite/
-bounded output across the full formant/shift extremes (formant -3..+3,
-shift -24..+24 semitones), and pitch accuracy within ~5 cents at neutral
-and positive formant on a clean sine (matching the underlying engine's own
-accuracy, i.e. the vowel EQ does not itself perturb pitch). At strongly
-NEGATIVE formant (`d` near the practical -1.5 floor) the same harness shows
-a real, reproducible ~70-90 cents flat error that predates this session's
-changes (confirmed by testing raw `EngineSoladSnac`/`GrainFormant` with no
-vowel/sibilance code at all) — consistent with this file's own
-already-documented free-transpose-engine note that "negative side is
-flatter/more non-monotonic... an inherent asymmetry in the `factor=
-powf(2,d)` mapping, not an engine defect"; the vowel/sibilance addition
-does not make this worse or better. The vowel filter's exact Q/gain
-constants and the sibilance detector's HF-corner/ratio thresholds are a
-first real implementation, not by-ear-tuned on real hardware yet — needs a
-live-mic pass on the Pi 4 before calling the vowel/sibilance character
-final.
+**`LpcFormantShifter::process`'s output stage is a soft-knee limiter, not
+a hard clamp.** Full-corpus testing (all 16 real instrument/vocal
+recordings, `test-audio-corpus/full_corpus_quality_pass.py`) found the
+whiten/recolor all-pole filter genuinely saturating to its output ceiling
+on real vibrato-rich vocal content (`vocal_female_vibrato.wav`), even at
+unity pitch shift — a real, bounded resonance the state-feedback clamp
+already prevented from diverging, but which a hard clamp turned into harsh
+digital clipping every time it engaged. `y` now passes through unchanged
+below `kOutputSaturationKnee = 1.5`, and smoothly approaches
+`kOutputMagnitudeCeil = 4.0` via `tanh` above that — the same
+near-identity-then-bounded idiom Resonode's `coupleFeedback` uses. Does
+not fix the underlying resonance instability (a deeper pole-placement
+redesign, not attempted — this feature is already disclosed above as not
+yet by-ear-verified on real hardware), only converts what would be harsh
+clipping into bounded soft compression.
 
 **Compile-time-cliff discipline for this file**: `[[memory:
 faust-compile-time-cliff]]` — any new UI primitive declared inside
