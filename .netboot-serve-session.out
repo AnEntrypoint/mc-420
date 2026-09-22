@@ -1,0 +1,25 @@
+[serve] auto-detected server IP 192.168.137.1 on Ethernet
+[serve] netboot root: C:\dev\mc-420\.netboot-serve
+[serve] server IP:    192.168.137.1  (DHCP :67, TFTP :69, HTTP :8080)
+[update] last-built sha: ee8d0fbe17674f0d9b9dd0ef84d6a9a973da53a4:ee8d0fbe17674f0d9b9dd0ef84d6a9a973da53a4
+[update] self-update ENABLED — polling build-binary/build-lv2 every 30s
+[serve] ready — power-cycle the Pi (SD out, network boot). Ctrl-C to stop.
+[TFTP] bind EADDRINUSE 0.0.0.0:69
+[DHCP] listening :67 (replies via 192.168.137.1 to 192.168.137.255)
+[HTTP] listen EADDRINUSE: address already in use 192.168.137.1:8080
+[update] up to date (sha ee8d0fbe17674f0d...)
+[DHCP] DISCOVER from e4:5f:01:53:f0:ef -> 192.168.137.100 (boot=bootcode.bin, tftp=192.168.137.1)
+[DHCP] DISCOVER from e4:5f:01:53:f0:ef -> 192.168.137.100 (boot=bootcode.bin, tftp=192.168.137.1)
+[update] up to date (sha ee8d0fbe17674f0d...)
+[DHCP] DISCOVER from e4:5f:01:53:f0:ef -> 192.168.137.100 (boot=bootcode.bin, tftp=192.168.137.1)
+[DHCP] DISCOVER from e4:5f:01:53:f0:ef -> 192.168.137.100 (boot=bootcode.bin, tftp=192.168.137.1)
+4f0d...)
+[DHCP] DISCOVER from e4:5f:01:53:f0:ef -> 192.168.137.100 (boot=bootcode.bin, tftp=192.168.137.1)
+[DHCP] DISCOVER from e4:5f:01:53:f0:ef -> 192.168.137.100 (boot=bootcode.bin, tftp=192.168.137.1)
+[update] up to date (sha ee8d0fbe17674f0d...)
+[DHCP] DISCOVER from e4:5f:01:53:f0:ef -> 192.168.137.100 (boot=bootcode.bin, tftp=192.168.137.1)
+[DHCP] DISCOVER from e4:5f:01:53:f0:ef -> 192.168.137.100 (boot=bootcode.bin, tftp=192.168.137.1)
+[update] up to date (sha ee8d0fbe17674f0d...)
+[DHCP] DISCOVER from e4:5f:01:53:f0:ef -> 192.168.137.100 (boot=bootcode.bin, tftp=192.168.137.1)
+[DHCP] DISCOVER from e4:5f:01:53:f0:ef -> 192.168.137.100 (boot=bootcode.bin, tftp=192.168.137.1)
+[update] up to date (sha ee8d0fbe17674f0d...)
