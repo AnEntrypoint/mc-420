@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d3cbcc5d9a82e52685b7dc036dfc059424f0a37b">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=161e91592225d2241ec14bc29d46b74533062351">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -283,7 +283,7 @@ path legitimately appears twice; verifiers grep the LAST match.</li>
   <li><strong>The <code class="language-plaintext highlighter-rouge">find</code> calls building those lists must run inside the overlay
 directory</strong> (<code class="language-plaintext highlighter-rouge">cd "$OVL" &amp;&amp; find usr/sbin ...</code>) — against the caller’s own
 cwd, <code class="language-plaintext highlighter-rouge">find</code> silently returns empty with no error, dropping matches with
-zero visible failure (caused a real ticker-AP outage once).</li>
+zero visible failure — a real ticker-AP outage class.</li>
   <li><strong><code class="language-plaintext highlighter-rouge">core.autocrlf=true</code> corrupts shell scripts on this Windows clone</strong> —
 <code class="language-plaintext highlighter-rouge">.gitattributes</code> forces <code class="language-plaintext highlighter-rouge">eol=lf</code> on scripts/configs. If a script behaves
 strangely on-device, <code class="language-plaintext highlighter-rouge">file path/to/script.sh</code> for “CRLF line
@@ -394,8 +394,8 @@ before trusting any observation. <code class="language-plaintext highlighter-rou
 option-66 address with zero TFTP reads; DISCOVERs never becoming REQUESTs
 from a wrong netmask/egress interface; a stale baked-in server IP that
 stalls in initramfs after TFTP succeeds). <code class="language-plaintext highlighter-rouge">serve-netboot-win.js</code>’s
-<code class="language-plaintext highlighter-rouge">ensureCorrectSubnetMask()</code> self-heals a wrong netmask on every startup
-(added 2026-09-22). Full diagnostic commands and root-cause detail:
+<code class="language-plaintext highlighter-rouge">ensureCorrectSubnetMask()</code> self-heals a wrong netmask on every startup.
+Full diagnostic commands and root-cause detail:
 <code class="language-plaintext highlighter-rouge">[[memory: netboot-dhcp-diagnosis-history]]</code>.</p>
 
 <p><strong>Fast DSP-only iteration</strong>: <code class="language-plaintext highlighter-rouge">node image/dsp-hotdeploy.js --target
@@ -529,7 +529,7 @@ against <code class="language-plaintext highlighter-rouge">build/_deps/abletonli
 12-case plan) — TEMPO-4’s 20-999bpm range matched by both, <code class="language-plaintext highlighter-rouge">effSpeed</code>
 clamps 0.1..8.0, AUDIOENGINE-1 onset-to-pulse alignment is unverified.</p>
 
-<h2 id="link-varispeed-and-transport-anchor-mechanism-current-since-2026-09-06">Link varispeed and transport-anchor mechanism (current, since 2026-09-06)</h2>
+<h2 id="link-varispeed-and-transport-anchor-mechanism">Link varispeed and transport-anchor mechanism</h2>
 
 <p><code class="language-plaintext highlighter-rouge">audio_thread.cpp</code> matches playback to session tempo by scaling read RATE
 (<code class="language-plaintext highlighter-rouge">linkSpeedRatio = linkBpm/recordedBpm</code>, folded into <code class="language-plaintext highlighter-rouge">effSpeed</code>) — never a
@@ -551,10 +551,8 @@ bare <code class="language-plaintext highlighter-rouge">setIsPlaying</code> (sto
 
 <p>Quick live check needing no recording: <code class="language-plaintext highlighter-rouge">/run/aloop/status.json</code>’s
 <code class="language-plaintext highlighter-rouge">eff_speed</code> must read exactly <code class="language-plaintext highlighter-rouge">1.0000</code> with nothing recorded; 0.97/1.03
-means the trim is saturating because the ratio isn’t engaged. Full bug
-history (three rules violated simultaneously pre-2026-09-06, the
-<code class="language-plaintext highlighter-rouge">weOwnTempo</code> scope bug, the transport-anchor bug): <code class="language-plaintext highlighter-rouge">[[memory:
-link-varispeed-trim-history]]</code>.</p>
+means the trim is saturating because the ratio isn’t engaged. Design
+rationale: <code class="language-plaintext highlighter-rouge">[[memory: link-varispeed-trim-history]]</code>.</p>
 
 <h2 id="midi-clock-fan-out-srccontrolmidi_clockcpp">MIDI clock fan-out (<code class="language-plaintext highlighter-rouge">src/control/midi_clock.cpp</code>)</h2>
 
@@ -568,17 +566,17 @@ after a scheduling hiccup bounded to 4 pulses. The control surface is
 excluded by the card the MIDI loop actually opened (<code class="language-plaintext highlighter-rouge">controlSurfaceCard()</code>),
 not by parsing <code class="language-plaintext highlighter-rouge">midi_device</code> (normally the literal string <code class="language-plaintext highlighter-rouge">auto</code>). Waits
 15s for the surface to be identified, releases any port later found to be
-the surface (e.g. across a replug) — a real MIDI-Tx outage on the control
-surface’s card happened once when the clock raced the MIDI loop’s
-auto-scan. <code class="language-plaintext highlighter-rouge">[[memory: mesh-link-midi-history]]</code>.</p>
+the surface (e.g. across a replug) — the clock racing the MIDI loop’s
+auto-scan can otherwise steal the surface’s own Tx port. <code class="language-plaintext highlighter-rouge">[[memory:
+mesh-link-midi-history]]</code>.</p>
 
 <h2 id="other-linkmesh-facts">Other Link/mesh facts</h2>
 
 <p><code class="language-plaintext highlighter-rouge">pinLinkThreadsToControlCore</code> (<code class="language-plaintext highlighter-rouge">main.cpp</code>) walks <code class="language-plaintext highlighter-rouge">/proc/self/task</code>, matches
 Link’s internal threads by <code class="language-plaintext highlighter-rouge">comm</code> name, pins them to <code class="language-plaintext highlighter-rouge">kControlCore=2</code>
-(matches <code class="language-plaintext highlighter-rouge">rt-tune.sh</code>’s <code class="language-plaintext highlighter-rouge">CONTROL_CORE</code>) — fixed a real ~30-37ms/1Hz audio
-stall from Link’s peer-discovery contending with isolated audio cores, adds
-no audio-path latency. <code class="language-plaintext highlighter-rouge">aloop.conf</code>’s <code class="language-plaintext highlighter-rouge">[link] enabled = true</code> must be
+(matches <code class="language-plaintext highlighter-rouge">rt-tune.sh</code>’s <code class="language-plaintext highlighter-rouge">CONTROL_CORE</code>) — prevents Link’s own
+peer-discovery messages from contending with the isolated audio cores (a
+~30-37ms/1Hz audio stall otherwise), adds no audio-path latency. <code class="language-plaintext highlighter-rouge">aloop.conf</code>’s <code class="language-plaintext highlighter-rouge">[link] enabled = true</code> must be
 parsed as a word (<code class="language-plaintext highlighter-rouge">true</code>/<code class="language-plaintext highlighter-rouge">1</code>/<code class="language-plaintext highlighter-rouge">yes</code>/<code class="language-plaintext highlighter-rouge">on</code>), not <code class="language-plaintext highlighter-rouge">%d</code>. <strong>Unproven</strong>: whether
 Link’s multicast crosses the Pi’s own AP/stations on Broadcom <code class="language-plaintext highlighter-rouge">brcmfmac</code>
 (<code class="language-plaintext highlighter-rouge">ap_isolate=0</code> set, may be sufficient — do not port the ESP32’s unicast
@@ -634,8 +632,8 @@ must be <code class="language-plaintext highlighter-rouge">std::make_unique</cod
 <p><strong>Per-block hot path: resolve string-keyed lookups ONCE, never per block</strong>
 — both control WRITE and telemetry READ paths cache resolved <code class="language-plaintext highlighter-rouge">(ParamStore
 slot, Faust zone float*)</code> pairs at startup, rebuilt only when
-<code class="language-plaintext highlighter-rouge">ParamStore::count</code> grows. Per-block resolution previously produced
-<code class="language-plaintext highlighter-rouge">readi()</code> taking 2.2-2.7ms against a 1.333ms budget with unbounded xruns.
+<code class="language-plaintext highlighter-rouge">ParamStore::count</code> grows. Resolving per-block instead makes <code class="language-plaintext highlighter-rouge">readi()</code>
+take 2.2-2.7ms against a 1.333ms budget with unbounded xruns.
 Diagnostic signature: <code class="language-plaintext highlighter-rouge">/proc/&lt;tid&gt;/schedstat</code> ~95% on-CPU with far fewer
 voluntary context switches than the block rate implies;
 <code class="language-plaintext highlighter-rouge">/proc/&lt;tid&gt;/stat</code>’s <code class="language-plaintext highlighter-rouge">state</code> should read <code class="language-plaintext highlighter-rouge">S</code> between blocks, not <code class="language-plaintext highlighter-rouge">R</code>.</p>
@@ -729,19 +727,17 @@ tabulation is approximate); per-effect LV2 splitting (multiplies RT
 dispatch); Faust’s <code class="language-plaintext highlighter-rouge">-omp</code>/<code class="language-plaintext highlighter-rouge">-sch</code> (fights manual <code class="language-plaintext highlighter-rouge">pthread_setaffinity_np</code>
 pinning); <code class="language-plaintext highlighter-rouge">-mcd</code>/<code class="language-plaintext highlighter-rouge">-dlt</code> (govern <code class="language-plaintext highlighter-rouge">de.delay</code> codegen only, not <code class="language-plaintext highlighter-rouge">rwtable</code>);
 <code class="language-plaintext highlighter-rouge">-clang</code> (every real compile uses gcc/g++); <code class="language-plaintext highlighter-rouge">-mem</code> (unified-heap Linux,
-not separate memory banks). <code class="language-plaintext highlighter-rouge">-vs 16</code> was tried (measured ~14% CPU win on
-x86_64 CI) and REJECTED — killed the real <code class="language-plaintext highlighter-rouge">faust</code> compiler via SIGALRM
-~2min into <code class="language-plaintext highlighter-rouge">dsp/aloop_pre.dsp</code> codegen when all sites moved together; do
-not re-propose without a fresh compile-time investigation, and all sites
-must still move together if retried.</p>
+not separate memory banks). <code class="language-plaintext highlighter-rouge">-vs 16</code> (a smaller vector size) kills the
+real <code class="language-plaintext highlighter-rouge">faust</code> compiler via SIGALRM ~2min into <code class="language-plaintext highlighter-rouge">dsp/aloop_pre.dsp</code> codegen
+when applied at every invocation site — do not re-propose without a fresh
+compile-time investigation, and all sites must move together if retried.</p>
 
-<p><code class="language-plaintext highlighter-rouge">guitar_lofi_fx.dsp</code> (always-on Guitar+LofiFx bank) was fully audited via
-real generated C++ for CPU waste — none found; every “obvious” candidate
-(shared LFO CSE, <code class="language-plaintext highlighter-rouge">pow(x,4.0)</code> strength-reduction, block-rate coefficients,
-<code class="language-plaintext highlighter-rouge">MAXD</code> sizing, phaser cascade division) is already handled by the compiler.
-Three judgment-call sound-character tradeoffs and two disproved
-“zero-cost” candidates are documented but not applied — need a by-ear pass.
-<code class="language-plaintext highlighter-rouge">[[memory: guitar-lofifx-cpu-audit-history]]</code>.</p>
+<p><code class="language-plaintext highlighter-rouge">guitar_lofi_fx.dsp</code> (always-on Guitar+LofiFx bank) has no exploitable CPU
+waste at the Faust-source level — every standard candidate (shared LFO
+CSE, <code class="language-plaintext highlighter-rouge">pow(x,4.0)</code> strength-reduction, block-rate coefficients, <code class="language-plaintext highlighter-rouge">MAXD</code>
+sizing, phaser cascade division) is already handled by the compiler.
+Several sound-character tradeoffs remain open, gated on a by-ear pass, not
+applied. <code class="language-plaintext highlighter-rouge">[[memory: guitar-lofifx-cpu-audit-history]]</code>.</p>
 
 <h2 id="buffer-sizing-constants">Buffer sizing constants</h2>
 
@@ -784,8 +780,8 @@ effect, made polyphonic; no per-file delay-line shifter exists anymore.
 converts to <code class="language-plaintext highlighter-rouge">pow(2, shiftAmount/12)</code>, threaded as a plain signal argument
 (compile-time-cliff discipline below).</p>
 
-<p><strong>Absolute pitch-lock</strong> (per explicit user direction — an “interval
-harmonizer” rearchitecture was tried and reverted). <code class="language-plaintext highlighter-rouge">freqDet = ba.if(
+<p><strong>Absolute pitch-lock</strong>, per explicit user direction — not an interval
+harmonizer. <code class="language-plaintext highlighter-rouge">freqDet = ba.if(
 extFreqDet&gt;0.5, extFreqDet, detectedFreq(sigIn))</code> prefers
 <code class="language-plaintext highlighter-rouge">pitchtracker.lv2</code>’s reading (<code class="language-plaintext highlighter-rouge">fx/extfreqdet</code>) over the internal
 zero-crossing fallback. <code class="language-plaintext highlighter-rouge">freeXpose</code> must follow <code class="language-plaintext highlighter-rouge">foldGain</code> (hoisted
@@ -794,23 +790,20 @@ track the same quantity the audio fold uses. Full SHIFT/free-guard bug
 history: <code class="language-plaintext highlighter-rouge">[[memory: multitranspose-investigation-history]]</code>.</p>
 
 <p><strong><code class="language-plaintext highlighter-rouge">trackingAllowed = trustedTracker &gt; 0.5</code>, not <code class="language-plaintext highlighter-rouge">| inLockWarmup</code>.</strong> A
-warmup-bypass OR term lets the first ~80ms of every note trust the slow,
-non-monotonic internal zero-crossing fallback whenever the external tracker
-hasn’t locked yet — the attack-transient “twitchy” pitch-lock bug. This
-exact formula was fixed once (2026-09), reverted alongside an unrelated
-change, and restored 2026-09-22 (git archaeology: <code class="language-plaintext highlighter-rouge">93b736b</code> reverted both
-<code class="language-plaintext highlighter-rouge">15fb984</code>’s trackingAllowed fix AND its unrelated shiftAmount-latching
-change together; only the latching change deserved reverting).</p>
+warmup-bypass OR term would let the first ~80ms of every note trust the
+slow, non-monotonic internal zero-crossing fallback whenever the external
+tracker hasn’t locked yet, producing attack-transient pitch-lock
+instability. <code class="language-plaintext highlighter-rouge">[[memory: multitranspose-investigation-history]]</code>.</p>
 
 <p><strong><code class="language-plaintext highlighter-rouge">heldDetNote</code> reseeds to <code class="language-plaintext highlighter-rouge">targetNote</code> on every attack until the external
 tracker has EVER been trusted, not just at the DSP instance’s literal
 <code class="language-plaintext highlighter-rouge">ba.time==0</code>.</strong> A <code class="language-plaintext highlighter-rouge">ba.time==0</code>-only seed goes stale the instant any time
-passes with no note held — which is always true on real hardware, since
-boot and the first note are never the same instant. Witnessed live: a
-first note with the tracker never trusted read <code class="language-plaintext highlighter-rouge">shiftAmount=60.00</code> (a
-5-octave runaway) instead of safe unity. <code class="language-plaintext highlighter-rouge">everTrusted</code> (a permanent latch,
-true the first time <code class="language-plaintext highlighter-rouge">trackingAllowed</code> is ever true) gates the reseed; once
-real trust lands even once, the reseed never fires again. <code class="language-plaintext highlighter-rouge">[[memory:
+passes with no note held — always true on real hardware, since boot and
+the first note are never the same instant; without the reseed, a first
+note with the tracker still untrusted reads a runaway multi-octave shift
+instead of safe unity. <code class="language-plaintext highlighter-rouge">everTrusted</code> (a permanent latch, true the first
+time <code class="language-plaintext highlighter-rouge">trackingAllowed</code> is ever true) gates the reseed; once real trust
+lands even once, the reseed never fires again. <code class="language-plaintext highlighter-rouge">[[memory:
 multitranspose-investigation-history]]</code>.</p>
 
 <p><strong>Voice mechanics</strong>: shared <code class="language-plaintext highlighter-rouge">an.pitchTracker</code> detection runs once/sample.
@@ -838,8 +831,8 @@ design/aliasing fixes, the high-fundamental defect, CPU measurements, the
 superseded <code class="language-plaintext highlighter-rouge">VowelFormantShaper</code>: <code class="language-plaintext highlighter-rouge">[[memory: lpc-formant-shifter-history]]</code>.</p>
 
 <p><strong>Splice-path upward-shift</strong>: <code class="language-plaintext highlighter-rouge">upshiftTargetLag()</code> raises target lag on
-upshifts so periodic resplice can fire (previously only downward drift
-triggered a resplice, leaving upshifts with no correction path). Neutral
+upshifts so periodic resplice can fire on the upward direction too, not
+only downward drift. Neutral
 formant runs on the phase-coherent splice path (the <code class="language-plaintext highlighter-rouge">scale&gt;1.02</code>
 forced-grain override is removed). Residual splice degradation at high
 shifts (~2.21 ratio at +12 semitones) is confirmed PSOLA legitimately
@@ -882,7 +875,7 @@ the JIT path this rewrite made impossible; <code class="language-plaintext highl
 every push touching this file and carries no information until it gets the
 same harness port.</p>
 
-<p><code class="language-plaintext highlighter-rouge">tools/dsp-cli</code> (added 2026-09-22) closes the gap the above two miss: real
+<p><code class="language-plaintext highlighter-rouge">tools/dsp-cli</code> closes the gap the above two miss: real
 local <code class="language-plaintext highlighter-rouge">faust -lang cpp</code> codegen (no JIT, so no <code class="language-plaintext highlighter-rouge">ffunction</code> limitation) +
 real MSVC link, compiling this file’s ACTUAL tracking/lock state machine —
 not just the shifter — against real corpus audio in ~1-2s. This is what
@@ -914,9 +907,9 @@ in output samples; dividing keeps reader travel at one period regardless
 of shift, divisor clamped ≥1.0 so downshift/unity stay bit-identical).
 <code class="language-plaintext highlighter-rouge">m_transientHold</code> holds off resplicing ~2 grains post-transient;
 <code class="language-plaintext highlighter-rouge">m_envSlow&lt;0.004</code> clamps the reader with no splice (quiet-input escape).
-<code class="language-plaintext highlighter-rouge">DL=32768</code> (128KB/channel ring — 131072 corrupted on the Pi’s
-32-bit-pointer build). <code class="language-plaintext highlighter-rouge">MIN_PERIOD=48</code> (1000Hz tracking ceiling — 32 was
-measured and REJECTED). <code class="language-plaintext highlighter-rouge">DUBFX_BS=64</code> (latency dominated by downshift
+<code class="language-plaintext highlighter-rouge">DL=32768</code> (128KB/channel ring — 131072 corrupts on the Pi’s
+32-bit-pointer build). <code class="language-plaintext highlighter-rouge">MIN_PERIOD=48</code> (1000Hz tracking ceiling — 32
+measurably degrades real wet-output pitch accuracy). <code class="language-plaintext highlighter-rouge">DUBFX_BS=64</code> (latency dominated by downshift
 reader geometry, not buffering; <code class="language-plaintext highlighter-rouge">DUBFX_POLY_BS=16</code> is the separate poly-path
 value, see the <code class="language-plaintext highlighter-rouge">beginBlock</code> note above). Every tunable here is already at
 its measured optimum — full splice-parameter sweep, the SNAC frequency bias
@@ -925,9 +918,9 @@ measurement, and the crossfade-division’s unpitched-material tradeoff:
 
 <p><strong>Open, disclosed bug</strong>: SNAC period-tracker drift on tremolo/AM content —
 <code class="language-plaintext highlighter-rouge">detectPitchStep()</code>’s anti-jitter clamp forces a slow climb toward a wrong
-subharmonic rather than rejecting it. Fixed for STEADY content by a
-first-strong-peak change; tremolo/dynamic content still reproduces the
-drift, several further attempts tried and rejected. <code class="language-plaintext highlighter-rouge">[[memory:
+subharmonic rather than rejecting it. STEADY content is unaffected (a
+first-strong-peak candidate-selection rule handles it); tremolo/dynamic
+content still reproduces the drift, unfixed. <code class="language-plaintext highlighter-rouge">[[memory:
 free-transpose-engine-history]]</code>, <code class="language-plaintext highlighter-rouge">[[memory: cold-start-self-trap]]</code>.</p>
 
 <p><code class="language-plaintext highlighter-rouge">pitch.dsp</code>’s <code class="language-plaintext highlighter-rouge">ffunction</code> rides params on the SAME per-sample call as the
@@ -936,10 +929,9 @@ away); buffers exactly <code class="language-plaintext highlighter-rouge">DUBFX_
 permanent 1-block (~1.333ms) algorithmic latency while engaged (working-rule
 carve-out).</p>
 
-<p><strong>Fixed (shared, both engines)</strong>: <code class="language-plaintext highlighter-rouge">reengage()</code> now calls
-<code class="language-plaintext highlighter-rouge">m_grainFormant.reset()</code> and restores the dialed formant factor with a
-proper glide — previously a new note inherited the previous note’s
-free-running grain-clock state.</p>
+<p><strong>Shared, both engines</strong>: <code class="language-plaintext highlighter-rouge">reengage()</code> calls <code class="language-plaintext highlighter-rouge">m_grainFormant.reset()</code> and
+restores the dialed formant factor with a proper glide, so a new note
+never inherits the previous note’s free-running grain-clock state.</p>
 
 <h2 id="pitchtrackerlv2-standalone-autocorrelation-pitch-tracker"><code class="language-plaintext highlighter-rouge">pitchtracker.lv2</code>: standalone autocorrelation pitch tracker</h2>
 
@@ -1120,10 +1112,10 @@ just hardcoded <code class="language-plaintext highlighter-rouge">setByName</cod
 never <code class="language-plaintext highlighter-rouge">cc70</code>/<code class="language-plaintext highlighter-rouge">cc71</code> — the real APC Key25 sends NOTES 70/71 on channel 0
 (<code class="language-plaintext highlighter-rouge">apcKey25.cpp:142-143,187-188</code>), not CCs; a <code class="language-plaintext highlighter-rouge">cc70</code>/<code class="language-plaintext highlighter-rouge">cc71</code> binding matches
 nothing the hardware transmits. <code class="language-plaintext highlighter-rouge">note91</code> must never be (re-)bound to
-<code class="language-plaintext highlighter-rouge">cmd/clearall</code> — it once raced <code class="language-plaintext highlighter-rouge">ApcGrid</code>’s shadow-state reset (a PLAY
-press during a SHIFT-held gesture could wipe DSP loop content while shadow
-state stayed stale); fixed by making <code class="language-plaintext highlighter-rouge">midi.cpp</code>’s note-91 intercept
-unconditional on shift.</p>
+<code class="language-plaintext highlighter-rouge">cmd/clearall</code> — a live binding there races <code class="language-plaintext highlighter-rouge">ApcGrid</code>’s shadow-state reset
+(a PLAY press during a SHIFT-held gesture could wipe DSP loop content
+while shadow state stays stale); <code class="language-plaintext highlighter-rouge">midi.cpp</code>’s note-91 intercept is
+unconditional on shift to prevent this.</p>
 
 <h2 id="delayverb-separate-conditionally-called-lv2-bundle">delayverb: separate, conditionally-called LV2 bundle</h2>
 
@@ -1183,8 +1175,7 @@ master phrase length (<code class="language-plaintext highlighter-rouge">kMaxLoo
 ALWAYS rounding up so recorded audio is never truncated. Every looper’s
 <code class="language-plaintext highlighter-rouge">wrapLen</code> is a clean power-of-2 ratio of every other, guaranteeing
 drift-free repeat alignment. <code class="language-plaintext highlighter-rouge">test/hardware/verify-quantization.js</code>’s own
-<code class="language-plaintext highlighter-rouge">nearestPow2Candidate</code> helper tests a never-real geometric-midpoint
-description — a real test-vs-code mismatch, not yet fixed.</p>
+<code class="language-plaintext highlighter-rouge">ceilingPow2Candidate</code> helper matches this exactly.</p>
 
 <p><strong>Content phase-anchor</strong>: every loop plays back starting at the SAME
 shared downbeat (<code class="language-plaintext highlighter-rouge">masterPhase==0</code>), never a per-take offset. Recording
@@ -1197,16 +1188,16 @@ gridMultiple*anchorGridLenNow</code>, <code class="language-plaintext highlighte
 UP to contain everything recorded, never truncate. <strong>Known, disclosed edge
 case</strong>: <code class="language-plaintext highlighter-rouge">winSamples</code>/<code class="language-plaintext highlighter-rouge">xfSamples</code> can permanently freeze at floor on a TRUE
 zero-context cold start (gate rising at the very first sample of a DSP
-instance, zero prior audio) — confirmed not to matter in realistic
-performance (any lead-in avoids it); a fix attempt reproduced the
-compile-time-cliff wall and was reverted.</p>
+instance, zero prior audio) — does not matter in realistic performance
+(any lead-in avoids it); unfixed (a source-level fix risks the
+compile-time cliff).</p>
 
 <p><strong>Real APC Key25 hardware re-sends note-on for an already-held pad</strong> —
 <code class="language-plaintext highlighter-rouge">onPadPress</code> tracks <code class="language-plaintext highlighter-rouge">m_looperHeld</code> per pad, treats a repeat as a no-op
-(same fix pattern independently applied to <code class="language-plaintext highlighter-rouge">onLofiFxPress</code>, which is why
-that gesture is now edge-triggered via SHIFT rather than hold-duration
-timed — a prior 1000ms-hold design was witnessed unreliable on real
-hardware). <strong>Guitar-fx held REDIRECTS looper pad presses</strong> to
+(same pattern applies to <code class="language-plaintext highlighter-rouge">onLofiFxPress</code>, which is why that gesture is
+edge-triggered via SHIFT rather than hold-duration timed — hold-duration
+timing is unreliable against real hardware’s repeat note-on behavior).
+<strong>Guitar-fx held REDIRECTS looper pad presses</strong> to
 <code class="language-plaintext highlighter-rouge">onSidechainLooperToggle</code> (toggles sidechain-source designation, one-shot,
 not ARM/FINISH) while <code class="language-plaintext highlighter-rouge">m_guitarFxHeld</code> — auto-clears when that looper’s
 content is wiped.</p>
@@ -1269,12 +1260,12 @@ enum’s zero value (<code class="language-plaintext highlighter-rouge">Sampler<
 
 <p><code class="language-plaintext highlighter-rouge">Voice::grainNextPeriod</code> applies a fixed internal
 <code class="language-plaintext highlighter-rouge">kGrainTimingJitterAmt=0.15</code> (±15%) random deviation to each grain’s own
-inter-onset interval, drawn fresh per grain-fire — fixes a previously
-exactly-regular grain-spawn clock (matches Resonode’s own
+inter-onset interval, drawn fresh per grain-fire — keeps the grain-spawn
+clock from reading as mechanically regular (matches Resonode’s own
 <code class="language-plaintext highlighter-rouge">positionDriftAmt</code>/<code class="language-plaintext highlighter-rouge">stretchJitterAmt</code> internal-constant convention).
 <code class="language-plaintext highlighter-rouge">kGranPatches[0]</code> (fallback before any patch-weight knob is touched) is
-the 90ms/35Hz/25-cent-spray/35ms-jitter patch — reordered from a
-previously tame fallback. Both measured via standalone harness:
+the 90ms/35Hz/25-cent-spray/35ms-jitter patch — a deliberately textured
+default, not the tamest patch in the table. Both measured via standalone harness:
 <code class="language-plaintext highlighter-rouge">[[memory: granulator-investigation-history]]</code>.</p>
 
 <p><strong>Considered, not implemented</strong>: making the granulator audible without a
@@ -1314,8 +1305,9 @@ a packaging check.</p>
 15/23/31/39) are also shuffle buttons, routed via
 <code class="language-plaintext highlighter-rouge">onShuffleButtonPress</code>/<code class="language-plaintext highlighter-rouge">Release</code> to a 4-bit <code class="language-plaintext highlighter-rouge">fx/shuffle/mask</code>. True
 retrigger/reorder, not swing/groove-offset — a continuous-perturbation
-design was tried and rejected (audible “double-tap” from re-reading
-already-played content). <code class="language-plaintext highlighter-rouge">kShiftReorderTables[shuffleMaskNow]</code> (15
+offset is audible as a “double-tap” from re-reading already-played
+content, so this must stay whole-beat, block-boundary only.
+<code class="language-plaintext highlighter-rouge">kShiftReorderTables[shuffleMaskNow]</code> (15
 hand-verified-distinct 4-entry sequences) gives whole-beat, block-boundary
 offsets only — structurally eliminates the double-tap mode. Runs on its
 own free-running <code class="language-plaintext highlighter-rouge">shuffleClockSamples</code>, added on top of the real
@@ -1327,10 +1319,9 @@ Link-tempo mismatches, causing steady phasing between loopers of different
 lengths. The soft-resync drift-correction term (<code class="language-plaintext highlighter-rouge">resyncCoeff</code>) is gated to
 <code class="language-plaintext highlighter-rouge">0.0</code> whenever <code class="language-plaintext highlighter-rouge">|effSpeed-1.0|&gt;0.3</code> so it never fights a deliberate manual
 half/double-speed press. <strong>Both beat-shuffle’s hard clip and varispeed’s
-instant speed jump are INTENTIONAL</strong> — a smoothing attempt was shipped
-then explicitly reverted on user correction; do not re-smooth either
-without confirming whether a report is about the (intended) abrupt
-transition itself vs. a genuinely distinct defect.</p>
+instant speed jump are INTENTIONAL</strong>, per explicit user direction — do
+not smooth either without confirming whether a report is about the
+(intended) abrupt transition itself vs. a genuinely distinct defect.</p>
 
 <p><code class="language-plaintext highlighter-rouge">microrepeat.dsp</code>’s <code class="language-plaintext highlighter-rouge">sliceBlocks = max(1, int(beatBlocks/divSafe))*2</code> with
 <code class="language-plaintext highlighter-rouge">divSafe=max(1,DIV)</code> (multiplying the already-computed slice length,
@@ -1340,10 +1331,9 @@ strength-reduced from <code class="language-plaintext highlighter-rouge">pow()</
 <code class="language-plaintext highlighter-rouge">damping*damping*damping</code> (literal integer exponents, bit-exact).</p>
 
 <p>CC53 formant: deadzone 60-68, <code class="language-plaintext highlighter-rouge">((data2-64)/63.0)*1.5</code> — a real ~±1.5
-range (clamped by the <code class="language-plaintext highlighter-rouge">-3..3</code> hslider). A shift-dependent widening was
-tried and removed per direct user direction — SHIFT is reserved
-exclusively for the native fold/resample gesture, must never change a
-knob’s own behavior.</p>
+range (clamped by the <code class="language-plaintext highlighter-rouge">-3..3</code> hslider). SHIFT must never change a knob’s
+own behavior (no shift-dependent widening) — it is reserved exclusively
+for the native fold/resample gesture, per direct user direction.</p>
 
 <hr />
 
