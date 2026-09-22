@@ -87,7 +87,8 @@ with {
                                     prev));
     smoothedDetNote = smoothedDetNoteStep ~ _;
     heldDetNoteStep(prev) = ba.if(trackingAllowed, smoothedDetNote, prev);
-    heldDetNote = heldDetNoteStep ~ _;
+    heldDetNoteRaw = heldDetNoteStep ~ _;
+    heldDetNote = ba.if(ba.time == 0, targetNote, heldDetNoteRaw);
     shiftTarget = targetNote - heldDetNote;
     shiftStep(prev) = ba.if(attackEdge, shiftTarget,
                        prev * normalGlidePole + shiftTarget * (1.0 - normalGlidePole));
