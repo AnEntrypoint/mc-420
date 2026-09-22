@@ -188,7 +188,7 @@ opi-prime-boot-history]]`.
 - **The `find` calls building those lists must run inside the overlay
   directory** (`cd "$OVL" && find usr/sbin ...`) — against the caller's own
   cwd, `find` silently returns empty with no error, dropping matches with
-  zero visible failure (caused a real ticker-AP outage once).
+  zero visible failure — a real ticker-AP outage class.
 - **`core.autocrlf=true` corrupts shell scripts on this Windows clone** —
   `.gitattributes` forces `eol=lf` on scripts/configs. If a script behaves
   strangely on-device, `file path/to/script.sh` for "CRLF line
@@ -296,8 +296,8 @@ before trusting any observation. `serve-netboot-win.js` can die holding its
 option-66 address with zero TFTP reads; DISCOVERs never becoming REQUESTs
 from a wrong netmask/egress interface; a stale baked-in server IP that
 stalls in initramfs after TFTP succeeds). `serve-netboot-win.js`'s
-`ensureCorrectSubnetMask()` self-heals a wrong netmask on every startup
-(added 2026-09-22). Full diagnostic commands and root-cause detail:
+`ensureCorrectSubnetMask()` self-heals a wrong netmask on every startup.
+Full diagnostic commands and root-cause detail:
 `[[memory: netboot-dhcp-diagnosis-history]]`.
 
 **Fast DSP-only iteration**: `node image/dsp-hotdeploy.js --target
@@ -388,7 +388,7 @@ against `build/_deps/abletonlink-src/TEST-PLAN.md` (Ableton's official
 12-case plan) — TEMPO-4's 20-999bpm range matched by both, `effSpeed`
 clamps 0.1..8.0, AUDIOENGINE-1 onset-to-pulse alignment is unverified.
 
-## Link varispeed and transport-anchor mechanism (current, since 2026-09-06)
+## Link varispeed and transport-anchor mechanism
 
 `audio_thread.cpp` matches playback to session tempo by scaling read RATE
 (`linkSpeedRatio = linkBpm/recordedBpm`, folded into `effSpeed`) — never a
@@ -410,10 +410,8 @@ bare `setIsPlaying` (stop path keeps the bare call — no beat to anchor).
 
 Quick live check needing no recording: `/run/aloop/status.json`'s
 `eff_speed` must read exactly `1.0000` with nothing recorded; 0.97/1.03
-means the trim is saturating because the ratio isn't engaged. Full bug
-history (three rules violated simultaneously pre-2026-09-06, the
-`weOwnTempo` scope bug, the transport-anchor bug): `[[memory:
-link-varispeed-trim-history]]`.
+means the trim is saturating because the ratio isn't engaged. Design
+rationale: `[[memory: link-varispeed-trim-history]]`.
 
 ## MIDI clock fan-out (`src/control/midi_clock.cpp`)
 
@@ -427,17 +425,17 @@ after a scheduling hiccup bounded to 4 pulses. The control surface is
 excluded by the card the MIDI loop actually opened (`controlSurfaceCard()`),
 not by parsing `midi_device` (normally the literal string `auto`). Waits
 15s for the surface to be identified, releases any port later found to be
-the surface (e.g. across a replug) — a real MIDI-Tx outage on the control
-surface's card happened once when the clock raced the MIDI loop's
-auto-scan. `[[memory: mesh-link-midi-history]]`.
+the surface (e.g. across a replug) — the clock racing the MIDI loop's
+auto-scan can otherwise steal the surface's own Tx port. `[[memory:
+mesh-link-midi-history]]`.
 
 ## Other Link/mesh facts
 
 `pinLinkThreadsToControlCore` (`main.cpp`) walks `/proc/self/task`, matches
 Link's internal threads by `comm` name, pins them to `kControlCore=2`
-(matches `rt-tune.sh`'s `CONTROL_CORE`) — fixed a real ~30-37ms/1Hz audio
-stall from Link's peer-discovery contending with isolated audio cores, adds
-no audio-path latency. `aloop.conf`'s `[link] enabled = true` must be
+(matches `rt-tune.sh`'s `CONTROL_CORE`) — prevents Link's own
+peer-discovery messages from contending with the isolated audio cores (a
+~30-37ms/1Hz audio stall otherwise), adds no audio-path latency. `aloop.conf`'s `[link] enabled = true` must be
 parsed as a word (`true`/`1`/`yes`/`on`), not `%d`. **Unproven**: whether
 Link's multicast crosses the Pi's own AP/stations on Broadcom `brcmfmac`
 (`ap_isolate=0` set, may be sufficient — do not port the ESP32's unicast
@@ -493,8 +491,8 @@ must be `std::make_unique`'d at thread startup, never stack-local
 **Per-block hot path: resolve string-keyed lookups ONCE, never per block**
 — both control WRITE and telemetry READ paths cache resolved `(ParamStore
 slot, Faust zone float*)` pairs at startup, rebuilt only when
-`ParamStore::count` grows. Per-block resolution previously produced
-`readi()` taking 2.2-2.7ms against a 1.333ms budget with unbounded xruns.
+`ParamStore::count` grows. Resolving per-block instead makes `readi()`
+take 2.2-2.7ms against a 1.333ms budget with unbounded xruns.
 Diagnostic signature: `/proc/<tid>/schedstat` ~95% on-CPU with far fewer
 voluntary context switches than the block rate implies;
 `/proc/<tid>/stat`'s `state` should read `S` between blocks, not `R`.
@@ -588,19 +586,17 @@ tabulation is approximate); per-effect LV2 splitting (multiplies RT
 dispatch); Faust's `-omp`/`-sch` (fights manual `pthread_setaffinity_np`
 pinning); `-mcd`/`-dlt` (govern `de.delay` codegen only, not `rwtable`);
 `-clang` (every real compile uses gcc/g++); `-mem` (unified-heap Linux,
-not separate memory banks). `-vs 16` was tried (measured ~14% CPU win on
-x86_64 CI) and REJECTED — killed the real `faust` compiler via SIGALRM
-~2min into `dsp/aloop_pre.dsp` codegen when all sites moved together; do
-not re-propose without a fresh compile-time investigation, and all sites
-must still move together if retried.
+not separate memory banks). `-vs 16` (a smaller vector size) kills the
+real `faust` compiler via SIGALRM ~2min into `dsp/aloop_pre.dsp` codegen
+when applied at every invocation site — do not re-propose without a fresh
+compile-time investigation, and all sites must move together if retried.
 
-`guitar_lofi_fx.dsp` (always-on Guitar+LofiFx bank) was fully audited via
-real generated C++ for CPU waste — none found; every "obvious" candidate
-(shared LFO CSE, `pow(x,4.0)` strength-reduction, block-rate coefficients,
-`MAXD` sizing, phaser cascade division) is already handled by the compiler.
-Three judgment-call sound-character tradeoffs and two disproved
-"zero-cost" candidates are documented but not applied — need a by-ear pass.
-`[[memory: guitar-lofifx-cpu-audit-history]]`.
+`guitar_lofi_fx.dsp` (always-on Guitar+LofiFx bank) has no exploitable CPU
+waste at the Faust-source level — every standard candidate (shared LFO
+CSE, `pow(x,4.0)` strength-reduction, block-rate coefficients, `MAXD`
+sizing, phaser cascade division) is already handled by the compiler.
+Several sound-character tradeoffs remain open, gated on a by-ear pass, not
+applied. `[[memory: guitar-lofifx-cpu-audit-history]]`.
 
 ## Buffer sizing constants
 
@@ -643,8 +639,8 @@ effect, made polyphonic; no per-file delay-line shifter exists anymore.
 converts to `pow(2, shiftAmount/12)`, threaded as a plain signal argument
 (compile-time-cliff discipline below).
 
-**Absolute pitch-lock** (per explicit user direction — an "interval
-harmonizer" rearchitecture was tried and reverted). `freqDet = ba.if(
+**Absolute pitch-lock**, per explicit user direction — not an interval
+harmonizer. `freqDet = ba.if(
 extFreqDet>0.5, extFreqDet, detectedFreq(sigIn))` prefers
 `pitchtracker.lv2`'s reading (`fx/extfreqdet`) over the internal
 zero-crossing fallback. `freeXpose` must follow `foldGain` (hoisted
@@ -653,23 +649,20 @@ track the same quantity the audio fold uses. Full SHIFT/free-guard bug
 history: `[[memory: multitranspose-investigation-history]]`.
 
 **`trackingAllowed = trustedTracker > 0.5`, not `| inLockWarmup`.** A
-warmup-bypass OR term lets the first ~80ms of every note trust the slow,
-non-monotonic internal zero-crossing fallback whenever the external tracker
-hasn't locked yet — the attack-transient "twitchy" pitch-lock bug. This
-exact formula was fixed once (2026-09), reverted alongside an unrelated
-change, and restored 2026-09-22 (git archaeology: `93b736b` reverted both
-`15fb984`'s trackingAllowed fix AND its unrelated shiftAmount-latching
-change together; only the latching change deserved reverting).
+warmup-bypass OR term would let the first ~80ms of every note trust the
+slow, non-monotonic internal zero-crossing fallback whenever the external
+tracker hasn't locked yet, producing attack-transient pitch-lock
+instability. `[[memory: multitranspose-investigation-history]]`.
 
 **`heldDetNote` reseeds to `targetNote` on every attack until the external
 tracker has EVER been trusted, not just at the DSP instance's literal
 `ba.time==0`.** A `ba.time==0`-only seed goes stale the instant any time
-passes with no note held — which is always true on real hardware, since
-boot and the first note are never the same instant. Witnessed live: a
-first note with the tracker never trusted read `shiftAmount=60.00` (a
-5-octave runaway) instead of safe unity. `everTrusted` (a permanent latch,
-true the first time `trackingAllowed` is ever true) gates the reseed; once
-real trust lands even once, the reseed never fires again. `[[memory:
+passes with no note held — always true on real hardware, since boot and
+the first note are never the same instant; without the reseed, a first
+note with the tracker still untrusted reads a runaway multi-octave shift
+instead of safe unity. `everTrusted` (a permanent latch, true the first
+time `trackingAllowed` is ever true) gates the reseed; once real trust
+lands even once, the reseed never fires again. `[[memory:
 multitranspose-investigation-history]]`.
 
 **Voice mechanics**: shared `an.pitchTracker` detection runs once/sample.
@@ -697,8 +690,8 @@ design/aliasing fixes, the high-fundamental defect, CPU measurements, the
 superseded `VowelFormantShaper`: `[[memory: lpc-formant-shifter-history]]`.
 
 **Splice-path upward-shift**: `upshiftTargetLag()` raises target lag on
-upshifts so periodic resplice can fire (previously only downward drift
-triggered a resplice, leaving upshifts with no correction path). Neutral
+upshifts so periodic resplice can fire on the upward direction too, not
+only downward drift. Neutral
 formant runs on the phase-coherent splice path (the `scale>1.02`
 forced-grain override is removed). Residual splice degradation at high
 shifts (~2.21 ratio at +12 semitones) is confirmed PSOLA legitimately
@@ -741,7 +734,7 @@ the JIT path this rewrite made impossible; `test-pitch-tracker` is red on
 every push touching this file and carries no information until it gets the
 same harness port.
 
-`tools/dsp-cli` (added 2026-09-22) closes the gap the above two miss: real
+`tools/dsp-cli` closes the gap the above two miss: real
 local `faust -lang cpp` codegen (no JIT, so no `ffunction` limitation) +
 real MSVC link, compiling this file's ACTUAL tracking/lock state machine —
 not just the shifter — against real corpus audio in ~1-2s. This is what
@@ -773,9 +766,9 @@ in output samples; dividing keeps reader travel at one period regardless
 of shift, divisor clamped ≥1.0 so downshift/unity stay bit-identical).
 `m_transientHold` holds off resplicing ~2 grains post-transient;
 `m_envSlow<0.004` clamps the reader with no splice (quiet-input escape).
-`DL=32768` (128KB/channel ring — 131072 corrupted on the Pi's
-32-bit-pointer build). `MIN_PERIOD=48` (1000Hz tracking ceiling — 32 was
-measured and REJECTED). `DUBFX_BS=64` (latency dominated by downshift
+`DL=32768` (128KB/channel ring — 131072 corrupts on the Pi's
+32-bit-pointer build). `MIN_PERIOD=48` (1000Hz tracking ceiling — 32
+measurably degrades real wet-output pitch accuracy). `DUBFX_BS=64` (latency dominated by downshift
 reader geometry, not buffering; `DUBFX_POLY_BS=16` is the separate poly-path
 value, see the `beginBlock` note above). Every tunable here is already at
 its measured optimum — full splice-parameter sweep, the SNAC frequency bias
@@ -784,9 +777,9 @@ measurement, and the crossfade-division's unpitched-material tradeoff:
 
 **Open, disclosed bug**: SNAC period-tracker drift on tremolo/AM content —
 `detectPitchStep()`'s anti-jitter clamp forces a slow climb toward a wrong
-subharmonic rather than rejecting it. Fixed for STEADY content by a
-first-strong-peak change; tremolo/dynamic content still reproduces the
-drift, several further attempts tried and rejected. `[[memory:
+subharmonic rather than rejecting it. STEADY content is unaffected (a
+first-strong-peak candidate-selection rule handles it); tremolo/dynamic
+content still reproduces the drift, unfixed. `[[memory:
 free-transpose-engine-history]]`, `[[memory: cold-start-self-trap]]`.
 
 `pitch.dsp`'s `ffunction` rides params on the SAME per-sample call as the
@@ -795,10 +788,9 @@ away); buffers exactly `DUBFX_BS=64` samples per `processBlock`, a genuine
 permanent 1-block (~1.333ms) algorithmic latency while engaged (working-rule
 carve-out).
 
-**Fixed (shared, both engines)**: `reengage()` now calls
-`m_grainFormant.reset()` and restores the dialed formant factor with a
-proper glide — previously a new note inherited the previous note's
-free-running grain-clock state.
+**Shared, both engines**: `reengage()` calls `m_grainFormant.reset()` and
+restores the dialed formant factor with a proper glide, so a new note
+never inherits the previous note's free-running grain-clock state.
 
 ## `pitchtracker.lv2`: standalone autocorrelation pitch tracker
 
@@ -979,10 +971,10 @@ just hardcoded `setByName` call sites).
 never `cc70`/`cc71` — the real APC Key25 sends NOTES 70/71 on channel 0
 (`apcKey25.cpp:142-143,187-188`), not CCs; a `cc70`/`cc71` binding matches
 nothing the hardware transmits. `note91` must never be (re-)bound to
-`cmd/clearall` — it once raced `ApcGrid`'s shadow-state reset (a PLAY
-press during a SHIFT-held gesture could wipe DSP loop content while shadow
-state stayed stale); fixed by making `midi.cpp`'s note-91 intercept
-unconditional on shift.
+`cmd/clearall` — a live binding there races `ApcGrid`'s shadow-state reset
+(a PLAY press during a SHIFT-held gesture could wipe DSP loop content
+while shadow state stays stale); `midi.cpp`'s note-91 intercept is
+unconditional on shift to prevent this.
 
 ## delayverb: separate, conditionally-called LV2 bundle
 
@@ -1042,8 +1034,7 @@ master phrase length (`kMaxLoopSamples` top, M/16 bottom via
 ALWAYS rounding up so recorded audio is never truncated. Every looper's
 `wrapLen` is a clean power-of-2 ratio of every other, guaranteeing
 drift-free repeat alignment. `test/hardware/verify-quantization.js`'s own
-`nearestPow2Candidate` helper tests a never-real geometric-midpoint
-description — a real test-vs-code mismatch, not yet fixed.
+`ceilingPow2Candidate` helper matches this exactly.
 
 **Content phase-anchor**: every loop plays back starting at the SAME
 shared downbeat (`masterPhase==0`), never a per-take offset. Recording
@@ -1056,16 +1047,16 @@ gridMultiple*anchorGridLenNow`, `gridMultiple` a CEILING — can only round
 UP to contain everything recorded, never truncate. **Known, disclosed edge
 case**: `winSamples`/`xfSamples` can permanently freeze at floor on a TRUE
 zero-context cold start (gate rising at the very first sample of a DSP
-instance, zero prior audio) — confirmed not to matter in realistic
-performance (any lead-in avoids it); a fix attempt reproduced the
-compile-time-cliff wall and was reverted.
+instance, zero prior audio) — does not matter in realistic performance
+(any lead-in avoids it); unfixed (a source-level fix risks the
+compile-time cliff).
 
 **Real APC Key25 hardware re-sends note-on for an already-held pad** —
 `onPadPress` tracks `m_looperHeld` per pad, treats a repeat as a no-op
-(same fix pattern independently applied to `onLofiFxPress`, which is why
-that gesture is now edge-triggered via SHIFT rather than hold-duration
-timed — a prior 1000ms-hold design was witnessed unreliable on real
-hardware). **Guitar-fx held REDIRECTS looper pad presses** to
+(same pattern applies to `onLofiFxPress`, which is why that gesture is
+edge-triggered via SHIFT rather than hold-duration timed — hold-duration
+timing is unreliable against real hardware's repeat note-on behavior).
+**Guitar-fx held REDIRECTS looper pad presses** to
 `onSidechainLooperToggle` (toggles sidechain-source designation, one-shot,
 not ARM/FINISH) while `m_guitarFxHeld` — auto-clears when that looper's
 content is wiped.
@@ -1128,12 +1119,12 @@ enum's zero value (`Sampler` only forward-declared there) — a
 
 `Voice::grainNextPeriod` applies a fixed internal
 `kGrainTimingJitterAmt=0.15` (±15%) random deviation to each grain's own
-inter-onset interval, drawn fresh per grain-fire — fixes a previously
-exactly-regular grain-spawn clock (matches Resonode's own
+inter-onset interval, drawn fresh per grain-fire — keeps the grain-spawn
+clock from reading as mechanically regular (matches Resonode's own
 `positionDriftAmt`/`stretchJitterAmt` internal-constant convention).
 `kGranPatches[0]` (fallback before any patch-weight knob is touched) is
-the 90ms/35Hz/25-cent-spray/35ms-jitter patch — reordered from a
-previously tame fallback. Both measured via standalone harness:
+the 90ms/35Hz/25-cent-spray/35ms-jitter patch — a deliberately textured
+default, not the tamest patch in the table. Both measured via standalone harness:
 `[[memory: granulator-investigation-history]]`.
 
 **Considered, not implemented**: making the granulator audible without a
@@ -1173,8 +1164,9 @@ a packaging check.
 15/23/31/39) are also shuffle buttons, routed via
 `onShuffleButtonPress`/`Release` to a 4-bit `fx/shuffle/mask`. True
 retrigger/reorder, not swing/groove-offset — a continuous-perturbation
-design was tried and rejected (audible "double-tap" from re-reading
-already-played content). `kShiftReorderTables[shuffleMaskNow]` (15
+offset is audible as a "double-tap" from re-reading already-played
+content, so this must stay whole-beat, block-boundary only.
+`kShiftReorderTables[shuffleMaskNow]` (15
 hand-verified-distinct 4-entry sequences) gives whole-beat, block-boundary
 offsets only — structurally eliminates the double-tap mode. Runs on its
 own free-running `shuffleClockSamples`, added on top of the real
@@ -1186,10 +1178,9 @@ Link-tempo mismatches, causing steady phasing between loopers of different
 lengths. The soft-resync drift-correction term (`resyncCoeff`) is gated to
 `0.0` whenever `|effSpeed-1.0|>0.3` so it never fights a deliberate manual
 half/double-speed press. **Both beat-shuffle's hard clip and varispeed's
-instant speed jump are INTENTIONAL** — a smoothing attempt was shipped
-then explicitly reverted on user correction; do not re-smooth either
-without confirming whether a report is about the (intended) abrupt
-transition itself vs. a genuinely distinct defect.
+instant speed jump are INTENTIONAL**, per explicit user direction — do
+not smooth either without confirming whether a report is about the
+(intended) abrupt transition itself vs. a genuinely distinct defect.
 
 `microrepeat.dsp`'s `sliceBlocks = max(1, int(beatBlocks/divSafe))*2` with
 `divSafe=max(1,DIV)` (multiplying the already-computed slice length,
@@ -1199,10 +1190,9 @@ strength-reduced from `pow()` to `damping`/`damping*damping`/
 `damping*damping*damping` (literal integer exponents, bit-exact).
 
 CC53 formant: deadzone 60-68, `((data2-64)/63.0)*1.5` — a real ~±1.5
-range (clamped by the `-3..3` hslider). A shift-dependent widening was
-tried and removed per direct user direction — SHIFT is reserved
-exclusively for the native fold/resample gesture, must never change a
-knob's own behavior.
+range (clamped by the `-3..3` hslider). SHIFT must never change a knob's
+own behavior (no shift-dependent widening) — it is reserved exclusively
+for the native fold/resample gesture, per direct user direction.
 
 ---
 

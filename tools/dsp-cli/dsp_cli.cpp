@@ -351,11 +351,55 @@ int main(int argc, char** argv) {
             "  dsp_cli --gen0 <spec> [--gen1 <spec> --gen2 <spec> ...] <out.wav> [CTRL=value ...]\n"
             "      (multi-input DSPs: drive each input channel independently; --gen is an alias for --gen0)\n"
             "  dsp_cli --stats <file.wav>\n"
+            "  dsp_cli --glitch-check <file.wav> [threshold=0.25] [minGapMs=5]\n"
             "  dsp_cli --list-zones\n");
         return 1;
     }
 
     const double SR = 48000.0;
+
+    if (strcmp(argv[1], "--glitch-check") == 0) {
+        // Flags a click/pop/discontinuity in a REAL recorded/rendered WAV: a
+        // single-sample delta this large has no acoustic origin at 48kHz --
+        // real audio (even a sharp transient/attack) is band-limited and
+        // never jumps this far in one sample. 0.25 (of full-scale -1..1) is
+        // a deliberately loose default so normal transients don't false-
+        // positive; tighten it for a known-quiet test signal. minGapMs
+        // coalesces a burst of consecutive over-threshold samples (one real
+        // glitch event) into a single reported hit instead of one per
+        // sample.
+        if (argc < 3) { fprintf(stderr, "error: --glitch-check needs a file\n"); return 1; }
+        std::vector<float> sig; uint32_t sr;
+        if (!readWavMono(argv[2], sig, sr)) return 1;
+        float threshold = 0.25f;
+        float minGapMs = 5.0f;
+        for (int i = 3; i < argc; i++) {
+            std::string arg = argv[i];
+            size_t eq = arg.find('=');
+            if (eq == std::string::npos) continue;
+            std::string name = arg.substr(0, eq);
+            float val = (float)atof(arg.substr(eq + 1).c_str());
+            if (name == "threshold") threshold = val;
+            else if (name == "minGapMs") minGapMs = val;
+        }
+        size_t minGapSamples = (size_t)(minGapMs * 0.001 * sr);
+        std::vector<size_t> hits;
+        size_t lastHit = (size_t)-1;
+        for (size_t i = 1; i < sig.size(); i++) {
+            float d = fabsf(sig[i] - sig[i - 1]);
+            if (d > threshold) {
+                if (lastHit == (size_t)-1 || (i - lastHit) > minGapSamples) hits.push_back(i);
+                lastHit = i;
+            }
+        }
+        printf("samples=%zu  duration=%.4fs  sampleRate=%u  threshold=%.3f  minGapMs=%.1f\n",
+               sig.size(), sig.size() / (double)sr, sr, threshold, minGapMs);
+        printf("glitches=%zu\n", hits.size());
+        for (size_t h : hits) {
+            printf("  at sample=%zu t=%.4fs  delta=%.4f\n", h, h / (double)sr, fabsf(sig[h] - sig[h - 1]));
+        }
+        return hits.empty() ? 0 : 1;
+    }
 
     if (strcmp(argv[1], "--stats") == 0) {
         if (argc < 3) { fprintf(stderr, "error: --stats needs a file\n"); return 1; }
