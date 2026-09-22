@@ -80,7 +80,7 @@ with {
     lastConvergedNoteRaw = lastConvergedNoteStep ~ _;
     lastConvergedNote = ba.if(ba.time == 0, targetNote, lastConvergedNoteRaw);
     smoothPole = ba.tau2pole(0.008);
-    trackingAllowed = (trustedTracker > 0.5) | inLockWarmup;
+    trackingAllowed = trustedTracker > 0.5;
     smoothedDetNoteStep(prev) = ba.if(attackEdge, lastConvergedNote,
                                   ba.if(trackingAllowed,
                                     prev * smoothPole + rawDetNote * (1.0 - smoothPole),
