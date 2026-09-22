@@ -109,7 +109,13 @@ async function deployToDevice(files) {
 }
 
 async function main() {
-  const sha = headSha();
+  // Default to literal HEAD, but allow an explicit override: HEAD may have
+  // moved past the last commit that actually touched a build-triggering path
+  // (build-binary.yml/build-lv2.yml both gate on source paths, not image/**
+  // or docs -- see AGENTS.md's "Automatic path's SHA-tracking is blind..."
+  // note for the analogous netboot-server case), in which case polling for
+  // literal HEAD's own CI run waits forever for a run that will never exist.
+  const sha = arg('--sha', 'DSP_SHA', headSha());
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsp-hotdeploy-'));
   const files = [];
