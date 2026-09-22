@@ -662,7 +662,9 @@ void ApcGrid::onKeybedNoteOn(int note, int vel, ParamStore& ps, Sampler* sampler
             return;
         }
     }
-    m_liveEngaged = true;
+    if (m_keysMode != KeysMode::MultiKey) {
+        m_liveEngaged = true;
+    }
     int v = allocateTransposeVoice(note);
     char noteName[24], gateName[24];
     snprintf(noteName, sizeof noteName, "fx/xpose%d/note", v);
