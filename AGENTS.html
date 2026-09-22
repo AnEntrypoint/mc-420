@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=161e91592225d2241ec14bc29d46b74533062351">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1c4d35f25a062eefc6deb27ce0d34e141bae7ffd">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -838,6 +838,19 @@ forced-grain override is removed). Residual splice degradation at high
 shifts (~2.21 ratio at +12 semitones) is confirmed PSOLA legitimately
 restructuring harmonic material, not an artifact. Full trace/measurements:
 <code class="language-plaintext highlighter-rouge">[[memory: multitranspose-investigation-history]]</code>.</p>
+
+<p><strong>Disclosed, unfixed: upward shifts of +18 semitones or more produce real
+audible clicks</strong> (<code class="language-plaintext highlighter-rouge">tools/dsp-cli/bisect-glitch-threshold.js</code>, threshold=0.15
+single-sample delta), not just the residual PSOLA spectral restructuring
+above. Clean across the full range -24..+17; onset is sharp at +18 and
+scales with interval size through +24. Ratio-dependent, not
+absolute-pitch-dependent (same +18 onset on a ~65Hz and a ~1047Hz source).
+Downward shifts stay fully clean across -24..-12. A glide-time-constant
+hypothesis (the untrusted-&gt;trusted tracking transition sweeping the ratio
+too fast) was tested and disproved: a steady, always-trusted ratio glitches
+identically to the realistic-onset case. Root cause is inside
+<code class="language-plaintext highlighter-rouge">soladSnacOctaver.h</code>’s resplice-trigger/crossfade-length interaction at
+large <code class="language-plaintext highlighter-rouge">m_scale</code>, not yet isolated further.</p>
 
 <p><strong><code class="language-plaintext highlighter-rouge">pitchtracker.lv2</code> is accurate below 500Hz, unreliable above</strong> — the
 range this pitch-lock is actually played in (guitar/bass/vocal) is

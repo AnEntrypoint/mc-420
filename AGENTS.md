@@ -698,6 +698,19 @@ shifts (~2.21 ratio at +12 semitones) is confirmed PSOLA legitimately
 restructuring harmonic material, not an artifact. Full trace/measurements:
 `[[memory: multitranspose-investigation-history]]`.
 
+**Disclosed, unfixed: upward shifts of +18 semitones or more produce real
+audible clicks** (`tools/dsp-cli/bisect-glitch-threshold.js`, threshold=0.15
+single-sample delta), not just the residual PSOLA spectral restructuring
+above. Clean across the full range -24..+17; onset is sharp at +18 and
+scales with interval size through +24. Ratio-dependent, not
+absolute-pitch-dependent (same +18 onset on a ~65Hz and a ~1047Hz source).
+Downward shifts stay fully clean across -24..-12. A glide-time-constant
+hypothesis (the untrusted->trusted tracking transition sweeping the ratio
+too fast) was tested and disproved: a steady, always-trusted ratio glitches
+identically to the realistic-onset case. Root cause is inside
+`soladSnacOctaver.h`'s resplice-trigger/crossfade-length interaction at
+large `m_scale`, not yet isolated further.
+
 **`pitchtracker.lv2` is accurate below 500Hz, unreliable above** — the
 range this pitch-lock is actually played in (guitar/bass/vocal) is
 accurate everywhere measured; 3 of 16 test files ≥500Hz are genuinely
