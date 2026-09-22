@@ -1,0 +1,8 @@
+---
+key: mem-615ccbee7db4f6e2-1563
+ns: default
+created: 1789370909717
+updated: 1789370909717
+---
+
+src/net/config/netboot-dnsmasq.conf is a manual/reference dnsmasq-only config for netbooting the Pi 4 from a LINUX host by hand (via image/serve-netboot.sh's POSIX path), distinct from the project's actual day-to-day Windows path (image/serve-netboot-win.js). Run as root: dnsmasq --conf-file=src/net/config/netboot-dnsmasq.conf --interface=eth0 --tftp-root=/srv/tftp/aloop-netboot -d; you must ALSO serve the netboot root over HTTP :8080 separately or the initramfs panics 'unable to mount root fs' (see docs/NETBOOT.md). Key witnessed facts baked into its directives: (1) dhcp-authoritative is WITNESSED necessary -- when a second DHCP server shares the link (e.g. Windows ICS on the same NIC), the Pi 4 loops DISCOVER<->OFFER and never REQUESTs without it; this is the same root cause documented in AGENTS.md's 'Netboot DHCP diagnosis' section for the Windows/JS server, confirming it's a general dnsmasq/ICS interaction, not JS-server-specific. (2) The Pi 4 bootloader identifies itself via DHCP vendor class 'PXEClient' plus Raspberry-specific option 43; dnsmasq must answer dhcp-vendorclass=set:rpi,PXEClient / dhcp-option-force=tag:rpi,43,"Raspberry Pi Boot" or the firmware won't proceed to TFTP. (3) The Pi 4 requests TFTP files under its BOARD SERIAL (e.g. 7bec0617/start4.elf), NOT its MAC -- so dnsmasq's tftp-unique-root (mac-keyed by default) does not match and must be omitted; serve the netboot root flat and create <tftp-root>/<serial>/ as symlinks to the root instead (image/serve-netboot.sh does this automatically from the first TFTP request).

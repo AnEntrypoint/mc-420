@@ -26,6 +26,7 @@
 .gm/config-source-cache-default/
 .gm/config-source-cache-default*.sync.json
 .gm/.embed-generation*
+.gm/dream-rsi/
 
 build/
 *.o
@@ -43,15 +44,17 @@ tmp/
 
 .netboot-stage/
 .netboot-serve/
+.netboot-serve-pi3/
 .netboot-serve.new.*/
-.netboot-serve.log
-.netboot-serve.err.log
-.netboot-serve-live*.log
+.netboot-serve*.log
 .netboot-serve.session.log
 .netboot-serve-launch.log
 .netboot-update-sha
 .netboot-update-work/
+.netboot-work-pi3/
 .netboot-cache/
+.pi3-local-boot/
+.pi3-local-boot-norct/
 
 *.stackdump
 .image-flash-work/
