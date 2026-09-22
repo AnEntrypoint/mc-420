@@ -41,18 +41,46 @@ function localAddressesOnNetbootSubnet() {
   for (const name of Object.keys(ifaces)) {
     for (const a of (ifaces[name] || [])) {
       if (a.family === 'IPv4' && !a.internal && a.address.startsWith(NETBOOT_SUBNET_PREFIX)) {
-        found.push({ iface: name, address: a.address });
+        found.push({ iface: name, address: a.address, netmask: a.netmask });
       }
     }
   }
   return found;
 }
 
+// A /16 (or any non-/24) mask on the netboot interface makes 192.168.137.255
+// -- the address every DHCP OFFER/ACK broadcasts to -- read as an ordinary
+// host address instead of this interface's local broadcast, so replies never
+// reach the Pi: it re-DISCOVERs forever with zero TFTP reads (see AGENTS.md's
+// "Netboot DHCP diagnosis" section). This has recurred more than once with no
+// script in this repo ever setting the mask, so it drifts from outside --
+// most likely Windows ICS or a manual `New-NetIPAddress` re-assigning the
+// interface without `-PrefixLength 24`. Self-heal on every startup rather
+// than requiring a human to notice silent DHCP failure and manually run the
+// documented PowerShell fix each time.
+function ensureCorrectSubnetMask(iface, address) {
+  const ifaces = os.networkInterfaces();
+  const entry = (ifaces[iface] || []).find(a => a.family === 'IPv4' && a.address === address);
+  if (!entry || entry.netmask === '255.255.255.0') return;
+  console.log('[serve] ' + iface + '=' + address + ' has netmask ' + entry.netmask + ', not 255.255.255.0 -- fixing (DHCP replies would silently never reach the Pi otherwise)');
+  try {
+    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      `Remove-NetIPAddress -InterfaceAlias '${iface}' -IPAddress '${address}' -Confirm:$false -ErrorAction Stop; ` +
+      `New-NetIPAddress -InterfaceAlias '${iface}' -IPAddress '${address}' -PrefixLength 24 -ErrorAction Stop | Out-Null`
+    ], { stdio: 'pipe' });
+    console.log('[serve] fixed: ' + iface + '=' + address + ' is now /24');
+  } catch (e) {
+    console.error('[serve] FAILED to fix subnet mask on ' + iface + ': ' + e.message);
+    console.error('[serve] DHCP will likely see DISCOVERs with no REQUESTs following -- fix manually per AGENTS.md');
+  }
+}
+
 function resolveServerIp() {
   const requested = arg('--server', '');
   const live = localAddressesOnNetbootSubnet();
   if (requested) {
-    if (live.some(l => l.address === requested)) return requested;
+    const match = live.find(l => l.address === requested);
+    if (match) { ensureCorrectSubnetMask(match.iface, match.address); return requested; }
     console.error('[serve] REFUSING --server ' + requested + ': no local interface holds that address.');
     console.error('[serve] A DHCP reply advertising an unreachable option-66 TFTP server makes the Pi');
     console.error('[serve] ACK and then fetch nothing -- it re-DISCOVERs forever with ZERO TFTP reads.');
@@ -60,11 +88,13 @@ function resolveServerIp() {
   }
   if (live.length === 1) {
     console.log('[serve] auto-detected server IP ' + live[0].address + ' on ' + live[0].iface);
+    ensureCorrectSubnetMask(live[0].iface, live[0].address);
     return live[0].address;
   }
   if (live.length > 1) {
     console.log('[serve] multiple addresses on ' + NETBOOT_SUBNET_PREFIX + '0/24: ' + live.map(l => l.iface + '=' + l.address).join(', '));
     console.log('[serve] using ' + live[0].address + ' (pass --server to choose explicitly)');
+    ensureCorrectSubnetMask(live[0].iface, live[0].address);
     return live[0].address;
   }
   console.error('[serve] no local interface on ' + NETBOOT_SUBNET_PREFIX + '0/24 -- is the Pi cable plugged into the shared adapter?');
