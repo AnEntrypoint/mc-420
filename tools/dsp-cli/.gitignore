@@ -4,3 +4,5 @@ dsp_cli.obj
 dsp_cli_before.exe
 dsp_cli_after.exe
 *.wav
+.sweep-out/
+.bisect-out/
