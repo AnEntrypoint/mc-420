@@ -69,7 +69,7 @@ engageReleaseHoldS = 0.06;
 lockDelayMs = 80.0;
 lockDelaySamples = lockDelayMs * 0.001 * ma.SR;
 
-voiceOut(voiceIdx, sig, freqDet, trustedTracker, formant, targetNote, gate) = wet
+voiceOut(voiceIdx, sig, freqDet, trustedTracker, formant, targetNote, gate) = wet, shiftAmount, heldDetNote
 with {
     attackEdge = gate > (gate : mem);
     sinceAttackStep(prev) = ba.if(attackEdge, 0.0, prev + 1.0);
@@ -104,10 +104,28 @@ with {
     wet = shifted * voiceEnv * 0.6;
 };
 
-harmonySum(sig, freqDet, trustedTracker, formant, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) =
-    voiceOut(0.0,sig,freqDet,trustedTracker,formant,n0,g0) + voiceOut(1.0,sig,freqDet,trustedTracker,formant,n1,g1)
-  + voiceOut(2.0,sig,freqDet,trustedTracker,formant,n2,g2) + voiceOut(3.0,sig,freqDet,trustedTracker,formant,n3,g3)
-  + voiceOut(4.0,sig,freqDet,trustedTracker,formant,n4,g4) + voiceOut(5.0,sig,freqDet,trustedTracker,formant,n5,g5);
+harmonySum(sig, freqDet, trustedTracker, formant, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5) = wetSum
+with {
+    v0 = voiceOut(0.0,sig,freqDet,trustedTracker,formant,n0,g0);
+    w0 = v0 : (_,!,!);
+    sh0 = v0 : (!,_,!);
+    hd0 = v0 : (!,!,_);
+    w1 = voiceOut(1.0,sig,freqDet,trustedTracker,formant,n1,g1) : (_,!,!);
+    w2 = voiceOut(2.0,sig,freqDet,trustedTracker,formant,n2,g2) : (_,!,!);
+    w3 = voiceOut(3.0,sig,freqDet,trustedTracker,formant,n3,g3) : (_,!,!);
+    w4 = voiceOut(4.0,sig,freqDet,trustedTracker,formant,n4,g4) : (_,!,!);
+    w5 = voiceOut(5.0,sig,freqDet,trustedTracker,formant,n5,g5) : (_,!,!);
+    // Voice 0 only, tapped via the same attach() probe idiom freqDetDiag/
+    // extFreqDetDiagRaw already use below -- attach(a,b) returns a
+    // UNCHANGED while computing b (the bargraph) as a side effect, so this
+    // has zero effect on the actual audio and only needs voice 0's own
+    // shiftAmount/heldDetNote to reach a real output (matches
+    // shiftamountdiag/helddetnotediag, the zone names audio_thread.cpp's
+    // [diag-multitranspose] log already looks up by name).
+    w0Tapped = attach(attach(w0, sh0 : hbargraph("shiftamountdiag", -60.0, 60.0)),
+                       hd0 : hbargraph("helddetnotediag", 0.0, 127.0));
+    wetSum = w0Tapped + w1 + w2 + w3 + w4 + w5;
+};
 
 freqDetMeter = hbargraph("freqdetdiag", 0.0, 2000.0);
 rawExtFreqDetMeter = hbargraph("rawextfreqdetdiag", 0.0, 2000.0);
