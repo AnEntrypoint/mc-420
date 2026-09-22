@@ -1,0 +1,6 @@
+dsp_generated.cpp
+dsp_cli.exe
+dsp_cli.obj
+dsp_cli_before.exe
+dsp_cli_after.exe
+*.wav
