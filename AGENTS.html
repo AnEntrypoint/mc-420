@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=2da45d7d96b654281f45812976049f62eedaaadc">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=6d5d4aadd37b4071de6b3930997009974280e0ce">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -514,10 +514,16 @@ holds. Tell a stale ICS lease renewal apart from a real DHCP loop: `arp -a`
 shows the local address as `Interface: <ip>`; `ping` TTL=128 (Windows) vs
 TTL=64 (Linux).
 
-**DHCP DISCOVERs that never become REQUESTs = wrong egress interface.**
-Cause: the netboot NIC holding `192.168.137.1` with a **/16** mask while
-Wi-Fi holds a /24 in the same range — Windows routes by longest prefix
-match, so replies to the directed broadcast go out Wi-Fi. Diagnose:
+**DHCP DISCOVERs that never become REQUESTs = the netboot interface isn't
+really on a /24.** The server always broadcasts DHCP replies to the fixed
+address `192.168.137.255`; a **/16** mask on the netboot NIC means that
+address isn't recognized as THIS interface's local broadcast at all (it
+reads as an ordinary, ARP-unresolvable host), so the OFFER/ACK is silently
+never delivered regardless of whether anything else is competing for the
+route — witnessed directly 2026-09-22 with no Wi-Fi adapter even present.
+A SEPARATE, compounding cause when Wi-Fi also holds a /24 in the same
+range: Windows then routes the correctly-recognized broadcast out Wi-Fi
+instead by longest-prefix-match. Diagnose either case the same way:
 `Find-NetRoute -RemoteIPAddress 192.168.137.255`; confirm
 `Get-NetIPAddress -AddressFamily IPv4` shows `PrefixLength 24`. Fix:
 
@@ -526,6 +532,18 @@ Remove-NetIPAddress -InterfaceAlias Ethernet -IPAddress 192.168.137.1 -Confirm:$
 New-NetIPAddress   -InterfaceAlias Ethernet -IPAddress 192.168.137.1 -PrefixLength 24
 Set-NetIPInterface -InterfaceAlias Ethernet -InterfaceMetric 10
 ```
+
+**`serve-netboot-win.js` self-heals this on every startup** (added
+2026-09-22, after this recurred with no script in the repo ever having set
+the mask in the first place — most likely Windows ICS or a manual
+`New-NetIPAddress` re-assigning the interface without `-PrefixLength 24`):
+`ensureCorrectSubnetMask()` checks the chosen interface's real netmask via
+`os.networkInterfaces()` and re-runs the same `Remove-NetIPAddress`/
+`New-NetIPAddress -PrefixLength 24` fix automatically if it isn't
+`255.255.255.0`, logging what it found and fixed. This does not remove the
+need to understand the failure mode above — the self-heal only runs when
+`serve-netboot-win.js` itself starts, not continuously, and a `--server`
+address that doesn't match any live interface still hard-refuses as before.
 
 The server resolves `SERVER_IP` once at startup AND bakes it into the netboot
 root's `cmdline.txt` (the `alpine_repo`/`modloop`/`apkovl` URLs). Restarting the
