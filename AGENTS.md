@@ -1,17 +1,20 @@
 # aloop — technical constraints reference
 
 Durable constraints for this codebase and its build/deploy pipeline. Real Pi 4
-device: `192.168.137.100`, root/aloop. Read before touching the device, the DSP,
-or the image/netboot scripts.
+device: `192.168.137.100`, root/aloop. Real Pi 3B+ debug device reaches the
+host via netboot (`.netboot-serve-pi3/`, `[[memory: project-pi3-netboot]]`).
+Read before touching the device, the DSP, or the image/netboot scripts.
 
 This file is a lean, current-state operational reference — hardware facts,
 build/deploy procedures, current shipped architecture, working rules, and
 currently-open/disclosed bugs. Long-form multi-session investigation history
 (rejected designs, session-by-session debugging narration, superseded
-measurements) has been moved to the auto-memory system
-(`~/.claude/projects/<project>/memory/`); see the `[[memory: ...]]` pointers
-below for that context when the "why not X instead" behind a current value
-matters.
+measurements) lives in the auto-memory system
+(`~/.claude/projects/<project>/memory/`); `[[memory: ...]]` pointers below
+point at that context whenever a "why not X instead" behind a current value
+matters. This file itself is re-compacted whenever it exceeds ~30KB — see
+`~/.claude/CLAUDE.md` invariant 3 — draining fresh narrative to memory each
+pass; if a value here lacks a memory pointer, no narrative was owed.
 
 ## Contents
 
@@ -31,102 +34,63 @@ matters.
 # Working rules
 
 Anchors below name established engineering disciplines this project follows;
-each replaces what would otherwise be a paragraph of restated rationale — treat
-the anchor name as shorthand for the full technique, not decoration.
+the anchor name is shorthand for the full technique, not decoration.
 
-## No comments in code, ever — Self-Documenting Code (Martin, *Clean Code*)
+**No comments in code, ever** — Self-Documenting Code (Martin). No inline,
+block, or doc comments anywhere (C++, Faust `.dsp`, JS, shell, YAML, config);
+a name/function boundary/extracted variable/small type IS the explanation.
+Design rationale belongs in THIS file or memory, never inline (SSOT). A
+comment encountered anywhere — pre-existing, vendored, another session's — is
+converted to self-explanatory code the same turn (root-cause it, delete it);
+one sighting spawns a full sweep of that file. `[[memory: no-comments-rule]]`.
 
-No inline, block, or doc comments anywhere (C++, Faust `.dsp`, JS, shell, YAML,
-config). A name, a function boundary, an extracted variable, or a small type IS
-the explanation — rename or restructure instead of annotating. A paragraph-long
-comment is the same violation at higher volume; explaining a "why" is not an
-exemption.
+**Never add audio-path latency** — Fitness-Function Invariant; Chesterton's
+Fence. The existing ~7ms block latency must never grow, even temporarily or
+to work around an unrelated bug — stop and ask first (one-way door). A wet
+effect's own engaged-only algorithmic latency (`ef.transpose`'s window, the
+SNAC engine's latency) is not covered — additive on top of an always-instant
+dry path, not part of the fixed block chain.
 
-Hardware quirks, root-causes, and design rationale belong in THIS file or
-`.wfgy/lessons.md`, never inline — durable knowledge lives in one place (SSOT),
-not scattered across call sites. `[[memory: no-comments-rule]]`.
+**Never trust an in-repo comment as ground truth** — Hyrum's Law inverted;
+Popper. Comments here have been confidently wrong about spec, performance,
+and numeric guarantees. Read what the code does; for spec questions, ask the
+user for the current requirement.
 
-A comment encountered anywhere — pre-existing, vendored, another session's — is
-converted to self-explanatory code the same turn: read it, fix the root cause it
-was compensating for, delete it (Boy Scout Rule / Broken Windows). One sighting
-spawns a full sweep of that file.
+**Real hardware over asking the user to reproduce input** — Feathers,
+adapted. Prefer byte-level MIDI injection (`tcp/9401`, `src/control/midi.cpp`)
+or SSH log/state inspection. Reserve `AskUserQuestion` for physical steps only
+once a byte-level substitute is proven impossible for that bug class.
 
-## Never add audio-path latency — Fitness-Function Invariant (Ford et al.,
-*Building Evolutionary Architectures*); Chesterton's Fence
+**Stay grounded in what this system is** — Feynman; First Principles. A
+real-time C++/Faust audio looper on real ALSA hardware, a real Pi, real USB
+devices, real MIDI gestures. Abstract "formal verification" framings do not
+apply. Work the concrete bug with the concrete tools: static reading, real
+device logs, byte-level MIDI injection, CI-verified builds, DawDreamer
+renders.
 
-The existing ~7ms block latency must never grow — not temporarily, not to work
-around an unrelated bug. If a fix seems to need a bigger ALSA buffer/period, more
-block lag, or any added buffering stage, stop and ask first (one-way door, see
-gm Section 4). Any audio glitch is a regression to root-cause (Five Whys), not a
-hardware limit to negotiate around.
+**Compiling clean proves nothing about runtime safety** — Deutsch, adapted;
+Popper. Repeatedly true here: a synthetic x86_64 A/B passed while real
+aarch64 codegen SIGSEGV'd (`-mapp`); a JIT `compile()` reported success and
+crashed at `render()` (`-fm def`); CI green only ever meant "x86_64
+compiled". Any numeric-approximation or codegen flag needs a real-target,
+real-signal test before shipping. `[[memory: faust-verification-discipline]]`,
+`[[memory: faust-compile-time-cliff]]`.
 
-A wet effect's own algorithmic latency while engaged (e.g. `ef.transpose`'s
-window, the SNAC engine's engaged-only latency) is not covered by this rule — it
-is additive on top of an always-instant dry path, not part of the fixed block
-chain.
-
-## Never trust an in-repo comment as ground truth — Hyrum's Law inverted; Popper
-(falsifiability)
-
-Comments in this tree have been confidently wrong about current intent (loop
-quantization spec), about performance ("already alloc-free" when it allocated per
-block), and about numeric guarantees ("byte-exact passthrough" that measured
-1.5e-05). Read what the code does (ground truth is execution, not prose); for
-spec questions, grill the user for the current requirement rather than assuming
-either code or comment is right.
-
-## Real hardware over asking the user to reproduce input — Characterization by
-Live Witness (Feathers, adapted); Least-Interruption Principle
-
-Prefer byte-level MIDI injection (`tcp/9401`, `src/control/midi.cpp`) or
-SSH-based log/state inspection over asking the user to press buttons. Reserve
-`AskUserQuestion` for physical steps only once a byte-level substitute is proven
-impossible for that bug class (audible sound quality, real analog behavior) or the
-user has said they want to verify by ear.
-
-## Stay grounded in what this system is — Cargo Cult Science (Feynman);
-First Principles
-
-A real-time C++/Faust audio looper on real ALSA hardware, a real Pi 4, real USB
-devices, real MIDI gestures. Abstract "formal verification"/"proof
-assistant"/"dependent types" framings do not apply and must not be adopted. Work
-the concrete bug with the concrete tools this project uses: static reading, real
-device logs, byte-level MIDI injection, CI-verified builds, DawDreamer renders.
-
-## Compiling clean proves nothing about runtime safety — Fallacies of
-Distributed/Cross-Target Computing (Deutsch, adapted); Popper (unfalsified ≠
-verified)
-
-Repeatedly true here: a synthetic x86_64 A/B passed while real aarch64 codegen
-SIGSEGV'd (`-mapp`); a JIT `compile()` reported success and crashed at `render()`
-(`-fm def`); CI green meant "x86_64 compiled", never "runs on target". Any
-numeric-approximation or codegen flag needs a real-target, real-signal test before
-shipping. `[[memory: faust-verification-discipline]]`, `[[memory:
-faust-compile-time-cliff]]`.
-
-## Diagnostic logging must carry wall-clock timestamps — Observability over
-Inference (Shewhart/statistical process control, adapted)
-
-A threshold-triggered log line's line-count density is not a proxy for elapsed
-time. Always log `clock_gettime(CLOCK_MONOTONIC, ...)` as `t=<sec>.<ms>` alongside
-the magnitude, or periodic-vs-bursty is indistinguishable.
+**Diagnostic logging must carry wall-clock timestamps** — Observability over
+Inference. Always log `clock_gettime(CLOCK_MONOTONIC, ...)` as `t=<sec>.<ms>`
+alongside the magnitude, or periodic-vs-bursty is indistinguishable.
 
 ---
 
 # Boards, images, boot trees
 
-## `image/lib-boot-tree.sh` is BOARD-parameterized
-
-One source of truth for every board's boot tree, dispatched by a `BOARD` env var
-(`pi3`/`pi4`/`pi5`/`opi-prime`, default `pi4`).
-
-`boot_tree_apkovl` (binary, LV2, services, vendored libs) is 100% shared and
-unconditional — architecture-independent aarch64 userspace. Only
+`image/lib-boot-tree.sh` is BOARD-parameterized (`BOARD` env var:
+`pi3`/`pi4`/`pi5`/`opi-prime`, default `pi4`). `boot_tree_apkovl` (binary,
+LV2, services, vendored libs) is 100% shared/unconditional. Only
 `boot_tree_fetch` (firmware/kernel/DTB) and `boot_tree_config` (boot
 cmdline/USB-gadget config) dispatch per board.
-
-`board_supports_usb_gadget`/`board_wifi_irq_name` in `lib-boot-tree.sh` are the
-authoritative capability source, not this table:
+`board_supports_usb_gadget`/`board_wifi_irq_name`/`board_firmware_names` in
+`lib-boot-tree.sh` are the authoritative capability source, not this table:
 
 | Board | SoC | Boot chain | USB-audio gadget | WiFi chip |
 |---|---|---|---|---|
@@ -135,387 +99,250 @@ authoritative capability source, not this table:
 | pi5 | BCM2712, quad Cortex-A76 aarch64 | Pi firmware, FAT partition | none — RP1 southbridge USB is host-only | Broadcom brcmfmac |
 | opi-prime | Allwinner H5, quad Cortex-A53 aarch64 | Armbian U-Boot (raw SD sectors) + ext4 root + extlinux.conf | unproven | Realtek RTL8723BS |
 
+**Pi 3B+ ships network boot ENABLED from the factory** (no OTP write needed,
+unlike plain 3B/CM3/3A+); ROM boot order is SD (if `bootcode.bin` present) →
+USB → Network, so "prep the SD for netboot" means wiping the card, not
+writing to it. `[[memory: project-pi3-netboot]]` for the full setup history
+and `[[memory: feedback-verify-before-irreversible-hw]]` for the process
+lesson (WebSearch hardware-OTP claims before any irreversible action, even
+after the user has already picked an option).
+
 ## Orange Pi Prime specifics
 
-**SoC is Allwinner H5, not H3.** 64-bit Cortex-A53 aarch64, Alpine's existing
-aarch64 packages apply directly.
-
-**USB-audio-gadget mode is UNPROVEN.** H5 uses a MUSB dual-role controller on
-the micro-USB OTG port; the 3 full-size USB-A ports are host-only EHCI/OHCI
-and can never do gadget mode. `board_supports_usb_gadget` returns false for
-`opi-prime`; the fallback is the board's built-in analog codec (3.5mm in/out)
-as a normal ALSA HOST device. If gadget-mode UAC2 is ever proven on real
-hardware, add `opi-prime` to the true case and update this.
+SoC is Allwinner H5 (64-bit Cortex-A53, not H3) — Alpine's existing aarch64
+packages apply directly. **USB-audio-gadget mode is UNPROVEN**: H5's MUSB
+dual-role controller is on the micro-USB OTG port only; the 3 USB-A ports are
+host-only EHCI/OHCI. `board_supports_usb_gadget` returns false for
+`opi-prime`; fallback is the board's built-in 3.5mm analog codec as a normal
+ALSA HOST device.
 
 **Boot chain is structurally incompatible with the Pi's FAT-partition
-firmware model.** Allwinner's BootROM reads a raw SPL/U-Boot image at a fixed
-raw SD sector offset before any partition table exists. `boot_tree_fetch_opi`/
+model.** Allwinner's BootROM reads a raw SPL/U-Boot image at a fixed raw SD
+sector offset before any partition table exists. `boot_tree_fetch_opi`/
 `boot_tree_config_opi` download Armbian's `dl.armbian.com/orangepiprime/
 Trixie_current_minimal` **stable redirect URL** (never a resolved
-`github.com/armbian/community/releases/...` asset URL — Armbian's rolling
-trunk moves that version string every build), read the image's own partition
-table via `sfdisk` (never assume a fixed offset), extract the raw
-pre-partition-1 region as the U-Boot blob, loop-mount the ext4 root to pull
-kernel/dtb/initrd. `boot_tree_config_opi` writes
-`/boot/extlinux/extlinux.conf` carrying the same isolcpus/RT kernel cmdline
-as the Pi boards' `cmdline.txt`.
+`github.com/armbian/community/releases/...` asset URL — trunk moves that
+version string every build), read the partition table via `sfdisk` (never
+assume a fixed offset), extract the pre-partition-1 region as the U-Boot
+blob, loop-mount the ext4 root for kernel/dtb/initrd.
+`boot_tree_config_opi` writes `/boot/extlinux/extlinux.conf` carrying the
+same isolcpus/RT cmdline as the Pi boards' `cmdline.txt`.
+`image/build-image.sh`'s `opi-prime` branch needs real root (`sudo
+losetup`/`mount`) — CI or real Linux host only, never Windows.
 
-`image/build-image.sh`'s `opi-prime` branch needs real root
-(`sudo losetup`/`mount`) — CI or a real Linux host only, never the Windows
-dev host.
+**No netboot path — SD-card-flash-only** (BootROM requires local U-Boot
+before PXE/TFTP is reachable); `build-image.yml` skips netboot-build/
+validate/SD-zip for `BOARD=opi-prime`.
 
-**No netboot path — SD-card-flash-only.** Allwinner's BootROM requires
-U-Boot resident on local media before PXE/TFTP is reachable. `build-image.yml`
-skips netboot-build/validate/SD-zip for `BOARD=opi-prime`.
-
-**`boot_tree_write_boot_scr_opi`'s `kernel_addr_r`/`fdt_addr_r`/
-`ramdisk_addr_r`** must match THIS specific U-Boot build's own compiled-in
-defaults, not generic sunxi-common.h values — real hardware only reaches
-`booti`'s handoff with the values `strings`-extracted from the real
-downloaded U-Boot blob (`kernel_addr_r=0x40080000`, `fdt_addr_r=0x4FA00000`,
-`ramdisk_addr_r=0x4FF00000`, `loadaddr=0x42000000`, `scriptaddr=0x4FC00000`).
-Untested past `booti`'s handoff on real hardware as of this writing — the
-next thing to verify once real hardware/serial adapter access exists.
-Armbian's own compiled `bootcmd` sources `/boot/boot.scr` by fixed filename
-directly and never touches `extlinux.conf` — `extlinux.conf` is a defensive
-fallback only, kept for any future U-Boot build with
-`CONFIG_DISTRO_DEFAULTS` compiled in.
-
-`boot_tree_config_opi`'s `earlycon=uart8250,mmio32,0x01c28000` is a
-diagnostic console param (H5's real uart0 MMIO base); `console=ttyS0,115200`
-is independently verified correct for this board's DTB.
-
-**WiFi is Realtek RTL8723BS.** `kernel/rt-tune.sh`'s IRQ-steering matches
+`boot_tree_write_boot_scr_opi`'s `kernel_addr_r`/`fdt_addr_r`/
+`ramdisk_addr_r` must match THIS U-Boot build's own compiled-in defaults
+(`strings`-extracted: `kernel_addr_r=0x40080000`, `fdt_addr_r=0x4FA00000`,
+`ramdisk_addr_r=0x4FF00000`, `loadaddr=0x42000000`,
+`scriptaddr=0x4FC00000`), not generic sunxi-common.h values. Untested past
+`booti`'s handoff on real hardware as of this writing. Armbian's own
+compiled `bootcmd` sources `/boot/boot.scr` by fixed filename directly and
+never touches `extlinux.conf` — that file is a defensive fallback only.
+`earlycon=uart8250,mmio32,0x01c28000` is diagnostic (H5's real uart0 MMIO
+base); `console=ttyS0,115200` is independently verified correct for this
+DTB. WiFi is Realtek RTL8723BS — `kernel/rt-tune.sh`'s IRQ-steering matches
 `rtl8723bs` alongside `brcmfmac`.
 
-**`build-opi-armbian-source.yml` pins Armbian's last pre-6.18 sunxi64
-`current` kernel.** Checkout pinned to `armbian/build@be0bd46058e23cfdad66e840198dda157b998db5`,
-with a verification step asserting the checkout genuinely resolves to 6.12
-(grep of `config/sources/families/include/sunxi64_common.inc`). Two patch-time
-workarounds are applied before compiling: known-broken unrelated-hardware
-entries are disabled in `patch/kernel/archive/sunxi-6.12/series.conf` (Rockchip
-SPI runtime-PM fixes, Cedrus probe-cleanup), and Realtek USB-WiFi driver
-configs (RTL8189ES/FS, RTL8192EU, 88XXAU, RTL8821CU) are unset in
-`linux-sunxi64-current.config` because they fail `-Werror=incompatible-pointer-types`
-against 6.12's `cfg80211_ops` signature.
+`build-opi-armbian-source.yml` pins Armbian's last pre-6.18 sunxi64
+`current` kernel (checkout `armbian/build@be0bd46...`, verified to resolve
+to 6.12). Two patch-time workarounds: known-broken unrelated-hardware
+entries disabled in `series.conf`, and Realtek USB-WiFi driver configs
+(RTL8189ES/FS, RTL8192EU, 88XXAU, RTL8821CU) unset in
+`linux-sunxi64-current.config` — they fail
+`-Werror=incompatible-pointer-types` against 6.12's `cfg80211_ops`.
 
 ## apkovl assembly constraints
 
-**`boot_tree_apkovl` must stamp `.default_boot_services`.** Alpine's
-`rc_add modloop sysinit` gate is conditioned on
-`[ -f "$sysroot/etc/.default_boot_services" -o ! -f "$ovl" ]` — without the
-marker `/lib/modules` stays empty, `/proc/asound` never exists, and
-`/sys/kernel/config/usb_gadget/` cannot be created. Init removes the marker
-after reading it (one-shot Alpine mechanism).
-
-**`aloop`'s OpenRC service needs `rc_ulimit="-l unlimited -r 95"`, not a
-`local.d` `ulimit` call.** `kernel/rt-tune.sh`'s memlock `ulimit` runs inside
-a `local.d/*.start` transient subshell — never reaches the separately-started
-`aloop` process. `rc_ulimit` is read by `openrc-run.sh` immediately before it
-execs `command`.
-
-**`aloop`'s `depend()` needs `after local autoap`.** `aloop` constructs
-`ableton::Link`'s UDP multicast socket at startup; with both services
-declaring only `after local`, Link could open its socket before `autoap`
-brought `wlan0` up. `src/main.cpp` additionally waits for the interface to
-carry an address before starting Link.
-
-**Vendor alsa-lib and the whole lilv stack as real `.so` files; never
-`apk add` at boot.** The device's only reachable apk repo is the ~100-package
-minimal set bundled in the Alpine RPi tarball (no CDN fallback) — none of
-`alsa-lib`/`lilv-libs`/`serd-libs`/`sord-libs`/`sratom`/`zix-libs` are in it.
-Real musl-aarch64 `.so` files live in `vendor/lib-aarch64/` and are copied
-into `usr/lib/`.
-
-**alsa-lib needs its DATA tree too (`/usr/share/alsa/alsa.conf`).** With
-`libasound.so.2` vendored but no `alsa.conf`, `snd_pcm_open("default", ...)`
-segfaults inside alsa-lib's config parser. The whole `vendor/share-alsa/`
-tree (~340K) is vendored.
-
-**`hostapd`/`dnsmasq` must be vendored as aarch64 binaries.** The Alpine RPi
-tarball's local repo has no hostapd/dnsmasq packages and its
-`APKINDEX.tar.gz` is RSA-signed by Alpine (cannot regenerate on Windows).
-Real aarch64 binaries live in `vendor/sbin-aarch64/`. `hostapd` additionally
-needs `libnl-3.so.200`/`libnl-genl-3.so.200`, vendored into
-`vendor/lib-aarch64/`.
-
-**`dnsmasq` needs explicit `user=root`/`group=root` in
-`src/net/config/dnsmasq.conf`** — vendoring the binary does not create the
-`dnsmasq` system user; without this the daemon exits immediately with
-`unknown user or group: dnsmasq`.
-
-**Every `cmdline.txt`/`extlinux.conf` APPEND write must stay a single
-line.** Pi firmware and U-Boot both read only line 1; an embedded newline
-silently truncates every kernel param after it. Every writer collapses both
-halves via `tr '\n' ' '` + `tr -s ' '` before emitting one line.
-`validate-image.sh`/`validate-netboot.sh` assert this by counting newlines.
-
-**Anything newly vendored needs adding to BOTH `tar --mode='+x'` lists.**
-NTFS carries no Unix exec bit (see `[[memory: windows-host-constraints]]`);
-`chmod +x` in the overlay is a silent no-op on this Windows host.
-`image/lib-boot-tree.sh` (`_exec_paths`, apkovl build) and
-`image/build-netboot.sh` (`_nb_exec_paths`, netboot repack) each re-append
-every executable path by name via `tar --mode='+x' -rf ...`. A file not named
-in those lists ships `-rw-r--r--`. Read modes from `tar -tvzf` archive
-listings, never from extracted files. `opt/aloop/aloop` legitimately appears
-twice in the listing (a `-rw-r--r--` entry then `-rwxr-xr-x`) since the `+x`
-pass re-appends rather than overwrites — verifiers grep the LAST match.
-
-**The `find` calls building these lists must run inside the overlay
-directory** (`cd "$OVL" && find usr/sbin ...`), never in the caller's own
-cwd — a `find` against a path that doesn't exist relative to cwd returns
-empty with no error, silently dropping matches from the `+x` re-append with
-zero visible failure anywhere in the pipeline. This produced a real
-ticker-AP outage once (hostapd/dnsmasq correctly matched in one list via a
-hardcoded path but silently excluded from the `find`-derived list).
-
-## `core.autocrlf=true` on this Windows clone corrupts shell scripts
-
-See `[[memory: windows-host-constraints]]`. A repo-level `.gitattributes`
-forces `eol=lf` on `*.sh *.start *.conf *.yml *.yaml Makefile cmdline.txt
-config.txt usercfg.txt`. If a script behaves strangely on-device despite
-looking correct, check `file path/to/script.sh` for "with CRLF line
-terminators"; fix via `rm path/to/script.sh && git checkout -- path/to/script.sh`.
+- **`boot_tree_apkovl` must stamp `.default_boot_services`** — Alpine's
+  `rc_add modloop sysinit` gate needs it or `/lib/modules` stays empty,
+  `/proc/asound` never exists, `/sys/kernel/config/usb_gadget/` can't be
+  created (init removes the marker after reading it, one-shot).
+- **`aloop`'s OpenRC service needs `rc_ulimit="-l unlimited -r 95"`**, not a
+  `local.d` `ulimit` call — `rt-tune.sh`'s memlock ulimit runs in a
+  transient subshell that never reaches the separately-started `aloop`
+  process; `rc_ulimit` is read by `openrc-run.sh` immediately before exec.
+- **`aloop`'s `depend()` needs `after local autoap`** — `aloop` opens
+  Link's UDP multicast socket at startup; `src/main.cpp` also waits for the
+  interface to carry an address before starting Link.
+- **Vendor alsa-lib and the whole lilv stack as real `.so` files; never
+  `apk add` at boot** — the device's reachable apk repo (~100 packages, no
+  CDN fallback) has none of `alsa-lib`/`lilv-libs`/`serd-libs`/`sord-libs`/
+  `sratom`/`zix-libs`. Real musl-aarch64 `.so`s live in `vendor/lib-aarch64/`.
+  alsa-lib also needs its DATA tree (`vendor/share-alsa/`, ~340K) — without
+  `alsa.conf`, `snd_pcm_open("default", ...)` segfaults in alsa-lib's
+  config parser.
+- **`hostapd`/`dnsmasq` must be vendored as aarch64 binaries**
+  (`vendor/sbin-aarch64/`) — the tarball's repo lacks them and its
+  `APKINDEX.tar.gz` can't be regenerated on Windows. `hostapd` also needs
+  `libnl-3.so.200`/`libnl-genl-3.so.200` (`vendor/lib-aarch64/`). `dnsmasq`
+  needs explicit `user=root`/`group=root` in `dnsmasq.conf` — vendoring the
+  binary doesn't create the `dnsmasq` system user.
+- **Every `cmdline.txt`/`extlinux.conf` APPEND write must stay a single
+  line** — Pi firmware and U-Boot both read only line 1. Every writer
+  collapses via `tr '\n' ' '` + `tr -s ' '`; `validate-image.sh`/
+  `validate-netboot.sh` assert this by counting newlines.
+- **Anything newly vendored needs adding to BOTH `tar --mode='+x'` lists**
+  (`_exec_paths` in `lib-boot-tree.sh`, `_nb_exec_paths` in
+  `build-netboot.sh`) — NTFS carries no Unix exec bit, `chmod +x` is a
+  silent no-op on Windows (`[[memory: windows-host-constraints]]`). Read
+  modes from `tar -tvzf` listings, never extracted files — a re-appended
+  path legitimately appears twice; verifiers grep the LAST match.
+- **The `find` calls building those lists must run inside the overlay
+  directory** (`cd "$OVL" && find usr/sbin ...`) — against the caller's own
+  cwd, `find` silently returns empty with no error, dropping matches with
+  zero visible failure. Caused a real ticker-AP outage once
+  (hostapd/dnsmasq matched via a hardcoded path but excluded from the
+  `find`-derived list).
+- **`core.autocrlf=true` corrupts shell scripts on this Windows clone** —
+  `.gitattributes` forces `eol=lf` on scripts/configs. If a script behaves
+  strangely on-device, `file path/to/script.sh` for "CRLF line
+  terminators"; fix via `rm` + `git checkout --`.
+  `[[memory: windows-host-constraints]]`.
 
 ---
 
 # Device runtime environment
 
-## Alpine/musl/aarch64 — glibc/x86_64 artifacts silently fail to load
+**Alpine/musl/aarch64 — glibc/x86_64 artifacts silently fail to load.** A
+`.so` built with host g++ dlopens with no discovery error, then fails at
+load: `Error relocating .../foo.so: unsupported relocation type 7`. CI green
+only ever means "x86_64 compiled". Pattern (`.github/workflows/
+build-lv2.yml`): split `faust2lv2`'s stages — `faust -i -a lv2.cpp` emits a
+self-contained `.cpp`; a `$HOST_CXX` compile+run of it emits `.ttl` metadata
+(host-only); only the final `-shared .so` link targets the device,
+cross-compiled in a real Alpine aarch64 container
+(`docker/setup-qemu-action` + `docker run --platform linux/arm64
+alpine:3.20`). Verify: `objdump -p foo.so | grep NEEDED` must show
+`libc.musl-aarch64.so.1`, never `libc.so.6`. Pass `CPPFLAGS` into nested
+`docker run ... sh -c "..."` via `-e VAR="$VAR"`, never string
+interpolation (escaped quotes lose their escapes across the nested-shell
+boundary).
 
-A `.so` built with the host's g++ (glibc/x86_64) dlopens on the device with no
-bundle-discovery error, then fails at load time:
-`Error relocating .../foo.so: unsupported relocation type 7`. CI green only ever
-means "the x86_64 build compiled", never "the plugin runs on target".
+**`actions/upload-artifact@v4` `path:` wildcard-vs-literal.** `path:
+effects/home/*.lv2` (wildcard) preserves the matched directory's basename;
+`path: effects/home/guitar_lofi_fx.lv2` (literal) flattens its CONTENTS at
+the zip root, silently dropping the `.lv2/` wrapper. Always use the
+wildcard form for LV2 bundle artifacts.
 
-Pattern (see `.github/workflows/build-lv2.yml`): split `faust2lv2`'s stages —
-`faust -i -a lv2.cpp ...` emits a self-contained `.cpp` (only libc/libstdc++/lv2/
-boost includes); a `$HOST_CXX` compile+run of that same `.cpp` emits the plugin's
-`.ttl` metadata (host-only, never touches target arch/libc); only the final
-`-shared .so` link targets the device. Cross-compile that one step in a real
-Alpine aarch64 container via `docker/setup-qemu-action` +
-`docker run --platform linux/arm64 alpine:3.20`, matching `build-binary.yml`.
-Verify: `objdump -p foo.so | grep NEEDED` must show `libc.musl-aarch64.so.1`,
-never `libc.so.6`.
-
-**Pass `CPPFLAGS` into nested `docker run ... sh -c "..."` via
-`docker run -e VAR="$VAR"`, never string interpolation** — escaped quotes lose
-their escapes across the nested-shell boundary.
-
-## `actions/upload-artifact@v4` `path:` wildcard-vs-literal
-
-`path: effects/home/*.lv2` (wildcard) zips the matched directory WITH its basename
-preserved. `path: effects/home/guitar_lofi_fx.lv2` (literal single directory) zips
-its CONTENTS flattened at the zip root, silently dropping the `.lv2/` wrapper.
-Always use the wildcard form for LV2 bundle artifacts.
-
-## `disable_core3_lv2` in `/etc/aloop.conf`
-
-An uncommented `disable_core3_lv2 = 1` makes `audio_thread.cpp`'s worker skip
-`homeFx.process()`/`userFx.process()` entirely every block, so `guitar_lofi_fx.lv2`
-never runs its DSP at all — fully silent, fully inert, no error or warning. This is
-a live-device-only state that survives any number of `rc-service aloop restart`s.
-Always `grep -n disable_core3_lv2 /etc/aloop.conf` (anchored to line-start, no
-leading `#`) before debugging "guitar/lofi effects don't do anything" as a code
-bug.
+**`disable_core3_lv2` in `/etc/aloop.conf`.** Uncommented `= 1` makes
+`audio_thread.cpp`'s worker skip `homeFx.process()`/`userFx.process()`
+entirely — fully silent, no error, survives any `rc-service aloop
+restart`. Always `grep -n disable_core3_lv2 /etc/aloop.conf` (anchored,
+no leading `#`) before debugging "guitar/lofi effects don't do anything"
+as a code bug.
 
 ---
 
 # Deploy, netboot, SSH
 
-## SSH: use a JS `ssh2` client, never Windows ssh.exe or sshpass
+**SSH: use a JS `ssh2` client, never Windows ssh.exe or sshpass**
+(`[[memory: windows-host-constraints]]` — password auth root/aloop,
+fastPut unreliability + base64/exec fallback, MSYS path-conversion). A
+fresh netboot generates a new host key every boot, breaking raw
+`ssh`/known_hosts but not `ssh2`.
 
-See `[[memory: windows-host-constraints]]` for the full detail (password
-auth root/aloop, fastPut unreliability + base64/exec fallback, MSYS
-path-conversion). A fresh netboot generates a new host key every boot,
-breaking raw `ssh`/known_hosts but not `ssh2`.
-
-## The `REBOOT:<token>` UDP listener lives INSIDE the aloop process
-
-`config/aloop.conf`'s `[remote] token=` enables a `udp/4446` listener
-(`src/control/remote_control.cpp`). If `aloop` has crashed, nothing is
-listening and `image/aloop-reboot.js` silently does nothing. OpenRC's
-`respawn_max=0` means it will not restart a crashed `aloop` either, so a
-crashed device stays crashed indefinitely.
-
-If `rc-service aloop status` shows `crashed`, use
-`node ssh-exec.js 192.168.137.100 "reboot"` instead. Only use the UDP REBOOT
-path once `aloop` is confirmed running.
-
-**Always verify a reboot actually happened before trusting any device-state
-observation**: check `cat /proc/uptime` and `md5sum /opt/aloop/aloop` against
-the binary just deployed, BEFORE reading logs.
+**The `REBOOT:<token>` UDP listener lives INSIDE the aloop process**
+(`config/aloop.conf`'s `[remote] token=`, `udp/4446`,
+`src/control/remote_control.cpp`). If `aloop` has crashed, nothing is
+listening and `image/aloop-reboot.js` silently does nothing — OpenRC's
+`respawn_max=0` means it won't restart a crashed `aloop` either. If
+`rc-service aloop status` shows `crashed`, use `node ssh-exec.js
+192.168.137.100 "reboot"` instead. Always verify a reboot actually
+happened before trusting any device-state observation: check `cat
+/proc/uptime` and `md5sum /opt/aloop/aloop` against the deployed binary,
+BEFORE reading logs.
 
 ## Netboot self-update: two rebuild paths
 
-- **Automatic**: `image/serve-netboot-win.js` (run elevated, needs
+- **Automatic**: `image/serve-netboot-win.js` (elevated, needs
   `GITHUB_TOKEN`/`gh auth token` and `PI_TOKEN`) polls `build-binary.yml`/
-  `build-lv2.yml`'s latest green run on `main` every 30s, downloads artifacts
-  into `.netboot-update-work/{bin,lv2}`, calls `image/build-netboot.sh` when
-  the combined SHA changes. State lives in `.netboot-update-sha`
-  (`<binSha>:<lv2Sha>`) — matching SHA means the poll loop does nothing.
+  `build-lv2.yml`'s latest green `main` run every 30s, downloads artifacts,
+  calls `image/build-netboot.sh` when the combined SHA changes. State in
+  `.netboot-update-sha` (`<binSha>:<lv2Sha>`). **Blind to changes in the
+  packaging scripts themselves** — neither workflow lists `image/**` in
+  `paths:`; a packaging-script change needs a manual rebuild.
 - **Manual**: `ALOOP_BIN=<path> LV2_DIR=<path> RESONODE_LV2_DIR=<path>
   PITCHTRACKER_LV2_DIR=<path> DELAYVERB_LV2_DIR=<path> OUT=.netboot-serve
-  NETBOOT_SERVER=192.168.137.1 bash image/build-netboot.sh`. **All three of the
-  extra `*_LV2_DIR` vars are mandatory** — `lib-boot-tree.sh` excludes
-  `resonode.lv2`/`pitchtracker.lv2`/`delayverb.lv2` by name from the general
-  `LV2_DIR` find and reads each from its own variable, so passing `LV2_DIR`
-  alone silently ships a boot tree with none of those three bundles. It warns
-  on stdout but still produces a complete-looking apkovl, so the omission is
-  easy to miss. Prefer deleting `.netboot-update-sha` and letting
-  `serve-netboot-win.js` rebuild (it passes all five correctly). Verify with
-  `tar -tzf .netboot-serve/aloop.apkovl.tar.gz | grep -oE 'effects/[a-z]+/[a-z_]+[.]lv2' | sort -u`
-  — expect delayverb, guitar_lofi_fx, pitchtracker, resonode.
+  NETBOOT_SERVER=192.168.137.1 bash image/build-netboot.sh`. **All three
+  `*_LV2_DIR` vars are mandatory** — `lib-boot-tree.sh` excludes those
+  three bundles by name from the general `LV2_DIR` find; passing `LV2_DIR`
+  alone silently ships none of them (warns on stdout, still produces a
+  complete-looking apkovl). Prefer deleting `.netboot-update-sha` and
+  letting `serve-netboot-win.js` rebuild. Verify: `tar -tzf
+  .netboot-serve/aloop.apkovl.tar.gz | grep -oE
+  'effects/[a-z]+/[a-z_]+[.]lv2' | sort -u` — expect delayverb,
+  guitar_lofi_fx, pitchtracker, resonode.
+- **Verify the deployed checksum after every manual rebuild, BEFORE
+  rebooting**: extract `opt/aloop/aloop` from the fresh apkovl and
+  `md5sum` against the source binary — a match proves SERVER state only,
+  cross-check `/proc/uptime` for whether the device actually picked it up.
+- **Any new LV2 bundle needs deploy wiring into BOTH `build-image.yml` AND
+  `serve-netboot-win.js`** — grep both for every existing `*-lv2` artifact
+  name before considering wiring complete. `[[memory:
+  deploy-two-paths-lv2]]`.
 
-**The automatic path's SHA-tracking is blind to changes in the packaging
-scripts themselves** — neither workflow lists `image/**` in its trigger
-`paths:`. Any packaging-script change requires a manual `.netboot-serve/`
-rebuild.
+**`build-netboot.sh` publish is a staged-directory atomic `mv`, never
+`rm -rf` + populate-in-place** — a Pi can be actively TFTP/HTTP-fetching
+mid-rebuild; the staging dir is a SIBLING of the real output dir (same
+filesystem, atomic `rename(2)`), never under `mktemp -d`'s `$WORK` (often a
+different mount, silently degrading the swap to copy+delete). The netboot
+root must be `chmod -R a+rX`'d after copy — the Alpine tarball ships
+`boot/initramfs-rpi` mode 600 and `cp -a` preserves it.
 
-**Verify the deployed checksum after every manual rebuild, BEFORE
-rebooting**: `tar -xzf .netboot-serve/aloop.apkovl.tar.gz -C
-<fresh-empty-dir> ./opt/aloop/aloop && md5sum <fresh-empty-dir>/opt/aloop/aloop`
-vs the source binary. A checksum match proves SERVER state only — cross-check
-`/proc/uptime` for whether the device actually picked it up.
+**Netboot silently outranks the SD card** — Pi 4 firmware prefers network
+boot when reachable; a correct SD card can look like a broken fix while the
+device fetches from a stale `.netboot-serve/`. Confirm which path booted
+(`.netboot-serve.log`) and compare running binary md5 against the card's
+before trusting any observation. `serve-netboot-win.js` can die holding its
+`updateInFlight` guard, freezing state indefinitely.
 
-**Any new LV2 bundle needs deploy wiring into BOTH `build-image.yml` AND
-`serve-netboot-win.js`.** `[[memory: deploy-two-paths-lv2]]` — grep both for
-every existing `*-lv2` artifact name before considering a new bundle's
-deploy wiring complete.
+**Netboot DHCP diagnosis** — three distinct failure signatures (dead
+option-66 address with zero TFTP reads; DISCOVERs never becoming REQUESTs
+from a wrong netmask/egress interface; a stale baked-in server IP that
+stalls in initramfs after TFTP succeeds). `serve-netboot-win.js`'s
+`ensureCorrectSubnetMask()` self-heals a wrong netmask on every startup
+(added 2026-09-22). Full diagnostic commands and root-cause detail:
+`[[memory: netboot-dhcp-diagnosis-history]]`.
 
-## `build-netboot.sh` publish discipline
+**Fast DSP-only iteration**: `node image/dsp-hotdeploy.js --target
+home|guitar|both` — pushes a committed/pushed `.dsp` edit through CI's real
+musl/aarch64 cross-compile, SFTPs the artifact onto a live device, restarts
+over `ssh2`. Requires `gh` authenticated; fails loudly on non-`success` CI
+or a non-`started` service after. **Stops the service BEFORE overwriting
+`/opt/aloop/aloop`** — `sftp.fastPut` against a currently-executing
+binary's inode fails with musl ETXTBSY (stop → fastPut → start, never
+`restart`-after-write). Does NOT replace the netboot path for
+`lib-boot-tree.sh`/`build-netboot.sh`/kernel/cmdline/OpenRC changes.
 
-**Publish is a staged-directory atomic `mv`, never `rm -rf` + populate-in-
-place.** `image/serve-netboot-win.js` can rebuild the netboot root while a Pi
-is actively TFTP/HTTP-fetching from it; the staging directory is built as a
-SIBLING of the real output dir (same filesystem, atomic `rename(2)`) — never
-under `mktemp -d`'s `$WORK`, which typically lands on a different mount and
-silently degrades the swap to copy+delete.
+## CI runner, docker-step, artifact discipline
 
-**The netboot root must be `chmod -R a+rX`'d after copy.** The Alpine
-tarball ships `boot/initramfs-rpi` mode 600 and `cp -a` preserves it; an
-unprivileged TFTP server then gets "Permission denied" and the Pi panics
-"unable to mount root fs".
-
-## Netboot silently outranks the SD card
-
-Pi 4 firmware prefers network boot when a netboot server is reachable — a
-correctly written SD card can look like a broken fix while the device fetches
-from a stale `.netboot-serve/`. Before trusting any on-device observation
-after an SD update, confirm which path booted (`.netboot-serve.log`) and
-compare the running binary's md5 against the card's. `serve-netboot-win.js`
-can also die while holding its `updateInFlight` guard, freezing
-`.netboot-serve/`/`.netboot-update-sha` indefinitely.
-
-## Netboot DHCP diagnosis
-
-**DHCP REQUESTs with ZERO TFTP reads = option 66 points at a dead
-address**, not a competing DHCP server. `SERVER_IP` must be an address an
-interface actually holds (Windows ICS may assign e.g. `192.168.137.101`, not
-`.1`). `resolveServerIp()` auto-detects the single live
-`192.168.137.0/24` address and REFUSES an explicit `--server` no interface
-holds. Tell a stale ICS lease renewal apart from a real DHCP loop: `arp -a`
-shows the local address as `Interface: <ip>`; `ping` TTL=128 (Windows) vs
-TTL=64 (Linux).
-
-**DHCP DISCOVERs that never become REQUESTs = the netboot interface isn't
-really on a /24.** The server always broadcasts DHCP replies to the fixed
-address `192.168.137.255`; a **/16** mask on the netboot NIC means that
-address isn't recognized as THIS interface's local broadcast at all (it
-reads as an ordinary, ARP-unresolvable host), so the OFFER/ACK is silently
-never delivered regardless of whether anything else is competing for the
-route — witnessed directly 2026-09-22 with no Wi-Fi adapter even present.
-A SEPARATE, compounding cause when Wi-Fi also holds a /24 in the same
-range: Windows then routes the correctly-recognized broadcast out Wi-Fi
-instead by longest-prefix-match. Diagnose either case the same way:
-`Find-NetRoute -RemoteIPAddress 192.168.137.255`; confirm
-`Get-NetIPAddress -AddressFamily IPv4` shows `PrefixLength 24`. Fix:
-
-```
-Remove-NetIPAddress -InterfaceAlias Ethernet -IPAddress 192.168.137.1 -Confirm:$false
-New-NetIPAddress   -InterfaceAlias Ethernet -IPAddress 192.168.137.1 -PrefixLength 24
-Set-NetIPInterface -InterfaceAlias Ethernet -InterfaceMetric 10
-```
-
-**`serve-netboot-win.js` self-heals this on every startup** (added
-2026-09-22, after this recurred with no script in the repo ever having set
-the mask in the first place — most likely Windows ICS or a manual
-`New-NetIPAddress` re-assigning the interface without `-PrefixLength 24`):
-`ensureCorrectSubnetMask()` checks the chosen interface's real netmask via
-`os.networkInterfaces()` and re-runs the same `Remove-NetIPAddress`/
-`New-NetIPAddress -PrefixLength 24` fix automatically if it isn't
-`255.255.255.0`, logging what it found and fixed. This does not remove the
-need to understand the failure mode above — the self-heal only runs when
-`serve-netboot-win.js` itself starts, not continuously, and a `--server`
-address that doesn't match any live interface still hard-refuses as before.
-
-The server resolves `SERVER_IP` once at startup AND bakes it into the netboot
-root's `cmdline.txt` (the `alpine_repo`/`modloop`/`apkovl` URLs). Restarting the
-server rebinds its sockets to the new address but does NOT rewrite those URLs —
-a restart alone is NOT sufficient after an interface change; rebuild the root
-with `NETBOOT_SERVER` set correctly, then power-cycle the Pi.
-
-A stale baked-in IP has its own signature, distinct from the dead-option-66
-case above: the whole TFTP firmware+kernel chain serves correctly (option 66 is
-live), then ZERO HTTP hits follow and the Pi stalls in initramfs — it pings with
-TTL=64 but refuses port 22, because Alpine never comes up so sshd never starts.
-The `udp/4446` REBOOT path cannot recover this: `aloop` never started. Verify
-with `cat .netboot-serve/cmdline.txt` and check the three URLs name the intended
-host. One way to reach this state is an Ethernet link that is down at server
-startup — `resolveServerIp()` then auto-detects a different live interface.
-`pkill -f serve-netboot-win` does not always reap the listener; confirm
-ports are free (`netstat -ano | grep -E ':(67|69|8080)\s'`) before concluding
-a restart took.
-
-## Fast DSP-only iteration: `image/dsp-hotdeploy.js`
-
-A pure `.dsp`/Faust edit does not need a full image assembly or reboot.
-`node image/dsp-hotdeploy.js --target home|guitar|both` pushes a commit
-through CI's real musl/aarch64 cross-compile, SFTPs the changed artifact
-onto a live device, restarts the service over `ssh2`. Requires the edit
-already committed and pushed (it polls the run that commit triggered, does
-not trigger one) and `gh` authenticated. Fails loudly if the run's
-conclusion isn't `success` or `rc-service aloop status` isn't `started`
-afterward.
-
-**It STOPS the service BEFORE overwriting `/opt/aloop/aloop`, not after** —
-`sftp.fastPut` against a currently-executing binary's inode fails with musl
-ETXTBSY. Sequence is stop → `fastPut` → start, never `restart`-after-write.
-
-Does NOT replace the netboot path for changes to
-`image/lib-boot-tree.sh`/`image/build-netboot.sh`, kernel/cmdline config, or
-OpenRC service files.
-
-## CI runner, docker-step, and artifact discipline (build workflows)
-
-- **Cross-compilation runs on native `ubuntu-24.04-arm` runners** (`build-binary.yml`,
-  `build-lv2.yml`): the Alpine `linux/arm64` container then needs NO QEMU
-  emulation. Measured need: the QEMU-emulated link step alone took ~14 minutes
-  on `ubuntu-latest` (the compile itself ~1 minute) — QEMU user-mode binary
-  translation is disproportionately slow for a linker's memory-access pattern.
-- **Docker build steps are split with per-command `timeout` bounds + `set -x`.**
-  An unbounded single `docker run ... sh -c` stalled silently multiple times
-  under emulation (apk-mirror stall / QEMU codegen hang) until GitHub's
-  multi-hour job timeout, with no signal naming WHICH sub-step hung.
-- **All workflow artifacts ship `retention-days: 3`** (opi armbian image: 7).
-  These workflows run on nearly every push; at the default 90-day retention,
-  accumulated ~68MB image artifacts hit the account-wide Actions storage quota
-  and blocked EVERY workflow's uploads repo-wide until GitHub's quota
-  recalculation cycled days later.
-- **`build-image.yml` downloads BOTH `home-fx-lv2` AND `guitar-lofi-fx-lv2`
-  from the same green `build-lv2.yml` run into sibling dirs** (a
-  `workflow_run` trigger only carries its own run's artifacts). Fetching only
-  `home-fx-lv2` shipped images with ZERO usable home-FX effects silently —
-  that bundle contains `aloop.lv2`, which `lib-boot-tree.sh` filters back out;
-  `guitar_lofi_fx.lv2` is the wanted standalone effect.
-- **The rolling `latest` release hard-gates on a real bundled aloop binary**
-  (`payload_check` step): `validate-image.sh` deliberately only WARNS on a
-  missing payload (legitimate structural-only build), so the release job needs
-  its own stricter gate refusing a payload-less "latest".
-- **The SD-card zip is extracted straight out of the already-built+validated
-  FAT image** via the same mtools offset view `validate-image.sh` uses, so it
-  can never drift from what was actually validated. Skipped for opi-prime
-  (raw-U-Boot-sector + ext4 layout, no FAT partition to zip — dd-only flash).
+- Cross-compilation runs on native `ubuntu-24.04-arm` runners — the Alpine
+  `linux/arm64` container needs NO QEMU emulation (a QEMU-emulated link
+  step alone measured ~14 min vs the ~1 min real compile).
+- Docker build steps are split with per-command `timeout` + `set -x` — an
+  unbounded single `sh -c` stalled silently multiple times under emulation
+  until GitHub's multi-hour job timeout, with no signal naming which
+  sub-step hung.
+- All workflow artifacts ship `retention-days: 3` (opi armbian image: 7) —
+  at the 90-day default, accumulated ~68MB artifacts hit the account-wide
+  Actions storage quota and blocked every workflow's uploads repo-wide for
+  days.
+- `build-image.yml` downloads BOTH `home-fx-lv2` AND `guitar-lofi-fx-lv2`
+  from the same green `build-lv2.yml` run (a `workflow_run` trigger only
+  carries its own run's artifacts) — fetching only `home-fx-lv2` ships
+  images with ZERO usable home-FX effects (`aloop.lv2` gets filtered back
+  out by `lib-boot-tree.sh`; `guitar_lofi_fx.lv2` is the wanted effect).
+- The rolling `latest` release hard-gates on a real bundled aloop binary
+  (`payload_check`) — `validate-image.sh` only WARNS on a missing payload
+  (legitimate structural-only build), so the release job needs its own
+  stricter gate.
+- The SD-card zip is extracted straight out of the already-validated FAT
+  image (same mtools offset view `validate-image.sh` uses) so it can never
+  drift from what was validated. Skipped for opi-prime (no FAT partition).
 
 ---
 
@@ -523,2090 +350,992 @@ OpenRC service files.
 
 ## aloop ↔ esp-idf-link paired invariants (change BOTH or the mesh splits)
 
-aloop (Pi 4) and `../esp-idf-link` (ESP32, the "ticker" box) form ONE ad-hoc
-single-AP mesh so Ableton Link's multicast peer discovery reaches every device. No
-credential provisioning: exactly one device hosts the open SSID `ticker`, everyone
-else joins as a station. Changing any value below in one project alone silently
-stops meshing, with no error on either side.
+aloop (Pi 4) and `../esp-idf-link` (ESP32, "ticker") form ONE ad-hoc
+single-AP mesh so Link's multicast peer discovery reaches every device. No
+credential provisioning — exactly one device hosts the open SSID `ticker`.
 
 | Invariant | aloop | esp-idf-link |
 |---|---|---|
-| Mesh SSID | `src/net/config/hostapd.conf` `ssid=ticker`, `wpa_supplicant.conf` `ssid="ticker"` | `main.cpp` `wifi_scan_best_bssid("ticker")` / `wifi_start_link_ap("ticker")` |
-| Auth | open (`key_mgmt=NONE`; `wpa=` commented out) | `wifi_connect_sta("ticker", "")` |
-| AP address / DHCP | `192.168.4.1/24`, dnsmasq `.2-.20` | `esp_netif_set_ip_info` `192.168.4.1/255.255.255.0` |
+| Mesh SSID | `hostapd.conf`/`wpa_supplicant.conf` `ssid=ticker` | `wifi_scan_best_bssid("ticker")`/`wifi_start_link_ap("ticker")` |
+| Auth | open (`key_mgmt=NONE`) | `wifi_connect_sta("ticker", "")` |
+| AP address / DHCP | `192.168.4.1/24`, dnsmasq `.2-.20` | `esp_netif_set_ip_info` same |
 | Channel | `hostapd.conf` `channel=6` | SoftAP ch6 |
-| Link multicast | Link's hardcoded `224.76.78.75:20808` | same (hardcoded in Link) |
-| Link quantum | `link_bridge.cpp` `quantum = 16.0` | `main.h` `#define LINK_QUANTUM 16.0` |
-| Start/stop sync | `link_bridge.cpp` `enableStartStopSync(true)` | `main.cpp` `g_link->enableStartStopSync(true)` |
-| Host election | lowest MAC/BSSID wins | lowest MAC/BSSID wins |
+| Link multicast | `224.76.78.75:20808` (hardcoded in Link) | same |
+| Link quantum | `link_bridge.cpp` `quantum=16.0` | `main.h` `LINK_QUANTUM 16.0` |
+| Start/stop sync | `enableStartStopSync(true)` | same |
+| Host election | lowest MAC/BSSID wins | same |
 
-`PHRASE_BEATS 64.0` in esp-idf-link is NOT the Link quantum — it is that project's
-transport-correction/SPP boundary (16 bars), intentionally different.
-
-**Host election is MAC-ordered, not "host if scan found nothing".** A naive
-"nothing found → host" makes two cold-booting devices both host, producing two
-isolated L2 domains Link can never cross. Both projects hold for a duration
-strictly monotonic in their own MAC (lowest ≈ 0s, highest ≈ 6s), rescanning
-every second and joining the instant a peer's AP appears. Both supervisors
-yield if another `ticker` AP with a strictly-lower BSSID appears — but never
+`PHRASE_BEATS 64.0` in esp-idf-link is NOT the Link quantum — its own
+transport-correction/SPP boundary. Host election is MAC-ordered (never
+"host if scan found nothing" — that makes two cold-booting devices both
+host, two isolated L2 domains). Both hold for a duration strictly monotonic
+in their own MAC (lowest ≈0s, highest ≈6s), rescan every second, join the
+instant a peer's AP appears; yield to a strictly-lower-BSSID AP but never
 while clients are attached.
 
-## `src/net/autoap.sh` constraints
-
-- Must host SSID `ticker`, never `aloop`.
-- `wpa_supplicant.conf` must carry at least one active (non-commented)
-  `network={}` block, or `known_net_available()` can never associate.
-- The AP-mode rescan pattern must not use a naive
-  `grep -oE 'ssid="[^"]*"' wpa_supplicant.conf` — grep does not skip
-  comments.
-- **Keep this file POSIX-clean** — busybox ash on Alpine; bashisms
-  (`grep -qFf <(...)`) are a hard syntax error. Check with
-  `dash -n src/net/autoap.sh`.
-- **`start_ap()` must clear a previous hostapd, not just wpa_supplicant** —
-  a stale hostapd holding the interface produces `Match already configured`
-  then `Could not set channel`. **The channel error is a red herring — ch6
-  is fine and is a paired invariant with esp-idf-link's `cfg.ap.channel = 6`;
-  never "fix" this by changing the channel.**
-
+`src/net/autoap.sh`: must host `ticker`, never `aloop`; needs ≥1 active
+`network={}` block in `wpa_supplicant.conf`; AP-mode rescan must not use a
+naive `grep -oE 'ssid="[^"]*"'` (doesn't skip comments); **POSIX-clean**
+(busybox ash — check `dash -n src/net/autoap.sh`); `start_ap()` must clear
+a previous hostapd, not just wpa_supplicant (stale hostapd → `Match already
+configured` → `Could not set channel` — that channel error is a red
+herring, ch6 is a paired invariant, never "fix" by changing it).
 `rc-service autoap status` reporting `started` is the real signal — a
-`crashed` status with a plausible-looking `ip addr` (wlan0 at
-`192.168.4.1/24`) and no AP is exactly what a broken AP looks like.
+`crashed` status with a plausible `ip addr` and no AP is exactly what a
+broken AP looks like.
 
 ## Ableton Link integration checklist
 
-- **Thread-correct session-state API.** `captureAppSessionState()`/
-  `commitAppSessionState()` from non-audio threads;
-  `captureAudioSessionState()`/`commitAudioSessionState()` from the audio
-  thread ONLY. aloop calls only the App variants and hands the audio thread a
-  lock-free double-buffered `LinkSnapshot` (ADR-005) — audio-side beat/phase
-  is up to one control-tick stale.
-- **`enableStartStopSync(true)` must be paired with both reading
-  `isPlaying()` and calling `setIsPlaying()`.** aloop does both; esp-idf-link
-  only consumes.
-- **The three notification callbacks** run on a Link-managed thread,
-  documented Realtime-safe: no — bounded logging and atomics only.
-- **Tempo authority.** `setTempo` rewrites tempo for EVERY peer. aloop's
-  `proposeTempo` refuses when peers are already present and aloop never set
-  the tempo itself.
-- **Quantum is a shared constant.** `kLinkQuantum`
-  (`src/link/link_bridge.h`) and `LINK_QUANTUM` (esp-idf-link `main.h`) are
-  both `16.0` and move together.
-- **Telemetry carries peer count, not just a bool** (`status.json`'s
-  `link.peers`/`link.playing`).
-- **Interface readiness is a real race** — `depend() { after local autoap;
-  ... }` plus a bounded `waitForNetworkInterface()` before `link.start()`.
-
-## Ableton's Link Test Plan
-
+`captureAppSessionState()`/`commitAppSessionState()` from non-audio threads
+only; `captureAudioSessionState()`/`commitAudioSessionState()` from the
+audio thread only — aloop calls only App variants, hands the audio thread a
+lock-free double-buffered `LinkSnapshot` (ADR-005, up to one control-tick
+stale). `enableStartStopSync(true)` pairs with both reading `isPlaying()`
+and calling `setIsPlaying()` — aloop does both, esp-idf-link only consumes.
+The three notification callbacks run on a Link-managed thread (bounded
+logging/atomics only, not RT-safe for more). `setTempo` rewrites tempo for
+EVERY peer — aloop's `proposeTempo` refuses when peers already present and
+never sets tempo itself. `kLinkQuantum`/`LINK_QUANTUM` (both `16.0`) move
+together. Telemetry carries peer count (`status.json`'s `link.peers`/
+`link.playing`). Interface readiness: `depend() { after local autoap; }`
+plus a bounded `waitForNetworkInterface()` before `link.start()`.
 `build/_deps/abletonlink-src/TEST-PLAN.md` is Ableton's official 12-case
-Link Test Plan; audit any Link change against it. Notable project-specific
-points: TEMPO-4's 20-999bpm range is matched by both projects; `effSpeed`
-clamps 0.1..8.0 in `dsp/loop.dsp` and never saturates inside that range;
-AUDIOENGINE-1 (onset-to-pulse alignment within 3ms) is unverified and
-interacts with the SHIFT-fold latency compensation and one-control-tick
-audio-thread snapshot staleness — the levers if it ever fails are a shorter
-publish interval or explicit output-latency compensation, never added
-buffering.
+test plan — audit any Link change against it (TEMPO-4's 20-999bpm range
+matched by both; `effSpeed` clamps 0.1..8.0; AUDIOENGINE-1 onset-to-pulse
+alignment is unverified).
 
-## Link tempo matching is VARISPEED, never a read-position jump
+## Link varispeed and transport-anchor mechanism (current, since 2026-09-06)
 
-When Link drives the loop length, `audio_thread.cpp` matches playback to the
-session tempo by scaling the read RATE — `linkSpeedRatio = linkBpm /
-recordedBpm`, folded into `effSpeed`. That direction matters and is easy to
-invert: `dsp/loop.dsp` advances `rposNext` by `speedClamped` per sample, so
-`effSpeed > 1` reads FASTER, and a 100bpm loop on a 120bpm session needs 1.2,
-not 0.833.
+`audio_thread.cpp` matches playback to session tempo by scaling read RATE
+(`linkSpeedRatio = linkBpm/recordedBpm`, folded into `effSpeed`) — never a
+read-position jump. `dsp/loop.dsp` advances `rposNext` by `speedClamped`
+per sample, so `effSpeed>1` reads FASTER (a 100bpm loop on a 120bpm session
+needs 1.2, not 0.833). Residual phase error is a BOUNDED SPEED TRIM
+(`kLinkPhaseTrimPerSample=0.00005`, clamped `kLinkPhaseTrimMax=0.03` = 51
+cents), applied to `effSpeed` only, never to the `masterPhaseSamples`
+advance (that advance is the TARGET timeline and must track
+`N*linkSpeedRatio*g_manualSpeedMul`). The trim is suspended while
+`abs(g_manualSpeedMul-1.0)>0.3` so it yields to a manual half/double-speed
+punch. Runs only while `linkVarispeedEngaged` (before any take,
+`recorded_bpm` is unset and the ratio is legitimately 1.0 — trimming then
+would saturate). `weOwnTempo` guards `proposeTempo` only, never the
+varispeed ratio (stays true for the whole session after any recording).
+`LinkBridge::setTransportPlaying(true)` anchors beat 0 via
+`setIsPlayingAndRequestBeatAtTime(true, now, 0.0, kLinkQuantum)`, never a
+bare `setIsPlaying` (stop path keeps the bare call — no beat to anchor).
 
-Three rules hold this together, and all three were violated at once in the
-code that shipped before 2026-09-06 (reported as "glitches when connected to
-Ableton Link"):
-
-- **Never correct phase by assigning to the read position.**
-  `masterPhaseSamples += delta` is a discontinuity in the read pointer and is
-  a click by construction. The residual phase error becomes a BOUNDED SPEED
-  TRIM instead (`kLinkPhaseTrimPerSample = 0.00005` per sample of error,
-  clamped by `kLinkPhaseTrimMax = 0.03`), so the loop walks into alignment.
-  Three percent is 51 cents — a brief varispeed glide, which is the intended
-  pitch-based strategy.
-- **`masterPhaseSamples` must advance at the rate the loopers actually read**,
-  i.e. `N * linkSpeedRatio`, not a bare `N`. Advancing it at 1.0x while the
-  loopers ran at the Link ratio made the two re-diverge as fast as any
-  correction closed them, so the jump re-fired forever.
-- **The trim must YIELD to a manual punch, not merely be small.** An earlier
-  version of this note claimed the 0.03 clamp was "an order of magnitude clear"
-  of `loop.dsp`'s `manualPunchActive` threshold (`abs(effSpeed - 1.0) > 0.3`).
-  That checked the wrong quantity: `effSpeed` is `manualSpeedMul * (ratio +
-  trim)`, so a half/double-speed press pushes it past the threshold regardless
-  of how small the trim is. Because `masterPhaseSamples` advanced at
-  `linkSpeedRatio` alone, a punch halved the read rate while the target timeline
-  kept full rate, the error grew at once, the trim saturated, and the punch was
-  dragged back within a fraction of a second — reported as "the punch varispeed
-  buttons change right back". The trim is now suspended while
-  `abs(g_manualSpeedMul - 1.0) > 0.3`, mirroring the DSP rule rather than
-  duplicating a different one, and `masterPhaseSamples` advances at
-  `linkSpeedRatio * g_manualSpeedMul` so the target follows the punch. Verified
-  live: `eff_speed` holds 0.5000 and 2.0000 across 1.5s and returns to exactly
-  1.0000 on release.
-- **The trim belongs on `effSpeed` and NOT on the `masterPhaseSamples`
-  advance.** That advance is the TARGET timeline — what Link says the position
-  should be — and the trim is the correction applied to the READER to walk it
-  toward that target. Adding the trim to both makes the target run away from the
-  reader and the loop never converges.
-- The ratio ITSELF can exceed the 0.3 threshold on a large tempo mismatch, and
-  that is correct — the C++ trim is the sync authority there.
-
-## `weOwnTempo` guards `proposeTempo` only, never playback varispeed
-
-`proposeTempo` sets `g_weSetTempo` the instant the FIRST loop finishes
-recording, and `resetTempoAuthority` is only called on erase or clear-all. So
-after recording anything, that flag stays true for the rest of the session.
-Gating `linkSpeedRatio` on `!weOwnTempo` therefore disabled the varispeed
-permanently once a loop existed — reported as "we changed the tempo, no change
-in pitch on the playing loops", and fixed 2026-09-06.
-
-The flag exists to stop `setTempo` rewriting the session tempo out from under
-other peers, which is what the Ableton Link checklist above documents it for.
-Playback varispeed is a different concern: if a peer moves the session tempo we
-must follow it whoever set it originally. Keep the flag on `proposeTempo`, and
-keep it off the ratio.
-
-**The phase trim must only run while the ratio is genuinely engaged**
-(`linkVarispeedEngaged`). `recorded_bpm` is written only when the first take
-FINISHES, so before any take the ratio is legitimately 1.0 — and with the ratio
-at 1.0 the master phase can never track the Link grid, so the phase error grows
-without bound and the trim saturates at its clamp. That shipped briefly and
-showed up as `eff_speed` 0.9700 with nothing playing at all: a permanent 3
-percent, 51 cent detune on anything subsequently played.
-
-**Quick check that needs no recording:** read `/run/aloop/status.json`.
-`eff_speed` must be exactly `1.0000` when no loop is recorded, whatever Link is
-doing. A value sitting at 0.97 or 1.03 with nothing playing means the trim is
-saturating because the ratio is not engaged.
-
-## Link transport start must anchor beat 0 to the quantum
-
-`LinkBridge::setTransportPlaying(true)` uses
-`setIsPlayingAndRequestBeatAtTime(true, now, 0.0, kLinkQuantum)`, never a bare
-`setIsPlaying`. Without the anchor a peer joining while we play maps its beat 0
-to whatever free-running phase exists and lands mid-metronome — the symptom
-reported before 2026-09-06, which appeared to "fix itself" only when the remote
-device was stopped and restarted.
-
-The API choice is deliberate on both sides: with no peers the start happens
-immediately, and with peers the beat maps to the next time whose session phase
-matches, rather than `forceBeatAtTime`, which would rudely re-map the shared
-timeline for everyone. The stop path keeps plain `setIsPlaying` — stopping has
-no beat to anchor.
-
-The INBOUND direction was already correct and still is:
-`ApcGrid::applyRemoteTransport` waits for a quantum wrap before starting
-loopers. Only the outbound announcement was unanchored, which is why the
-manual stop/start on the remote appeared to be the fix.
+Quick live check needing no recording: `/run/aloop/status.json`'s
+`eff_speed` must read exactly `1.0000` with nothing recorded; 0.97/1.03
+means the trim is saturating because the ratio isn't engaged. Full bug
+history (three rules violated simultaneously pre-2026-09-06, the
+`weOwnTempo` scope bug, the transport-anchor bug): `[[memory:
+link-varispeed-trim-history]]`.
 
 ## MIDI clock fan-out (`src/control/midi_clock.cpp`)
 
-24 PPQN `0xF8` plus `0xFA`/`0xFC` transport to every hardware MIDI output
-except the control surface's own, so external arps, the US-2x2 and the KO2
-follow the Link sync. Two constraints are structural, not preferences:
+24 PPQN `0xF8` plus `0xFA`/`0xFC` to every hardware MIDI output except the
+control surface's own. **No `/dev/snd/seq` on this device** — enumeration
+walks `/proc/asound/card*/midi*`, opens `hw:CARD,0,0` via `snd_rawmidi`,
+rescans every 2s. **Neither existing loop can carry the tick rate**
+(`midi.cpp` 100ms poll, `main.cpp` 5Hz, vs 20.8ms/tick at 120bpm) — the
+clock owns a thread, derives every tick from `LinkBridge::beatNow()`, never
+a local timer; catch-up after a scheduling hiccup bounded to 4 pulses. The
+control surface is excluded by the card the MIDI loop actually opened
+(`controlSurfaceCard()`), not by parsing `midi_device` (normally the
+literal string `auto` — parsing would silently exclude nothing). The clock
+waits 15s for the surface to be identified, releases any port later found
+to be the surface (e.g. across a replug onto a different card) — this bit
+for real once (card1 Tx byte count 31599→0 when the clock raced the
+MIDI loop's auto-scan).
 
-- **There is no `/dev/snd/seq` on this device.** `snd_seq_device` is loaded
-  only as a dependency of `snd_rawmidi` and the sequencer node does not exist,
-  so enumeration walks `/proc/asound/card*/midi*` and opens `hw:CARD,0,0`
-  through `snd_rawmidi`. Never reach for `snd_seq` here. The rescan runs every
-  2s so a device plugged in later is picked up without a restart.
-- **Neither existing loop can carry the tick rate.** `midi.cpp` polls with a
-  100ms timeout and `main.cpp` runs at 5Hz, against 20.8ms per tick at 120bpm
-  and 10.4ms at 240bpm. The clock owns a thread and derives every tick from
-  Link's beat timeline via `LinkBridge::beatNow()`, never a local timer —
-  otherwise it drifts away from the sync it exists to distribute. Catch-up
-  after a scheduling hiccup is bounded to 4 pulses so a stall cannot dump a
-  burst into a hardware arp.
+## Other Link/mesh facts
 
-**The control surface is excluded by the card the MIDI loop actually opened**
-(`controlSurfaceCard()`), not by parsing `midi_device` from the config — that
-value is normally the literal string `auto`, so parsing it silently excludes
-nothing. This bit for real: the clock raced the MIDI loop's auto-scan, opened
-`hw:1,0,0` (the APC Key 25) and card1's Tx byte count went from 31599 to 0 —
-the LED writer had lost its port. The clock now waits for the surface to be
-identified (15s grace so a device with no surface still gets clock) and
-releases any port that later turns out to be the surface, e.g. across a replug
-onto a different card.
-
-## `pinLinkThreadsToControlCore`
-
-`ableton::Link` spawns its own internal threads ("Link Main"/"Link
-Dispatcher") the moment it's constructed, with no thread-affinity hook in
-its public API. `main.cpp`'s `pinLinkThreadsToControlCore` walks
-`/proc/self/task`, matches by `comm` name, and `sched_setaffinity`s them
-onto the control core (`kControlCore = 2`, matching `kernel/rt-tune.sh`'s
-`CONTROL_CORE` — keep in sync). This fixed a real ~30-37ms/1Hz audio stall
-traced to Link's own periodic peer-discovery messages contending with the
-isolated audio cores; adds no audio-path latency, only steers two
-pre-existing background threads' CPU affinity.
-
-## `[link] enabled` must be parsed as a word, not `%d`
-
-`aloop.conf`'s `[link] enabled = true` ships the literal text `true` —
-`sscanf(line, " enabled = %d", &v)` returns 0 matches against that.
-`cfg.linkEnabled` accepts `true`/`1`/`yes`/`on`, matching `usb_record`'s own
-boolean-parsing convention.
-
-## Unproven: AP-mode multicast forwarding on the Pi
-
-Whether Link's multicast crosses between the Pi's own AP and its associated
-stations on Broadcom `brcmfmac` is UNVERIFIED. `ap_isolate=0` is set and may
-be sufficient — but the ESP32's SoftAP needed a full unicast relay beyond
-isolation. Do NOT port that relay speculatively — confirm the gap on real
-hardware first (`docs/LINK-MESH-TESTING.md` Tests 1-3).
+`pinLinkThreadsToControlCore` (`main.cpp`) walks `/proc/self/task`, matches
+Link's internal threads by `comm` name, pins them to `kControlCore=2`
+(matches `rt-tune.sh`'s `CONTROL_CORE`) — fixed a real ~30-37ms/1Hz audio
+stall from Link's peer-discovery contending with isolated audio cores; adds
+no audio-path latency. `aloop.conf`'s `[link] enabled = true` must be
+parsed as a word (`true`/`1`/`yes`/`on`), not `%d` — matching `usb_record`'s
+convention. **Unproven**: whether Link's multicast crosses the Pi's own
+AP/stations on Broadcom `brcmfmac` (`ap_isolate=0` set, may be sufficient —
+do not port the ESP32's unicast relay speculatively;
+`docs/LINK-MESH-TESTING.md` Tests 1-3).
 
 ---
 
 # Audio thread and ALSA
 
-## Two ALSA devices, never conflate them
+`src/dsp/audio_thread.cpp`'s `worker()` opens two distinct PCM devices —
+never conflate them: **instrument device** (default `hw:0,0`, e.g. M-Audio
+AIR 192|4) — real tight-latency capture+playback, opened blocking, retried
+30x/1s if not plugged in; **OTG gadget** (`f_uac2`, `hw:UAC2Gadget,0`) —
+best-effort MIRROR, opened NONBLOCK so a missing host can never stall the
+real path (`-EAGAIN` expected; any other negative return triggers a
+one-shot recover; a permanently-gone device degrades silently).
 
-`src/dsp/audio_thread.cpp`'s `worker()` opens two distinct PCM devices:
+Instrument device is **S32_LE only** — class-compliant USB interfaces like
+the AIR 192|4 have no S16_LE fallback; requesting `SND_PCM_FORMAT_S16_LE`
+returns success while the device negotiates S32_LE anyway (16-bit
+normalization on 32-bit data = loud static). Buffer type `int32_t`,
+normalization divisor `2147483648.0f`; negotiated format is read back and
+compared, warning loudly on mismatch. The OTG mirror is genuinely separate
+S16_LE — the two output paths need separate wire buffers in native formats.
 
-- **Instrument device** (default `hw:0,0`, e.g. M-Audio AIR 192|4) — the
-  real tight-latency capture+playback path, opened blocking, retried up to
-  30 times at 1s intervals if not yet plugged in.
-- **OTG gadget** (`f_uac2`, `hw:UAC2Gadget,0`) — a best-effort MIRROR of the
-  same processed output, opened NONBLOCK so a missing/non-streaming host can
-  never stall the real path. `-EAGAIN` is expected/skipped; any other
-  negative return triggers a one-shot recover; a permanently gone device
-  degrades silently.
+Playback needs `start_threshold` lowered to one period
+(`snd_pcm_sw_params_set_start_threshold(pcm, sw, period)`) — the hw_params
+default is the full `buffer_size`, and this block loop writes only one
+N-frame period per `snd_pcm_writei()` then blocks on the next capture read,
+so playback stays `PREPARED` forever otherwise. **4 periods minimum** — 2
+(256 frames, ALSA minimum) produces hundreds of xruns/sec on the instrument
+PCM; the OTG mirror deliberately uses looser timing (period=4×N,
+buffer=4× that).
 
-## Instrument device is S32_LE — ALSA silently ignores a wrong format request
+`f_uac2-gadget.sh`: `req_number` must be **4**, not the kernel default 2 —
+the default silently caps ALSA's negotiated `buffer_size` at 256 frames
+regardless of `hw_params`. Gadget presents a STEREO wire (`c_chmask`/
+`p_chmask=0x3`) — capture L/R averaged to mono for Faust, mono result
+duplicated onto both playback channels; DSP stays mono internally. Runs
+from `/etc/local.d` after `libcomposite` loads.
 
-Class-compliant USB interfaces like the AIR 192|4 support only S32_LE
-(24-bit data left-justified in a 32-bit word) with no S16_LE fallback.
-Requesting `SND_PCM_FORMAT_S16_LE` returns success while the device
-negotiates S32_LE anyway — 16-bit normalization on 32-bit data produces loud
-static. Buffer type is `int32_t`, normalization divisor
-`2147483648.0f`; the negotiated format is read back and compared against the
-request, warning loudly on mismatch. The OTG gadget mirror is a genuinely
-separate S16_LE device — the two output paths need separate wire buffers in
-their own native formats.
+`main.cpp` declares `AudioThread` (and hands its address to
+`runMidiLoop` for VU telemetry) BEFORE `audio.start()` — safe only because
+`snapshotTelemetry()` returns the default-constructed all-zero `Telemetry`
+pre-`start()`, never uninitialized state; any future constructor change
+must preserve this.
 
-## Playback needs `start_threshold` lowered to one period
+Flush-to-zero must be set explicitly (`setFlushToZero()`, AArch64 FPCR FZ
+bit via inline asm on `__aarch64__`, SSE intrinsics on x86) — denormals in
+any decaying IIR/feedback loop are 10-100x slower on both architectures.
 
-The hw_params default `start_threshold` for a PLAYBACK stream is the full
-`buffer_size`; this block loop writes only one N-frame period per
-`snd_pcm_writei()` then blocks on the next capture read, so playback stays
-`PREPARED` forever and desyncs from capture. Fix:
-`snd_pcm_sw_params_set_start_threshold(pcm, sw, period)`.
+`AloopLoopDsp` (~320 MiB, 20 loopers × `MAXLEN=48000*60` rings) must be
+`std::make_unique`'d at thread startup, never stack-local (SIGSEGVs on
+first write — frame unmapped the moment SP moves) and never in the RT hot
+path. `Sampler` (~5.3MB) the same.
 
-## ALSA period/buffer sizing: 4 periods minimum
+**Per-block hot path: resolve string-keyed lookups ONCE, never per block**
+— both control WRITE and telemetry READ paths cache resolved `(ParamStore
+slot, Faust zone float*)` pairs at startup, rebuilt only when
+`ParamStore::count` grows. Per-block resolution previously produced
+`readi()` taking 2.2-2.7ms against a 1.333ms budget with unbounded xruns.
+Diagnostic signature: `/proc/<tid>/schedstat` ~95% on-CPU with far fewer
+voluntary context switches than the block rate implies;
+`/proc/<tid>/stat`'s `state` should read `S` between blocks, not `R`.
 
-2 periods (256 frames, ALSA minimum) produces hundreds of xruns/sec on the
-USB instrument-device PCM. 4 periods at the real `block_size` N keeps the
-same latency granularity with enough slack for USB transfer-scheduling
-jitter on top of SCHED_FIFO jitter. The OTG gadget mirror deliberately uses
-looser timing (period = 4xN, buffer = 4x that).
+`FaustUI` shim's `addHorizontalBargraph`/`addVerticalBargraph` must do
+`zones[full(l)]=z` like every other control type, or every `hbargraph()`
+falls through to an O(n) scan on every `fui.get()`. `targetToZone()` needs
+a case for every control target — a missing case returns `""` and the
+value silently never reaches the Faust zone, zero error output.
 
-## `f_uac2-gadget.sh`: `req_number` must be 4, not the kernel default 2
+`masterPhaseBuf` must ramp per-sample within the block —
+`masterPhaseBuf[i]=masterPhaseSamples+i` (running accumulator, wrapped at
+`masterLen`, bit-exact vs the `fmod` formula); `std::fill()` with a
+block-constant value freezes `readIdx0`/`readIdx1` and jumps 64 samples at
+block boundaries (audibly = bitcrushing).
 
-`req_number` is the f_uac2 driver's isochronous USB request queue depth,
-separate from ALSA's `buffer_size`/`period_size`. The default of 2 silently
-caps ALSA's negotiated `buffer_size` at 256 frames regardless of what
-`hw_params` requests. The gadget presents a STEREO wire (`c_chmask`/
-`p_chmask = 0x3`) — `wireCh` handling averages capture L/R to mono for the
-Faust DSP and duplicates the mono result onto both playback channels; DSP
-stays mono internally. Runs at boot from `/etc/local.d` after `libcomposite`
-loads.
+Recording taps a dedicated post-fx Faust input (`loop.dsp`'s `prevFiltIn`)
+fed from `prevFiltOut` — structurally prevents post-fx content re-entering
+`fx`; must always capture the fully-effected mix, never raw pre-fx.
+Sampler `captureBlock` reads the same `prevFiltOut`, never `fin` (which
+post-`renderInto()` contains this block's own sampler-playback voices —
+would let a sample record itself).
 
-## `main.cpp` declares `AudioThread` before starting the MIDI thread on purpose
-
-`aloop::AudioThread audio;` is declared, and its address handed to
-`runMidiLoop` (for live LED VU-meter telemetry), BEFORE `audio.start()`
-runs. Safe only because `AudioThread::snapshotTelemetry()` returns the
-default-constructed all-zero `Telemetry` before `start()`, never
-uninitialized state — any future change to `AudioThread`'s construction must
-preserve this default-safe-snapshot property.
-
-## Flush-to-zero must be set explicitly on the audio thread
-
-Denormal floats occur naturally in any decaying IIR filter/feedback loop
-and are 10-100x slower on both ARM and x86. No portable C++ API on ARM —
-`setFlushToZero()` sets the AArch64 FPCR FZ bit via inline assembly on
-`__aarch64__`, SSE intrinsics on x86. Applied once at thread startup.
-
-## `AloopLoopDsp` must be heap-allocated, never a stack-local
-
-`sizeof(AloopLoopDsp)` is ~320 MiB (20 loopers x `MAXLEN=48000*60` rings
-each). A stack-local SIGSEGVs at the first local-variable stack write since
-the frame is unmapped the moment the stack pointer moves to make room. Use
-`std::make_unique<AloopLoopDsp>()` at thread startup, never in the per-block
-RT hot path. The `Sampler` (~5.3MB) is heap-allocated the same way.
-
-## Per-block hot path: resolve string-keyed lookups ONCE, never per block
-
-Both the control WRITE path and the telemetry READ path cache resolved
-`(ParamStore slot, Faust zone float*)` pairs at thread startup, rebuilt only
-when `ParamStore::count` grows (`resolvedControls`/`sidechainSrcSlot`/
-`looperTelemetryZones[]`). Doing this per-block previously produced `readi()`
-taking 2.2-2.7ms against a 1.333ms expectation with unbounded-climbing
-xruns. Diagnostic signal for this class of bug: `/proc/<tid>/schedstat`
-showing the RT thread on-CPU ~95% with far fewer voluntary context switches
-than the real block rate implies; `/proc/<tid>/stat`'s `state` should read
-`S` between blocks, not `R`.
-
-## `FaustUI` shim must register bargraph zones
-
-`addHorizontalBargraph`/`addVerticalBargraph` in the hand-written `FaustUI`
-shim must do `zones[full(l)] = z` like every other control type, or every
-`hbargraph()` zone falls through to an O(n) linear suffix-scan fallback on
-every `fui.get()`.
-
-## `targetToZone()` must have a case for every control target
-
-A missing case falls through to `return ""` and the value silently never
-reaches the Faust zone — zero error output.
-
-## `masterPhaseBuf` must ramp per-sample within the block
-
-`dsp/loop.dsp`'s `absPos` formula treats `masterPhase` as this looper's
-actual per-sample READ POSITION at `effSpeed==1.0`. Filling it via
-`std::fill()` with a block-constant value freezes `readIdx0`/`readIdx1`
-within each block and jumps 64 samples at block boundaries — audibly
-indistinguishable from bitcrushing. Fill as
-`masterPhaseBuf[i] = masterPhaseSamples + i`, wrapped at `masterLen` via a
-running accumulator (verified bit-exact against the `fmod` formula).
-
-## Recording must tap a dedicated post-fx Faust input, never fold post-fx into `fin`
-
-`loop.dsp`'s `process()` has a dedicated second input `prevFiltIn` that ONLY
-the record-capture term consumes, structurally preventing post-fx content
-re-entering `fx`. `audio_thread.cpp` feeds it from `prevFiltOut`, a
-snapshot of the previous block's fully-effected mix — recording must always
-capture the fully-effected signal, not raw pre-fx input.
-
-## Sampler capture taps `prevFiltOut`, same one-block-lag discipline
-
-`captureBlock` reads `prevFiltOut`, never `fin` (which, post-`renderInto()`,
-contains this block's own sampler-playback voices — capturing from it would
-let a sample record itself).
-
-## SHIFT (`fx/monitorfold`) native fold mechanism
-
-`worker()` does `fin[i] += prevLoopSum[i] * combinedFold` whenever
-`fx/monitorfold` is engaged, ramping `foldGain` at `kFoldStep` (1/16 per
-block). `prevLoopSum` is always exactly one block behind the live signal.
-`foldTarget` also depends on whether any transpose voice is gated
-(`foldTarget = (shiftHeldNow && !anyXposeVoiceGatedNow) ? 1.0f : 0.0f`) — a
-SHIFT+held-key pitch-lock must not simultaneously play the raw unshifted
-loop alongside the locked wet bus.
-
-## SHIFT-hold recording latency compensation
-
-SHIFT's fold adds one block of lag into what gets captured.
-`dsp/loop.dsp`'s `latencyBiasN` is subtracted from `masterPhase` at the
-instant `recordStartPhaseOffset` latches. `applyRecPlayCycle` writes
+**SHIFT (`fx/monitorfold`) fold**: `worker()` does `fin[i] +=
+prevLoopSum[i]*combinedFold` when engaged, ramping `foldGain` at
+`kFoldStep` (1/16/block); `prevLoopSum` always exactly one block behind.
+`foldTarget = (shiftHeldNow && !anyXposeVoiceGatedNow) ? 1.0 : 0.0` — a
+SHIFT+held-key pitch-lock must not also play the raw unshifted loop
+alongside the locked wet bus. SHIFT's fold adds one block of recording
+lag: `dsp/loop.dsp`'s `latencyBiasN` is subtracted from `masterPhase` at
+`recordStartPhaseOffset` latch; `applyRecPlayCycle` writes
 `kShiftFoldBlockLatencySamples` (64) at FINISH if
-`m_looperShiftHeldDuringTake[looper]` was ever set during the take, else 0 —
-sampled every `pollHolds` tick against `fx/monitorfold`, reset at ARM.
+`m_looperShiftHeldDuringTake[looper]` was ever set, else 0.
 
 ---
 
 # Faust DSP
 
-## `par()`-replicated UI controls silently duplicate — use signal inputs
+## Language gotchas
 
-A `button()`/`hslider()` inside a function that `par()` instantiates N times
-gets RE-ELABORATED at each call site — even with the declaration text
-hoisted outside the `par` and passed as a parameter. Verify against the
-generated C++ (`grep -c '"speed"'` must be 1, not 20), never against how the
-source reads. Fix: thread the value as a plain signal input to `process()`.
-Genuinely per-looper values that only change once per take (`finishtarget`,
-`latencybias`) are correctly `par()`-replicated hsliders. Momentary/held UI
-state is threaded as signal inputs by convention even in non-`par()`-wrapped
-files (`multitranspose.dsp`'s `note`/`gate`/`free`).
+`par()`-replicated UI controls silently duplicate — a `button()`/
+`hslider()` inside a `par()`-instantiated function is RE-ELABORATED at each
+call site even with the declaration hoisted; verify against generated C++
+(`grep -c '"name"'` must be 1), never source reading. Fix: thread the value
+as a plain signal input. Genuinely per-looper once-per-take values
+(`finishtarget`, `latencybias`) are correctly `par()`-replicated. Momentary/
+held UI state threads as signal inputs by convention even outside `par()`
+(`multitranspose.dsp`'s `note`/`gate`/`free`).
 
-## Faust has no runtime branching
+Faust has no runtime branching — `select2`/`ba.if` choose among
+ALREADY-COMPUTED signals; there is no way to skip a stage's cost when its
+own amount is zero. This is why Guitar/LofiFx are a permanent always-on
+Core-3 LV2 bundle (a real ~7pp `core_busy` regression was measured trying
+an in-Faust 3-way `fx/bank` crossfade) and why Resonode/delayverb are
+separate conditionally-called LV2 bundles instead of in-graph components.
 
-`select2`/`ba.if` choose among ALREADY-COMPUTED signals; there is no
-in-Faust way to skip a stage's cost based on its own runtime amount being
-zero. Any "gate this expensive stage when its amount is 0" idea must be
-solved at the topology level (move the stage to another core/plugin), not
-with a selector. This is why `effects_runtime.dsp` has no in-Faust `fx/bank`
-3-way crossfade (a real ~7pp `core_busy` regression when tried) — Guitar and
-Lofi-Fx live in a permanent Core-3 LV2 bundle instead, always active, never
-gated. It is also why Resonode was pulled out into its own conditionally-
-called LV2 bundle (see LV2 hosting section).
-
-## Faust direct function-call syntax substitutes whole expressions, not buses
-
-`f(loop(...), a, b)` binds the ENTIRE multi-wire `loop(...)` output to `f`'s
-FIRST formal parameter — function application is closer to textual
-substitution than a wire-count splice (symptom: `too much arguments`
-buried deep in the callee). `:`-based composition wires positionally by
-wire count. Correct idiom: build the bus with `,` then pipe with `:`.
-
-## Faust stdlib functions can hide oversized buffers
+Direct function-call syntax substitutes whole expressions, not buses —
+`f(loop(...), a, b)` binds the ENTIRE multi-wire `loop(...)` output to the
+FIRST formal parameter (symptom: `too much arguments` buried deep in the
+callee); use `,` to build the bus then `:` to pipe.
 
 Always read the real stdlib definition (`/usr/share/faust/*.lib`) before
-trusting a call site's own window/size argument — `ef.transpose` has a
-HARDCODED `maxDelay=65536` independent of the window argument passed. This
-is why `multitranspose.dsp` originally defined its own local `xpose` sized
-to its real usage ceiling instead of calling `ef.transpose` directly; that
-local shifter itself has since been replaced by the per-voice
-`EngineSoladSnac` C++ engine (see the `multitranspose.dsp` section below),
-so the concrete example is gone, but the underlying stdlib-footgun lesson
-still applies to any future `ef.transpose`/similarly-sized stdlib call.
+trusting a call site's size argument — `ef.transpose` has a HARDCODED
+`maxDelay=65536` independent of the window argument passed.
 
-## Faust compiler flags — currently shipped
+Faust already CSEs `par()`-replicated pure-signal subexpressions (including
+through recursive `~` signals and across `component()`-composed files
+sharing a control) — only `button()`/`hslider()` boxes are exempt. Check
+the real generated C++ call count before proposing a manual hoist.
 
-**`-vec -fun -dfs -vs 32 -nvi -ct 0`** at every real `faust` invocation site
-(`build-local.sh`, `build-binary.yml`, both jobs in `build-lv2.yml`).
-`-ct 0` (disable table range-checking) is safe because every `rwtable` index
-in this codebase is software-bounded already (`dsp/loop.dsp`'s
-`readIdx0`/`readIdx1` modulo `wrapLen`; `microrepeat.dsp`'s `wpos`/`rpos`
-clamped/modulo'd). **Any new `rwtable` needs its own explicit index-bound
-trace before this flag stays valid.**
+Comments compile away to nothing (confirmed via real `faust -lang cpp` A/B)
+— a comment-only diff is byte-identical, no DawDreamer/hardware check
+needed to trust a comment removal.
 
-**`-mcpu=cortex-a72`** at every real target-compile step, NOT on the two
-native-host `.ttl`-metadata `g++` compiles (those run on the CI runner's
-x86_64).
+## Compiler flags — currently shipped
 
-**`-O3`** for the aloop binary, matching the LV2 `.so` builds — no
-`-Ofast`, no `-march=native`, no fast-math.
+`-vec -fun -dfs -vs 32 -nvi -ct 0` at every real `faust` invocation
+(`build-local.sh`, `build-binary.yml`, both `build-lv2.yml` jobs). `-ct 0`
+(disable table range-checking) is safe because every `rwtable` index here
+is software-bounded already — any new `rwtable` needs its own explicit
+index-bound trace before this flag stays valid. `-mcpu=cortex-a72` at
+every target-compile step, NOT the two native-host `.ttl`-metadata g++
+compiles. `-O3`, no `-Ofast`/`-march=native`/fast-math.
 
-`-vs 16` measured a real ~14% CPU reduction over the shipped `-vs 32` on
-x86_64 CI hardware, but is REJECTED on CI-witnessed evidence (2026-08-24,
-commits 468c10541a → reverted in 655e742e09): with all invocation sites moved
-together, the real `faust` compiler was killed by SIGALRM ~2 minutes into
-codegenning `dsp/aloop_pre.dsp` — `build-binary.yml` and `build-lv2.yml` both
-failed hard before any binary existed to A/B. Do not re-propose without a
-fresh, separately-justified compile-time investigation; all invocation sites
-must still move together if ever retried.
+**Deliberately NOT shipped**: `-mapp` (real-aarch64 SIGSEGV despite a
+byte-identical x86_64 A/B); `-fm def` (emits `fast_tanf`/`fast_powf` calls
+the LLVM JIT can't resolve, segfaults at `render()` while `compile()`
+reports success — `test/faust-flags/README.md`); `ba.tabulate` for
+`filters.dsp`/`pitch.dsp` (both claim bit-identical hardware parity;
+tabulation is approximate); per-effect LV2 splitting (multiplies RT
+dispatch); Faust's `-omp`/`-sch` (fights manual `pthread_setaffinity_np`
+pinning); `-mcd`/`-dlt` (govern `de.delay` codegen only, not `rwtable`);
+`-clang` (every real compile uses gcc/g++); `-mem` (unified-heap Linux,
+not separate memory banks). `-vs 16` was tried (measured ~14% CPU win on
+x86_64 CI) and REJECTED — killed the real `faust` compiler via SIGALRM
+~2min into `dsp/aloop_pre.dsp` codegen when all sites moved together
+(commits 468c10541a → reverted 655e742e09); do not re-propose without a
+fresh compile-time investigation, and all sites must still move together
+if retried.
 
-**Faust already CSEs `par()`-replicated pure-signal subexpressions** — a
-subexpression built purely from already-shared signal inputs (no UI
-primitive) already compiles to exactly one instance across `par()`-replicated
-call sites, including through recursive `~` signals. Only `button()`/
-`hslider()` boxes are exempt (each must produce its own zone). Before
-proposing a manual hoist, check the real generated C++ call count first.
+`guitar_lofi_fx.dsp` (always-on Guitar+LofiFx bank) was fully audited via
+real generated C++ for CPU waste — none found; every "obvious" candidate
+(shared LFO CSE, `pow(x,4.0)` strength-reduction, block-rate coefficients,
+`MAXD` sizing, phaser cascade division) is already handled by the compiler.
+Three judgment-call sound-character tradeoffs and two disproved
+"zero-cost" candidates are documented but not applied — need a by-ear pass.
+`[[memory: guitar-lofifx-cpu-audit-history]]`.
 
-## Guitar/LofiFx bank (`guitar_lofi_fx.dsp`): audited for CPU, no safe win found
+## Buffer sizing constants
 
-A full audit of the always-on Guitar+LofiFx bank (`guitar_lofi_fx.dsp`
-composing `flanger`/`tremolo`/`phaser`/`distortion`/`bitcrush`/`vinyl`/
-`flutter` + its own `gateStage`) generated the REAL compiled C++ via
-DawDreamer's `faust.box.boxFromDSP`/`boxToSource` with the exact shipped
-flags (`-vec -fun -dfs -vs 32 -ct 0`) and read it line-by-line, rather than
-assuming from the `.dsp` source. Result: there is no exploitable CPU waste
-left to fix at the Faust-source level — every "obvious" candidate the
-pattern below would suggest is already handled by the compiler:
+All sized to "real usage ceiling + margin", verified bit-exact via
+DawDreamer JIT before shipping: `delay.dsp`'s `MAXD=52000` (real ring 65536
+floats — `TIME`'s `targetSamples()` caps usable delay at ~999.6ms/~47999
+samples @ 48kHz); `microrepeat.dsp`'s `MR_MAX=36000` (`sliceLen`'s real
+ceiling across the full `DIV`/`MLB` grid is exactly 32768; `rwtable`
+allocates its declared size exactly, unlike `de.delay`'s power-of-2
+rounding). `-ct 0`'s safety story is untouched — `de.fdelay`/`de.delay`
+sizing is structurally different from the `rwtable`/`table` primitives that
+flag governs.
 
-- The shared `BANKSPEED` LFO (`flanger`/`tremolo`/`phaser` each writing
-  their own `pow(10, DECADES*BANKSPEED)`/`os.osc(...)` against the SAME
-  rebound top-level hslider) already compiles to exactly ONE `pow()` call
-  and ONE oscillator/table lookup for all three files combined — the
-  "Faust already CSEs..." rule above extends across `component()`-composed
-  files sharing a control, not just within one file's own `par()`.
-- `gateStage`'s `pow(x, 4.0)` already compiles to a generated
-  `faustpower4_f(x)=x*x*x*x` helper with zero `pow()` call — the SAME
-  strength-reduction this file documents as a MANUAL fix for Resonode's
-  `mode2`/`mode3`/`mode4` happens here automatically. That Resonode
-  precedent does not generalize to every `pow(x, literal)` call; check the
-  real generated code per case before assuming a manual fix is needed.
-- `bitcrush.dsp`'s `pow(2.0, bits-1.0)` and `distortion.dsp`'s `tan()`/
-  `tanh()` coefficients are already block-rate (`fSlow*`, computed once
-  per 64-sample callback), confirmed directly in the generated
-  `compute()` body, not just inferred from "only depends on an hslider".
-- `flanger.dsp`'s `MAXD=4096` and `flutter.dsp`'s `MAXD=1024` are already
-  at (or, per a follow-up empirical test sizing the same delay with
-  MAXD=2048/2200/3000/4096, ABOVE — Faust's `de.delay`/`de.fdelay` size
-  the real ring from the signal's own interval analysis, mostly ignoring
-  the declared constant once it's large enough) their real usage ceiling;
-  do not shrink or grow either.
-- `phaser.dsp`'s 6-stage allpass cascade (`apStage:apStage:...`, 6x) LOOKS
-  like it recomputes the same per-sample division 6 times (`fun24..fun29`
-  in generated code each independently divide by `(t+1)`) even though the
-  shared `tan()`/coefficient inputs are already correctly hoisted to a
-  single call — but a controlled test (rewriting the source to pass the
-  allpass coefficient as one explicit shared parameter into all 6 stages,
-  regenerating C++) produced BYTE-IDENTICAL output to the original. This
-  is the compiler's own vectorizer/scheduler re-deriving and duplicating
-  the division regardless of how the source expresses it — not fixable at
-  the `.dsp`-source level, and its cost (~5 redundant divisions/sample) is
-  under 0.1% of the 1.333ms block budget regardless. Do not attempt this
-  "fix" again without a different compiler backend/flag.
+`bitcrush.dsp`'s `BITS_MAX=24` (not 16) — the real path never round-trips
+through int16 (S32_LE/24-bit instrument device), so 16 would be a real
+always-on precision floor at `BITCRUSHAMT=0`.
 
-**Verification methodology to reuse before touching this bank again**:
-generate the real compiled C++ (`dawdreamer.faust.box.boxFromDSP` +
-`boxToSource`, exact shipped flags) and grep the actual op counts and
-whether a variable is `fSlow*` (block-rate) vs inside the per-sample loop,
-per the DawDreamer section's existing "check the real generated C++ call
-count first" rule. If a rewrite is proposed, regenerate and diff against
-the original — byte-identical output means the compiler already handles
-it and the change should be dropped.
+`delay.dsp`'s slew recursion (`curStep(target,c)=c+(target-c)*SLEW`,
+`SLEW=0.0001`) must have NO additive drift term — a stray `+1.0` (mistaking
+a bookkeeping tautology for a required correction) gave a fixed point of
+`target+10000` samples, a hidden ~208ms floor under every TIME setting.
+`MIN_DELAY_MS=1000.0/SR` (1 sample); TIME sweeps 0.02ms-~999.6ms linearly.
+Warm the ring ~90000 samples before measuring anything in this file.
 
-**Judgment-call CPU/quality tradeoffs found — NOT applied, need a real Pi 4
-by-ear pass before ever shipping, per the project's own
-faust-verification-discipline**: reducing `phaser.dsp`'s allpass cascade
-from 6 to 4 stages (real CPU win, changes notch density/"swoosh"
-character); a Faust-source rational `tanh` approximation (e.g.
-`x*(27+x*x)/(27+9*x*x)`, clamped) for `flanger.dsp`'s feedback saturator
-and `distortion.dsp`'s drive stage, which would sidestep the `-fm def`
-JIT-link failure since it never touches `fastmath.cpp` but is not
-bit-exact and changes each stage's saturation character; collapsing
-`vinyl.dsp`'s cascaded lowpass+highpass noise-bed shaping into one biquad
-bandpass (background texture, lower risk, still audible). None of these
-were implemented — this file only records that they were considered and
-why they're gated on real-hardware verification, not that a fix has been
-queued for them.
+Parameter smoothing in `effects_runtime.dsp`'s `filterStage`/`delayStage`/
+`reverbStage`/`pitchStage` is deliberately absent (no `si.smoo` upstream of
+`pow()`/`exp()`) — verified against per-render-constant normalized CC
+values with an all-defaults byte-exact passthrough, matching the looper's
+own piecewise-constant behavior. Adding `si.smoo` would break that parity.
 
-**Zero-cost musicality candidates checked, both DISPROVED by real
-DawDreamer measurement** (recorded so they are not re-investigated):
-`distortion.dsp`'s `DISTAMT`-coupled drive is NOT flat/dead at the top of
-its range — rendering a 220Hz/-6dBFS sine at `DISTAMT=0.0..1.0` in 0.1
-steps gives RMS deltas of `[0.040, 0.061, 0.062, 0.063, 0.064, 0.065,
-0.065, 0.065, 0.062, 0.052]` between consecutive steps: a mild,
-tanh-typical taper (the smallest delta, 0.040 at the very bottom, is still
-~60% of the peak ~0.065 in the middle; the final 0.9->1.0 delta, 0.052, is
-one of the smaller deltas but nowhere near a collapsed/dead zone) — no
-retaper needed. `bitcrush.dsp`'s `BITCRUSHAMT` is already correctly
-linear-tapered for its own perceptually-relevant unit (quantization noise
-floor is linear in dB per bit, and `bits` is already linear in
-`BITCRUSHAMT`) — a log taper would be wrong here, not an improvement.
-One real, zero-CPU-cost candidate remains genuinely open:
-`flanger.dsp`'s `FEEDBACK_MIN=0.5` makes feedback jump straight to an
-audibly-resonant ~0.5 the instant `FLANGEAMT` leaves 0 rather than
-ramping up from a subtle chorus-like character; lowering it (e.g. to
-~0.15-0.25) is a one-constant change with no CPU cost, but it is a genuine
-sound-character change and needs a by-ear call, not a blind edit — left
-open, not applied.
-
-## Faust compiler flags — deliberately NOT shipped
-
-- **`-mapp`** — 100%-reproducible real-aarch64 SIGSEGV inside
-  `AloopLoopDsp::compute()` despite a byte-identical synthetic x86_64 A/B.
-  Re-adding requires a fresh live Pi 4 test with real audio.
-- **`-fm def`** — emits calls to `fast_tanf`/`fast_powf`/etc. from
-  `faust/dsp/fastmath.cpp`, an architecture file meant for `-lang cpp`
-  output, never baked into `libfaust` — the LLVM JIT can't resolve those
-  symbols and segfaults at `render()` on every real-usage case while
-  `compile()` reports success. See `test/faust-flags/README.md`.
-- **`ba.tabulate`** for `filters.dsp`'s/`pitch.dsp`'s `pow()` calls — both
-  files claim exact-port/bit-identical hardware parity; tabulation is
-  inherently approximate.
-- **Splitting the home Faust stack or Core-3 bundle into per-effect LV2
-  bundles** — multiplies per-plugin dispatch on the RT block path.
-- **Faust's `-omp`/`-sch` scheduler** — fights this project's own manual
-  per-core `pthread_setaffinity_np` pinning.
-- **`-mcd`/`-dlt`** — govern only `de.delay`-family codegen, not `rwtable`
-  (this project's rings). `delay.dsp`/`reverb.dsp` are comfortably above
-  the default `-mcd 16` regardless.
-- **`-clang`** — every real target compile here uses gcc/g++.
-- **`-mem`** — for genuinely separate memory banks; the Pi 4 is a normal
-  unified-heap Linux process.
-
-## Buffer sizing constants — current values and why
-
-Buffer sizes here are all "real usage ceiling + margin", verified bit-exact
-against the unsized-down original via DawDreamer JIT before shipping:
-
-- `delay.dsp`'s `MAXD = 52000` (real ring 65536 floats) — `TIME`'s own
-  `targetSamples()` caps the real usable delay at ~999.6ms (~47999 samples
-  @ 48kHz), roughly half the previous `96000`.
-- `microrepeat.dsp`'s `MR_MAX = 36000` — `sliceLen`'s real reachable
-  ceiling across the full `DIV`/`MLB` grid is exactly 32768; `rwtable`
-  allocates its declared size exactly (unrounded, unlike `de.delay`'s
-  power-of-2 rounding).
-
-`-ct 0`'s safety story is untouched by any of the above — `de.fdelay`/
-`de.delay` sizing is a structurally different mechanism from the
-`rwtable`/`table` primitives that flag governs.
-
-## Faust comments compile away to nothing
-
-A comment-only diff produces byte-identical generated C++ — confirmed via
-real `faust -lang cpp` A/B, no DawDreamer render or real-hardware check
-needed to trust a comment removal. The entire `.dsp` tree (`dsp/` and
-`effects/home/faust/`) is comment-free, per the no-comments working rule.
-
-## Parameter smoothing order is deliberate
-
-`effects_runtime.dsp`'s `filterStage`/`delayStage`/`reverbStage`/
-`pitchStage` take raw `hslider` values straight into `pow()`/`exp()`-bearing
-math with no `si.smoo` upstream — intentional, since the audio path is
-verified against per-render-constant normalized CC values with an
-all-defaults byte-exact passthrough, matching the looper's own per-block
-piecewise-constant behavior. Adding `si.smoo` would change transient
-response and break that parity guarantee.
-
-## `bitcrush.dsp` `BITS_MAX` is 24, not 16
-
-At `BITCRUSHAMT=0`, `BITS_MAX=16` would quantize to 16-bit resolution
-unconditionally (~500x the float32 rounding floor) — the real production
-path never round-trips through int16 (instrument device negotiates
-S32_LE/24-bit), so this was a real always-on precision floor. `24` brings
-the amt=0 diff to the expected float32 rounding band while leaving the
-crushed extreme unchanged.
-
-## `delay.dsp` slew recursion must have no additive drift term
-
-`curStep(target, c) = c + (target - c)*SLEW` (`SLEW=0.0001`) — a `+1.0`
-term (mistaking a bookkeeping tautology in a C++ reference comment for a
-required correction) has fixed point `target + 10000` samples, a hidden
-~208ms floor under every TIME setting. `MIN_DELAY_MS = 1000.0/SR` (1
-sample); TIME sweeps linearly 0.02ms to ~999.6ms. Warm the ring ~90000
-samples before measuring anything in this file.
-
-## `multitranspose.dsp`: polyphonic pitch-LOCK, 6 voices — current architecture
+## `multitranspose.dsp` — polyphonic pitch-LOCK, 6 voices (current architecture)
 
 `effects/home/faust/multitranspose.dsp` is an NVOICES=6 polyphonic
 pitch-LOCK stage (Digitech Whammy / Infected Mushroom Manipulator
-behavior): the output lands on the exact held key regardless of what pitch
-is actually being played. Strictly additive with the existing mono SNAC
-engine (`fx/pitchbend`, CC52/mod wheel, `pitch_ffi.h`), which remains the
-mono "pedal ride" lane, untouched.
+behavior — output lands on the exact held key). Strictly additive with the
+mono SNAC "pedal ride" engine (`fx/pitchbend`, CC52). Each voice owns its
+own `EngineSoladSnac` instance (`pitch_poly.dsp`/`pitch_poly_ffi.h`,
+`DubfxPolyVoice[6]`) — the SAME engine that powers the mono effect, made
+polyphonic; the old per-file two-tap delay-line `xpose()` shifter no longer
+exists anywhere. `shiftAmount = targetNote - heldDetNote` (continuously
+re-tracked for the whole sustain) converts to `pow(2, shiftAmount/12)`,
+threaded as a plain signal argument (compile-time-cliff discipline below).
 
-**Shifter engine (current, post-`xpose` rewrite)**: each of the 6 voices
-now owns its own `EngineSoladSnac` instance (`pitch_poly.dsp` /
-`pitch_poly_ffi.h`, a `DubfxPolyVoice[6]` array) — the SAME SNAC-tracked
-splice-based PSOLA engine that already powers the mono "pedal ride" effect
-(`pitch.dsp`/`pitch_ffi.h`/`soladSnacOctaver.h`), made polyphonic. The
-OLD per-file two-tap delay-line `xpose()` shifter (pitch-synchronous
-window/crossfade sizing, `windowFor()`, `winSkewMul`/`formantXfSkew`,
-`xposeMaxDelay`) no longer exists anywhere in this file or the codebase —
-do not look for it. `shiftAmount = targetNote - heldDetNote` (continuously re-tracked for the
-whole sustain whenever the external tracker is trusted — note this differs
-from an earlier description in this file that called it latched at
-`attackEdge`; a change to make it latch was built and REVERTED, see below) converts to a ratio (`pow(2, shiftAmount
-/ 12)`) and is threaded straight into the per-voice engine as a plain
-signal argument, per the compile-time-cliff discipline below.
+**Absolute pitch-lock** (per explicit user direction; an "interval
+harmonizer" rearchitecture was tried and reverted). `freqDet = ba.if(
+extFreqDet>0.5, extFreqDet, detectedFreq(sigIn))` — prefers
+`pitchtracker.lv2`'s reading (`fx/extfreqdet`, from
+`audio_thread.cpp`'s `pitchTrackerFx`) over the internal zero-crossing
+fallback. `freeXpose` follows `foldGain` (hoisted `static`, previous-block
+read) — must track the same quantity the audio fold uses, not raw SHIFT
+button state (a real shipped bug, root-caused and fixed — full history
+`[[memory: multitranspose-investigation-history]]`).
 
-**Current mechanism (absolute pitch-lock, per explicit user direction — an
-earlier "interval harmonizer" rearchitecture was tried and reverted)**:
-unchanged from before the shifter rewrite. The detected pitch source is
-`freqDet = ba.if(extFreqDet > 0.5, extFreqDet, detectedFreq(sigIn))` —
-prefers the external `pitchtracker.lv2` autocorrelation tracker's reading
-(`fx/extfreqdet`, fed from `audio_thread.cpp` via `pitchTrackerFx`) when
-present, falls back to the internal zero-crossing tracker
-(`trackPitchHzAndHp`/`jumpGuard`) otherwise.
+**Voice mechanics**: shared `an.pitchTracker`-derived detection runs once
+per sample. Each voice's shift glides via a one-pole
+(`tau2pole(0.008)`), gated by `en.adsr` (3ms/30ms/sustain 1/50ms release),
+pitch-shifted by the per-voice `EngineSoladSnac`, formant-shaped by
+`LpcFormantShifter`, block-buffered at 16 samples (~0.33ms onset latency —
+fixed algorithmic latency regardless of pitch/formant). Fixed per-voice
+gain 0.6 + static `ma.tanh` soft-clip on the summed bus (never dynamic
+`1/sqrt(activeVoices)` — pumps on chord-note release). Round-robin/
+oldest-steal voice allocation (`allocateTransposeVoice`/
+`releaseTransposeVoice` in `ApcGrid`); a steal calls `reengage()` to reset
+read position/period tracking. Note-off releases by GATE only, held by a
+linear release counter (`engageReleaseHoldS=0.06`) guaranteed to reach
+exactly 0 — do NOT gate on `voiceEnv>0` directly (an asymptotic envelope
+may never cross a threshold, stranding the engine engaged).
+`DubfxPolyVoice::pos`/`inBuf`/`outBuf` are cleared on reengage (unfixed
+once produced a 0.549-peak burst from stale samples on note-on).
 
-**Current SHIFT/free-guard behavior**: `freeXpose` follows `foldGain`
-(hoisted above both uses as `static`, so the earlier read sees the previous
-block) rather than the raw SHIFT button state — the two must track the same
-quantity the audio fold actually uses, or holding SHIFT can silently
-disable the key pitch-lock. `[[memory: multitranspose-investigation-history]]`
-for the full SHIFT/free-guard bug history (reported as "key based transpose
-is glitching"/"its not pitch locking the keys", root-caused to this exact
-mismatch) and a separately-reverted `attackEdge`-latching attempt that
-turned out not to be the real cause.
+**Formant control** (`fx/formant`, CC53) is a plain signal argument;
+real-world reachable range is ~±1.5 of the `-3..3` hslider
+(`((data2-64)/63)*1.5`, deadzone 60-68). Moved by `LpcFormantShifter`
+(`vowelFormant.h`), an LPC spectral-envelope shifter, not the grain
+resampler — `GrainFormant` is entirely inert on this poly path.
+`SibilanceDetector` (per-voice, gated on SNAC-unlocked + HF-energy ratio)
+crossfades a voice's output back toward raw dry input (up to 85%) during
+fricatives/consonants so sibilants stay intelligible — not yet by-ear
+verified on real hardware. LPC design detail, order/aliasing fixes, the
+high-fundamental H1-annihilation defect and its three-bound mitigation,
+CPU measurements, and the superseded `VowelFormantShaper`: `[[memory:
+lpc-formant-shifter-history]]`.
 
-**Residual splice degradation is not an engine defect.** Corpus degradation
-ratio settles ~2.21 at +12 semitones and is PSOLA legitimately restructuring
-harmonically rich material (splicing every period changes short-window
-second derivative), confirmed three ways: spurious energy on a pure tone is
--64 to -67dB at every shift (no worse than at unity), roughness is no
-longer splice-localised (1.00-1.01 ratio inside vs. between splices), and
-clicks are 0/112 synthetic cases. `[[memory:
-multitranspose-investigation-history]]` for the full measurement and two
-refuted sharper-metric attempts.
+`LpcFormantShifter::beginBlock(int blockSamples)` accumulates real elapsed
+samples and updates coefficients only once per `kCoeffUpdateHopSamples=64`
+regardless of caller block size — a real click was shipped when
+`DUBFX_POLY_BS` cut 64→16 without this, running the O(order²) coefficient
+update 4x more often and snapping a high-Q filter every ~43ms LPC hop.
+`LpcFormantShifter::process`'s output stage is a soft-knee limiter
+(identity below `kOutputSaturationKnee=1.5`, `tanh` toward
+`kOutputMagnitudeCeil=4.0` above) — full-corpus testing found the
+whiten/recolor filter genuinely saturating on real vibrato-rich vocal
+content even at unity shift; converts what would be harsh clipping into
+bounded soft compression, does not fix the underlying resonance
+instability (disclosed, not attempted).
 
-**`pitchtracker.lv2` is accurate below 500Hz and unreliable above it** —
-verified against all 16 real instrument recordings cross-checked against an
-FFT harmonic-comb score: accurate within 50 cents on 9 files (66-706Hz),
-genuinely wrong on 3 files, all >=500Hz (an octave-down subharmonic lock on
-oboe, a bad lock on violin, -63.9c on trumpet). Below 500Hz — guitar, bass,
-both vocal ranges, everything this pitch-lock is actually played with — the
-tracker is accurate everywhere measured (-3.7c to +22.9c across
-bassoon/cello/violin/trumpet/piano/marimba/vibraphone/vocal). Deliberately
-NOT fixed: `pitchtracker_ac.dsp` is on the wrong side of this file's own
-compile-time-cliff warning (a multi-GB codegen blowup from one attempted
-per-candidate-tau-selection change); re-opening needs a real measured win
-that justifies that risk. `[[memory: multitranspose-investigation-history]]`
-for the full per-file measurement and why `subharmonicPromote` structurally
-cannot catch the oboe case.
+**Splice-path upward-shift mechanism**: `upshiftTargetLag()` raises the
+target lag to `kUpshiftLagPeriods(1.5)*period+SINC_HALF+2` when
+`m_scale>1.0`; drift test is symmetric (SOLA for pitch-up).
+`shrinkSpliceCount` bounds `|n|` both sides. Closed a real gap (upward
+shift's drift never went positive so periodic resplice could never fire) —
+worst upward error went -204.7c→+18.9c. Added latency is engaged-only
+wet-path (covered by the never-add-latency carve-out) and SHORTER than the
+grain path it replaced (~14ms vs ~36ms at 110Hz). The `scale>1.02`
+forced-grain override is REMOVED — neutral formant runs on the
+phase-coherent splice path. Full trace/measurements: `[[memory:
+multitranspose-investigation-history]]`.
 
-**Known, disclosed, current limitation**: the internal zero-crossing
-fallback tracker (when `pitchtracker.lv2` is NOT loaded) has a real,
-unresolved note-selection accuracy problem — it can take well over 400ms to
-converge and can drift non-monotonically rather than settle. With
-`pitchtracker.lv2` genuinely loaded (the real, intended on-device
-configuration — see deploy section), lock is near-instant and accurate
-(~11-38 cents on real recordings spanning piano/violin/vocal/brass/
-woodwind/marimba/vibraphone). Do not attempt a timing-based heuristic fix
-for the fallback tracker's convergence in `multitranspose.dsp` itself —
-this file's own history (see `[[memory: faust-compile-time-cliff]]`)
-records the real, repeated risk of touching this file's tracker internals.
+**Residual splice degradation is not an engine defect** — corpus
+degradation ratio settles ~2.21 at +12 semitones, confirmed as PSOLA
+legitimately restructuring harmonically rich material (three separate
+measurements rule out an artifact). `[[memory:
+multitranspose-investigation-history]]`.
 
-**Voice mechanics**: `an.pitchTracker`-derived detection runs on the live
-input once per sample (shared instance, not per-voice). Each voice's shift
-glides via a one-pole (`normalGlidePole`, `tau2pole(0.008)`), gated by
-`en.adsr` (3ms attack/30ms decay/sustain 1/50ms release — 50ms release is
-the verified click-free value), then pitch-shifted by the per-voice
-`EngineSoladSnac` engine and formant-shaped by `LpcFormantShifter` (see
-below), block-buffered at 16 samples (~0.33ms onset latency), the same
-fixed algorithmic latency as the mono engine's wet effect regardless of
-pitch or formant. Gain staging:
-fixed per-voice gain (0.6) + static `ma.tanh` soft-clip on the summed bus
-(never a dynamic `1/sqrt(activeVoices)` renormalization — that pumps on
-every chord-note release). Voice allocation: round-robin/oldest-steal
-(`allocateTransposeVoice`/`releaseTransposeVoice` in `ApcGrid`) — a held
-note reuses its own slot, an unheld slot is preferred, oldest-triggered is
-stolen once all 6 are held (ADSR re-attacks, and each steal calls
-`EngineSoladSnac::reengage()` to reset that voice's read position/period
-tracking cleanly). Note-off releases by GATE only, never a hard cut.
+**`pitchtracker.lv2` is accurate below 500Hz, unreliable above** —
+verified against all 16 real recordings + FFT harmonic-comb score: 9 files
+(66-706Hz) within 50 cents, 3 files ≥500Hz genuinely wrong (octave-down
+locks). Below 500Hz (guitar/bass/vocal — this pitch-lock's actual use
+case) accurate everywhere measured. Deliberately not fixed —
+`pitchtracker_ac.dsp` is on the wrong side of the compile-time-cliff.
+`[[memory: multitranspose-investigation-history]]`.
 
-**Formant control** (`fx/formant`, CC53) reaches this engine as a plain
-signal argument into `pitchPoly`'s `process()`; real-world CC range is
-`((data2-64)/63)*1.5` clamped to the `-3..3` hslider range in
-`effects_runtime.dsp`, so the practically reachable magnitude is ~1.5, not
-3 (`applyFormantCC` in `apc_grid.cpp`, gated on `(m_liveEngaged ||
-m_keysMode==KeysMode::MultiKey)` — a genuine no-op when neither pitch-shift
-engine is active).
+**Known, disclosed limitation**: the internal zero-crossing fallback
+tracker (when `pitchtracker.lv2` is NOT loaded) can take >400ms to converge
+and drift non-monotonically. With `pitchtracker.lv2` genuinely loaded (the
+intended on-device config), lock is near-instant, ~11-38 cents accurate.
+Do not attempt a timing-heuristic fix in `multitranspose.dsp` itself — real
+risk of the compile-time cliff (`[[memory: faust-compile-time-cliff]]`).
 
-**Current splice-path upward-shift mechanism** (supersedes an earlier
-"splice path is mysteriously inaccurate" note): `upshiftTargetLag()` raises
-the target lag to `kUpshiftLagPeriods (1.5) * period + SINC_HALF + 2`
-whenever `m_scale > 1.0` and a period is known, and the drift test is
-symmetric (`driftFromTarget < -trigger` jumps the passive reader BACKWARD by
-`n*per` through the same value+slope candidate search — textbook SOLA for
-pitch-up, repeating segments); `shrinkSpliceCount` bounds `|n|` on both
-sides. This closed a real gap: without it, an upward shift's drift never
-went positive so the periodic resplice could never fire at all. The added
-lag is engaged-only wet-path latency (covered by the Working Rules
-carve-out) and is SHORTER than the grain path it replaces: ~14ms vs ~36ms
-at 110Hz. Downward and unity shifts are bit-identical to before across a
-180-case sweep — the mono engine is provably untouched. Because the splice
-path now beats the grain path on envelope stability at neutral formant, the
-`scale > 1.02` forced-grain override that used to paper over the missing
-upward mechanism has been REMOVED; neutral formant now runs on the
-phase-coherent splice path. `[[memory: multitranspose-investigation-history]]`
-for the root-cause trace and before/after measurements (worst upward error
--204.7c -> +18.9c).
+**One shared SNAC period tracker serves all 6 poly voices**
+(`snacPeriodTracker.h`, extracted verbatim from `EngineSoladSnac`,
+108-case sweep bit-identical to pre-refactor). `EngineSoladSnac` owns one
+by default (mono engine unchanged); `attachSharedTracker()` points it at
+an external tracker, fed from voice 0's per-sample tick (Faust has no
+runtime branching, so all 6 `voiceOut` calls run every sample regardless).
+`reengage()` on a shared-tracker voice INHERITS the locked period instead
+of `kReengageSeedPeriod` (600 samples/~80Hz) — removes most per-note
+lock-time variance. **The shared tracker's `stepSchedule` MUST step at
+`m_sinceBlock==0`, matching the engine's own tracker's phase** — a 63-sample
+misalignment silently degrades tremolo/AM material (measured
+envelope-tracking error 0.057→0.239→0.057 fixed). Full measurement,
+including two rejected fix attempts (second-sweep confirmation, a Hann
+LUT): `[[memory: multitranspose-investigation-history]]`.
 
-**Historical, now superseded: `GrainFormant` is entirely inert on this
-(poly) path** — `pitch_poly_ffi.h` no longer calls `eng.setFormantDepth()`
-at all (verified: max grain mix 0.000000000 across formant -1.5..+1.5),
-since formants moved to the LPC spectral-envelope shifter below. It remains
-active on the MONO pedal-ride engine (`pitch_ffi.h`).
-`[[memory: multitranspose-investigation-history]]` for three now-inapplicable
-findings from when this engine still drove formants here: an exact-octave
-pitch defect at high formant depth (structural, from the grain window vs.
-OLA-hop relationship), a secondary epoch-drift amplitude-modulation
-contributor, and a rejected `targetLag`-reduction attempt that made envelope
-stability monotonically worse.
+The grain-suspend condition is keyed on the DIALED formant depth
+(`m_formantDepth != 0.0f`), not the smoothed mix — keying on
+`m_grainMix`/`m_grainMixTarget` reads the previous sample's mix (0 on the
+very first sample even with formant dialed in), breaking bit-exactness.
+`GrainFormant::read()` calls `suspend()` below `kGrainBypassFloor` instead
+of running its overlap-add loop every sample at zero mix — the
+formant-factor glide must still advance while suspended (`advanceFactor()`
+called from both `read()` and `suspend()`, or small formant settings could
+never cross the mix floor). Measured (x86_64, indicative only): mean
+per-block 60.4us→37.5us, p99 208.6us→68.2us against the 1333us budget.
 
-## Formants are moved by an LPC spectral envelope, not by the grain resampler
+**Every momentary voice must stay engaged through its own release tail**
+— gating the shifter on raw `gate>0.5` disengaged instantly on note-off
+while `voiceEnv`'s ADSR still had a 50ms release, playing unshifted dry
+input at full envelope (measured -492 cents off target). Fixed via the
+`engageReleaseHoldS` linear counter above.
 
-`vowelFormant.h`'s `LpcFormantShifter` replaces the three peaking-EQ boosts.
-Per analysis hop it fits an all-pole envelope to the raw wet signal, warps that
-envelope in frequency, refits, and filters through `A_src(z)` then
-`1/A_tgt(z)`. `pitch_poly_ffi.h` no longer calls `eng.setFormantDepth()` at all
-on the poly path, so `GrainFormant` is inert there (verified directly: max grain
-mix 0.000000000 across formant -1.5..+1.5). It remains for the mono pedal-ride
-engine, which still calls `setFormantDepth` via `pitch_ffi.h`.
+**Compile-time-cliff discipline for this file**: any new UI primitive
+declared inside `multitranspose.dsp` itself risks unbounded real-`faust`
+compile time regardless of DawDreamer JIT results — new controls are
+declared elsewhere (`effects_runtime.dsp`) and threaded in as signal
+arguments. `[[memory: faust-compile-time-cliff]]`.
 
-This retires the octave defect a peaking-EQ/grain-based approach had.
-Worst error over a 72-case formant-applied sweep dropped from 1904 cents to
-14.4 cents; a wider 280-case sweep found zero regressions against the
-previous build. `[[memory: lpc-formant-shifter-history]]` for the full
-accuracy measurement, two LPC design corrections (order must be ~44 at
-48kHz, not the 8kHz-speech figure of 10-12; warping must happen on the
-power-spectrum bin grid, not the autocorrelation lag domain, or it aliases
-past Nyquist), and why bounding the LPC order alone doesn't fix it.
+**DawDreamer JIT cannot compile `multitranspose.dsp`/`pitch.dsp`
+directly** — the `ffunction` JIT limitation. `real_audio_cross_verify.py`
+shells out to `test-audio-corpus/multitranspose_harness.cpp` (links
+`pitch_poly_ffi.h` directly) instead of `daw.RenderEngine` — the pattern to
+reuse for any future change to this file's shifter/formant/sibilance
+behavior. **`verify_highoctave_transient.py` is a BROKEN GATE,
+pre-existing on `main`, disclosed not fixed** — still calls
+`FaustProcessor.set_dsp(...multitranspose.dsp)`/`compile()`, the exact JIT
+path this rewrite made impossible; reproduces identically on `main`'s
+`34cad6d`, so not caused by any recent change. `test-pitch-tracker` is red
+on every push touching `multitranspose.dsp` and carries no information
+until this script gets the same harness port.
 
-**High-fundamental defect and its current fix**: an LPC pair is a linear
-filter and cannot move a partial, so at a high fundamental, warping the
-envelope moves the modelled resonances off the only two or three harmonics
-that exist and can annihilate H1 (an octave percept). Current mitigation is
-three bounds: a warp taper against output pitch (full below 450Hz, zero by
-900Hz — covering the whole useful range of a guitar/vocal pitch-lock),
-fundamental-level protection (clamps the warped spectrum to within 1.5dB of
-the source below 2x the fundamental), and an LPC-order bound (helpful, not
-sufficient alone). `[[memory: lpc-formant-shifter-history]]` for the
-measurement that found this and a refuted order-only-bound attempt.
+## Free-transpose engine (`soladSnacOctaver.h`/`EngineSoladSnac`)
 
-**Known, disclosed corner (unrelated to formants)**: at f0=880 with -12
-semitones the output reads +1200c in both the old and current builds,
-including at formant=0 where they're bit-identical — a pre-existing
-splice-path failure at that corner. `[[memory: lpc-formant-shifter-history]]`
-for the numbers.
+The `-12` live pitch engine (`pitch_ffi.h`/`pitch.dsp`'s
+`dubfx_pitch_tick` `ffunction`, ADR-004). SNAC (McLeod/Tartini-style)
+pitch tracker on a 1024-sample window + solad delay-line PSOLA shifter
+(resplices by an INTEGER MULTIPLE of the detected period) + independent
+formant grain-playback stage (`grainFormant.h`). This is the SAME
+`EngineSoladSnac` class `multitranspose.dsp`'s 6 voices run — one splice/
+PSOLA implementation in the codebase (spectral purity 0.99-1.00 THD to
+5000Hz).
 
-**Real-hardware CPU cost, current measurement**: driving MultiKey transpose
-with 6 held keys via byte-level MIDI injection and sweeping `fx/formant`
-(CC53) across its range gives 46-63% peak `core_busy` with zero xruns
-across the whole sweep — see the `LpcFormantShifter::beginBlock` section
-below for why an earlier 80-83% figure regressed and was fixed.
-`[[memory: lpc-formant-shifter-history]]` for that earlier measurement's own
-history and the x86-vs-aarch64 discrepancy it originally reported.
+Key values: algorithmic delay `INITIAL_READ_OFFSET_DEFAULT=64` samples
+(1.3ms); `m_respliceFrac=1.0`; splice search matches value+slope ONLY
+among integer-period candidates; `triggerSpliceByPeriod` jumps whole
+periods to clear drift in one splice plus a `per*0.9` cooldown; SNAC sweep
+chunked `LAGS_PER_STEP=48`/block, `SNAC_HOP=2048`, `m_lockMiss` needs 3
+consecutive misses; `reengage()` seeds `kReengageSeedPeriod=600.0f`
+(~80Hz, deliberately long so no real note biases toward a half-period
+splice); sinc-kernel phases normalized to unity DC gain (fixed a ~20%
+envelope-modulation tremolo); crossfade is EQUAL-GAIN LINEAR (not
+cosine — the two readers are correlated, cosine sums to +3dB mid-fade).
 
-**`SibilanceDetector`** (a unity-at-Nyquist ~4kHz one-pole highpass energy
-ratio against a slower broadband envelope, `kHpPole = 0.5925`) is per-voice,
-applied in `pitch_poly_ffi.h`'s `dubfx_poly_shape_block()` right after
-`EngineSoladSnac::processBlock()` fills that voice's output block. Gated on
-the SNAC tracker being UNLOCKED (`!periodOk()`, smoothed over ~5ms) as well
-as on the HF-energy ratio: a detected fricative/consonant crossfades the
-voice's output back toward its own raw dry input (up to 85%) so
-"s"/"sh"/"f"/"t" transients stay intelligible instead of being
-pitch/formant-warped. A pitched instrument holds its SNAC lock through a
-pick transient (`m_lockMiss` needs 3 consecutive misses), which is what
-makes the gate discriminate real sibilance from a percussive attack.
-`[[memory: lpc-formant-shifter-history]]` for the superseded
-`VowelFormantShaper` peaking-EQ mechanism this file used to also describe
-here (retired by `LpcFormantShifter` itself, not by anything sibilance-
-related) and the HF-ratio detector's own gain-bug history. This vowel/
-sibilance character is a first real implementation, not by-ear-tuned on
-real hardware yet — needs a live-mic pass on the Pi 4 before calling it
-final. At strongly NEGATIVE formant (near the practical -1.5 floor) a
-standalone C++ harness shows a real, reproducible ~70-90 cents flat error
-that predates this shaping work (confirmed against the raw shifter engine
-with no vowel/sibilance code at all) — consistent with the free-transpose
-engine's own documented negative-side asymmetry, not a defect this
-shaping introduced.
+**Crossfade LENGTH divided by pitch ratio on upward shifts** — `m_xfadeLen`
+is set from one input period but counted in OUTPUT samples while readers
+advance `m_scale` input samples/output sample; dividing keeps reader
+travel at one period regardless of shift (divisor clamped ≥1.0, so
+downshift/unity are bit-identical). Fixed a real microclick (40x median
+slew rate, worsening +10 to +14 semitones). Full splice-parameter sweep
+(every other tunable already at measured optimum, do not re-tune without
+new evidence) and the crossfade-division's unpitched-material tradeoff:
+`[[memory: free-transpose-engine-history]]`.
 
-**`LpcFormantShifter::beginBlock`'s coefficient-update cadence must be
-decoupled from the caller's block size, not called once per FFI-block
-call.** `beginBlock()` glides the reflection-coefficient state toward the
-latest LPC analysis and runs two O(order²) `reflectionToDirect` conversions
-every time it's called. When `1b70abb` cut `DUBFX_POLY_BS` from 64 to 16
-samples (a real, independently-good latency win), `beginBlock()` kept
-firing every FFI-block call, so this fixed per-call cost ran 4x more often
-in real time, and the glide constant (`kReflectionGlidePerBlock = 0.2`,
-tuned for ~64-sample calls) converged the resonant recolor filter's
-coefficients 4x faster in wall-clock time — a near-instant coefficient
-snap on a high-Q filter every ~43ms LPC-analysis hop, audible as a click.
-Fixed: `beginBlock(int blockSamples)` accumulates real elapsed samples and
-only runs the coefficient update once per `kCoeffUpdateHopSamples = 64`
-regardless of the caller's block size, restoring the original ~64-sample
-real-time cadence. Verified via an instrumented harness against the real
-code: reflection-coefficient convergence to 95% takes ~208 samples
-(~4.3ms) pre-fix vs. ~832 samples (~17ms) post-fix for the identical
-coefficient sequence, matching the originally-tuned glide time.
+`m_transientHold` holds off resplicing ~2 grains post-transient. Quiet-input
+emergency escape while `m_envSlow<0.004` clamps the reader with no splice.
+`DL=32768` (128KB/channel ring, downsized from 131072 which corrupted on
+the Pi's 32-bit-pointer build). `MIN_PERIOD=48` (1000Hz ceiling — raising
+to 32 measured and REJECTED, real accuracy got worse). SNAC carries a
+small frequency-dependent bias (well under 3° of splice phase error,
+already corrected by the value+slope search) — deliberately unfixed.
+`DUBFX_BS=64` (mono, unchanged — latency dominated by downshift reader
+geometry, not buffering; `DUBFX_POLY_BS=16` is the poly path's own value,
+see the `beginBlock` note above).
 
-**`LpcFormantShifter::process`'s output stage is a soft-knee limiter, not
-a hard clamp.** Full-corpus testing (all 16 real instrument/vocal
-recordings, `test-audio-corpus/full_corpus_quality_pass.py`) found the
-whiten/recolor all-pole filter genuinely saturating to its output ceiling
-on real vibrato-rich vocal content (`vocal_female_vibrato.wav`), even at
-unity pitch shift — a real, bounded resonance the state-feedback clamp
-already prevented from diverging, but which a hard clamp turned into harsh
-digital clipping every time it engaged. `y` now passes through unchanged
-below `kOutputSaturationKnee = 1.5`, and smoothly approaches
-`kOutputMagnitudeCeil = 4.0` via `tanh` above that — the same
-near-identity-then-bounded idiom Resonode's `coupleFeedback` uses. Does
-not fix the underlying resonance instability (a deeper pole-placement
-redesign, not attempted — this feature is already disclosed above as not
-yet by-ear-verified on real hardware), only converts what would be harsh
-clipping into bounded soft compression.
+**Open, disclosed bug**: SNAC period-tracker drift on tremolo/AM or
+dynamically-varying content — `detectPitchStep()`'s anti-jitter clamp
+(`maxDelta=m_period/8+2`) forces a slow climb toward a wrong subharmonic
+rather than rejecting it, when a raw sweep genuinely prefers a longer lag.
+A first-strong-peak fix shipped and fixed STEADY content; tremolo/dynamic
+content still reproduces the drift. Several further attempts tried and
+rejected. `[[memory: free-transpose-engine-history]]`,
+`[[memory: cold-start-self-trap]]`.
 
-**Compile-time-cliff discipline for this file**: `[[memory:
-faust-compile-time-cliff]]` — any new UI primitive declared inside
-`multitranspose.dsp` itself risks an unbounded real-`faust`-CLI compile
-time regardless of DawDreamer JIT results. New controls affecting this
-engine are declared elsewhere (e.g. `effects_runtime.dsp`) and threaded in
-as plain signal arguments. This is why the vowel/sibilance shaping above
-lives entirely in the C++ FFI headers instead: it needed zero new Faust
-declarations.
+`pitch.dsp`'s `ffunction` rides params on the SAME per-sample call as the
+audio sample (a separate params-only call site would let Faust
+constant-fold params away). Internally buffers exactly `DUBFX_BS=64`
+samples per `processBlock` call, matching the looper's own cadence
+(SNAC cadence is tuned to 64-sample blocks) — a genuine, permanent 1-block
+(~1.333ms) algorithmic latency while engaged (covered by the working-rule
+carve-out).
 
-**DawDreamer JIT cannot compile `multitranspose.dsp` (or `pitch.dsp`)
-directly anymore** — `pitch_poly.dsp`'s `ffunction` declaration hits the
-same "calling foreign function ... is not allowed in this compilation
-mode" JIT limitation documented below for `pitch.dsp`. `test-audio-corpus/
-real_audio_cross_verify.py`'s direct `set_dsp(".../multitranspose.dsp")`
-call predated the `xpose`-to-`EngineSoladSnac` rewrite and stopped
-compiling once `multitranspose.dsp` started pulling in `pitch_poly.dsp`'s
-`ffunction` — fixed by porting it to the same pattern
-`free_transpose_harness.cpp` already used for the mono engine: a new
-`test-audio-corpus/multitranspose_harness.cpp` links `pitch_poly_ffi.h`
-directly (no Faust/DawDreamer involved) and `real_audio_cross_verify.py`
-now shells out to it per test case instead of calling `daw.RenderEngine`/
-`make_faust_processor` at all. This is also the pattern to reach for when
-verifying any future change to this file's shifter/formant/sibilance
-behavior — a standalone C++ harness against the real FFI, never the JIT.
-
-## One shared SNAC period tracker serves all 6 poly voices
-
-`snacPeriodTracker.h` holds the SNAC sweep (buffer, `snacBegin`,
-`detectPitchStep`, period/validity/lock-miss state), extracted verbatim out of
-`EngineSoladSnac`. The extraction is provably behavior-preserving: a 108-case
-sweep (6 frequencies x 6 ratios x 3 formant depths) is **bit-identical** to the
-pre-refactor engine.
-
-`EngineSoladSnac` owns one (`m_ownSnac`) and uses it by default, so the mono
-free-transpose engine is unchanged. `attachSharedTracker()` points it at an
-external tracker instead; `pitch_poly_ffi.h` creates ONE shared instance, feeds
-it from voice 0's per-sample tick (which the Faust graph always evaluates —
-Faust has no runtime branching, so all 6 `voiceOut` calls run every sample
-regardless of gate) and attaches all 6 voices to it. Six identical sweeps over
-one identical `sigIn` became one.
-
-`reengage()` on a shared-tracker voice now INHERITS the locked period instead of
-falling back to `kReengageSeedPeriod` (600 samples / ~80Hz), which is what
-removes most of the per-note lock-time variance. Only an owned-tracker engine
-still resets its own tracker on reengage.
-
-**The shared tracker MUST step its sweep at the same point in the block as the
-engine's own tracker did, or it silently degrades on modulated material.**
-`stepSchedule` originally ran at `i == 0` inside `processBlock`, i.e. after the
-FIRST sample of a block reached the SNAC buffer. A `tick()` that instead stepped
-after the 64th sample put the sweep 63 samples out of phase, which shifts which
-1024-sample window `snacBegin` snapshots. On steady material that is invisible;
-on amplitude-modulated material it flips which autocorrelation peak wins.
-Measured on `vibraphone_mid_C5B5.wav` (motor tremolo — exactly the content the
-documented SNAC drift bug affects), envelope-tracking error against the input:
-own-tracker 0.057, misaligned shared tracker **0.239**, block-aligned shared
-tracker **0.057**. The misaligned version's period trace showed the classic
-`maxDelta = period/8` walk toward a wrong subharmonic
-(586-511-446-389-339-295-257-223-194-168-145); the aligned version goes straight
-to the correct ~91. Keep `tick()` stepping at `m_sinceBlock == 0`.
-
-**Measured and REJECTED while fixing the above: requiring a second sweep to
-confirm a large period jump.** It cleanly removed the subharmonic WALK from the
-period trace, but produced no corpus-wide benefit whatsoever (mean
-envelope-tracking error 0.0883 vs 0.0882 over 32 real-instrument cases) and left
-the vibraphone error at 0.251. The walk was a symptom, not the cause; the cause
-was window alignment. Do not re-propose without evidence that distinguishes it
-from the alignment fix. This joins the other rejected attempts on the documented
-SNAC tremolo-drift bug.
-
-**Measured and REJECTED: a Hann-window LUT in place of `GrainFormant`'s
-per-grain `cosf`.** It cost bit-exactness against the shipped engine for every
-formant-engaged case (max abs diff 5.4e-07) and bought no measurable CPU at all
-(6 voices, formant engaged: 49.8/48.9us with `cosf` vs 46.3/49.2us with the LUT
-— inside run-to-run noise). `cosf` is not the bottleneck here.
-
-**The grain-suspend condition is keyed on the DIALED formant depth
-(`m_formantDepth != 0.0f`), not on the smoothed mix.** Keying it on
-`m_grainMix`/`m_grainMixTarget` reads the PREVIOUS sample's mix, which is 0 on
-the very first sample even when formant is dialed in — so the grain clock
-re-seeded at a different `m_wr` and every formant-engaged case stopped being
-bit-identical. With the depth-keyed condition, all 180 downshift/unity cases
-(6 frequencies x 6 ratios x 5 formant depths) are bit-identical to the shipped
-engine.
-
-Measured on the 6-voice poly engine (x86_64 dev host — NOT the Pi 4 Cortex-A72;
-treat the ratios as indicative and the absolute microseconds as not
-transferable): mean per-block **60.4us -> 37.5us** against the 1333us budget,
-and p99 per-block **208.6us -> 68.2us**. The p99 number is the one that matters:
-it is the chord-attack case where six independent sweeps used to synchronize
-into the same blocks. Median rises slightly (27.9 -> 32.8us) because the splice
-path now genuinely does the pitch-shifting work it previously skipped.
-
-Part of that win is a second change in the same area: `GrainFormant::read()` used
-to run its whole overlap-add voice loop every sample even when the grain mix was
-zero. With the forced-grain override gone, neutral formant means the mix really
-is zero, so the engine now calls `suspend()` instead (below `kGrainBypassFloor`),
-which drops the grain voices and clears `m_seeded` so the next engagement
-re-seeds cleanly. **The formant-factor glide must still advance while
-suspended** — `mixTgt` is derived from `factorNow()`, so freezing the glide
-would make small formant settings unable to ever re-cross the mix floor. That is
-why `advanceFactor()` is called from both `read()` and `suspend()`. The per-grain
-Hann window is also a LUT now rather than a per-sample `cosf`.
-
-## Every momentary voice must stay engaged through its own release tail
-
-`multitranspose.dsp` gated the shifter on `engaged = gate > 0.5` while `voiceEnv`
-is an `en.adsr` with a 50ms release. So on every note-off the engine disengaged
-instantly, `dubfx_pitch_tick_poly` returned raw `x`, and the voice played a 50ms
-tail of UNSHIFTED dry input at full envelope — plus a discontinuity from the
-64-sample-delayed `outBuf` to an instantaneous sample. Measured: the release tail
-read **-492 cents** off the shifted target (i.e. it was the dry input pitch).
-`engaged` is now held by a linear release counter (`engageReleaseHoldS = 0.06`,
-mirroring the file's existing `anyGateHighRelease` idiom) that is guaranteed to
-reach exactly 0 — do NOT gate on `voiceEnv > 0` directly, since an asymptotic
-envelope may never reach the threshold and the engine would never disengage or
-re-`reengage()` on the next note.
-
-`DubfxPolyVoice::pos`/`inBuf`/`outBuf` are also cleared on reengage. They were
-not, so a note-on replayed up to 64 stale samples of the PREVIOUS note: measured
-a **0.549 peak** burst into the first block of a new note whose own input was
-only 0.02 amplitude, a 27x onset blowout. Now exactly 0.
+**`Fixed (shared, both engines)`**: `reengage()` never called
+`m_grainFormant.reset()`, so a new note inherited the previous note's
+free-running grain-clock timing state. Now resets and immediately restores
+the dialed formant factor with a proper glide. Verified via a standalone
+harness linking `soladSnacOctaver.h` directly.
 
 ## `pitchtracker.lv2`: standalone autocorrelation pitch tracker
 
 `effects/pitchtracker-src/pitchtracker_ac.dsp` — a genuinely separate
-compilation unit (not folded into `multitranspose.dsp`, per the
-compile-time-cliff constraint above), built into its own LV2 bundle
-(`build-lv2.yml`'s `pitchtracker-lv2` job), hosted via a dedicated
-`Lv2Host pitchTrackerFx` in `audio_thread.cpp`
-(`AudioConfig::pitchTrackerDir`, default `/effects/pitchtracker`).
-Normalized-autocorrelation-based (not zero-crossing), with a
-local-maximum-peak candidate selection (`pickFundamental`) to reject
-harmonic/subharmonic false locks and a `holdLastGood`/`energyReady` onset
-gate (holds output at `0.0` for the first ~35-40ms of any fresh onset,
-correctly signaling "no reading yet" to `multitranspose.dsp`'s
-`extFreqDet > 0.5` fallback check). Structurally immune to the
-broadband-burst/plosive octave-search failure class that plagued the
-zero-crossing tracker — folds cleanly to its floor (60Hz) during noise and
-recovers within ~15-25ms of a burst ending, rather than swinging through
-wrong octaves. Verified accurate on real recorded audio across a wide
-register (82Hz-1500Hz+) and a broad instrument/vocal corpus. Must be
-deployed to the device (`/effects/pitchtracker/pitchtracker.lv2/`) for
-`multitranspose.dsp` to use it — see deploy-two-paths memory for the
-artifact-fetch wiring this depends on.
-
-## Fixed (shared, both engines): `reengage()` never reset `GrainFormant`'s own grain clock
-
-`GrainFormant`'s `m_inEpoch`/active grain voices/`m_Tin` are class members
-constructed once and free-running for the process's whole lifetime;
-`EngineSoladSnac::reengage()` (called on every note attack/voice-steal, on
-both the mono and polyphonic engines) reset the SNAC period tracker but
-never called `m_grainFormant.reset()`, so a new note inherited the
-PREVIOUS note's grain-clock timing state — e.g. a fresh note's
-`setInputPeriod()` call could yank `m_Tin` by 4x+ with no epoch resync,
-since the resplice-epoch correction is deliberately slow to react (only
-fires once drift exceeds `Tin*kRespliceDeadbandPeriods=5` periods).
-`reengage()` now calls `m_grainFormant.reset()` and immediately restores
-the currently-dialed formant factor
-(`setFormantFactor(powf(2, m_formantDepth))`) so a new note gets a clean
-grain clock without silently losing the player's formant setting.
-Verified via a standalone harness linking `soladSnacOctaver.h` directly:
-`targetFactorNow()` stays at the dialed value across `reengage()` (the
-formant setting survives), `factorNow()` (the glide-smoothed value
-actually used) correctly re-glides from neutral over the same ~10ms
-`kFormantGlideInvSamples` window every other formant change already uses
-rather than jumping, and output stays finite across a two-note sequence.
-This is a real state-leakage bug fix, independent of the mixTgt-routing
-question in the `multitranspose.dsp` section above, and applies
-identically to both engines since they share this class.
-
-## Free-transpose engine (`soladSnacOctaver.h` / `EngineSoladSnac`)
-
-The `-12` live pitch engine, bridged into Faust via `pitch_ffi.h`/
-`pitch.dsp`'s `dubfx_pitch_tick` `ffunction` (ADR-004). Combines a SNAC
-(McLeod/Tartini-style) pitch tracker on a 1024-sample sliding window with a
-solad delay-line PSOLA-style shifter (drifts by construction, resplices by
-an INTEGER MULTIPLE of the detected period to stay phase-coherent) and an
-independent-formant grain-playback-speed stage (`grainFormant.h`).
-
-**Key current values/mechanisms**:
-- Algorithmic delay `INITIAL_READ_OFFSET_DEFAULT = 64` samples (1.3ms);
-  `m_respliceFrac = 1.0` (resplice once the reader drifts ~1 period past
-  target, the PSOLA minimum).
-- Splice search matches value+slope ONLY among already-integer-period
-  candidates (never continuous-then-snap) — frequency-neutral and
-  seamless simultaneously.
-- `triggerSpliceByPeriod` jumps by AS MANY whole periods as needed to clear
-  accumulated drift in one splice, plus a `per*0.9`-sample cooldown — avoids
-  a resplice storm.
-- SNAC's full autocorrelation sweep is chunked across blocks
-  (`LAGS_PER_STEP=48`/block) to avoid a real-time deadline overrun;
-  `SNAC_HOP=2048` throttles how often a fresh sweep is armed; `m_lockMiss`
-  requires 3 consecutive peak-pick misses before `m_periodValid` clears.
-- `reengage()` seeds a period BEFORE SNAC's first lock:
-  `kReengageSeedPeriod = 600.0f` (~80Hz) — deliberately LONG so no real note
-  can ever bias toward a half-period (octave) splice error.
-- Sinc-kernel phases are normalized to unity DC gain (fixes a real ~20%
-  envelope-modulation tremolo).
-- Crossfade is EQUAL-GAIN LINEAR, never equal-power cosine — the two
-  readers being crossfaded are correlated (one period apart on a
-  quasi-periodic signal), so cosine fades sum to up to +3dB mid-fade.
-- **The crossfade LENGTH is divided by the pitch ratio on upward shifts** —
-  `m_xfadeLen` is set from one input period but counted down in OUTPUT
-  samples, while the readers advance `m_scale` input samples per output
-  sample; dividing by the ratio keeps reader travel at one period regardless
-  of shift, which is what makes the equal-gain-linear crossfade's
-  correlation assumption true. The divisor is clamped to never go below
-  1.0, so downshift and unity keep their original fade length and are
-  bit-identical — only upshifts are affected. `[[memory:
-  free-transpose-engine-history]]` for the microclick this fixed (measured
-  at 40x median slew rate, worsening from +10 to +14 semitones) and the
-  full splice-parameter sweep confirming every other tunable (`m_respliceFrac`,
-  `SINC_TAPS`, candidate search width, `m_transientHold`, slope-match
-  weight, crossfade length/shape) is already at its measured optimum — do
-  not re-tune any of them without new evidence.
-
-Mean corpus degradation over 16 instruments is 2.21 with this fix (down
-from 2.82); the fix trades slightly against barely-pitched/unpitched
-material (a real, expected tradeoff for a pitch-lock effect — see the
-memory entry). The SNAC period tracker carries a small, deliberately
-unfixed systematic frequency-dependent bias (a few cents, converting to
-well under 3 degrees of splice phase error across the musical range) —
-already corrected for by `triggerSpliceByPeriod`'s value+slope candidate
-search.
-
-- `m_transientHold` holds off resplicing for ~2 grains after a detected
-  transient, avoiding a double-played attack. The separate snap-to-live
-  transient-response mechanism is DISABLED in shipped code (introduced a
-  worse spike than the smearing it fixed).
-- Quiet-input emergency escape: while `m_envSlow < 0.004`, the reader
-  clamps to a safe distance behind the writer with no splice, avoiding an
-  unaligned reset mid-silence that would click the next note's onset.
-- `DL=32768` (128KB/channel ring) — downsized from a prior 131072 which
-  bloated `RubberBandWrapper`'s single allocation and corrupted on the Pi's
-  32-bit-pointer build.
-- `MIN_PERIOD=48` (1000Hz tracking ceiling) — raising to 32 was measured
-  and REJECTED (real wet-output pitch accuracy got worse). `[[memory:
-  free-transpose-engine-history]]` for why.
-- Formant control is real and strong on real audio, with a known
-  positive/negative asymmetry (an inherent `factor=powf(2,d)` mapping
-  property, not a defect) and an un-implemented make-up-gain idea for the
-  brightening-side loudness cost — needs by-ear tuning, not a blind
-  constant.
-- This engine and `multitranspose.dsp`'s 6 voices now run the exact same
-  `EngineSoladSnac` class (see the `multitranspose.dsp` section above) —
-  there is only one splice/PSOLA implementation in the codebase, with
-  measured spectral purity 0.99-1.00 THD on a clean sine sweep to 5000Hz.
-  `DUBFX_POLY_BS=16` (the multitranspose.dsp poly path's block size) and
-  its `beginBlock` cadence history are documented there; the mono
-  `DUBFX_BS` here stays 64 unchanged since its latency is dominated by
-  downshift reader geometry, not buffering.
-
-**Open, disclosed bug**: a genuine SNAC period-tracker drift bug on
-tremolo/amplitude-modulated or dynamically-varying content (e.g. vibrato,
-forte dynamics, trill technique) — `detectPitchStep()`'s anti-jitter clamp
-(`maxDelta = m_period/8 + 2`) forces a slow multi-step climb toward a wrong
-subharmonic candidate rather than rejecting it outright, when a raw
-autocorrelation sweep genuinely prefers a longer lag. A first-strong-peak
-candidate-selection fix (McLeod/SNAC-paper style "take the shortest local-
-max peak clearing 90% of the sweep's global max", rather than always
-trusting the tallest peak) was shipped and verified to fix this for
-STEADY/non-modulated content — but tremolo/dynamic content specifically
-still reproduces the drift. Several further fix attempts (plausibility-gate
-margin checks, `slowRef`-style second references) were tried and rejected —
-see `[[memory: cold-start-self-trap]]` for why a second reference derived
-from the same raw stream doesn't help. Not currently fixed.
-
-## `pitch.dsp` / `dubfx_pitch_tick` ffunction bridge
-
-`pitchTick = ffunction(float dubfx_pitch_tick(float, float, float, float),
-...)` rides params (`scale`/`FORMANT`/`ENGAGED`) in on the SAME per-sample
-call as the audio sample — a separate params-only call site would let Faust
-constant-fold params away on some paths. `dubfx_pitch_tick` internally
-buffers exactly `DUBFX_BS=64` samples and calls the real `processBlock(...,
-64)` once per block (matching the looper's own cadence, since
-`EngineSoladSnac`'s SNAC cadence is tuned to 64-sample blocks specifically)
-— this introduces a genuine, permanent 1-block (~1.333ms) algorithmic
-latency while engaged, covered by the "wet effect's own algorithmic
-latency" carve-out in the Working Rules, not a violation of the
-never-add-latency rule.
+compilation unit (compile-time-cliff constraint), its own LV2 bundle
+(`build-lv2.yml`'s `pitchtracker-lv2` job), hosted via `Lv2Host
+pitchTrackerFx` (`AudioConfig::pitchTrackerDir`, default
+`/effects/pitchtracker`). Normalized-autocorrelation with local-maximum
+peak selection (rejects harmonic/subharmonic false locks) and a
+`holdLastGood`/`energyReady` onset gate (~35-40ms hold at fresh onset,
+signals "no reading yet" via `extFreqDet>0.5`). Structurally immune to the
+broadband-burst/plosive octave-search failure the old zero-crossing
+tracker had. Must be deployed to `/effects/pitchtracker/pitchtracker.lv2/`
+for `multitranspose.dsp` to use it — see the deploy-two-paths note above.
 
 ## DawDreamer verification harness
 
-Numeric/behavioral verification of `.dsp` changes uses
 [DawDreamer](https://github.com/DBraun/DawDreamer)'s `FaustProcessor` — a
-real Linux `libfaust` LLVM JIT with a `compile_flags` passthrough
-(`pip install dawdreamer`). `test/faust-flags/` is a committed example.
-
-Known limits (see also `[[memory: faust-verification-discipline]]`,
-`[[memory: faust-compile-time-cliff]]`):
-
-- **The JIT refuses to link `ffunction`-declared external symbols**
-  (`dubfx_pitch_tick`). Harnesses needing `effects_runtime.dsp`/
-  `aloop.dsp` stub `pitch.dsp` to a bare passthrough; `pitch_ffi.h` itself
-  is never touched.
-- **`FaustProcessor`'s parameter list is alphabetical, not
-  declaration-order** — match hsliders by name via
-  `set_parameter`/`get_parameters_description()`, never raw index.
-  `set_automation(name, array)` applies at the next 64-sample block
-  boundary, not the exact sample requested.
-- **Faust constant-folds `tan()`/`pow()` of a literal at compile time** —
-  sweep with a real runtime `hslider`, matching production wiring.
-- **`df.box.boxFromDSP`/`boxToSource`** (inside a `with
-  df.FaustContext():` block — calling without it SEGFAULTS immediately)
-  runs the REAL codegen path, not the JIT, and is the local reproduction
-  for the compile-time-cliff class of bug (95-500+ real seconds per
-  iteration, much cheaper than a full CI round-trip).
-- Warm delay-line-bearing files ~90000 samples before measuring.
-
-**BROKEN GATE, pre-existing on `main`, disclosed not fixed:
-`test/pitch-tracker-transient/verify_highoctave_transient.py` cannot pass in its
-current form.** It still calls `FaustProcessor.set_dsp(...multitranspose.dsp)` +
-`compile()`, i.e. the DawDreamer JIT — the exact path the `xpose` ->
-`EngineSoladSnac` rewrite made impossible. `real_audio_cross_verify.py` was
-ported to a standalone C++ harness for this reason; this second script was
-missed. Reproduced locally against BOTH the current branch and `main`'s
-`34cad6d`, failing identically, so it is not caused by any change here. Two
-distinct errors stack: from an arbitrary cwd it reports `unable to open file
-pitch_poly.dsp` (the `component()` path does not resolve), and once that is
-fixed by `faust_libraries_path` or a cwd change it reports `calling foreign
-function 'dubfx_pitch_tick_poly' is not allowed in this compilation mode` — the
-documented JIT `ffunction` limitation. So the path error masks a structural one:
-there is no configuration of the JIT under which this script can work. The fix
-is the same port `real_audio_cross_verify.py` already received (drive
-`multitranspose_harness.cpp` against the real FFI), which additionally requires
-that harness to grow the note/gate/extFreqDet state machine the Faust file
-currently owns. Until then `test-pitch-tracker` is red on every push touching
-`multitranspose.dsp` and its green/red state carries no information.
-
-`faust2bench` (real Linux host) is the CPU-measurement counterpart for any
-Faust-flag A/B. A mandatory `build-binary.yml` "Benchmark CPU usage" step that
-once ran it was REMOVED: its output was human-read-once diagnostics already
-recorded here, and it became a real, repeated source of CI stalls (3 of 4
-build-binary attempts hung indefinitely on it around the Resonode-LV2
-extraction change), blocking every real build behind a step nothing needed.
-Run it manually only when a Faust-flag change needs a fresh measured
-comparison — never as a critical-path CI step again. Standard invocation: 20
-runs, `-bs 64`, real shipped Faust flags, isolated via a `git stash`/
-rebuild A/B on the same tree.
+real Linux `libfaust` LLVM JIT with `compile_flags` passthrough
+(`pip install dawdreamer`; `test/faust-flags/` is a committed example).
+Known limits: the JIT refuses to link `ffunction`-declared external
+symbols (`dubfx_pitch_tick`) — harnesses stub `pitch.dsp` to a bare
+passthrough. `FaustProcessor`'s parameter list is alphabetical, not
+declaration-order — match by name via `get_parameters_description()`,
+never raw index; `set_automation` applies at the next 64-sample block
+boundary. Faust constant-folds `tan()`/`pow()` of a literal at compile
+time — sweep with a real runtime `hslider`. `df.box.boxFromDSP`/
+`boxToSource` (inside `with df.FaustContext():` — SEGFAULTS without it)
+runs the real codegen path, the local reproduction for compile-time-cliff
+bisection (95-500+ real seconds/iteration, cheaper than a CI round-trip).
+Warm delay-line-bearing files ~90000 samples before measuring.
+`faust2bench` is the CPU-measurement counterpart for a Faust-flag A/B —
+run manually only, never as critical-path CI (a mandatory benchmark step
+was removed after 3 of 4 `build-binary.yml` attempts hung indefinitely on
+it around the Resonode-LV2 extraction). Standard invocation: 20 runs,
+`-bs 64`, real shipped flags, isolated via `git stash` A/B on the same
+tree.
 
 ---
 
 # LV2 hosting
 
-## Never pass a bare `nullptr` for the features array
+Never pass a bare `nullptr` for the features array — `Lv2Host::instantiate()`
+must pass a real, NULL-TERMINATED `LV2_Feature* const*`
+(`static const LV2_Feature* const kNoFeatures[] = { nullptr };`) — Faust's
+generated `lv2.cpp` does `for (int i=0; features[i]; i++)` with no
+null-check on `features` itself. Wrap `instantiate()`/`activate()` in the
+same sigsetjmp crash-isolation watchdog `runOne()` uses (ADR-002) — a
+plugin crashing during LOAD is as untrusted as one crashing during `run()`.
 
-`Lv2Host::instantiate()` (`src/host/lv2_host.cpp`) must pass a real,
-NULL-TERMINATED `LV2_Feature* const*`. Faust's generated `lv2.cpp` does
-`for (int i = 0; features[i]; i++)` with no null-check on `features` itself
-— a bare `nullptr` derefs at `features[0]`. Use
-`static const LV2_Feature* const kNoFeatures[] = { nullptr };`. Wrap
-`instantiate()`/`activate()` in the same sigsetjmp crash-isolation watchdog
-`runOne()` uses (ADR-002) — a plugin crashing during LOAD is as untrusted as
-one crashing during `run()`.
+`readTtl()`'s bundle match must strip trailing slashes — lilv's resolved
+bundle path carries one the passed-in `bundlePath` never has; a raw prefix
+comparison silently and permanently fails, falling back to a no-port-wiring
+`.so`-only path with the crash watchdog disabled.
 
-## `readTtl()`'s bundle match must strip trailing slashes
+`setControl` matches Faust's MANGLED LV2 port symbol
+(`mangleFaustLabel(rawLabel) + "_"`, prefix match) — Faust's `mangle()`
+turns non-alnum/underscore chars into `_` then appends
+`"_<portIndex>"`; `hslider("fx2/FLANGEAMT", ...)` becomes
+`fx2_FLANGEAMT_3`. Verify any new target against the deployed bundle's own
+`.ttl` (`grep lv2:symbol *.ttl`) — an exact-symbol match matches nothing,
+permanently, with zero error output. `Lv2Plugin::descriptor` is cached at
+`instantiate()` time, never re-resolved via `dlsym`/URI-scan on the RT
+block path.
 
-lilv's resolved bundle path carries a trailing slash the passed-in
-`bundlePath` never has, so a raw prefix comparison silently and permanently
-fails even for well-formed bundles, falling back to a no-port-wiring
-`.so`-only path that gets the plugin crash-watchdog-disabled on every
-startup. Strip trailing slashes from both sides and compare for exact
-equality.
+`aloop.lv2` must be excluded from apkovl packaging —
+`build-lv2.yml`'s `home-fx-lv2` job compiles `dsp/aloop.dsp` (the same
+source `audio_thread.cpp`'s `faustHome` already compiles natively) purely
+as a CI packaging-reproducibility check (ADR-003). Deployed alongside
+`guitar_lofi_fx.lv2` it runs the whole home stack twice (`core_busy`
+~23-30%→~63-65% with continuous xruns); `lib-boot-tree.sh` excludes it by
+name.
 
-## `setControl` must match Faust's MANGLED LV2 port symbol
+## Resonode: separate, conditionally-called LV2 bundle
 
-Faust's `lv2.cpp` architecture (`mangle()`) never emits a control's raw
-Faust label as the LV2 `lv2:symbol` — non-alnum/non-underscore chars
-(including `/`) become `_`, then `"_<portIndex>"` (declaration-order) is
-appended. `hslider("fx2/FLANGEAMT", ...)` becomes `fx2_FLANGEAMT_3`.
-`Lv2Host::setControl` matches by MANGLED-LABEL PREFIX
-(`mangleFaustLabel(rawLabel) + "_"`), so target tables keep natural raw
-Faust labels without hardcoding fragile per-build port indices. An
-exact-symbol match silently matches nothing, permanently, with zero error
-output. Verify any new LV2-hosted Faust control target against the
-deployed bundle's own `.ttl` (`grep lv2:symbol *.ttl`), never assume it
-equals the raw label.
-
-## `Lv2Plugin::descriptor` is cached at `instantiate()` time
-
-Not re-resolved via `dlsym` + URI-matching scan on every `runOne()` — that
-call runs on the RT block path (Core 1 home-fx, Core 3 user-fx) every
-block.
-
-## `aloop.lv2` must be excluded from apkovl packaging
-
-`build-lv2.yml`'s `home-fx-lv2` job compiles `dsp/aloop.dsp` — the exact
-Faust source `audio_thread.cpp`'s `faustHome` already compiles natively —
-into a standalone LV2 bundle purely as a CI reproducibility/packaging check
-(ADR-003). Deployed alongside `guitar_lofi_fx.lv2` it runs the whole home
-stack a SECOND time (`core_busy` ~23-30% → ~63-65% with continuous xruns).
-`image/lib-boot-tree.sh`'s copy step excludes it by name.
-
-## Resonode: a separate, conditionally-called LV2 bundle, not part of the always-on home stack
-
-`effects/home/faust/resonode_synth.dsp` was originally an always-on
-`component()` inside `effects_runtime.dsp` — even fully idle/unengaged it
-produced a sustained ~2ms `readi` gap against the 1.333ms budget, since
-Faust has no runtime branching (see Faust DSP section). Pulled out entirely
-into its own standalone LV2 bundle (`resonode.lv2`, `build-lv2.yml`'s
-`resonode-lv2` job), loaded via a dedicated `Lv2Host resonodeFx` in
-`audio_thread.cpp` from `AudioConfig::resonodeDir` (`/effects/resonode`,
-excluded by name from the general `homeFx`/`userFx` `find`).
-`resonodeFx.process()` is only ever called when `fx/resonode/engaged` reads
-true — the real cost elimination, verified at the C++ call site.
+`effects/home/faust/resonode_synth.dsp` — pulled out of the always-on
+Faust graph (was a real, sustained ~2ms `readi` gap even idle, since Faust
+has no runtime branching) into `resonode.lv2`, loaded via a dedicated
+`Lv2Host resonodeFx` (`AudioConfig::resonodeDir`, `/effects/resonode`).
+`resonodeFx.process()` is only ever called when `fx/resonode/engaged`
+reads true — the real cost elimination.
 
 **Architecture**: per-voice `note`/`gate`/`vel` are LV2 control ports
-(`hslider`), not signal inputs — updated once per control-tick from
-`ApcGrid`'s MIDI handlers, a lossless representation change from the old
-Faust-component design. `effects_runtime.dsp`'s `process()` takes a single
-audio-rate `resonodeIn` signal input, filled by `audio_thread.cpp` from
-`resonodeFx.process()`'s output when engaged (zeroed, not passed through,
-when the LV2 host has no plugins loaded — silence is the correct
-degraded state for Resonode, unlike `homeFx`/`userFx`'s dry-passthrough
-default). Signal-flow order: guitar/lofi-fx (`homeFx`/`userFx`) run as an
-INPUT stage on `fin` before `faustHome.compute()`, so they color what
-dubfx's own pitch/harmony/filter/delay/reverb chain receives. Resonode's
-exciter is fed from that same post-guitar/lofi-fx signal, and its output
-re-enters `effects_runtime.dsp`'s crossfade BEFORE
-`microStage:filterStage:delayStage:reverbStage`.
+(`hslider`), updated per control-tick from `ApcGrid`'s MIDI handlers.
+`effects_runtime.dsp` takes a single audio-rate `resonodeIn` signal, filled
+from `resonodeFx.process()`'s output when engaged (zeroed — not
+passed-through — when the LV2 host has no plugins loaded; silence is the
+correct degraded state, unlike `homeFx`/`userFx`'s dry-passthrough
+default). Signal order: guitar/lofi-fx run as an INPUT stage on `fin`
+before `faustHome.compute()`; Resonode's exciter is fed from that same
+post-guitar/lofi-fx signal, its output re-enters the crossfade BEFORE
+`microStage:filterStage:delayStage:reverbStage`. Locked pitch REPLACES,
+never layers over, the original — `resonodeEngageGate` crossfades the
+entire dry/pitch-lock/harmony term against `resonodeOut`.
+`RESONODE_ENGAGED`'s Faust zone is written directly via `fui.set()` in the
+worker loop (matching the `MONITORFOLD`/`GLITCHFOLD` pattern), NOT through
+`targetToZone`/`resolvedControls` — it has TWO real consumers (the C++
+process-gate AND the Faust crossfade checkbox), both need their own write
+path audited whenever a control gains a second consumer.
 
-**`RESONODE_ENGAGED`'s Faust zone** is written directly via
-`fui.set("fx/resonode/engaged", ...)` in the worker loop (matching
-`MONITORFOLD`/`GLITCHFOLD`'s C++-internal-flag pattern), NOT through
-`targetToZone`/`resolvedControls` — that flag has TWO real consumers (the
-C++ process-gate AND the Faust crossfade checkbox), and only routing the
-control-port consumer correctly does not imply the Faust-crossfade consumer
-still works. Lesson generalizable: when a control target gains a second
-consumer during a refactor, each consumer needs its own explicit write path
-audited.
+**DSP mechanism**: 6-modes/voice, 4-voice physically-modeled resonator,
+excited ONLY by the live mic signal ("reactor mode" — a held key with
+silent input renders bit-exact silence). Exciter is a SHARED
+broadband highpass(60Hz)+lowpass(tone) — each mode's own resonant filter
+does 100% of frequency selection (matches Resonarium/Objekt's documented
+architecture). Percussive strike envelope: `en.adsr(0.004, 0.11, 0.09,
+0.25, xgate)`. **`couple`** (knob slot 7, `fx/resonode/couple`):
+nearest-neighbor mode coupling via one Faust `letrec` block, skew-symmetric
+energy exchange on peak-normalized states (`coupleScale=8.0`,
+`coupleSmallGainMax=0.45`, hard clamp ±8 as last-resort guard — chosen over
+`tanh` since a hard clamp is exactly identity below threshold, provably).
+Verified against real recorded excitation, not just synthetic noise
+(12/12 configs finite/unclipped at the two highest-risk named patches).
+Full exciter/envelope/coupling redesign history (two coupling generations,
+the real divergence bug that motivated both, rejected fully-connected/
+frequency-aware alternatives): `[[memory:
+resonode-exciter-coupling-cpu-history]]`.
 
-**Locked pitch must REPLACE, never layer over, the original** — a
-`checkbox("fx/resonode/engaged")`-driven `resonodeEngageGate` crossfades
-the entire dry/pitch-lock/harmony term against `resonodeOut`, rather than
-summing `resonodeOut` into `dry` upstream of the shared filter/delay/reverb
-tail (an earlier design let raw dry keep leaking through the whole time
-Resonode was engaged).
+**16 modes** (of 24-entry tables), five named ratio tables (string/bell/
+plate/membrane/bar) blended by 5 hsliders, log-blended once and shared
+across all 4 voices. `modeCount` is capped by BOTH real CPU cost and a
+Faust compile-time ceiling — 24 modes kills the real `faust` compiler via
+SIGALRM (~2min into codegen). Shipped: Resonode engaged/no keys = zero
+gaps; 8-key stress 34-73% peak/0-2 gaps; worst combined case (Resonode +
+guitar + lofi + 8 keys) 80% peak/3 gaps, zero xruns. Full optimization
+ladder (what shipped, what was reverted as not sound-preserving under
+gliding morph knobs, what was refuted by measurement):
+`[[memory: resonode-exciter-coupling-cpu-history]]`.
 
-**DSP mechanism (current shipped state)**: `resonode_synth.dsp` is a
-6-modes/voice, 4-voice physically-modeled resonator, excited ONLY by the
-live mic signal — there is NO synthetic exciter anywhere (a held key with
-silent live input renders bit-exact silence) — keys drive voice
-note/gate/vel only, the mic is the only sound source ("reactor mode").
-
-**The exciter is broadband, not a note-locked bandpass.** `sharedExciteIn`
-is a SHARED (not per-voice) highpass(60Hz)+lowpass(tone) only — each mode's
-own resonant filter performs 100% of the frequency selection, matching both
-Gabriel Soule's Resonarium thesis and Reason Studios' Objekt manual's
-documented architecture (exciter modules are deliberately broadband; the
-resonator bank, not the exciter, does mode selection). `modeGain6`'s base
-coefficient is `0.55` (an empirically-tuned constant closing a mode-6 gain
-gap; re-verify with `test/resonode-sweetspot/verify_musical_controls.py`'s
-`modes_2_to_6_are_not_starved` check before changing mode-gain
-coefficients). `[[memory: resonode-exciter-coupling-cpu-history]]` for the
-per-voice-bandpass design this replaced and why.
-
-**The exciter envelope is a percussive strike shape, not a sustained-open
-gate**: `en.adsr(0.004, 0.11, 0.09, 0.25, xgate)` — 4ms attack, decaying to
-a 9%-of-peak sustain floor over 110ms, releasing over 250ms on note-off.
-`xgate` gating and voice-steal retrigger/`stealEvent` timing are unchanged.
-`[[memory: resonode-exciter-coupling-cpu-history]]` for the sustained-gate
-shape this replaced and the RMS measurements behind the change.
-
-**`couple` — nearest-neighbor mode coupling** (`fx/resonode/couple`, knob
-slot 7): each mode's excitation also receives a scaled sum of its immediate
-chain-neighbors' PREVIOUS-sample output (mode `k` couples with `k-1`/`k+1`,
-a 6-node chain, modes 1 and 6 as end nodes with a single neighbor each —
-implemented as one Faust `letrec` block over all 6 mode outputs; a
-scattered `x'` reference across independent `with{}` bindings hits an
-"endless evaluation cycle" Faust compile failure, so it must stay one
-`letrec` block). Nearest-neighbor (`O(modes)`, 5 cross-terms/voice) over a
-fully-connected matrix, per Resonarium/Objekt's own cost-vs-richness
-guidance. `coupleScale = 8.0` is the internal knob-to-coefficient
-multiplier (user-facing `couple` knob is 0..1).
-
-Coupling is skew-symmetric energy exchange on peak-normalised states,
-guarded only as a last resort. Each mode exports `rawOut*aliasGuard /
-modePeakGain(r)` — a peak-normalised state, so loop gain is
-decay-independent — the network computes `u_{k+1} - u_{k-1}` (skew,
-lossless exchange), scales by `couple*0.45` (`coupleSmallGainMax`), and a
-hard `min/max` clamp at +-8 is the only guard (chosen over `tanh` because a
-hard clamp is exactly identity below threshold, provably). `modePeakGain(r)
-= sqrt(K(1+r)/(1-r))`. `[[memory: resonode-exciter-coupling-cpu-history]]`
-for the two coupling-mechanism generations (a `tanh` soft-clip guard, then
-this skew-symmetric redesign), the real divergence bug that motivated
-both, and the rejected fully-connected/frequency-aware alternatives.
-
-**Verified with real recorded excitation, not just synthetic noise.**
-`test/resonode-sweetspot/real_corpus_excitation.py` drives this engine
-with real instrument/vocal recordings from `test-audio-corpus/instruments/`
-as the exciter (the original divergence bug was found via sustained
-synthetic noise, which has different spectral/temporal structure than real
-material) at the two highest divergence-risk named patches (`metal_glass`/
-`strings`: `decay=7.0, damping=0.97`) with `couple=1.0` — the exact corner
-the historical bug lived in. 12/12 configs (6 representative instruments
-spanning low/percussive to high/sustained/vibrato content) render finite,
-unclipped output.
-
-**Bandwidth is frequency-proportional.** `modeInvT60 = (1/decay) *
-(f1/261.6Hz) * rho^p` with `p = 1.934*log2(1/damping)` and `rho` the mode's live
-frequency ratio, so mode overlap is note-invariant and `damping` is a real
-frequency power law rather than a mode-INDEX power law. The 1.934 slope
-(`5/log2(6)`) is calibrated to reproduce the shipped `damping^(k-1)` factor
-exactly at mode 6, preserving the knob's shipped meaning. `1 - r` comes directly
-from `6.907755/(SR*T60)` (relative error < 3e-5), removing 24 `pow` calls per
-voice. Measured mode-1 overlap `BW/(f2-f1)` across notes 24-96 goes from a 64.0x
-spread to 1.000x at the old divergent corner's settings.
-
-**16 modes (of 24-entry tables), five named ratio tables, loudness normalisation.** `string`
-(1..24, exactly harmonic, and the DEFAULT so the plugin is a harmonic bank with
-no C++ change), `bell` (11 measured church-bell partials plus a plate-density
-continuation), `plate` (`m^2+n^2`), `membrane` (Bessel zeros `j_mn/j_01`), `bar`
-(free-free `beta^2`). Blended convexly by five hsliders with a string fallback at
-zero sum, log-blended once and shared across all 4 voices (24 `log` call sites in
-the generated C++, not 96). Mode amplitude is `k^-0.85`; the old hand-tuned
-mode-6 `0.55` bump is deliberately NOT carried over — its documented
-justification was a `b0`/`r` interaction at long T60 that the new bandwidth law
-removes. `decayLoudnessNorm = 1.06*(decay/1.2)^0.17` cuts the decay-axis
-loudness spread from 7.5dB to 1.7dB while leaving the default patch level
-within 2.8%, so `outLevel = 25` still means what it did.
-
-Measured distinctness (note 52, decay 4.0, damping 0.97) — centroid /
-inharmonic fraction: string 1490Hz/0.21, bell 1393Hz/0.51, plate 1794Hz/0.53,
-membrane 703Hz/0.76, bar 2499Hz/0.59; minimum pairwise max-relative-feature
-difference 0.224. These are genuinely different instruments, not relabelled
-copies.
-
-**`modeCount` ships at 16, capped by BOTH real CPU cost and a Faust
-compile-time ceiling.** Cost is flat across 1-4 voices held (Faust has no
-runtime branching — every voice's bank computes every sample regardless).
-At 24 modes the real `faust` compiler is killed by SIGALRM ~2 minutes into
-`resonode_synth.dsp`'s `-i -a lv2.cpp` codegen (exit 142, "Alarm clock") —
-independent of whether the CPU cost itself would have been acceptable.
-Measured ladder (8-key stress, peak `core_busy`/gaps): 12 modes ~73%/2-3,
-16 modes 70-73%/5-7, 20 modes 82-85%/8-13, 24 modes will not build at all.
-Shipped build: Resonode engaged with no keys held is zero gaps; 8-key
-Resonode stress is 34-73% peak/0-2 gaps; worst combined case (Resonode +
-guitar + lofi + 8 keys) is 80% peak/3 gaps, zero xruns throughout. Only one
-of several attempted micro-optimizations is shipped — the position sine is
-computed via a Chebyshev-polynomial identity (`sin` call count 64 → 4,
-inaudible float error) since it's a plain output multiplier, never a filter
-coefficient. `[[memory: resonode-exciter-coupling-cpu-history]]` for the
-full optimization ladder: two further optimizations that were built,
-measured exact-in-isolation, and REVERTED because they weren't
-sound-preserving once the morph knobs actually glide (a `sqrt`-cancellation
-refactor moving a coefficient outside the biquad's numerator, and
-de-gliding the five shape weights); three more that were tried and
-REFUTED by measurement (a `pow`-based exp rewrite, applying the Chebyshev
-identity to the resonator's own `cos()`, un-gliding the morph knobs); why
-the remaining ~120 per-sample `exp` calls aren't hoistable; and why
-`modes_2_to_6_are_not_starved` failing after the position-drift change is
-a measurement artifact (isolated and confirmed), not a regression.
-
-**Control wiring**: the five `fx/resonode/shape/*` names MUST be `ps.bind()`-ed
-in `ApcGrid::bindAll` — `ParamStore::setByName` is a silent no-op on an unbound
-name, and this exact bug class has already hit `fx/resonode/engaged` and
-`fx/resonode/collision`. They reach the plugin through the existing
-`fx/resonode/` prefix match in `audio_thread.cpp` (the lambda at line 136), and
-`Lv2Host::setControl`'s mangled-prefix match resolves them uniquely because none
-of `fx_resonode_shape_{string,bell,plate,membrane,bar}` is a prefix of another.
-
-**Scope note on "doesn't quite sound like Objekt" (disclosed, not fully
-addressed)**: the numerical-instability fix above addresses "feeds back
-easily"/"unpredictable" directly (a real divergence bug, now closed). It
-does not itself close the broader tonal-character gap against Objekt/
-Resonarium. One structural difference both reference instruments lean on —
-stereo diffusion across the mode bank — is architecturally out of reach
-here without a much larger change: `resonode_synth.dsp` is mono in/out,
-and the ENTIRE aloop signal path is mono end-to-end (the OTG gadget mirror
-already averages capture L/R to mono, `dsp/loop.dsp`'s rings are mono,
-`audio_thread.cpp` carries one channel throughout) — giving Resonode real
-stereo would mean carrying a second channel through the whole pipeline,
-not a local change to this file. Left open for a dedicated audio-thread
-architecture change, not attempted here.
-
-**Defense-in-depth: a NaN/Inf guard now sits at the C++ call site too**
-(`audio_thread.cpp`, right after `resonodeFx.process(resonodeInBuf.data(),
-N)`), independent of the `coupleFeedback` fix above. If Resonode's LV2
-plugin ever emits a non-finite sample for any reason (a future patch/
-preset landing outside the coupling fix's safety margin, a bug in a
-different Resonode code path entirely, or simply defense against a class
-of bug this audit didn't anticipate), the block is detected and zeroed
-before it reaches the shared mix, with a rate-limited (max 1/second),
-wall-clock-timestamped `[diag-resonode]` log line — matching the
-project's existing `[diag-gap]`/`[diag-pitchguard]` logging convention and
-the "diagnostic logging must carry wall-clock timestamps" working rule.
-This is pure safety-net C++ with zero DSP/latency change; keep it even
-after the coupling fix, the same way the project already treats crash
-isolation at LV2 load time (ADR-002) as permanent defense-in-depth rather
-than something to remove once a specific crash cause is fixed.
-
-**Per-voice structural modulation** (new, cheap, reuses the existing
-attack-edge envelope idiom `pitchEnv` already used for pitch-mod): `position`
-gets a small live per-voice drift, `positionDriftEnv`, that starts every
-voice brighter right at the strike (mode balance shifted toward higher
-modes) and decays back to the patch's own set `position` over ~350ms — a
-struck object's real spectral-evolution character (bright attack, darker
-sustain), and the direct fix for "a single patch sounds static/dull over
-its own decay" (Objekt's own "Bassonic" factory-patch technique: reuse an
-envelope the engine is already computing to modulate STRUCTURAL balance,
-not just amplitude). `stretch` gets a small per-note sample-and-hold random
-offset (`no.noise` through `ba.sAndH`, latched fresh at every `attackEdge`)
-so repeated strikes of the same key are not bit-identical — Resonarium's
-"chaos"-correlated random modulator and Objekt's per-note-latched
-"Random1/2" source, both cited as a cheap way to avoid "patches sound too
-similar" without adding named patches. Both are fixed internal constants
-(`positionDriftAmt = 0.16`, `stretchJitterAmt = 0.02`), not user-facing
-knobs — there was no free knob-bank slot for either without displacing an
-existing control.
-
-`bwFloorT60 = 0.15` (as `burstGainRefT60`) still clamps every mode's
-excitation-gain reference point (measured/tuned jointly with the OLD
-exciter's bandpass Q; the removal of that bandpass did not require
-re-deriving this constant — verified via the `modes_2_to_6_are_not_starved`
-regression check). `process()` order is `(...) : *(outLevel) : ma.tanh`
-(outLevel drives INTO the limiter, not scaled past it). `outLevel` default
-`25.0` (range `0.0..60.0`, logarithmic-taper knob) — large because a real
-narrowband resonator only captures a small fraction of a broadband/mistuned
-excitation's energy by design. `bassBoost` gives the fundamental mode (mode
-1 only) up to 1.35x gain below 220Hz, tapering to unity at/above 220Hz
-(exact identity above the corner). `aliasGuard` fades any mode whose real
-frequency crosses the top 5% of Nyquist to silence rather than letting it
-fold back as a spurious alias peak. `collision` (0..1, per-patch) is a
-bounded `ma.tanh`-based waveshaper on each voice's own `bank()` output
-before summing — exact identity at 0, adds real broadband grit/decay-tail
-energy at higher values. Pitch-mod (`flexibility = max(0,min(1,(0.5-stretch)))`)
-adds a small (~44 cents max), velocity- and stretch-scaled onset frequency
-bump via a one-shot exponential decay envelope, retriggered on the same
-`attackEdge`/voice-steal edge the exciter retrigger already uses — models a
-struck object's transient pitch bend, more prominent on low-`stretch`
-("flexible") patches. All morph knobs (`position`/`decay`/`damping`/
-`stretch`/`tone`/`level`/`collision`/`couple`) glide via a `letrec`-based
-one-pole that SNAPS to the true value on `ba.time==0` and glides only on
-later changes (never a naive `si.smooth`, which zero-inits and fades in
-from silence on every fresh DSP instance).
-
-**Voice-steal retrigger**: `stealEvent`/`retriggerGate` synthesizes a
-one-sample gate dip so a steal (note change while gate stays high) still
-fires a genuine fresh attack envelope; `freqGlide` snaps instantly on a true
-onset and glides ~10ms on a steal, spreading the resonator-coefficient
-jump instead of a one-sample discontinuity.
-
-**Named sweetspot patches** (`kResonodePatches`, knob slots 1-4 in the
-Resonode knob bank, convex-blend weighted like the granulator's own
-`kGranPatches`):
+**Named sweetspot patches** (`kResonodePatches`, knob slots 1-4):
 
 | Patch | position | decay | damping | stretch | collision | Character |
 |---|---|---|---|---|---|---|
 | Percussive | 0.08 | 0.15 | 0.80 | -0.10 | 0.55 | ~60ms decay, sharp transient |
 | Metal/Glass | 0.08 | 7.00 | 0.97 | 1.20 | 0.15 | ~2.5s ring, bright/inharmonic |
 | Strings | 0.08 | 7.00 | 0.97 | -0.10 | 0.00 | ~2.5s ring, harmonic partials audible |
-| Dance Bass | 0.42 | 7.00 | 0.15 | -0.10 | 0.30 | long ring, sub-bass-dominant (93-97% of energy below 1.5x f0) |
+| Dance Bass | 0.42 | 7.00 | 0.15 | -0.10 | 0.30 | long ring, sub-bass-dominant |
 
-These were found via a real DawDreamer grid search (625 combos of
-position/decay/damping/stretch x 5 levels each) against measured features
-(decay time, transient ratio, spectral centroid, low-frequency-energy
-ratio) scored against a hand-authored target direction per voice —
-`collision` values are hand-set judgment calls, not swept. The table's raw
-values are unchanged since the exciter/coupling fix above — they did not
-need retuning, because the OLD engine's near-total mode 2-6 starvation was
-masking the differentiation these values already encoded (measured early-
-transient spectral centroid across the 4 patches went from a flat ~220Hz/
-1.0x-fundamental for every patch, pre-fix, to a real 340-1300Hz/1.7-5.9x
-spread post-fix, with zero changes to `kResonodePatches` itself). Knobs 5-7
-are direct performative dials (`applyResonodeDirectKnob`): tone brightness
-(logarithmic taper — a linear Hz sweep compressed nearly all audible change
-into the first 10-20% of the knob's travel), level, and `couple` (linear
-0..1, knob 7 — previously unused/`Unused`, see the coupling paragraph
-above).
+Found via a real DawDreamer grid search (625 combos) scored against
+measured features vs a hand-authored target per voice — `collision` is
+hand-set, not swept. Knobs 5-7: tone brightness (log taper), level,
+`couple` (linear 0..1). Distinctness measurement and why the table didn't
+need retuning after the exciter fix: `[[memory:
+resonode-exciter-coupling-cpu-history]]`.
+
+Per-voice structural modulation (cheap, reuses the existing attack-edge
+envelope idiom): `positionDriftEnv` starts each voice brighter at the
+strike, decays to the patch's set `position` over ~350ms (Objekt's
+"Bassonic" technique — reuse an envelope already being computed to
+modulate STRUCTURAL balance, not just amplitude — direct fix for
+"a single patch sounds static over its own decay"). `stretch` gets a
+per-note sample-and-hold random offset (`stretchJitterAmt=0.02`),
+latched fresh at every `attackEdge`. Both fixed internal constants, not
+user-facing knobs (no free knob-bank slot). `bassBoost` gives the
+fundamental mode up to 1.35x gain below 220Hz. `aliasGuard` fades any mode
+crossing the top 5% of Nyquist to silence. `collision` (0..1, per-patch) is
+a bounded `ma.tanh` waveshaper on each voice's own `bank()` output before
+summing. Pitch-mod adds a small (~44 cents max) onset frequency bump via a
+one-shot exponential decay envelope on the same attack/steal edge as the
+exciter retrigger. All morph knobs glide via a `letrec`-based one-pole
+that SNAPS on `ba.time==0`, glides only on later changes.
+
+**Scope note (disclosed, not addressed)**: `resonode_synth.dsp` is mono
+in/out and the entire aloop signal path is mono end-to-end — giving
+Resonode real stereo diffusion (a structural Objekt/Resonarium
+difference) would mean carrying a second channel through the whole
+pipeline, not a local change. Left open for a dedicated audio-thread
+architecture change.
+
+**Defense-in-depth**: a NaN/Inf guard sits at the C++ call site
+(`audio_thread.cpp`, right after `resonodeFx.process()`) independent of
+the `coupleFeedback` DSP fix — zeroes the block and logs a rate-limited
+(max 1/s), wall-clock-timestamped `[diag-resonode]` line on any non-finite
+sample, matching the `[diag-gap]`/`[diag-pitchguard]` convention. Keep
+this even after any future coupling fix, same as ADR-002's crash isolation.
 
 **`ApcGrid::bindAll` must `ps.bind()` every internal flag a C++ path later
 `setByName`s** — `ParamStore::setByName` is a silent no-op on an unbound
-name (`bind()` is the only path that inserts into the slot map). Two real
-incidents: `fx/resonode/engaged` and `fx/resonode/collision` were both
-missing their `bind()` call at different points, producing a permanently
-silent feature with zero error anywhere. Same bug class separately hit
+name. Real incidents: `fx/resonode/engaged`, `fx/resonode/collision`,
 `cmd/halfspeed`/`cmd/doublespeed` (routed only through
-`config/controls.conf`'s generic `map.find(key)` fallback, easy to miss
-when auditing hardcoded `setByName` call sites alone — grep the config file
-too). Any new internal (non-MIDI-mapped) C++ flag reaching Faust via
-`setByName` needs an explicit `bind()` audit before being trusted.
+`config/controls.conf`'s generic fallback — grep the config file too, not
+just hardcoded `setByName` call sites).
 
 ## `config/controls.conf` regression guardrails
 
 `cmd/halfspeed`/`cmd/doublespeed` must stay bound as `note70`/`note71`,
-never `cc70`/`cc71` — the real APC Key25 sends NOTES 70/71 on channel 0 for
-the momentary speed-scrub buttons (`apcKey25.cpp:142-143,187-188`, a
-`channel==0 && data1==70/71` check, not a CC lookup). A `cc70`/`cc71`
-binding matches nothing the real hardware transmits, so half/double-speed
-silently never worked before this was caught and fixed.
+never `cc70`/`cc71` — the real APC Key25 sends NOTES 70/71 on channel 0
+(`apcKey25.cpp:142-143,187-188`), not CCs; a `cc70`/`cc71` binding matches
+nothing the hardware transmits. `note91` must never be (re-)bound to
+`cmd/clearall` — it once raced `ApcGrid`'s shadow-state reset (a PLAY
+press during a SHIFT-held gesture could wipe DSP loop content while shadow
+state stayed stale); fixed by making `midi.cpp`'s note-91 intercept
+unconditional on shift.
 
-`note91` must never be (re-)bound to `cmd/clearall` in this file. It was
-once live here, racing `ApcGrid`'s own shadow-state reset: `midi.cpp`'s
-note-91 intercept used to be gated on `!grid.shiftHeld()`, so a PLAY press
-during a SHIFT-held gesture fell through to this flat binding, wiping the
-DSP's loop content and `cmd/master_len` while `ApcGrid`'s shadow state
-(`m_looperHasContent`, `m_masterLenSamples`) stayed stale — producing a
-"recording" that was never actually armed, with no diagnosable clear-all
-event anywhere. Fixed by making `midi.cpp`'s note-91 intercept
-unconditional on shift (`ApcGrid::onClearAll` always runs first); do not
-re-add a live `note91` binding here.
+## delayverb: separate, conditionally-called LV2 bundle
 
-## delayverb: a separate, conditionally-called LV2 bundle
+`effects/delayverb-src/delayverb.dsp` (delay + reverb) extracted into
+`delayverb.lv2` (`build-lv2.yml`'s `delayverb-lv2` job), compiled in two
+halves (`aloop_pre.dsp`/`aloop_post.dsp`) around it — both stages were
+fully unconditional and ran TWICE (cue + master paths) every block
+regardless of DELAYAMT/REVAMT. `audio_thread.cpp` now calls `.process()`
+only on whichever instance has a meaningfully nonzero amount. The LV2
+build container needs `libboost-dev` (Faust's `lv2.cpp` uses
+`boost/circular_buffer`).
 
-`effects/delayverb-src/delayverb.dsp` (delay + reverb stages) is extracted out
-of the always-on Faust graph into its own `delayverb.lv2`
-(`build-lv2.yml`'s `delayverb-lv2` job), compiled in TWO halves
-(`aloop_pre.dsp`/`aloop_post.dsp`) around it: both stages were fully
-unconditional in-graph (Faust has no runtime branching) and ran TWICE (cue +
-master paths) every block regardless of the DELAYAMT/REVAMT knobs' actual
-values. `audio_thread.cpp` now calls `.process()` only on whichever instance
-(cue/master) has a meaningfully nonzero amount — same extraction pattern as
-Resonode. The LV2 build container needs `libboost-dev` because Faust's
-`lv2.cpp` architecture uses boost/circular_buffer.
+## Tracktion Engine — evaluated and REJECTED, do not re-open without new evidence
 
-## Tracktion Engine was evaluated and REJECTED — do not re-open without new evidence
-
-Disqualified by the threading/device model, not dependency weight: (1) two
-independent ALSA devices with deliberately different buffering (blocking
-instrument device + NONBLOCK best-effort OTG mirror) — JUCE's
-`AudioDeviceManager` gives one device/rate/buffer/callback, the mirror is
-not expressible; (2) manual per-core `pthread_setaffinity_np` pinning would
-fight `tracktion_graph`'s own thread pool; (3) the 1.333ms block budget and
-never-add-latency constraint make DAW-graph plugin-delay-compensation a
-real regression risk unprovable without real hardware. Also: pulls in
-`juce_gui_extra`/X11/freetype on a headless device, and a GPL/Commercial
-license change from the current no-obligation state.
-
-**Higher-leverage alternative already available**: exactly one LV2 bundle
-ships (`guitar_lofi_fx.lv2`) from a Faust source this build already
-compiles natively for the home stack — folding it into the Core-3 Faust
-program the same way would let `lv2_host.{cpp,h}`/lilv/the crash-isolation
-watchdog/`build-lv2.yml`'s cross-compile job all be retired, removing
-moving parts with no new dependency/latency risk. Confirm `/effects/user`
-(the swappable user-LV2 extension point) is genuinely unused before acting
-on this, since retiring the host removes that surface too.
+Disqualified by the threading/device model: two independent ALSA devices
+with deliberately different buffering aren't expressible in
+`AudioDeviceManager`'s one-device/rate/buffer/callback model; manual
+per-core `pthread_setaffinity_np` pinning would fight `tracktion_graph`'s
+own thread pool; the 1.333ms budget makes DAW-graph plugin-delay-
+compensation an unprovable regression risk without real hardware. Also
+pulls in `juce_gui_extra`/X11/freetype on a headless device, GPL/Commercial
+licensing change. **Higher-leverage alternative available**: folding
+`guitar_lofi_fx.lv2` into the Core-3 Faust program natively would retire
+`lv2_host.{cpp,h}`/lilv/the crash watchdog/`build-lv2.yml`'s cross-compile
+job with no new dependency/latency risk — confirm `/effects/user` (the
+swappable user-LV2 extension point) is genuinely unused before acting.
 
 ---
 
 # Control surface (`src/control/apc_grid.cpp`)
 
-## Every momentary Faust gate must be explicitly released
+Every momentary Faust gate must be explicitly released or it sticks at 1
+forever: `looperN/erase` (`dsp/loop.dsp`'s `wipe=max(clearAll,eraseN)`
+gates ring recirculation — a stuck erase silently wipes playback forever
+while recording still works; `pollHolds` releases after ~50ms),
+`looperN/finishreq` (same shape), `cmd/clearall` (genuinely HELD — note-on
+sets, note-off releases, no deadline needed). `rec` is a persistent
+`ParamStore` value — `applyRecPlayCycle` sets `rec=0` on FINISH or a
+`rec=1`/`play=1` press re-records live input forever. Per-looper cycle:
+empty → ARM (`rec=1`) → FINISH (`rec=0`, `play=1`) → pause (`play=0`) →
+resume (`play=1`); **ARM/FINISH fire on PRESS**, not release —
+pause/resume stay on release. CLEAR_ALL zeroes both `play` and `rec` in
+Faust, not just C++ shadow state; `onStopImmediate` also zeroes `rec` for
+a mid-recording looper (abort, stays "empty"). `m_masterLenSamples`/
+`cmd/master_len`/`cmd/recorded_bpm` reset to 0 whenever the LAST looper
+with content is erased, from ANY path (checked in `pollHolds`).
 
-A one-shot gate driven from the control thread sticks at 1 forever unless
-something writes it back to 0:
+**Master phrase length comes from `writeIdx` telemetry, never wall-clock**
+— `deriveTempoQuant` proposes a BPM to Link only, never resizes
+`m_masterLenSamples`; read `AudioThread::snapshotTelemetry().looperWriteIdx`
+(the DSP's true elapsed sample count).
 
-- **`looperN/erase`** — `dsp/loop.dsp`'s `wipe = max(clearAll, eraseN)`
-  gates ring recirculation every block; a stuck `erase` silently wipes
-  playback forever while recording still works. `pollHolds` records a
-  ~50ms release deadline and clears it on a later tick.
-- **`looperN/finishreq`** — same shape, ~50ms then release.
-- **`cmd/clearall`** — a genuinely HELD value (note-on sets, note-off
-  releases), no deadline needed.
+**Quantization is powers of 2 only, always the CEILING** — a subsequent
+recording's raw duration snaps to a power-of-2 subdivision/multiple of the
+master phrase length (`kMaxLoopSamples` top, M/16 bottom via
+`lowerExp` floor -4.0). `bestLen=upperCand` in every non-degenerate case —
+ALWAYS rounding up so recorded audio is never truncated. Every looper's
+`wrapLen` is a clean power-of-2 ratio of every other, guaranteeing
+drift-free repeat alignment. `test/hardware/verify-quantization.js`'s own
+`nearestPow2Candidate` helper tests a never-real geometric-midpoint
+description — a real test-vs-code mismatch, not yet fixed.
 
-## `rec` must be explicitly zeroed on FINISH
+**Content phase-anchor**: every loop plays back starting at the SAME
+shared downbeat (`masterPhase==0`), never a per-take offset. Recording
+start is DOWNBEAT-ONLY quantized (RC-505 behavior): `armEdge` for a
+non-first looper fires only at the next `masterPhase==0`; `recordStartMasterPhase`
+is hardcoded `0.0` for every non-first looper (loop 1 is the one
+exception — no downbeat to wait for). `cycleOffset` accumulates
+`+masterLen` on each wrap, reset at `armEdge`. `wrapLen =
+gridMultiple*anchorGridLenNow`, `gridMultiple` a CEILING — can only round
+UP to contain everything recorded, never truncate. **Known, disclosed edge
+case**: `winSamples`/`xfSamples` can permanently freeze at floor on a TRUE
+zero-context cold start (gate rising at the very first sample of a DSP
+instance, zero prior audio) — confirmed not to matter in realistic
+performance (any lead-in avoids it); a fix attempt reproduced the
+compile-time-cliff wall and was reverted.
 
-`rec` is a persistent `ParamStore` value; setting `rec=1`/`play=1` in the
-same press with nothing resetting `rec` re-records live input over the
-loop forever. `applyRecPlayCycle` sets `rec=0` on FINISH. Per-looper press
-cycle: empty → ARM (`rec=1`) → FINISH (`rec=0`, `play=1`) → pause
-(`play=0`) → resume (`play=1`) → ... **ARM and FINISH fire on PRESS**, not
-release — precision instants; pause/resume stay on release.
+**Real APC Key25 hardware re-sends note-on for an already-held pad** —
+`onPadPress` tracks `m_looperHeld` per pad, treats a repeat as a no-op
+(same fix pattern independently applied to `onLofiFxPress`, which is why
+that gesture is now edge-triggered via SHIFT rather than hold-duration
+timed — a prior 1000ms-hold design was witnessed unreliable on real
+hardware). **Guitar-fx held REDIRECTS looper pad presses** to
+`onSidechainLooperToggle` (toggles sidechain-source designation, one-shot,
+not ARM/FINISH) while `m_guitarFxHeld` — auto-clears when that looper's
+content is wiped.
 
-## CLEAR_ALL must zero both `play` and `rec` in Faust, not just C++ shadow state
+## LofiFx/granulator button — SHIFT disambiguates the two gestures (note 69)
 
-`onClearAll` explicitly writes both; `onStopImmediate` also zeros `rec` for
-any mid-recording looper (a mid-recording stop is an abort, the looper
-stays "empty").
-
-## An emptied rig must reset the shared master phrase length, from ANY path
-
-`m_masterLenSamples`/`cmd/master_len` (and `cmd/recorded_bpm`) reset to 0
-whenever the LAST looper with content is erased, checked in `pollHolds`
-after the per-looper erase loop.
-
-## Master phrase length comes from `writeIdx` telemetry, never wall-clock
-
-Loop 1 plays back at EXACTLY its raw recorded duration. `deriveTempoQuant`
-is used ONLY to propose a BPM to Link — never to resize
-`m_masterLenSamples`. Read `AudioThread::snapshotTelemetry().looperWriteIdx`
-— the DSP's true elapsed sample count. Wall-clock is a defensive fallback
-only.
-
-## Successive-recording quantization: powers of 2 only, always the ceiling
-
-A subsequent recording's raw duration snaps to a power-of-2 subdivision/
-multiple of the master phrase length M (`kMaxLoopSamples` at the top end,
-M/16 at the bottom via a `lowerExp` floor of `-4.0`). `apc_grid.cpp`'s
-`lowerCand`/`upperCand` bracket the raw (tempo-scaled) recorded length by
-construction (`lowerExp = floor(log2Ratio)`, so `lowerCand <= effective
-Samples` always), and the decision is `bestLen = upperCand` in every
-non-degenerate case — a previous revision of this section described this
-as a log-space geometric-midpoint choice (`sqrt(lowerCand*upperCand)`);
-that call never existed in the real code (verified: zero `sqrt` calls
-anywhere in `src/control`/`src/dsp`) and the correction above matches
-this file's own Content Phase-Anchor section, which already documented
-the ceiling behavior correctly. ALWAYS rounding up, never down, is not
-incidental: recorded audio must never be truncated, so a round-to-nearest
-that could pick the lower bracket would silently cut off real content.
-Every looper's `wrapLen` is therefore always a clean power-of-2 ratio of
-every other, guaranteeing drift-free repeat alignment forever.
-
-`test/hardware/verify-quantization.js`'s own `nearestPow2Candidate` helper
-(a `frac >= 0.68` linear-fraction threshold between the two candidates)
-tests the OLD, never-real geometric-midpoint description above, not this
-ceiling behavior — a real test-vs-code mismatch, not yet fixed here.
-
-## Content phase-anchor: fixed-cycle lock (505-style), current architecture
-
-Every loop, once a master phrase exists, plays back starting exactly at the
-SAME shared downbeat (`masterPhase == 0`) — never an independently-computed
-per-take offset. Recording start is DOWNBEAT-ONLY quantized (real RC-505
-behavior, not a finer sub-beat grid): `armEdge` for any non-first looper
-fires only when `pendPrev` (armed since the raw `armPulse` press) coincides
-with `gridTickCrossed`, which is exactly `masterPhaseWrapped` — the next
-`masterPhase == 0` downbeat, however far away that is. Because `armEdge`
-therefore always coincides with `masterPhase == 0`, `recordStartMasterPhase`
-(`rsmNext`) is a hardcoded `0.0` for every non-first looper — there is no
-sub-beat offset left to store or correct for. (Loop 1 itself, before any
-master phrase exists, is the one exception: `armEdge == armPulse`
-immediately, no downbeat to wait for, and `rsmNext` captures the real
-free-running `masterPhase` at that instant.) `cycleOffset` (accumulates
-`+masterLen` on each `masterPhase` wrap, reset at `armEdge` only) restores
-which repetition of a multi-`masterLen` take is being read.
-`wrapLen = gridMultiple * anchorGridLenNow`, where `anchorGridLenNow` picks
-the coarsest anchor-grid unit (1/2/4/8/16 beats) not exceeding the take's
-raw recorded length, and `gridMultiple` is a CEILING (never round-to-nearest)
-of how many of that unit the raw length needs — the grid-snap can only ever
-round the loop length UP to contain everything actually recorded, never
-truncate content out of the ring.
-
-**Known, disclosed, unfixed edge case**: `winSamples`/`xfSamples` (the
-window-freeze mechanism, separate from the phase-anchor above) can
-permanently freeze at the floor value on a TRUE zero-context cold start —
-gate rising at the very first sample of a DSP instance with zero prior
-audio, no lead-in at all. Confirmed NOT to matter in realistic performance
-(any real lead-in, even ~100ms, before the gate rises avoids it, and real
-hardware's mic runs continuously) — realistically limited to the very
-first note played after boot/silence. A fix attempt (gate the freeze on the
-same `distrust` signal `shiftAmount`'s own holdGate uses) reproduced the
-real-CLI compile-time wall (see `[[memory: faust-compile-time-cliff]]`) and
-was reverted. Needs real local `faust` CLI/Docker access to bisect properly.
-
-## Real APC Key25 hardware re-sends note-on for an already-held pad
-
-Unlike synthetic MIDI-inject. Without a guard, each repeat resets the
-hold-start timer and can re-enter ARM/FINISH mid-recording. `onPadPress`
-tracks `m_looperHeld` per pad and treats a repeat note-on as a no-op. The
-same retrigger bug independently hit `onLofiFxPress` (re-stamping
-`m_granulatorPressAt`/`m_bankBeforeGranulatorHold` on every retrigger,
-making a hold-duration threshold structurally unreachable) — same fix
-pattern (guard on the true 0→1 edge only). This is why the LofiFx/Resonode
-gesture below is now edge-triggered (SHIFT modifier) rather than
-hold-duration timed.
-
-## Guitar-fx held REDIRECTS looper pad presses entirely
-
-While `m_guitarFxHeld` is true, a looper pad press is consumed by
-`onSidechainLooperToggle` (toggles that looper's sidechain-source
-designation) and never reaches ARM/FINISH — a one-shot toggle, not a hold
-gesture. Auto-clears when that looper's content is wiped.
-
-## LofiFx/granulator button: Shift disambiguates granulator-tap vs Resonode-tap
-
-The LofiFx button (`kApcBtnLofiFx`, note 69) uses SHIFT to disambiguate its
-two gestures, not a hold-duration timer (a prior 1000ms-hold design was
-WITNESSED unreliable on real hardware — real button releases interrupted
-the hold before the threshold, so Resonode never actually engaged). Both
-gestures fire instantly on the PRESS edge:
-
-- **Plain tap**: toggles `m_granulatorLatched` + `setGranulatorEnabled` —
-  latches the grain engine on/off as a persistent, backgrounded texture.
-- **Shift+tap**: `toggleResonodeEngage` — flips `m_resonodeLatched`/
-  `m_resonodeEngaged`, writes `fx/resonode/engaged`, forces the granulator
-  latch off (Resonode always wins). Disengaging releases every held
-  Resonode voice.
-
-Every press switches the active knob bank to LofiFx; the bank only reverts
-on release if Resonode is NOT engaged (`m_bankBeforeGranulatorHold` is
-captured only on the FIRST press while disengaged, never overwritten while
-Resonode stays engaged — otherwise the disengage press would capture
-`LofiFx` itself as "bank to restore" and strand it there). `onClearAll`'s
-own Resonode-disengage path needs the identical bank-restore call.
-
-While Resonode is engaged, the keybed drives 4 Resonode voices
-(`allocateResonodeVoice`/`releaseResonodeVoice`, same oldest-steal shape as
-transpose voices) via `Lv2Host::setControl` pushes to
-`fx/resonodevoice{v}/{note,gate,vel}`. Knob slots 1-4 are the named-patch
-blend weights (table above); slots 5-7 are the direct tone/level/couple
-dials (`kResonodeDirectKnobRanges`/`applyResonodeDirectKnob`).
-LED feedback: blinking red while Resonode engaged, solid green while
-granulator latched, off otherwise.
-
+Both gestures fire instantly on PRESS: plain tap toggles
+`m_granulatorLatched`/`setGranulatorEnabled`; SHIFT+tap toggles Resonode
+engage (forces the granulator latch off — Resonode always wins;
+disengaging releases every held Resonode voice). Every press switches the
+active knob bank to LofiFx; the bank reverts on release only if Resonode is
+NOT engaged. While Resonode is engaged the keybed drives 4 Resonode voices
+via `Lv2Host::setControl` pushes to `fx/resonodevoice{v}/{note,gate,vel}`;
 Resonode's 4 voices are only computed when engaged (genuinely skipped at
-the C++ call site) — unlike `multitranspose.dsp`'s 6 always-on voices.
+the C++ call site), unlike `multitranspose.dsp`'s 6 always-on voices. LED:
+blinking red while Resonode engaged, solid green while granulator latched.
 
-## Granulator: 4 named patches + 3 direct dials (current architecture)
+LofiFx must latch permanently on press (matching Dub/Guitar), no
+revert-on-release. `m_lofiShiftMode` selects the knob page: plain press =
+granulator (bitcrush + 4 named patches + 3 direct dials), SHIFT press =
+Resonode (bitcrush + 4 named patches + tone/level/couple).
 
-The granulator engine itself lives entirely in C++
-(`src/dsp/sampler/sampler.h`'s `Sampler::_renderGranularVoice`/
-`_spawnGrain`), not Faust — a real overlap-add grain engine with 7
-underlying parameters (`grainMs`/`grainRateHz`/`pitchSprayCents`/
-`posJitterMs`/`scanRate`/`reverseProb`/`envShape`), `MAX_GRAINS=48`
-concurrent grain slots shared across all 16 voices, and a cubic-
-interpolated grain reader. `scanRate=0` is a genuine freeze (the scan
-position stops advancing while grains keep spawning from the same spot);
-negative `rate`/`reverseProb` plays a grain backwards; `envShape` morphs
-the per-grain window from Blackman (0.0) through Hann (0.5) to a
-percussive attack-then-decay shape (1.0), LUT-cached and double-buffered
-(`m_grainWinLutBuf[2]`) so a control-thread rebuild never races an RT
-grain spawn.
+## Granulator (`src/dsp/sampler/sampler.h`) — 4 named patches + 3 direct dials
 
-**Direct dials** (`kGranDirectKnobRanges`/`applyGranulatorDirectKnob`, the
-same per-instance touched-knob pattern as `applyResonodeDirectKnob`,
-knobs 5-7): override the corresponding patch-blended field only once that
-knob has actually been touched (`m_lofiFxKnobTouched[5..7]`, checked in
-`applyGranulatorMorph`) — before that, the patch blend's own value applies
-unchanged, purely additive over the prior patch-only behavior.
-`kGranPatchCount = 4` (reduced from 6, dropping the two patches most
-redundant with these dials). `[[memory: granulator-investigation-history]]`
-for why this was added — every granulator parameter used to be reachable
-only via guessing a blend of fixed presets, no direct "turn this knob, hear
-that change" control:
-- **Scan/Freeze** (knob5, linear 0.0-3.0): 0 = frozen (grains keep firing
-  from one static position — the classic granular-freeze/"stuck" texture,
-  reachable now with ANY patch, not just the one preset that happened to
-  set `scanRate=0`), 1.0 = normal forward scan matching the source
-  material's own pitch, up to 3x fast-forward scan.
-- **Density** (knob6, log taper 2-200Hz): directly dials `grainRateHz`,
-  the single highest-leverage "how granular does this sound" control in
-  any granular engine, previously only reachable via patch-blend guessing.
-- **Pitch Scatter** (knob7, linear 0-1200 cents): directly dials
-  `pitchSprayCents`, a full octave of per-grain random pitch scatter at
-  the extreme.
+C++ (not Faust): 7 underlying params (`grainMs`/`grainRateHz`/
+`pitchSprayCents`/`posJitterMs`/`scanRate`/`reverseProb`/`envShape`),
+`MAX_GRAINS=48` shared across all 16 voices, cubic-interpolated reader.
+`scanRate=0` freezes the scan position; negative `rate`/`reverseProb`
+plays backward; `envShape` morphs Blackman→Hann→percussive attack-decay,
+LUT-cached double-buffered. Direct dials (knobs 5-7,
+`applyGranulatorDirectKnob`) override the corresponding patch-blended
+field only once touched (`m_lofiFxKnobTouched[5..7]`) — additive over
+prior patch-only behavior: Scan/Freeze (0-3.0, 0=frozen, 1.0=normal,
+3x=fast-forward), Density (log taper 2-200Hz → `grainRateHz`), Pitch
+Scatter (0-1200 cents linear → `pitchSprayCents`). `kGranPatchCount=4`
+(down from 6). Full history behind these additions (the "every parameter
+only reachable via preset-guessing" problem, "boring" diagnosis):
+`[[memory: granulator-investigation-history]]`.
 
-**The 48-grain pool is now budgeted per voice, never reachably exhaustible.**
-`MAX_GRAINS = 48` is shared across all 16 voices; `_recomputePerVoiceGrainBudget()`
-divides the pool by the active granular voice count once per block,
-`_renderGranularVoice` raises the spawn period to fit that share, and
-`_spawnGrain` refuses to exceed it — which makes
-`_stealMostFinishedGrainSlot()` structurally unreachable (0 thefts across
-the full production-reachable knob space). Gain compensation tracks the
-budgeted spawn period (not the requested overlap), so the level stays flat
-within 0.5dB regardless of voice count — this removes what had been acting
-as an accidental -43dB limiter at 16 held keys, so downstream headroom now
-genuinely matters at that extreme. `MAX_GRAINS` was deliberately NOT
-raised: it's not the binding constraint (one voice never demands more than
-42 even at the extreme), and the real per-grain CPU cost means a 4x pool
-grows worst-case cost 4x too. `[[memory: granulator-investigation-history]]`
-for the full exhaustion/gain-collapse measurements this fixed.
+**48-grain pool is budgeted PER VOICE, never exhaustible** —
+`_recomputePerVoiceGrainBudget()` divides the pool by active granular
+voice count per block, `_spawnGrain` refuses to exceed its share
+(`_stealMostFinishedGrainSlot()` structurally unreachable, 0 thefts across
+the production-reachable space). Gain compensation tracks the BUDGETED
+spawn period (not requested overlap) — level stays flat within 0.5dB
+regardless of voice count, removing what had been an accidental -43dB
+limiter at 16 held keys (so downstream headroom now genuinely matters at
+that extreme). `MAX_GRAINS` deliberately NOT raised — not the binding
+constraint, and 4x pool = 4x worst-case per-grain CPU. Full exhaustion/
+gain-collapse measurements: `[[memory: granulator-investigation-history]]`.
 
-**Grain pitch can be quantized to musical intervals (the Clouds trick), at
-zero CPU.** `GrainPitchQuantize` adds Octaves / Fifths / Minor Triad / Minor
-Pentatonic beside the original continuous `pitchSprayCents`, held in a
-lock-free `std::atomic<int>`; `pitchSprayCents` is inert while quantized,
-which is what lets one physical knob carry both. Control surface: knob 7 is
-segmented (`v01 <= 0.5` continuous spray over 0-1200 cents, above 0.5
-selects the four interval sets in equal quarters) rather than taking a new
-knob, since all 8 LofiFx granulator knobs were already assigned — an
-untouched knob 7 leaves the mode at Continuous, so prior behavior is exact.
-`kGranPitchContinuousSprayMode` in `apc_grid.h` duplicates the enum's zero
-value because `Sampler` is only forward-declared there; a `static_assert`
-in `apc_grid.cpp` fails the build if the two ever drift.
-`[[memory: granulator-investigation-history]]` for the pitch-distribution
-measurement and the byte-level additivity verification (output is
-byte-identical to the pre-fix shipped header everywhere except where grain
-demand used to exceed the pool).
+**Grain pitch can be quantized to musical intervals** (Octaves/Fifths/
+Minor Triad/Minor Pentatonic beside continuous `pitchSprayCents`) at zero
+CPU, held in a lock-free `std::atomic<int>`. Knob 7 is segmented (`v01
+<=0.5` continuous spray, above selects the four interval sets in equal
+quarters) — an untouched knob 7 leaves Continuous mode, prior behavior
+exact. `kGranPitchContinuousSprayMode` in `apc_grid.h` duplicates the
+enum's zero value (`Sampler` only forward-declared there) — a
+`static_assert` in `apc_grid.cpp` fails the build if the two drift.
 
-**`Voice::grainNextPeriod` applies a fixed internal `kGrainTimingJitterAmt
-= 0.15` (+/-15%) random deviation to each grain's own inter-onset
-interval**, drawn fresh every time a grain actually fires (not a
-user-facing knob — matches Resonode's own `positionDriftAmt`/
-`stretchJitterAmt` internal-constant convention). Fixes a previously
-exactly-regular grain-spawn clock that read as mechanical regardless of
-how much position/pitch jitter was layered on top.
-`[[memory: granulator-investigation-history]]` for the harness verification.
+`Voice::grainNextPeriod` applies a fixed internal
+`kGrainTimingJitterAmt=0.15` (±15%) random deviation to each grain's own
+inter-onset interval, drawn fresh per grain-fire — fixes a previously
+exactly-regular grain-spawn clock (matches Resonode's own
+`positionDriftAmt`/`stretchJitterAmt` internal-constant convention).
+`kGranPatches[0]` (fallback before any patch-weight knob is touched) is
+the 90ms/35Hz/25-cent-spray/35ms-jitter patch — reordered from a
+previously tame fallback. Both measured via standalone harness:
+`[[memory: granulator-investigation-history]]`.
 
-**`kGranPatches[0]`** (the fallback before any patch-weight knob is
-touched) is the 90ms/35Hz/25-cent-spray/35ms-jitter patch — a properly
-textured, obviously "granular" starting point.
-`[[memory: granulator-investigation-history]]` for why this was reordered
-(the previous fallback was the tamest patch in the table, a real
-contributor to a "boring" first impression).
+**Considered, not implemented**: making the granulator audible without a
+held key (auto-triggering a background voice on latch — two real blocking
+bugs identified: `Sampler::ROOT_NOTE=60` sits inside the drum-key range,
+and `_noteOn`'s same-note release logic would kill the ambient voice the
+first time that exact note is played manually). Left open, needs a
+dedicated non-keybed-reachable voice slot or explicit re-arm, neither
+exists today.
 
-**Considered, not implemented: making the granulator audible without a
-held key.** `setGranulatorEnabled` only flags newly-spawned NOTE voices as
-granular; toggling the LofiFx button alone produces no sound until a key
-is actually played, which is a real mismatch against this file's own
-"latches the grain engine on/off as a persistent, backgrounded texture"
-framing (Control-surface section, LofiFx button paragraph — that framing
-itself should be read as aspirational/imprecise until this is addressed).
-The straightforward fix (auto-`pushEvent(EV_NOTE_ON, someNote, ...)` on
-latch-ON, `EV_NOTE_OFF` on latch-OFF, reusing the existing event-ring
-verbatim) has two real bugs that must be solved first, not glossed over:
-(1) `Sampler::ROOT_NOTE=60` sits inside the drum-key range
-(`BASE_NOTE=48`..`BASE_NOTE+NUM_DRUM-1=72`), so if a drum sample is ever
-recorded at note 60 the auto-trigger would silently grain the wrong
-buffer — any implementation must pick a note number structurally outside
-`[BASE_NOTE, BASE_NOTE+NUM_DRUM)` or bypass the drum-check branch
-explicitly; (2) `_noteOn`'s existing same-note release logic means
-manually playing that exact note kills the ambient voice with no code
-path to resume it afterward, so the "persistent" texture would vanish the
-first time anyone plays that note on the keybed — needs either a
-dedicated non-keybed-reachable voice slot or an explicit re-arm on note-
-off, neither of which exists today. Left open for a follow-up change,
-not attempted here.
+## Three-page × regular/shift × 8-knob control surface
 
-## `mode2`/`mode3`/`mode4`'s damping exponent is small-integer — strength-reduced from `pow()`
+Every FX page (Dub, Guitar, LofiFx) has two independently-latching 8-knob
+banks selected via `ApcGrid::onFxKnobCC` on `m_activeBank`/`m_shift`.
+`kFxKnobCcNumbers = {48,49,50,51,54,55,57,53}` (CC53 double-duties as
+Formant on Dub only, intercepted before the table). Dub regular:
+`fx/reverb,delay,time,hp,lpres,lp,pitch`, CC53=Formant. Dub shift: a
+dance-gate + LFO bank (`dubGateLfoStage`) — `fx/dubgate/{amt,pattern}`,
+`fx/dublfo/{rate,depth,shape,target,phase}`, tempo-synced via
+`fx/dubgate/clockphase` off the same shared 4-beat clock as the guitar
+gate/groove-shuffle. Guitar regular:
+`fx2/{FLANGEAMT,TREMOLOAMT,BANKSPEED,PHASERAMT,DISTAMT,VINYLAMT,FLUTTERAMT}`
+(shared `BANKSPEED` LFO), CC53=`fx2/GATEAMT`. Guitar shift: an 8-dial
+dual-ADSR bank for the Sampler engine (filter-cutoff envelope + amplitude
+envelope), writes straight into the C++ `Sampler` object, no Faust/LV2
+targets. LofiFx: knob0 `fx2/BITCRUSHAMT`, knobs1-4 named-patch weights
+(granulator or Resonode per `m_lofiShiftMode`), knobs5-7 direct dials.
 
-`pow(damping,1)` → `damping`, `pow(damping,2)` → `damping*damping`,
-`pow(damping,3)` → `damping*damping*damping` — the exponents are literal
-integers baked into the source (independent of any runtime hslider),
-verified bit-exact (0.0 max abs diff) since squaring/cubing introduces no
-more rounding than the `pow()` call it replaces.
+`compressor.dsp` stays in-tree unreferenced (only `ab_fm_def.py`'s
+fast-math test uses it — don't delete without updating that test).
+`samplerate.dsp`, `mixbus.dsp`, `gateStage`'s multi-pattern select/`SRRAMT`
+stutter were removed as confirmed-dead.
 
-## LofiFx bank must latch permanently on press, matching Dub/Guitar
+**Groove shuffle**: the 4 metronome-flash pads (`kBeatPadNotes`, notes
+15/23/31/39) are also shuffle buttons, routed via
+`onShuffleButtonPress`/`Release` to a 4-bit `fx/shuffle/mask`. True
+retrigger/reorder, not swing/groove-offset — a continuous-perturbation
+design was tried and rejected (audible "double-tap" from re-reading
+already-played content). `kShiftReorderTables[shuffleMaskNow]` (15
+hand-verified-distinct 4-entry sequences) gives whole-beat, block-boundary
+offsets only — structurally eliminates the double-tap mode. Runs on its
+own free-running `shuffleClockSamples`, added on top of the real
+`masterPhaseSamples+i` ramp.
 
-`onLofiFxPress`/`onLofiFxRelease` latch `m_activeBank`/`m_lofiShiftMode`
-permanently on press (matching Dub/Guitar's existing behavior), with NO
-revert-on-release logic — `m_bankBeforeGranulatorHold` was removed once
-bank selection stopped being tied to physical hold duration.
-`m_lofiShiftMode` selects which of LofiFx's two knob pages is live: plain
-press = granulator page (bitcrush + 4 named granulator patches + 3 direct
-performative dials — Scan/Freeze, Density, Pitch Scatter, see the
-granulator section below), SHIFT press = Resonode page (bitcrush + 4 named
-Resonode patches + tone/level/couple).
+`dsp/loop.dsp` varispeed must have NO deadzone — `varispeedActive =
+effSpeed != 1.0` (exact-equality) — a deadzone would discard small real
+Link-tempo mismatches, causing steady phasing between loopers of different
+lengths. The soft-resync drift-correction term (`resyncCoeff`) is gated to
+`0.0` whenever `|effSpeed-1.0|>0.3` so it never fights a deliberate manual
+half/double-speed press. **Both beat-shuffle's hard clip and varispeed's
+instant speed jump are INTENTIONAL** — a smoothing attempt was shipped
+then explicitly reverted on user correction; do not re-smooth either
+without confirming whether a report is about the (intended) abrupt
+transition itself vs. a genuinely distinct defect.
 
-## Three-page x regular/shift x 8-knob control surface (current architecture)
+`microrepeat.dsp`'s `sliceBlocks = max(1, int(beatBlocks/divSafe))*2` with
+`divSafe=max(1,DIV)` (multiplying the already-computed slice length,
+never halving the divisor first — would floor-collide `div=1`/`div=2` at
+`int(1/2)=0`). `mode2`/`mode3`/`mode4`'s damping exponent is
+strength-reduced from `pow()` to `damping`/`damping*damping`/
+`damping*damping*damping` (literal integer exponents, bit-exact).
 
-Every FX page (Dub, Guitar, LofiFx) has TWO independently-latching 8-knob
-banks (regular and Shift), selected per-CC via `ApcGrid::onFxKnobCC`
-branching on `m_activeBank`/`m_shift`. `kFxKnobCcNumbers = {48, 49, 50, 51,
-54, 55, 57, 53}` (CC53 also double-duties as Formant on the Dub page only —
-intercepted before the table lookup).
+`mixbus.dsp`/`samplerate.dsp` removed (zero consumers). `chain.dsp` is NOT
+dead — `build-lv2.yml`'s `home-fx-lv2` job builds it as a packaging
+check. `rawGlitchTap` removed as confirmed-dead.
 
-- **Dub regular**: `fx/reverb`, `fx/delay`, `fx/time`, `fx/hp`, `fx/lpres`,
-  `fx/lp`, `fx/pitch`; CC53 = Formant (intercepted, never in the table).
-- **Dub shift**: a dance-gate + LFO bank (`dubGateLfoStage`, appended to
-  `mainOut` post-reverb) — `fx/dubgate/{amt,pattern}`, `fx/dublfo/{rate,
-  depth,shape,target,phase}`. All bit-exact identity at compiled-in
-  defaults. Tempo-synced via `fx/dubgate/clockphase`, pushed from the same
-  shared 4-beat clock as the guitar gate and groove-shuffle (not
-  `masterPhase` — keeps ticking with no loop recorded).
-- **Guitar regular**: `fx2/{FLANGEAMT,TREMOLOAMT,BANKSPEED,PHASERAMT,
-  DISTAMT}` (a single shared `BANKSPEED` LFO rate drives flanger/tremolo/
-  phaser together), `fx2/{VINYLAMT,FLUTTERAMT}`; CC53 = `fx2/GATEAMT` (a
-  fixed 4-on-the-floor rhythmic gate, `gateStage`, driven by the same
-  shared clock).
-- **Guitar shift**: an 8-dial dual-ADSR bank for the Sampler engine
-  (`SamplerFilter{Attack,Decay,Sustain,Release}Ms` — filter-cutoff
-  envelope, C++-side state machine, `_recomputeFilterEngaged` checks ALL
-  FOUR stages before deciding to engage; `Sampler{Attack,AmpDecay,
-  AmpSustain,Release}Ms` — amplitude envelope). No Faust/LV2 targets — all
-  write straight into the C++ `Sampler` object.
-- **LofiFx**: knob0 `fx2/BITCRUSHAMT`; knobs1-4 are 4 named-patch weights
-  (granulator or Resonode per `m_lofiShiftMode`); knobs5-7 are 3 direct
-  performative dials, own meaning per page (granulator: Scan/Freeze,
-  Density, Pitch Scatter; Resonode: tone, level, couple — see the
-  granulator section below for the granulator page's own layout).
-
-`compressor.dsp` is kept in-tree unreferenced by the live chain, only
-because `test/faust-flags/ab_fm_def.py` still uses it for an unrelated
-fast-math-flag check — do not delete without updating that test.
-`samplerate.dsp`, `mixbus.dsp`, and `gateStage`'s multi-pattern
-select/`SRRAMT` stutter effect were removed as confirmed-dead (no reachable
-control/consumer).
-
-## Groove shuffle: the 4 metronome-flash pads are also shuffle buttons
-
-`kBeatPadNotes` (notes 15/23/31/39, col 7 rows 1-4) are LED-flash pads that
-are now ALSO pressable, routed via `ApcGrid::onShuffleButtonPress`/
-`onShuffleButtonRelease` to a 4-bit held-state bitmask published as
-`fx/shuffle/mask`. **True retrigger/reorder, not swing/groove-offset** — a
-continuous-perturbation design (sine-sum, then hard-jump offset tables) was
-tried and rejected (produced an audible "double-tap" from re-reading
-already-played content). Current mechanism: one beat = one slice, 4-beat
-cycle, `kShiftReorderTables[shuffleMaskNow]` (indexed directly by the raw
-4-bit bitmask — 15 hand-verified-distinct sequences, not composed at
-runtime) gives each combination its own 4-entry sequence of which beat's
-content plays during which cycle position. The applied offset is always a
-WHOLE beat, constant for the entire beat, recomputed only at beat
-boundaries — structurally eliminates the double-tap failure mode. Runs on
-its OWN free-running `shuffleClockSamples` accumulator (wrapped at a
-nominal 4-beat length derived from `masterLen`/`recordedBeats` when a loop
-exists, else a nominal half-second beat), added on top of the real
-`masterPhaseSamples + i` ramp, never replacing it.
-
-## `dsp/loop.dsp` varispeed must have NO deadzone
-
-`varispeedActive = effSpeed != 1.0` — exact-equality check. A deadzone
-would discard small-but-real tempo mismatches, causing steady (non-
-sweeping) phasing between loopers of different lengths at a close-but-not-
-identical Link tempo.
-
-## Manual half/double-speed vs. soft-resync drift correction
-
-The soft-resync term (`readPosStep`'s `wrapDelta(prev) * resyncCoeff`,
-built for gently correcting small Link-drift mismatches) actively fought a
-deliberate large manual speed-multiplier press, dragging `readPos` back
-toward normal-speed position within a fraction of a second. Fixed by gating
-`resyncCoeff` to `0.0` whenever `|effSpeed - 1.0| > 0.3` — manual
-half/double-speed (0.5/2.0) is always far outside this band; genuine
-Link-tempo-following mismatches realistically never approach it.
-
-**Both beat-shuffle's hard clip and varispeed's instant speed jump are
-INTENTIONAL** — a smoothing attempt (tanh saturation on shuffle offset, a
-~50ms glide on `effSpeed`) was shipped then explicitly reverted on user
-correction: the abrupt "punch in" character is the desired musical effect
-for both gestures, not a bug. Do not re-smooth either without confirming
-with the user first whether a report is about the transition being audible
-at all (intentional) vs. some other defect (wrong timing/magnitude/a real
-click distinct from the punch character).
-
-## Glitch/microrepeat slice length
-
-`microrepeat.dsp`'s `sliceBlocks = max(1, int(beatBlocks / divSafe)) * 2`
-with `divSafe = max(1, DIV)` — multiplying the already-computed slice
-length (never halving the divisor first, which would floor-collide `div=1`
-and `div=2` at `int(1/2)=0`).
-
-## Dead files
-
-`mixbus.dsp` and `samplerate.dsp` were removed (zero consumers, confirmed
-via full-repo grep). `chain.dsp` is NOT dead — `build-lv2.yml`'s
-`home-fx-lv2` job builds it as a packaging-reproducibility check despite no
-live-chain reference. `rawGlitchTap` was removed from
-`effects_runtime.dsp`/`aloop.dsp`/`audio_thread.cpp` (`fouts[4]` →
-`fouts[3]`) as confirmed-dead.
-
-## CC53 formant constants
-
-Deadzone 60-68, formula `((data2-64)/63.0)*1.5` (`applyFormantCC` in
-`apc_grid.cpp`) — a real reachable range of roughly ±1.5 (clamped to the
-`-3..3` hslider range, which the CC mapping can never actually reach), NOT
-a flat ±1 range — this section previously documented a stale `*1.0`
-factor that no longer matches the shipped code; see the
-`multitranspose.dsp` section above for the same formula and its
-downstream saturation behavior against `GrainFormant`'s `[0.5,2.0]`
-factor clamp. A shift-dependent widening was tried and removed per direct
-user direction: a bare SHIFT press must never change a knob's behavior —
-SHIFT is reserved exclusively for the native fold/resample gesture.
+CC53 formant: deadzone 60-68, `((data2-64)/63.0)*1.5` — a real ~±1.5
+range (clamped by the `-3..3` hslider). A shift-dependent widening was
+tried and removed per direct user direction — SHIFT is reserved
+exclusively for the native fold/resample gesture, must never change a
+knob's own behavior.
 
 ---
 
 # Storage: continuous USB-drive ring recording
 
 `src/storage/usb_recorder.{h,cpp}`. `src/usb/f_uac2-gadget.sh` is a
-completely different USB role (peripheral/gadget mode vs. host mode on the
+completely different USB role (peripheral/gadget vs. host mode on the
 USB-A ports a flash drive plugs into).
 
-**RT side**: `UsbRecorder` owns a fixed, heap-allocated `int16_t` ring (5
-seconds). `audio_thread.cpp`'s worker calls `pushBlock(prevFiltOut.data(),
-N)` every block, next to `g_sampler->captureBlock(...)` — the same post-fx
-tap point. The producer is a single-atomic-counter SPSC ring
-(`std::atomic<uint64_t>` write/read counters, not raw indices) that NEVER
-blocks or allocates: if the consumer has fallen behind, `pushBlock`
-advances the read counter itself (dropping oldest samples) and increments
-an overrun counter. Drop, never block.
+**RT side**: `UsbRecorder` owns a fixed, heap-allocated `int16_t` ring (5s).
+`audio_thread.cpp`'s worker calls `pushBlock(prevFiltOut.data(), N)` every
+block, next to `g_sampler->captureBlock(...)` — same post-fx tap point.
+Single-atomic-counter SPSC ring (`std::atomic<uint64_t>` write/read
+counters) that NEVER blocks/allocates — if the consumer falls behind,
+`pushBlock` advances the read counter itself (drops oldest samples,
+increments an overrun counter).
 
-**Control side**: all file I/O (mount detection, WAV chunk writing/
-rotation) happens in `UsbRecorder::poll()`, called from `main.cpp`'s
-existing 5 Hz control loop — deliberately NOT a dedicated pthread. Chunks
-are fixed-size and cyclically `O_TRUNC`-reopened, so the ring bounds disk
-usage by construction with no eviction pass.
-
-**Mount detection is a `stat()` device-id comparison** (`isMounted()`: the
-mount point's `st_dev` differs from its parent's exactly when something is
-mounted there), not `/proc/mounts` parsing.
+**Control side**: all file I/O happens in `UsbRecorder::poll()`, called
+from `main.cpp`'s 5 Hz control loop — deliberately NOT a dedicated
+pthread. Chunks are fixed-size, cyclically `O_TRUNC`-reopened, so the ring
+bounds disk usage by construction. Mount detection is a `stat()`
+device-id comparison (`isMounted()`), not `/proc/mounts` parsing.
 
 **Config**: `[storage]` in `config/aloop.conf` — `usb_record`,
 `usb_mount_point` (default `/media/aloop-usb`), `usb_chunk_minutes` (10),
-`usb_chunk_count` (6). `effectiveChunkCount()` shrinks the ring to fit
+`usb_chunk_count` (6). `effectiveChunkCount()` shrinks the ring for
 smaller drives via `statvfs`.
 
 **Automount**: `src/usb/usb-automount.sh` (mdev hotplug) +
-`src/usb/usb-automount-setup.sh` (local.d bootstrap) — the setup script
-APPENDS two rules to `/etc/mdev.conf` (never overwrites) and does its own
-explicit coldplug pass over `/dev/sd[a-z][0-9]*` after installing the rule
-(since `local.d` runs AFTER `mdev -s`'s sysinit coldplug scan, an
-already-inserted drive would otherwise be missed).
-
-Mount attempts: no `-t` first (kernel auto-detection), then explicit
-`-t vfat`/`ext4`/`exfat`/`ntfs`. **exFAT/NTFS userspace tools are almost
-certainly NOT in the minimal Alpine RPi tarball's repo** — only
-kernel-native FAT32/ext4 is expected to work without further vendoring.
-UNVERIFIED on real hardware, along with the mdev.conf rule syntax and real
-USB-drive enumeration on the Pi 4's USB-A ports.
-
-`./opt/aloop/usb-automount.sh` and `./etc/local.d/25-usb-automount.start`
-are registered in BOTH `_exec_paths` and `_nb_exec_paths`.
+`usb-automount-setup.sh` (local.d bootstrap, APPENDS to `/etc/mdev.conf`,
+never overwrites, does its own explicit coldplug pass since `local.d`
+runs AFTER `mdev -s`'s sysinit scan). Mount attempts: no `-t` first, then
+explicit `vfat`/`ext4`/`exfat`/`ntfs`. **exFAT/NTFS userspace tools are
+almost certainly NOT in the minimal Alpine RPi tarball** — only
+kernel-native FAT32/ext4 expected to work without further vendoring.
+UNVERIFIED on real hardware, along with mdev.conf rule syntax and real
+USB-drive enumeration. Both scripts are registered in BOTH
+`_exec_paths` and `_nb_exec_paths`.
 
 ---
 
 # Faust Libraries reference
 
-Faust Libraries is the standard DSP library collection for the Faust language.
-Prefer the Markdown sources over the built HTML for LLM-friendly content.
+Faust Libraries is the standard DSP library collection for the Faust
+language. Prefer the Markdown sources over built HTML for LLM-friendly
+content.
 
 ### Core entrypoints
-- [Libraries index](https://faustlibraries.grame.fr/libs/): Index of all library
-  reference pages.
-- [Standard functions](https://faustlibraries.grame.fr/standardFunctions/): Core
-  standard functions used across the libraries.
-- [Overview](https://faustlibraries.grame.fr/organization/): High-level
-  organization and structure of the library.
-- [Motion functions](https://faustlibraries.grame.fr/motion_functions/):
-  Motion-related functions and reference.
-
-### Library map
-- Each library has a dedicated reference page under `doc/docs/libs/` (Markdown
-  source) and `/libs/` (HTML site).
+- [Libraries index](https://faustlibraries.grame.fr/libs/)
+- [Standard functions](https://faustlibraries.grame.fr/standardFunctions/)
+- [Overview](https://faustlibraries.grame.fr/organization/)
+- [Motion functions](https://faustlibraries.grame.fr/motion_functions/)
 
 ### Markdown sources (authoritative)
 - [Libraries index (md)](https://raw.githubusercontent.com/grame-cncm/faustlibraries/master/doc/docs/libs/index.md)
@@ -2616,13 +1345,11 @@ Prefer the Markdown sources over the built HTML for LLM-friendly content.
 - [Overview (md)](https://raw.githubusercontent.com/grame-cncm/faustlibraries/master/doc/docs/organization.md)
 
 ### Scope
-- This section documents the Faust **libraries** only. Compiler-flag guidance lives
-  in the "Faust compiler flags" sections above; the reference for those is
-  [faustdoc.grame.fr/manual/optimizing/](https://faustdoc.grame.fr/manual/optimizing/).
+This section documents the Faust **libraries** only. Compiler-flag guidance
+lives in the "Faust compiler flags" section above; the reference for those
+is [faustdoc.grame.fr/manual/optimizing/](https://faustdoc.grame.fr/manual/optimizing/).
 
 ### Optional
 - [Contributing](https://faustlibraries.grame.fr/contributing/)
 - [Community](https://faustlibraries.grame.fr/community/)
 - [About](https://faustlibraries.grame.fr/about/)
-
-@.gm/next-step.md
