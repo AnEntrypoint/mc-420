@@ -656,153 +656,92 @@ own piecewise-constant behavior. Adding `si.smoo` would break that parity.
 
 ## `multitranspose.dsp` — polyphonic pitch-LOCK, 6 voices (current architecture)
 
-`effects/home/faust/multitranspose.dsp` is an NVOICES=6 polyphonic
-pitch-LOCK stage (Digitech Whammy / Infected Mushroom Manipulator
-behavior — output lands on the exact held key). Strictly additive with the
-mono SNAC "pedal ride" engine (`fx/pitchbend`, CC52). Each voice owns its
-own `EngineSoladSnac` instance (`pitch_poly.dsp`/`pitch_poly_ffi.h`,
-`DubfxPolyVoice[6]`) — the SAME engine that powers the mono effect, made
-polyphonic; the old per-file two-tap delay-line `xpose()` shifter no longer
-exists anywhere. `shiftAmount = targetNote - heldDetNote` (continuously
-re-tracked for the whole sustain) converts to `pow(2, shiftAmount/12)`,
-threaded as a plain signal argument (compile-time-cliff discipline below).
+`effects/home/faust/multitranspose.dsp`: NVOICES=6 polyphonic pitch-LOCK
+(Digitech Whammy/Manipulator behavior — output lands on the exact held
+key), additive with the mono SNAC "pedal ride" engine (`fx/pitchbend`,
+CC52). Each voice owns its own `EngineSoladSnac` (`pitch_poly.dsp`/
+`pitch_poly_ffi.h`, `DubfxPolyVoice[6]`) — the same engine as the mono
+effect, made polyphonic; no per-file delay-line shifter exists anymore.
+`shiftAmount = targetNote - heldDetNote` (continuously re-tracked)
+converts to `pow(2, shiftAmount/12)`, threaded as a plain signal argument
+(compile-time-cliff discipline below).
 
-**Absolute pitch-lock** (per explicit user direction; an "interval
+**Absolute pitch-lock** (per explicit user direction — an "interval
 harmonizer" rearchitecture was tried and reverted). `freqDet = ba.if(
-extFreqDet>0.5, extFreqDet, detectedFreq(sigIn))` — prefers
-`pitchtracker.lv2`'s reading (`fx/extfreqdet`, from
-`audio_thread.cpp`'s `pitchTrackerFx`) over the internal zero-crossing
-fallback. `freeXpose` follows `foldGain` (hoisted `static`, previous-block
-read) — must track the same quantity the audio fold uses, not raw SHIFT
-button state (a real shipped bug, root-caused and fixed — full history
-`[[memory: multitranspose-investigation-history]]`).
+extFreqDet>0.5, extFreqDet, detectedFreq(sigIn))` prefers
+`pitchtracker.lv2`'s reading (`fx/extfreqdet`) over the internal
+zero-crossing fallback. `freeXpose` must follow `foldGain` (hoisted
+`static`, previous-block read), not raw SHIFT button state — the two must
+track the same quantity the audio fold uses. Full SHIFT/free-guard bug
+history: `[[memory: multitranspose-investigation-history]]`.
 
-**Voice mechanics**: shared `an.pitchTracker`-derived detection runs once
-per sample. Each voice's shift glides via a one-pole
-(`tau2pole(0.008)`), gated by `en.adsr` (3ms/30ms/sustain 1/50ms release),
-pitch-shifted by the per-voice `EngineSoladSnac`, formant-shaped by
-`LpcFormantShifter`, block-buffered at 16 samples (~0.33ms onset latency —
-fixed algorithmic latency regardless of pitch/formant). Fixed per-voice
-gain 0.6 + static `ma.tanh` soft-clip on the summed bus (never dynamic
-`1/sqrt(activeVoices)` — pumps on chord-note release). Round-robin/
-oldest-steal voice allocation (`allocateTransposeVoice`/
-`releaseTransposeVoice` in `ApcGrid`); a steal calls `reengage()` to reset
-read position/period tracking. Note-off releases by GATE only, held by a
-linear release counter (`engageReleaseHoldS=0.06`) guaranteed to reach
-exactly 0 — do NOT gate on `voiceEnv>0` directly (an asymptotic envelope
-may never cross a threshold, stranding the engine engaged).
-`DubfxPolyVoice::pos`/`inBuf`/`outBuf` are cleared on reengage (unfixed
-once produced a 0.549-peak burst from stale samples on note-on).
+**Voice mechanics**: shared `an.pitchTracker` detection runs once/sample.
+Each voice glides shift via a one-pole (`tau2pole(0.008)`), gated by
+`en.adsr` (3ms/30ms/sustain 1/50ms release), shifted by its
+`EngineSoladSnac`, formant-shaped by `LpcFormantShifter`, block-buffered at
+16 samples (~0.33ms onset latency, fixed regardless of pitch/formant).
+Fixed per-voice gain 0.6 + static `ma.tanh` soft-clip on the summed bus
+(never dynamic `1/sqrt(activeVoices)` — pumps on chord-note release).
+Round-robin/oldest-steal allocation (`ApcGrid`); a steal calls
+`reengage()`. **Engaged state is held by a linear release counter**
+(`engageReleaseHoldS=0.06`), never gated on raw `gate>0.5` or `voiceEnv>0`
+directly — an instant-disengage-on-note-off bug and an asymptotic-envelope
+stall bug are both closed this way. `DubfxPolyVoice::pos`/`inBuf`/`outBuf`
+are cleared on reengage (prevents stale-sample bleed into a new note).
 
-**Formant control** (`fx/formant`, CC53) is a plain signal argument;
-real-world reachable range is ~±1.5 of the `-3..3` hslider
-(`((data2-64)/63)*1.5`, deadzone 60-68). Moved by `LpcFormantShifter`
-(`vowelFormant.h`), an LPC spectral-envelope shifter, not the grain
-resampler — `GrainFormant` is entirely inert on this poly path.
-`SibilanceDetector` (per-voice, gated on SNAC-unlocked + HF-energy ratio)
-crossfades a voice's output back toward raw dry input (up to 85%) during
-fricatives/consonants so sibilants stay intelligible — not yet by-ear
-verified on real hardware. LPC design detail, order/aliasing fixes, the
-high-fundamental H1-annihilation defect and its three-bound mitigation,
-CPU measurements, and the superseded `VowelFormantShaper`: `[[memory:
-lpc-formant-shifter-history]]`.
+**Formant control** (`fx/formant`, CC53) is a plain signal argument,
+reachable range ~±1.5 of the `-3..3` hslider (`((data2-64)/63)*1.5`,
+deadzone 60-68). Moved by `LpcFormantShifter` (`vowelFormant.h`), an LPC
+spectral-envelope shifter — `GrainFormant` is entirely inert on this poly
+path. `SibilanceDetector` (per-voice, gated on SNAC-unlocked + HF-energy
+ratio) crossfades output toward raw dry (up to 85%) during
+fricatives/consonants, not yet by-ear verified on real hardware. LPC
+design/aliasing fixes, the high-fundamental defect, CPU measurements, the
+superseded `VowelFormantShaper`: `[[memory: lpc-formant-shifter-history]]`.
 
-`LpcFormantShifter::beginBlock(int blockSamples)` accumulates real elapsed
-samples and updates coefficients only once per `kCoeffUpdateHopSamples=64`
-regardless of caller block size — a real click was shipped when
-`DUBFX_POLY_BS` cut 64→16 without this, running the O(order²) coefficient
-update 4x more often and snapping a high-Q filter every ~43ms LPC hop.
-`LpcFormantShifter::process`'s output stage is a soft-knee limiter
-(identity below `kOutputSaturationKnee=1.5`, `tanh` toward
-`kOutputMagnitudeCeil=4.0` above) — full-corpus testing found the
-whiten/recolor filter genuinely saturating on real vibrato-rich vocal
-content even at unity shift; converts what would be harsh clipping into
-bounded soft compression, does not fix the underlying resonance
-instability (disclosed, not attempted).
-
-**Splice-path upward-shift mechanism**: `upshiftTargetLag()` raises the
-target lag to `kUpshiftLagPeriods(1.5)*period+SINC_HALF+2` when
-`m_scale>1.0`; drift test is symmetric (SOLA for pitch-up).
-`shrinkSpliceCount` bounds `|n|` both sides. Closed a real gap (upward
-shift's drift never went positive so periodic resplice could never fire) —
-worst upward error went -204.7c→+18.9c. Added latency is engaged-only
-wet-path (covered by the never-add-latency carve-out) and SHORTER than the
-grain path it replaced (~14ms vs ~36ms at 110Hz). The `scale>1.02`
-forced-grain override is REMOVED — neutral formant runs on the
-phase-coherent splice path. Full trace/measurements: `[[memory:
-multitranspose-investigation-history]]`.
-
-**Residual splice degradation is not an engine defect** — corpus
-degradation ratio settles ~2.21 at +12 semitones, confirmed as PSOLA
-legitimately restructuring harmonically rich material (three separate
-measurements rule out an artifact). `[[memory:
-multitranspose-investigation-history]]`.
-
-**`pitchtracker.lv2` is accurate below 500Hz, unreliable above** —
-verified against all 16 real recordings + FFT harmonic-comb score: 9 files
-(66-706Hz) within 50 cents, 3 files ≥500Hz genuinely wrong (octave-down
-locks). Below 500Hz (guitar/bass/vocal — this pitch-lock's actual use
-case) accurate everywhere measured. Deliberately not fixed —
-`pitchtracker_ac.dsp` is on the wrong side of the compile-time-cliff.
+**Splice-path upward-shift**: `upshiftTargetLag()` raises target lag on
+upshifts so periodic resplice can fire (previously only downward drift
+triggered a resplice, leaving upshifts with no correction path). Neutral
+formant runs on the phase-coherent splice path (the `scale>1.02`
+forced-grain override is removed). Residual splice degradation at high
+shifts (~2.21 ratio at +12 semitones) is confirmed PSOLA legitimately
+restructuring harmonic material, not an artifact. Full trace/measurements:
 `[[memory: multitranspose-investigation-history]]`.
 
-**Known, disclosed limitation**: the internal zero-crossing fallback
-tracker (when `pitchtracker.lv2` is NOT loaded) can take >400ms to converge
-and drift non-monotonically. With `pitchtracker.lv2` genuinely loaded (the
-intended on-device config), lock is near-instant, ~11-38 cents accurate.
-Do not attempt a timing-heuristic fix in `multitranspose.dsp` itself — real
-risk of the compile-time cliff (`[[memory: faust-compile-time-cliff]]`).
+**`pitchtracker.lv2` is accurate below 500Hz, unreliable above** — the
+range this pitch-lock is actually played in (guitar/bass/vocal) is
+accurate everywhere measured; 3 of 16 test files ≥500Hz are genuinely
+wrong (octave-down locks), deliberately not fixed (on the wrong side of
+the compile-time-cliff). The internal zero-crossing fallback tracker (used
+only when `pitchtracker.lv2` is NOT loaded) can take >400ms to converge and
+drift non-monotonically — do not attempt a timing-heuristic fix inside
+`multitranspose.dsp` itself, real risk of the compile-time cliff.
+`[[memory: multitranspose-investigation-history]]`,
+`[[memory: faust-compile-time-cliff]]`.
 
-**One shared SNAC period tracker serves all 6 poly voices**
+**One shared SNAC period tracker serves all 6 voices**
 (`snacPeriodTracker.h`, extracted verbatim from `EngineSoladSnac`,
-108-case sweep bit-identical to pre-refactor). `EngineSoladSnac` owns one
-by default (mono engine unchanged); `attachSharedTracker()` points it at
-an external tracker, fed from voice 0's per-sample tick (Faust has no
-runtime branching, so all 6 `voiceOut` calls run every sample regardless).
-`reengage()` on a shared-tracker voice INHERITS the locked period instead
-of `kReengageSeedPeriod` (600 samples/~80Hz) — removes most per-note
-lock-time variance. **The shared tracker's `stepSchedule` MUST step at
-`m_sinceBlock==0`, matching the engine's own tracker's phase** — a 63-sample
-misalignment silently degrades tremolo/AM material (measured
-envelope-tracking error 0.057→0.239→0.057 fixed). Full measurement,
-including two rejected fix attempts (second-sweep confirmation, a Hann
-LUT): `[[memory: multitranspose-investigation-history]]`.
+bit-identical to pre-refactor). `reengage()` on a shared-tracker voice
+INHERITS the locked period (removes most per-note lock-time variance). The
+shared tracker's step MUST stay phase-aligned with the engine's own
+per-block cadence — a past misalignment silently degraded tremolo/AM
+material. Full measurement and two rejected fix attempts: `[[memory:
+multitranspose-investigation-history]]`.
 
-The grain-suspend condition is keyed on the DIALED formant depth
-(`m_formantDepth != 0.0f`), not the smoothed mix — keying on
-`m_grainMix`/`m_grainMixTarget` reads the previous sample's mix (0 on the
-very first sample even with formant dialed in), breaking bit-exactness.
-`GrainFormant::read()` calls `suspend()` below `kGrainBypassFloor` instead
-of running its overlap-add loop every sample at zero mix — the
-formant-factor glide must still advance while suspended (`advanceFactor()`
-called from both `read()` and `suspend()`, or small formant settings could
-never cross the mix floor). Measured (x86_64, indicative only): mean
-per-block 60.4us→37.5us, p99 208.6us→68.2us against the 1333us budget.
+**Compile-time-cliff discipline**: any new UI primitive declared inside
+`multitranspose.dsp` itself risks unbounded real-`faust` compile time
+regardless of DawDreamer JIT results — new controls are declared elsewhere
+(`effects_runtime.dsp`) and threaded in as signal arguments. `[[memory:
+faust-compile-time-cliff]]`.
 
-**Every momentary voice must stay engaged through its own release tail**
-— gating the shifter on raw `gate>0.5` disengaged instantly on note-off
-while `voiceEnv`'s ADSR still had a 50ms release, playing unshifted dry
-input at full envelope (measured -492 cents off target). Fixed via the
-`engageReleaseHoldS` linear counter above.
-
-**Compile-time-cliff discipline for this file**: any new UI primitive
-declared inside `multitranspose.dsp` itself risks unbounded real-`faust`
-compile time regardless of DawDreamer JIT results — new controls are
-declared elsewhere (`effects_runtime.dsp`) and threaded in as signal
-arguments. `[[memory: faust-compile-time-cliff]]`.
-
-**DawDreamer JIT cannot compile `multitranspose.dsp`/`pitch.dsp`
-directly** — the `ffunction` JIT limitation. `real_audio_cross_verify.py`
+**Verification**: DawDreamer's JIT cannot compile this file or `pitch.dsp`
+directly (the `ffunction` JIT limitation) — `real_audio_cross_verify.py`
 shells out to `test-audio-corpus/multitranspose_harness.cpp` (links
-`pitch_poly_ffi.h` directly) instead of `daw.RenderEngine` — the pattern to
-reuse for any future change to this file's shifter/formant/sibilance
-behavior. **`verify_highoctave_transient.py` is a BROKEN GATE,
-pre-existing on `main`, disclosed not fixed** — still calls
-`FaustProcessor.set_dsp(...multitranspose.dsp)`/`compile()`, the exact JIT
-path this rewrite made impossible; reproduces identically on `main`'s
-`34cad6d`, so not caused by any recent change. `test-pitch-tracker` is red
-on every push touching `multitranspose.dsp` and carries no information
-until this script gets the same harness port.
+`pitch_poly_ffi.h` directly) instead. **`verify_highoctave_transient.py` is
+a broken gate, pre-existing on `main`, disclosed not fixed** — still calls
+the JIT path this rewrite made impossible; `test-pitch-tracker` is red on
+every push touching this file and carries no information until it gets the
+same harness port. `[[memory: multitranspose-investigation-history]]`.
 
 ## Free-transpose engine (`soladSnacOctaver.h`/`EngineSoladSnac`)
 
