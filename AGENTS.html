@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f42b125e3594f91624a70b4faf6ab1259d8c897c">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d3cbcc5d9a82e52685b7dc036dfc059424f0a37b">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -793,6 +793,26 @@ zero-crossing fallback. <code class="language-plaintext highlighter-rouge">freeX
 track the same quantity the audio fold uses. Full SHIFT/free-guard bug
 history: <code class="language-plaintext highlighter-rouge">[[memory: multitranspose-investigation-history]]</code>.</p>
 
+<p><strong><code class="language-plaintext highlighter-rouge">trackingAllowed = trustedTracker &gt; 0.5</code>, not <code class="language-plaintext highlighter-rouge">| inLockWarmup</code>.</strong> A
+warmup-bypass OR term lets the first ~80ms of every note trust the slow,
+non-monotonic internal zero-crossing fallback whenever the external tracker
+hasn’t locked yet — the attack-transient “twitchy” pitch-lock bug. This
+exact formula was fixed once (2026-09), reverted alongside an unrelated
+change, and restored 2026-09-22 (git archaeology: <code class="language-plaintext highlighter-rouge">93b736b</code> reverted both
+<code class="language-plaintext highlighter-rouge">15fb984</code>’s trackingAllowed fix AND its unrelated shiftAmount-latching
+change together; only the latching change deserved reverting).</p>
+
+<p><strong><code class="language-plaintext highlighter-rouge">heldDetNote</code> reseeds to <code class="language-plaintext highlighter-rouge">targetNote</code> on every attack until the external
+tracker has EVER been trusted, not just at the DSP instance’s literal
+<code class="language-plaintext highlighter-rouge">ba.time==0</code>.</strong> A <code class="language-plaintext highlighter-rouge">ba.time==0</code>-only seed goes stale the instant any time
+passes with no note held — which is always true on real hardware, since
+boot and the first note are never the same instant. Witnessed live: a
+first note with the tracker never trusted read <code class="language-plaintext highlighter-rouge">shiftAmount=60.00</code> (a
+5-octave runaway) instead of safe unity. <code class="language-plaintext highlighter-rouge">everTrusted</code> (a permanent latch,
+true the first time <code class="language-plaintext highlighter-rouge">trackingAllowed</code> is ever true) gates the reseed; once
+real trust lands even once, the reseed never fires again. <code class="language-plaintext highlighter-rouge">[[memory:
+multitranspose-investigation-history]]</code>.</p>
+
 <p><strong>Voice mechanics</strong>: shared <code class="language-plaintext highlighter-rouge">an.pitchTracker</code> detection runs once/sample.
 Each voice glides shift via a one-pole (<code class="language-plaintext highlighter-rouge">tau2pole(0.008)</code>), gated by
 <code class="language-plaintext highlighter-rouge">en.adsr</code> (3ms/30ms/sustain 1/50ms release), shifted by its
@@ -855,11 +875,21 @@ faust-compile-time-cliff]]</code>.</p>
 <p><strong>Verification</strong>: DawDreamer’s JIT cannot compile this file or <code class="language-plaintext highlighter-rouge">pitch.dsp</code>
 directly (the <code class="language-plaintext highlighter-rouge">ffunction</code> JIT limitation) — <code class="language-plaintext highlighter-rouge">real_audio_cross_verify.py</code>
 shells out to <code class="language-plaintext highlighter-rouge">test-audio-corpus/multitranspose_harness.cpp</code> (links
-<code class="language-plaintext highlighter-rouge">pitch_poly_ffi.h</code> directly) instead. <strong><code class="language-plaintext highlighter-rouge">verify_highoctave_transient.py</code> is
+<code class="language-plaintext highlighter-rouge">pitch_poly_ffi.h</code> directly, so it tests the shifter engine only, not the
+tracking/lock state machine above). <strong><code class="language-plaintext highlighter-rouge">verify_highoctave_transient.py</code> is
 a broken gate, pre-existing on <code class="language-plaintext highlighter-rouge">main</code>, disclosed not fixed</strong> — still calls
 the JIT path this rewrite made impossible; <code class="language-plaintext highlighter-rouge">test-pitch-tracker</code> is red on
 every push touching this file and carries no information until it gets the
-same harness port. <code class="language-plaintext highlighter-rouge">[[memory: multitranspose-investigation-history]]</code>.</p>
+same harness port.</p>
+
+<p><code class="language-plaintext highlighter-rouge">tools/dsp-cli</code> (added 2026-09-22) closes the gap the above two miss: real
+local <code class="language-plaintext highlighter-rouge">faust -lang cpp</code> codegen (no JIT, so no <code class="language-plaintext highlighter-rouge">ffunction</code> limitation) +
+real MSVC link, compiling this file’s ACTUAL tracking/lock state machine —
+not just the shifter — against real corpus audio in ~1-2s. This is what
+found and verified the trackingAllowed/heldDetNote/everTrusted fixes above;
+prefer it over hand-porting new C++ reference logic for any future bug in
+this file’s control-rate behavior. <code class="language-plaintext highlighter-rouge">[[memory:
+multitranspose-investigation-history]]</code>.</p>
 
 <h2 id="free-transpose-engine-soladsnacoctaverhenginesoladsnac">Free-transpose engine (<code class="language-plaintext highlighter-rouge">soladSnacOctaver.h</code>/<code class="language-plaintext highlighter-rouge">EngineSoladSnac</code>)</h2>
 
@@ -945,6 +975,23 @@ measuring. <code class="language-plaintext highlighter-rouge">faust2bench</code>
 Faust-flag A/B — run manually only (20 runs, <code class="language-plaintext highlighter-rouge">-bs 64</code>, real shipped flags,
 <code class="language-plaintext highlighter-rouge">git stash</code> A/B on the same tree), never wired into critical-path CI.
 <code class="language-plaintext highlighter-rouge">[[memory: ci-build-pipeline-history]]</code>.</p>
+
+<h2 id="toolsdsp-cli--local-faust-harness-complements-dawdreamer-above"><code class="language-plaintext highlighter-rouge">tools/dsp-cli</code> — local Faust harness (complements DawDreamer above)</h2>
+
+<p><code class="language-plaintext highlighter-rouge">tools/dsp-cli/build.bat &lt;repo_root&gt; &lt;dsp_file&gt; [-I flags]</code> compiles ANY
+<code class="language-plaintext highlighter-rouge">.dsp</code> file with the real local <code class="language-plaintext highlighter-rouge">C:\Faust\bin\faust.exe</code> + MSVC (both
+already installed on the primary dev machine) to a standalone
+<code class="language-plaintext highlighter-rouge">dsp_cli.exe</code> in ~1-2s — no CI, no Docker, no Python/DawDreamer install.
+Because it’s real offline <code class="language-plaintext highlighter-rouge">-lang cpp</code> codegen + ordinary link (never a
+JIT), it compiles files DawDreamer categorically cannot: anything pulling
+in an <code class="language-plaintext highlighter-rouge">ffunction</code>-declared extern (<code class="language-plaintext highlighter-rouge">multitranspose.dsp</code>, <code class="language-plaintext highlighter-rouge">pitch.dsp</code>) links
+cleanly since both companion headers (<code class="language-plaintext highlighter-rouge">pitch_poly_ffi.h</code>/<code class="language-plaintext highlighter-rouge">pitch_ffi.h</code>) are
+header-only. <code class="language-plaintext highlighter-rouge">--gen0 wav:&lt;path&gt; --gen1 step:... ...</code> drives real corpus
+audio on one Faust input channel while scripted step/silence automation
+drives others (needed for tracking/timing state machines, not just shifter
+ratio accuracy — see the <code class="language-plaintext highlighter-rouge">multitranspose.dsp</code> section above for a worked
+example). <code class="language-plaintext highlighter-rouge">--list-zones</code>/<code class="language-plaintext highlighter-rouge">--stats</code> round out inspection. See
+<code class="language-plaintext highlighter-rouge">tools/dsp-cli/README.md</code> for the full command grammar.</p>
 
 <hr />
 

@@ -652,6 +652,26 @@ zero-crossing fallback. `freeXpose` must follow `foldGain` (hoisted
 track the same quantity the audio fold uses. Full SHIFT/free-guard bug
 history: `[[memory: multitranspose-investigation-history]]`.
 
+**`trackingAllowed = trustedTracker > 0.5`, not `| inLockWarmup`.** A
+warmup-bypass OR term lets the first ~80ms of every note trust the slow,
+non-monotonic internal zero-crossing fallback whenever the external tracker
+hasn't locked yet — the attack-transient "twitchy" pitch-lock bug. This
+exact formula was fixed once (2026-09), reverted alongside an unrelated
+change, and restored 2026-09-22 (git archaeology: `93b736b` reverted both
+`15fb984`'s trackingAllowed fix AND its unrelated shiftAmount-latching
+change together; only the latching change deserved reverting).
+
+**`heldDetNote` reseeds to `targetNote` on every attack until the external
+tracker has EVER been trusted, not just at the DSP instance's literal
+`ba.time==0`.** A `ba.time==0`-only seed goes stale the instant any time
+passes with no note held — which is always true on real hardware, since
+boot and the first note are never the same instant. Witnessed live: a
+first note with the tracker never trusted read `shiftAmount=60.00` (a
+5-octave runaway) instead of safe unity. `everTrusted` (a permanent latch,
+true the first time `trackingAllowed` is ever true) gates the reseed; once
+real trust lands even once, the reseed never fires again. `[[memory:
+multitranspose-investigation-history]]`.
+
 **Voice mechanics**: shared `an.pitchTracker` detection runs once/sample.
 Each voice glides shift via a one-pole (`tau2pole(0.008)`), gated by
 `en.adsr` (3ms/30ms/sustain 1/50ms release), shifted by its
@@ -714,11 +734,21 @@ faust-compile-time-cliff]]`.
 **Verification**: DawDreamer's JIT cannot compile this file or `pitch.dsp`
 directly (the `ffunction` JIT limitation) — `real_audio_cross_verify.py`
 shells out to `test-audio-corpus/multitranspose_harness.cpp` (links
-`pitch_poly_ffi.h` directly) instead. **`verify_highoctave_transient.py` is
+`pitch_poly_ffi.h` directly, so it tests the shifter engine only, not the
+tracking/lock state machine above). **`verify_highoctave_transient.py` is
 a broken gate, pre-existing on `main`, disclosed not fixed** — still calls
 the JIT path this rewrite made impossible; `test-pitch-tracker` is red on
 every push touching this file and carries no information until it gets the
-same harness port. `[[memory: multitranspose-investigation-history]]`.
+same harness port.
+
+`tools/dsp-cli` (added 2026-09-22) closes the gap the above two miss: real
+local `faust -lang cpp` codegen (no JIT, so no `ffunction` limitation) +
+real MSVC link, compiling this file's ACTUAL tracking/lock state machine —
+not just the shifter — against real corpus audio in ~1-2s. This is what
+found and verified the trackingAllowed/heldDetNote/everTrusted fixes above;
+prefer it over hand-porting new C++ reference logic for any future bug in
+this file's control-rate behavior. `[[memory:
+multitranspose-investigation-history]]`.
 
 ## Free-transpose engine (`soladSnacOctaver.h`/`EngineSoladSnac`)
 
@@ -804,6 +834,23 @@ measuring. `faust2bench` is the CPU-measurement counterpart for a
 Faust-flag A/B — run manually only (20 runs, `-bs 64`, real shipped flags,
 `git stash` A/B on the same tree), never wired into critical-path CI.
 `[[memory: ci-build-pipeline-history]]`.
+
+## `tools/dsp-cli` — local Faust harness (complements DawDreamer above)
+
+`tools/dsp-cli/build.bat <repo_root> <dsp_file> [-I flags]` compiles ANY
+`.dsp` file with the real local `C:\Faust\bin\faust.exe` + MSVC (both
+already installed on the primary dev machine) to a standalone
+`dsp_cli.exe` in ~1-2s — no CI, no Docker, no Python/DawDreamer install.
+Because it's real offline `-lang cpp` codegen + ordinary link (never a
+JIT), it compiles files DawDreamer categorically cannot: anything pulling
+in an `ffunction`-declared extern (`multitranspose.dsp`, `pitch.dsp`) links
+cleanly since both companion headers (`pitch_poly_ffi.h`/`pitch_ffi.h`) are
+header-only. `--gen0 wav:<path> --gen1 step:... ...` drives real corpus
+audio on one Faust input channel while scripted step/silence automation
+drives others (needed for tracking/timing state machines, not just shifter
+ratio accuracy — see the `multitranspose.dsp` section above for a worked
+example). `--list-zones`/`--stats` round out inspection. See
+`tools/dsp-cli/README.md` for the full command grammar.
 
 ---
 
