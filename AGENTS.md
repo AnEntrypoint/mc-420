@@ -1049,13 +1049,23 @@ ALWAYS rounding up so recorded audio is never truncated. Every looper's
 drift-free repeat alignment. `test/hardware/verify-quantization.js`'s own
 `ceilingPow2Candidate` helper matches this exactly.
 
-**Content phase-anchor**: every loop plays back starting at the SAME
-shared downbeat (`masterPhase==0`), never a per-take offset. Recording
-start is DOWNBEAT-ONLY quantized (RC-505 behavior): `armEdge` for a
-non-first looper fires only at the next `masterPhase==0`; `recordStartMasterPhase`
-is hardcoded `0.0` for every non-first looper (loop 1 is the one
-exception — no downbeat to wait for). `cycleOffset` accumulates
-`+masterLen` on each wrap, reset at `armEdge`. `wrapLen =
+**Content phase-anchor**: every loop plays back anchored to a shared
+`masterPhase` grid, never a per-take offset. Recording start is BEAT-grid
+quantized (RC-505-derived, refined since — `8b6364b`/`a24e833`): `armEdge`
+for a non-first looper fires on `gridTickCrossed`, a wrap of `beatPhase =
+wrapAbs(masterPhase, oneBeat)` where `oneBeat = masterLen/recordedBeats` —
+the nearest BEAT boundary, not only the top-of-phrase `masterPhase==0`
+(loop 1 is the one exception — no grid exists yet, arms instantly on
+press). `rsmNext` (the read-position phase reference latched at armEdge)
+captures the REAL `masterPhase` at that instant (`44aad9c` — not a
+hardcoded `0.0`; an older design once hardcoded it, superseded). `armEdge`
+requires `(pendPrev | armPulse) & gridTickCrossed` — a press landing on the
+exact SAME sample as a grid crossing must arm immediately, not wait a full
+extra beat; `pendPrev` alone (missing the same-sample `armPulse` term) was
+a real shipped off-by-one where hitting a beat exactly punted the arm to
+the NEXT one instead of backdating to the one just hit, verified via a
+sample-accurate FSM replay of `takeState`, not by ear. `cycleOffset`
+accumulates `+masterLen` on each wrap, reset at `armEdge`. `wrapLen =
 gridMultiple*anchorGridLenNow`, `gridMultiple` a CEILING — can only round
 UP to contain everything recorded, never truncate. **Known, disclosed edge
 case**: `winSamples`/`xfSamples` can permanently freeze at floor on a TRUE
@@ -1063,6 +1073,25 @@ zero-context cold start (gate rising at the very first sample of a DSP
 instance, zero prior audio) — does not matter in realistic performance
 (any lead-in avoids it); unfixed (a source-level fix risks the
 compile-time cliff).
+
+**The first (master-length-establishing) recording's tempo/beat-count must
+come from a real synced metronome when one exists, never a duration-only
+guess.** `applyRecPlayCycle`'s `m_masterLenSamples==0` FINISH branch used
+to always call `deriveTempoQuant` — a heuristic that power-of-2-searches
+for whichever `{beats,bpm}` pair lands closest to 120bpm in an 80-160bpm
+window, with no reference to any tempo actually running. This made
+`cmd/recorded_beats` (and therefore `microrepeat.dsp`'s `beatBlocks =
+MLB/RECORDEDBEATS`, its notion of "one beat") a function of the take's own
+raw duration rather than the real tempo — a short take whose raw length
+didn't land cleanly on the heuristic's assumed grid produced a wrong beat
+count, so the glitch/microrepeat effect's one-beat length drifted from the
+metronome. Fixed: when `link->audioRead().synced && bpm>1.0` at FINISH,
+`recorded_beats = round(recordedSeconds*bpm/60)` and `recorded_bpm` is that
+real bpm directly (skipping `proposeTempo` — already trusting the peer's
+tempo); `deriveTempoQuant` remains the fallback only when no tempo
+reference exists yet. Mirrors the pattern the non-first-looper FINISH
+branch already used for its own `tempoScale` (`link->audioRead().bpm`),
+20-ish lines below in the same function.
 
 **Real APC Key25 hardware re-sends note-on for an already-held pad** —
 `onPadPress` tracks `m_looperHeld` per pad, treats a repeat as a no-op

@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1c4d35f25a062eefc6deb27ce0d34e141bae7ffd">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=9ffb2e4a8544f3a1165d05538a6ce6a3c77dc49c">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1190,13 +1190,23 @@ ALWAYS rounding up so recorded audio is never truncated. Every looper’s
 drift-free repeat alignment. <code class="language-plaintext highlighter-rouge">test/hardware/verify-quantization.js</code>’s own
 <code class="language-plaintext highlighter-rouge">ceilingPow2Candidate</code> helper matches this exactly.</p>
 
-<p><strong>Content phase-anchor</strong>: every loop plays back starting at the SAME
-shared downbeat (<code class="language-plaintext highlighter-rouge">masterPhase==0</code>), never a per-take offset. Recording
-start is DOWNBEAT-ONLY quantized (RC-505 behavior): <code class="language-plaintext highlighter-rouge">armEdge</code> for a
-non-first looper fires only at the next <code class="language-plaintext highlighter-rouge">masterPhase==0</code>; <code class="language-plaintext highlighter-rouge">recordStartMasterPhase</code>
-is hardcoded <code class="language-plaintext highlighter-rouge">0.0</code> for every non-first looper (loop 1 is the one
-exception — no downbeat to wait for). <code class="language-plaintext highlighter-rouge">cycleOffset</code> accumulates
-<code class="language-plaintext highlighter-rouge">+masterLen</code> on each wrap, reset at <code class="language-plaintext highlighter-rouge">armEdge</code>. <code class="language-plaintext highlighter-rouge">wrapLen =
+<p><strong>Content phase-anchor</strong>: every loop plays back anchored to a shared
+<code class="language-plaintext highlighter-rouge">masterPhase</code> grid, never a per-take offset. Recording start is BEAT-grid
+quantized (RC-505-derived, refined since — <code class="language-plaintext highlighter-rouge">8b6364b</code>/<code class="language-plaintext highlighter-rouge">a24e833</code>): <code class="language-plaintext highlighter-rouge">armEdge</code>
+for a non-first looper fires on <code class="language-plaintext highlighter-rouge">gridTickCrossed</code>, a wrap of <code class="language-plaintext highlighter-rouge">beatPhase =
+wrapAbs(masterPhase, oneBeat)</code> where <code class="language-plaintext highlighter-rouge">oneBeat = masterLen/recordedBeats</code> —
+the nearest BEAT boundary, not only the top-of-phrase <code class="language-plaintext highlighter-rouge">masterPhase==0</code>
+(loop 1 is the one exception — no grid exists yet, arms instantly on
+press). <code class="language-plaintext highlighter-rouge">rsmNext</code> (the read-position phase reference latched at armEdge)
+captures the REAL <code class="language-plaintext highlighter-rouge">masterPhase</code> at that instant (<code class="language-plaintext highlighter-rouge">44aad9c</code> — not a
+hardcoded <code class="language-plaintext highlighter-rouge">0.0</code>; an older design once hardcoded it, superseded). <code class="language-plaintext highlighter-rouge">armEdge</code>
+requires <code class="language-plaintext highlighter-rouge">(pendPrev | armPulse) &amp; gridTickCrossed</code> — a press landing on the
+exact SAME sample as a grid crossing must arm immediately, not wait a full
+extra beat; <code class="language-plaintext highlighter-rouge">pendPrev</code> alone (missing the same-sample <code class="language-plaintext highlighter-rouge">armPulse</code> term) was
+a real shipped off-by-one where hitting a beat exactly punted the arm to
+the NEXT one instead of backdating to the one just hit, verified via a
+sample-accurate FSM replay of <code class="language-plaintext highlighter-rouge">takeState</code>, not by ear. <code class="language-plaintext highlighter-rouge">cycleOffset</code>
+accumulates <code class="language-plaintext highlighter-rouge">+masterLen</code> on each wrap, reset at <code class="language-plaintext highlighter-rouge">armEdge</code>. <code class="language-plaintext highlighter-rouge">wrapLen =
 gridMultiple*anchorGridLenNow</code>, <code class="language-plaintext highlighter-rouge">gridMultiple</code> a CEILING — can only round
 UP to contain everything recorded, never truncate. <strong>Known, disclosed edge
 case</strong>: <code class="language-plaintext highlighter-rouge">winSamples</code>/<code class="language-plaintext highlighter-rouge">xfSamples</code> can permanently freeze at floor on a TRUE
@@ -1204,6 +1214,25 @@ zero-context cold start (gate rising at the very first sample of a DSP
 instance, zero prior audio) — does not matter in realistic performance
 (any lead-in avoids it); unfixed (a source-level fix risks the
 compile-time cliff).</p>
+
+<p><strong>The first (master-length-establishing) recording’s tempo/beat-count must
+come from a real synced metronome when one exists, never a duration-only
+guess.</strong> <code class="language-plaintext highlighter-rouge">applyRecPlayCycle</code>’s <code class="language-plaintext highlighter-rouge">m_masterLenSamples==0</code> FINISH branch used
+to always call <code class="language-plaintext highlighter-rouge">deriveTempoQuant</code> — a heuristic that power-of-2-searches
+for whichever <code class="language-plaintext highlighter-rouge">{beats,bpm}</code> pair lands closest to 120bpm in an 80-160bpm
+window, with no reference to any tempo actually running. This made
+<code class="language-plaintext highlighter-rouge">cmd/recorded_beats</code> (and therefore <code class="language-plaintext highlighter-rouge">microrepeat.dsp</code>’s <code class="language-plaintext highlighter-rouge">beatBlocks =
+MLB/RECORDEDBEATS</code>, its notion of “one beat”) a function of the take’s own
+raw duration rather than the real tempo — a short take whose raw length
+didn’t land cleanly on the heuristic’s assumed grid produced a wrong beat
+count, so the glitch/microrepeat effect’s one-beat length drifted from the
+metronome. Fixed: when <code class="language-plaintext highlighter-rouge">link-&gt;audioRead().synced &amp;&amp; bpm&gt;1.0</code> at FINISH,
+<code class="language-plaintext highlighter-rouge">recorded_beats = round(recordedSeconds*bpm/60)</code> and <code class="language-plaintext highlighter-rouge">recorded_bpm</code> is that
+real bpm directly (skipping <code class="language-plaintext highlighter-rouge">proposeTempo</code> — already trusting the peer’s
+tempo); <code class="language-plaintext highlighter-rouge">deriveTempoQuant</code> remains the fallback only when no tempo
+reference exists yet. Mirrors the pattern the non-first-looper FINISH
+branch already used for its own <code class="language-plaintext highlighter-rouge">tempoScale</code> (<code class="language-plaintext highlighter-rouge">link-&gt;audioRead().bpm</code>),
+20-ish lines below in the same function.</p>
 
 <p><strong>Real APC Key25 hardware re-sends note-on for an already-held pad</strong> —
 <code class="language-plaintext highlighter-rouge">onPadPress</code> tracks <code class="language-plaintext highlighter-rouge">m_looperHeld</code> per pad, treats a repeat as a no-op
