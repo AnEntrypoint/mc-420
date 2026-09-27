@@ -143,11 +143,7 @@ with {
     masterPhaseWrapped = masterPhase < masterPhasePrev;
 
     kArmBackdateGraceSamples = 2400.0;
-    samplesSincePhraseTop = phraseTopCounter ~ _
-    with {
-        phraseTopCounter(prev) = ba.if(masterPhaseWrapped, 0.0, min(prev + 1.0, 1000000000.0));
-    };
-    backdateEligible = samplesSincePhraseTop <= kArmBackdateGraceSamples;
+    backdateEligible = masterPhase < kArmBackdateGraceSamples;
 
     outs = looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, backdateEligible);
     loopSum = outs :> _;
