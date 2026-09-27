@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e6d72b531d450b1036b823f3c5159bb3e8317b2a">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=089f585f62d58b661bbc5f0e895d3165bd48138b">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1059,21 +1059,28 @@ this.</p>
 
 <p><strong>Content phase-anchor</strong>: every loop plays back anchored to a shared
 <code class="language-plaintext highlighter-rouge">masterPhase</code> grid, never a per-take offset. Recording start is
-BEAT-grid quantized (RC-505-derived): <code class="language-plaintext highlighter-rouge">armEdge</code> for a non-first looper
-fires on <code class="language-plaintext highlighter-rouge">gridTickCrossed</code> (wrap of <code class="language-plaintext highlighter-rouge">beatPhase=wrapAbs(masterPhase,
-oneBeat)</code>, <code class="language-plaintext highlighter-rouge">oneBeat=masterLen/recordedBeats</code>) — nearest BEAT boundary,
-not just phrase-top (loop 1 arms instantly, no grid exists yet).
-<code class="language-plaintext highlighter-rouge">rsmNext</code> (read-position phase reference, latched at armEdge) captures
-the real <code class="language-plaintext highlighter-rouge">masterPhase</code> at that instant. <code class="language-plaintext highlighter-rouge">armEdge</code> requires <code class="language-plaintext highlighter-rouge">(pendPrev
-| armPulse) &amp; gridTickCrossed</code> so a same-sample press arms immediately
-rather than backdating a beat late. <code class="language-plaintext highlighter-rouge">cycleOffset</code> accumulates
+PHRASE-TOP quantized (RC-505-derived): <code class="language-plaintext highlighter-rouge">armEdge</code> for a non-first looper
+fires only on <code class="language-plaintext highlighter-rouge">masterPhaseWrapped</code> (<code class="language-plaintext highlighter-rouge">masterPhase &lt; masterPhasePrev</code>,
+the top of the shared master phrase) — every looper anchors to the SAME
+reference beat, not merely its own nearest beat (loop 1 arms instantly,
+no grid exists yet). <strong>Backdating grace window</strong>: real MIDI/human press
+timing cannot hit a phrase-top sample-exact, so a press up to
+<code class="language-plaintext highlighter-rouge">kArmBackdateGraceSamples</code> (2400 = 50ms @ 48kHz) AFTER the most recent
+phrase-top arms IMMEDIATELY on that press, backdated to the phrase-top
+just passed (<code class="language-plaintext highlighter-rouge">samplesSincePhraseTop</code> tracks elapsed samples since the
+last wrap; <code class="language-plaintext highlighter-rouge">rsmNext</code> still captures the real <code class="language-plaintext highlighter-rouge">masterPhase</code> at armEdge,
+so a backdated arm correctly encodes “this content starts N samples
+into the phrase,” not exactly at 0) — a press outside the grace window
+waits for the NEXT phrase-top as before. <code class="language-plaintext highlighter-rouge">cycleOffset</code> accumulates
 <code class="language-plaintext highlighter-rouge">+masterLen</code> per wrap, reset at <code class="language-plaintext highlighter-rouge">armEdge</code>. <code class="language-plaintext highlighter-rouge">wrapLen=
 gridMultiple*anchorGridLenNow</code>, <code class="language-plaintext highlighter-rouge">gridMultiple</code> always a ceiling.
 <strong>Known, disclosed edge case</strong>: <code class="language-plaintext highlighter-rouge">winSamples</code>/<code class="language-plaintext highlighter-rouge">xfSamples</code> can freeze at
 floor on a true zero-context cold start (gate rising at the DSP
 instance’s very first sample) — doesn’t matter in real performance,
-unfixed (compile-time-cliff risk). Commit lineage and the same-sample
-arm-pulse off-by-one history: <code class="language-plaintext highlighter-rouge">[[memory:
+unfixed (compile-time-cliff risk). <code class="language-plaintext highlighter-rouge">kArmBackdateGraceSamples</code> is a
+first-pass value, not yet by-ear tuned on real hardware. Commit lineage
+(including a superseded “nearest beat, not phrase-top” design and the
+same-sample arm-pulse off-by-one this replaces): <code class="language-plaintext highlighter-rouge">[[memory:
 control-surface-quantization-history]]</code>.</p>
 
 <p><strong>First (master-length-establishing) recording’s tempo/beat-count

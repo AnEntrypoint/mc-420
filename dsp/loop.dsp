@@ -22,10 +22,13 @@ with {
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
-    beatPhase = wrapAbs(masterPhase, oneBeat);
-    beatPhasePrev = beatPhase : mem;
-    beatTickCrossed = beatPhase < beatPhasePrev;
-    gridTickCrossed = beatTickCrossed;
+
+    kArmBackdateGraceSamples = 2400.0;
+    samplesSincePhraseTop = phraseTopCounter ~ _
+    with {
+        phraseTopCounter(prev) = ba.if(masterPhaseWrapped, 0.0, min(prev + 1.0, 1000000000.0));
+    };
+    backdateEligible = samplesSincePhraseTop <= kArmBackdateGraceSamples;
 
     takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev) =
         (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext)
@@ -34,10 +37,11 @@ with {
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
 
         cancelPend = pendPrev & (finishReqN > 0.5) & (actPrev < 0.5);
-        pendOrArmingNow = pendPrev | armPulse;
-        armEdge = ba.if(masterLen < 0.5, armPulse, pendOrArmingNow & gridTickCrossed);
+        armNowOnPress = armPulse & backdateEligible;
+        pendOrArmingNow = pendPrev | (armPulse & (1.0 - backdateEligible));
+        armEdge = ba.if(masterLen < 0.5, armPulse, armNowOnPress | (pendOrArmingNow & masterPhaseWrapped));
         pendNext = ba.if(masterLen < 0.5, 0,
-                    ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(armPulse, 1, pendPrev))));
+                    ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(armPulse & (1.0 - backdateEligible), 1, pendPrev))));
 
         rsmNext = ba.if(armEdge, masterPhase, rsmPrev);
 

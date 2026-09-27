@@ -868,21 +868,28 @@ this.
 
 **Content phase-anchor**: every loop plays back anchored to a shared
 `masterPhase` grid, never a per-take offset. Recording start is
-BEAT-grid quantized (RC-505-derived): `armEdge` for a non-first looper
-fires on `gridTickCrossed` (wrap of `beatPhase=wrapAbs(masterPhase,
-oneBeat)`, `oneBeat=masterLen/recordedBeats`) — nearest BEAT boundary,
-not just phrase-top (loop 1 arms instantly, no grid exists yet).
-`rsmNext` (read-position phase reference, latched at armEdge) captures
-the real `masterPhase` at that instant. `armEdge` requires `(pendPrev
-| armPulse) & gridTickCrossed` so a same-sample press arms immediately
-rather than backdating a beat late. `cycleOffset` accumulates
+PHRASE-TOP quantized (RC-505-derived): `armEdge` for a non-first looper
+fires only on `masterPhaseWrapped` (`masterPhase < masterPhasePrev`,
+the top of the shared master phrase) — every looper anchors to the SAME
+reference beat, not merely its own nearest beat (loop 1 arms instantly,
+no grid exists yet). **Backdating grace window**: real MIDI/human press
+timing cannot hit a phrase-top sample-exact, so a press up to
+`kArmBackdateGraceSamples` (2400 = 50ms @ 48kHz) AFTER the most recent
+phrase-top arms IMMEDIATELY on that press, backdated to the phrase-top
+just passed (`samplesSincePhraseTop` tracks elapsed samples since the
+last wrap; `rsmNext` still captures the real `masterPhase` at armEdge,
+so a backdated arm correctly encodes "this content starts N samples
+into the phrase," not exactly at 0) — a press outside the grace window
+waits for the NEXT phrase-top as before. `cycleOffset` accumulates
 `+masterLen` per wrap, reset at `armEdge`. `wrapLen=
 gridMultiple*anchorGridLenNow`, `gridMultiple` always a ceiling.
 **Known, disclosed edge case**: `winSamples`/`xfSamples` can freeze at
 floor on a true zero-context cold start (gate rising at the DSP
 instance's very first sample) — doesn't matter in real performance,
-unfixed (compile-time-cliff risk). Commit lineage and the same-sample
-arm-pulse off-by-one history: `[[memory:
+unfixed (compile-time-cliff risk). `kArmBackdateGraceSamples` is a
+first-pass value, not yet by-ear tuned on real hardware. Commit lineage
+(including a superseded "nearest beat, not phrase-top" design and the
+same-sample arm-pulse off-by-one this replaces): `[[memory:
 control-surface-quantization-history]]`.
 
 **First (master-length-establishing) recording's tempo/beat-count
