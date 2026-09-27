@@ -4,7 +4,7 @@ SR       = 48000.0;
 MAXLEN   = 48000 * 60;
 NLOOPERS = 20;
 
-oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = out : attachLevel
+oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, backdateEligible) = out : attachLevel
 with {
     recN  = button("rec");
     playN = checkbox("play");
@@ -19,16 +19,7 @@ with {
 
     beatsPerMasterLen = max(1.0, recordedBeats);
     oneBeat = max(1.0, masterLen / beatsPerMasterLen);
-    masterPhasePrev = masterPhase : mem;
-    masterPhaseWrapped = masterPhase < masterPhasePrev;
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
-
-    kArmBackdateGraceSamples = 2400.0;
-    samplesSincePhraseTop = phraseTopCounter ~ _
-    with {
-        phraseTopCounter(prev) = ba.if(masterPhaseWrapped, 0.0, min(prev + 1.0, 1000000000.0));
-    };
-    backdateEligible = samplesSincePhraseTop <= kArmBackdateGraceSamples;
 
     takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev) =
         (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext)
@@ -142,13 +133,23 @@ with {
     attachLevel(x) = attach(x, levelPeakFollow(x) : levelMeter) : attachWriteIdx : attachWrapLen : attachReadPos : attachStateFlags;
 };
 
-looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) =
-    par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats)));
+looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, backdateEligible) =
+    par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, backdateEligible)));
 
 loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) =
     in, loopSum, loopSolos
 with {
-    outs = looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats);
+    masterPhasePrev = masterPhase : mem;
+    masterPhaseWrapped = masterPhase < masterPhasePrev;
+
+    kArmBackdateGraceSamples = 2400.0;
+    samplesSincePhraseTop = phraseTopCounter ~ _
+    with {
+        phraseTopCounter(prev) = ba.if(masterPhaseWrapped, 0.0, min(prev + 1.0, 1000000000.0));
+    };
+    backdateEligible = samplesSincePhraseTop <= kArmBackdateGraceSamples;
+
+    outs = looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, backdateEligible);
     loopSum = outs :> _;
     loopSolos = outs;
 };
