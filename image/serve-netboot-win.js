@@ -179,6 +179,22 @@ function handleRRQ(filename, rinfo, options) {
     else { const d = Buffer.alloc(4 + Math.min(blksize, data.length)); d.writeUInt16BE(OP_DATA, 0); d.writeUInt16BE(1, 2); data.copy(d, 4, 0, blksize); xfer.send(d, rinfo.port, rinfo.address); acked = 0; }
     tftpReadCount++;
     console.log('[TFTP] ' + safe + ' -> ' + rinfo.address + ' (' + data.length + 'B)');
+    if (/initramfs-rpi$/.test(safe) && !httpSilenceWarned) {
+      setTimeout(() => {
+        if (httpReqCount === 0 && !httpSilenceWarned) {
+          httpSilenceWarned = true;
+          console.error('[HTTP] DIAGNOSIS: initramfs was fetched over TFTP 30s ago and ZERO HTTP requests ' +
+            'have arrived since. The Pi\'s own initramfs fetches modloop/apkovl over HTTP:' + HTTP_PORT +
+            ' next (baked into cmdline.txt at build time) and does not retry after giving up -- it will sit ' +
+            'here answering ping with no other service up until power-cycled. Two known causes: (1) this ' +
+            'server\'s own HTTP listener failed to bind at startup (check for an earlier "[HTTP] listen ' +
+            'EADDRNOTAVAIL"/error line above -- a startup race with ensureCorrectSubnetMask() can cause this; ' +
+            'restart this process and confirm a "[HTTP] listening http://..." line appears before the Pi boots ' +
+            'again) or (2) cmdline.txt was baked with a different NETBOOT_SERVER than ' + SERVER_IP +
+            ' (rebuild the netboot tree). Either way this specific hung boot needs a physical power-cycle to retry.');
+        }
+      }, 30000);
+    }
     xfer.on('message', msg => {
       if (msg.readUInt16BE(0) !== OP_ACK) return;
       const blk = msg.readUInt16BE(2);
@@ -205,6 +221,8 @@ tftp.bind(69, '0.0.0.0', () => console.log('[TFTP] listening :69'));
 const dhcpRequestCount = new Map();
 let tftpReadCount = 0;
 let bootOptionWarned = false;
+let httpReqCount = 0;
+let httpSilenceWarned = false;
 
 const SUBNET_DIRECTED_BROADCAST = NETBOOT_SUBNET_PREFIX + '255';
 function replyDestinations(offeredIp) { return [SUBNET_DIRECTED_BROADCAST, offeredIp]; }
@@ -309,6 +327,7 @@ dhcp.bind(67, '0.0.0.0', () => {
 
 const mime = { '.tar': 'application/x-tar', '.gz': 'application/gzip' };
 const httpSrv = http.createServer((req, res) => {
+  httpReqCount++;
   const safe = path.normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^(\.\.[/\\])+/, '');
   const full = path.join(ROOT, safe);
   if (!full.startsWith(ROOT) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) { res.statusCode = 404; res.end('not found'); console.log('[HTTP] 404 ' + safe); return; }
