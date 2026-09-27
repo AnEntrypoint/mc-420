@@ -34,9 +34,10 @@ with {
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
 
         cancelPend = pendPrev & (finishReqN > 0.5) & (actPrev < 0.5);
+        pendOrArmingNow = pendPrev | armPulse;
+        armEdge = ba.if(masterLen < 0.5, armPulse, pendOrArmingNow & gridTickCrossed);
         pendNext = ba.if(masterLen < 0.5, 0,
-                    ba.if(pendPrev & gridTickCrossed, 0, ba.if(cancelPend, 0, ba.if(armPulse, 1, pendPrev))));
-        armEdge = ba.if(masterLen < 0.5, armPulse, pendPrev & gridTickCrossed);
+                    ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(armPulse, 1, pendPrev))));
 
         rsmNext = ba.if(armEdge, masterPhase, rsmPrev);
 

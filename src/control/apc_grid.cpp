@@ -208,11 +208,22 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             m_masterLenSamples = lenSamples;
             ps.setByName("cmd/master_len", (float)m_masterLenSamples);
             double recordedSeconds = (double)m_masterLenSamples / (double)kSampleRate;
-            TempoSolveResult solved = deriveTempoQuant(recordedSeconds);
-            ps.setByName("cmd/recorded_bpm", (float)solved.bpm);
-            ps.setByName("cmd/recorded_beats", (float)solved.beats);
-            if (link) {
-                link->proposeTempo(solved.bpm);
+            bool haveExternalTempo = link && link->audioRead().synced && link->audioRead().bpm > 1.0;
+            double solvedBpm, solvedBeats;
+            if (haveExternalTempo) {
+                double curBpm = link->audioRead().bpm;
+                solvedBpm = curBpm;
+                solvedBeats = std::round(recordedSeconds * curBpm / 60.0);
+                if (solvedBeats < 1.0) solvedBeats = 1.0;
+            } else {
+                TempoSolveResult solved = deriveTempoQuant(recordedSeconds);
+                solvedBpm = solved.bpm;
+                solvedBeats = solved.beats;
+            }
+            ps.setByName("cmd/recorded_bpm", (float)solvedBpm);
+            ps.setByName("cmd/recorded_beats", (float)solvedBeats);
+            if (link && !haveExternalTempo) {
+                link->proposeTempo(solvedBpm);
             }
             setLooper(ps, looper, "finishtarget", (float)m_masterLenSamples);
             setLooper(ps, looper, "finishreq", 1.0f);
