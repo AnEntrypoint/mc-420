@@ -446,6 +446,15 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
     }
     bool anyHasContent = false;
     for (int lp = 0; lp < kLooperCount; lp++) if (m_looperHasContent[lp]) { anyHasContent = true; break; }
+    if (!anyHasContent && audio) {
+        auto realT = audio->snapshotTelemetry();
+        for (int lp = 0; lp < kLooperCount; lp++) {
+            if (realT.looperWrapLen[lp] > 1.0f) {
+                m_looperHasContent[lp] = true;
+                anyHasContent = true;
+            }
+        }
+    }
     if (!anyHasContent && m_masterLenSamples != 0) {
         m_masterLenSamples = 0;
         ps.setByName("cmd/master_len", 0.0f);
