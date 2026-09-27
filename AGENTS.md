@@ -1,10 +1,9 @@
 # aloop — technical constraints reference
 
-Durable constraints for this codebase and its build/deploy pipeline. Real
-Pi 4 device `192.168.137.100`, root/aloop. Real Pi 3B+ debug device
-reaches the host via netboot (`.netboot-serve-pi3/`, `[[memory:
-project-pi3-netboot]]`). Read before touching the device, the DSP, or
-the image/netboot scripts.
+Durable constraints for this codebase and its build/deploy pipeline.
+Real Pi 4 device `192.168.137.100`, root/aloop. Real Pi 3B+ debug
+device reaches the host via netboot (`.netboot-serve-pi3/`, `[[memory:
+project-pi3-netboot]]`). Read before touching device/DSP/netboot.
 
 Lean, current-state-only reference: hardware facts, build/deploy
 procedures, shipped architecture, working rules, open/disclosed bugs.
@@ -15,14 +14,14 @@ carry the "why". Re-compacted at ~30KB.
 ## Contents
 
 - Boards, images, boot trees
-- Device runtime environment (Alpine/musl/aarch64)
+- Device runtime environment
 - Deploy, netboot, SSH
-- Mesh networking (`ticker` AP, Ableton Link)
+- Mesh networking
 - Audio thread and ALSA
-- Faust DSP: language gotchas, compiler flags, current architecture
+- Faust DSP
 - LV2 hosting
-- Control surface (`apc_grid.cpp`)
-- Storage (USB ring recording)
+- Control surface
+- Storage
 - Working rules
 
 ---

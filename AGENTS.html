@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=78787b443eaf356c933f9fe2fb435ff391dcbaa9">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fff546686cb5bfcf0828bc42a8ff4961842f7fdf">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -57,11 +57,10 @@
 
       <h1 id="aloop--technical-constraints-reference">aloop — technical constraints reference</h1>
 
-<p>Durable constraints for this codebase and its build/deploy pipeline. Real
-Pi 4 device <code class="language-plaintext highlighter-rouge">192.168.137.100</code>, root/aloop. Real Pi 3B+ debug device
-reaches the host via netboot (<code class="language-plaintext highlighter-rouge">.netboot-serve-pi3/</code>, <code class="language-plaintext highlighter-rouge">[[memory:
-project-pi3-netboot]]</code>). Read before touching the device, the DSP, or
-the image/netboot scripts.</p>
+<p>Durable constraints for this codebase and its build/deploy pipeline.
+Real Pi 4 device <code class="language-plaintext highlighter-rouge">192.168.137.100</code>, root/aloop. Real Pi 3B+ debug
+device reaches the host via netboot (<code class="language-plaintext highlighter-rouge">.netboot-serve-pi3/</code>, <code class="language-plaintext highlighter-rouge">[[memory:
+project-pi3-netboot]]</code>). Read before touching device/DSP/netboot.</p>
 
 <p>Lean, current-state-only reference: hardware facts, build/deploy
 procedures, shipped architecture, working rules, open/disclosed bugs.
@@ -73,14 +72,14 @@ carry the “why”. Re-compacted at ~30KB.</p>
 
 <ul>
   <li>Boards, images, boot trees</li>
-  <li>Device runtime environment (Alpine/musl/aarch64)</li>
+  <li>Device runtime environment</li>
   <li>Deploy, netboot, SSH</li>
-  <li>Mesh networking (<code class="language-plaintext highlighter-rouge">ticker</code> AP, Ableton Link)</li>
+  <li>Mesh networking</li>
   <li>Audio thread and ALSA</li>
-  <li>Faust DSP: language gotchas, compiler flags, current architecture</li>
+  <li>Faust DSP</li>
   <li>LV2 hosting</li>
-  <li>Control surface (<code class="language-plaintext highlighter-rouge">apc_grid.cpp</code>)</li>
-  <li>Storage (USB ring recording)</li>
+  <li>Control surface</li>
+  <li>Storage</li>
   <li>Working rules</li>
 </ul>
 
