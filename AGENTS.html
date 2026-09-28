@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fff546686cb5bfcf0828bc42a8ff4961842f7fdf">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=bb59b636557a38aa711544b1328479280d6fab80">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -594,9 +594,11 @@ PRESS, pause/resume on release. CLEAR_ALL zeroes `play`/`rec` in Faust,
 not just C++ shadow; `onStopImmediate` also zeroes `rec` on a
 mid-recording abort. `m_masterLenSamples`/`cmd/master_len`/
 `cmd/recorded_bpm` reset to 0 when the last looper with content is
-erased — `anyHasContent` cross-checks real DSP telemetry
-(`Telemetry::looperWrapLen`, not just `ApcGrid`'s own shadow) and
-self-heals the shadow before committing to a reset. Master phrase
+erased — `anyHasContent` cross-checks `Telemetry::looperWrapLen` and
+self-heals the shadow, skipping loopers with
+`m_looperWrapLenStaleAfterWipe` (wipe never resets DSP `wraplen`, only
+FINISH writes it; ignoring that resurrected cleared loopers as
+paused). Master phrase
 length is `writeIdx` telemetry, never wall-clock. Quantization is
 powers-of-2, always the CEILING (`kMaxLoopSamples` top, M/16 bottom via
 `lowerExp` floor -4.0); every `wrapLen` is a power-of-2 ratio of every
