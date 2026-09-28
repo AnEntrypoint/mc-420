@@ -79,4 +79,3 @@ test-audio-corpus/*.json
 .sdcard-update-work/
 
 *-tmp.js
-config.bat
