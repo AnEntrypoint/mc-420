@@ -180,6 +180,7 @@ int ApcGrid::monitorFoldSlot(ParamStore& ps) {
 void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
     if (m_looperRecording[looper]) {
         m_looperHasContent[looper] = true;
+        m_looperWrapLenStaleAfterWipe[looper] = false;
         m_looperPlaying[looper] = true;
         setLooper(ps, looper, "play", 1.0f);
         long latencyBias = kBlockSize + (m_looperShiftHeldDuringTake[looper] ? kShiftFoldBlockLatencySamples : 0);
@@ -438,6 +439,7 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
         m_looperErased[looper] = true;
         m_looperArmedOnPress[looper] = false;
         m_looperHasContent[looper] = false;
+        m_looperWrapLenStaleAfterWipe[looper] = true;
         m_looperPlaying[looper] = false;
         setLooper(ps, looper, "play", 0.0f);
         forgetLooperFromPresets(looper);
@@ -449,7 +451,7 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
     if (!anyHasContent && audio) {
         auto realT = audio->snapshotTelemetry();
         for (int lp = 0; lp < kLooperCount; lp++) {
-            if (realT.looperWrapLen[lp] > 1.0f) {
+            if (!m_looperWrapLenStaleAfterWipe[lp] && realT.looperWrapLen[lp] > 1.0f) {
                 m_looperHasContent[lp] = true;
                 anyHasContent = true;
             }
@@ -562,6 +564,7 @@ void ApcGrid::onClearAll(bool held, ParamStore& ps, LinkBridge* link) {
         m_looperArmedOnPress[lp] = false;
         m_looperPlaying[lp] = false;
         m_looperHasContent[lp] = false;
+        m_looperWrapLenStaleAfterWipe[lp] = true;
         m_looperRecording[lp] = false;
         m_recordStartMs[lp] = 0;
         m_looperIsSidechainSource[lp] = false;
