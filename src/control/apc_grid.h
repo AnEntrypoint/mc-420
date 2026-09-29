@@ -80,9 +80,9 @@ public:
     void onSamplerBtn66Release(Sampler* sampler);
     bool drumRecordMode() const { return m_drumRecordMode; }
 
-    void onStopImmediate(ParamStore& ps, class LinkBridge* link = nullptr);
+    void onStopImmediate(unsigned now_ms, ParamStore& ps, class LinkBridge* link = nullptr, class AudioThread* audio = nullptr);
 
-    void onClearAll(bool held, ParamStore& ps, class LinkBridge* link = nullptr);
+    void onClearAll(unsigned now_ms, bool held, ParamStore& ps, class LinkBridge* link = nullptr, class AudioThread* audio = nullptr);
 
     void onMicrorepeatOn(int note, ParamStore& ps);
     void onMicrorepeatOff(int note, ParamStore& ps);

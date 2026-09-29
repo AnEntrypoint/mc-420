@@ -3,8 +3,9 @@ import("stdfaust.lib");
 SR       = 48000.0;
 MAXLEN   = 48000 * 60;
 NLOOPERS = 20;
+kFineGridBeats = 0.125;
 
-oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, backdateEligible) = out : attachLevel
+oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped) = out : attachLevel
 with {
     recN  = button("rec");
     playN = checkbox("play");
@@ -26,13 +27,13 @@ with {
     with {
         recPrevEdge = recN : mem;
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
+        armPulseGrid = armPulse & (masterLen >= 0.5);
 
         cancelPend = pendPrev & (finishReqN > 0.5) & (actPrev < 0.5);
-        armNowOnPress = armPulse & backdateEligible;
-        pendOrArmingNow = pendPrev | (armPulse & (1.0 - backdateEligible));
-        armEdge = ba.if(masterLen < 0.5, armPulse, armNowOnPress | (pendOrArmingNow & masterPhaseWrapped));
+        pendOrArmingNow = pendPrev | armPulseGrid;
+        armEdge = ba.if(masterLen < 0.5, armPulse, pendOrArmingNow & fineGridWrapped);
         pendNext = ba.if(masterLen < 0.5, 0,
-                    ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(armPulse & (1.0 - backdateEligible), 1, pendPrev))));
+                    ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(armPulseGrid, 1, pendPrev))));
 
         rsmNext = ba.if(armEdge, masterPhase, rsmPrev);
 
@@ -133,8 +134,8 @@ with {
     attachLevel(x) = attach(x, levelPeakFollow(x) : levelMeter) : attachWriteIdx : attachWrapLen : attachReadPos : attachStateFlags;
 };
 
-looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, backdateEligible) =
-    par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, backdateEligible)));
+looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped) =
+    par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped)));
 
 loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) =
     in, loopSum, loopSolos
@@ -142,10 +143,12 @@ with {
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
 
-    kArmBackdateGraceSamples = 2400.0;
-    backdateEligible = masterPhase < kArmBackdateGraceSamples;
+    beatsPerMasterLenShared = max(1.0, recordedBeats);
+    oneBeatShared = max(1.0, masterLen / beatsPerMasterLenShared);
+    fineGridShared = max(1.0, kFineGridBeats * oneBeatShared);
+    fineGridWrapped = int(masterPhase / fineGridShared) != int(masterPhasePrev / fineGridShared);
 
-    outs = looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, backdateEligible);
+    outs = looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped);
     loopSum = outs :> _;
     loopSolos = outs;
 };

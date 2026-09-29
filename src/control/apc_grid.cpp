@@ -119,6 +119,17 @@ static TempoSolveResult deriveTempoQuant(double seconds) {
     return best;
 }
 static double deriveTempoBpm(double seconds) { return deriveTempoQuant(seconds).bpm; }
+static double pickAnchorGridBeats(double takeLenBeats) {
+    const double eps = 0.01;
+    if (takeLenBeats > 16.0 + eps) return 16.0;
+    if (takeLenBeats > 8.0 + eps) return 8.0;
+    if (takeLenBeats > 4.0 + eps) return 4.0;
+    if (takeLenBeats > 2.0 + eps) return 2.0;
+    if (takeLenBeats > 1.0 + eps) return 1.0;
+    if (takeLenBeats > 0.5 + eps) return 0.5;
+    if (takeLenBeats > 0.25 + eps) return 0.25;
+    return 0.125;
+}
 static double snapBeatsToPow2(double continuousBeats) {
     static const double kCandidates[] = {1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0};
     double best = kCandidates[0];
@@ -251,6 +262,8 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             }
             if (rawSamples <= 0) {
                 setLooper(ps, looper, "rec", 0.0f);
+                setLooper(ps, looper, "finishreq", 1.0f);
+                m_looperFinishReqReleaseAt[looper] = now_ms + 50;
                 m_looperRecording[looper] = false;
                 m_looperHasContent[looper] = false;
                 m_looperPlaying[looper] = false;
@@ -266,19 +279,19 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
                 }
             }
             double effectiveSamples = (double)rawSamples * tempoScale;
-            double log2Ratio = std::log2(effectiveSamples / (double)m_masterLenSamples);
-            double gridPickEps = 0.0001;
-            double lowerExp = std::floor(log2Ratio + gridPickEps);
-            if (lowerExp < -4.0) lowerExp = -4.0;
-            double lowerCand = (double)m_masterLenSamples * std::pow(2.0, lowerExp);
-            double upperCand = (double)m_masterLenSamples * std::pow(2.0, lowerExp + 1.0);
-            if (upperCand > (double)kMaxLoopSamples) upperCand = (double)kMaxLoopSamples;
-            if (lowerCand > upperCand) lowerCand = upperCand;
-            double bestLen = (lowerCand >= effectiveSamples) ? lowerCand : upperCand;
-            long quantized = (long)(bestLen / tempoScale + 0.5);
+            double beatsPerMasterLen = std::max(1.0f, ps.get("cmd/recorded_beats", 0.0f));
+            double oneBeatSamples = std::max(1.0, (double)m_masterLenSamples / beatsPerMasterLen);
+            double takeLenBeats = effectiveSamples / oneBeatSamples;
+            double anchorGridBeats = pickAnchorGridBeats(takeLenBeats);
+            double pastMultiple = std::floor(takeLenBeats / anchorGridBeats + 0.0001);
+            double pastNodeBeats = pastMultiple * anchorGridBeats;
+            double futureNodeBeats = pastNodeBeats + anchorGridBeats;
+            double overshootBeats = takeLenBeats - pastNodeBeats;
+            double finalBeats = (pastMultiple >= 1.0 && overshootBeats <= 1.0 + 0.0001)
+                ? pastNodeBeats
+                : futureNodeBeats;
+            long quantized = (long)((finalBeats * oneBeatSamples) / tempoScale + 0.5);
             if (quantized < 64) quantized = 64;
-            if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;
-            if (quantized < rawSamples) quantized = rawSamples;
             if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;
             setLooper(ps, looper, "finishtarget", (float)quantized);
             setLooper(ps, looper, "finishreq", 1.0f);
@@ -440,7 +453,11 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
         setLooper(ps, looper, "erase", 1.0f);
         m_looperEraseReleaseAt[looper] = now_ms + 50;
         if (m_looperRecording[looper]) {
+            float widxNow = audio ? audio->snapshotTelemetry().looperWriteIdx[looper] : 0.0f;
             setLooper(ps, looper, "rec", 0.0f);
+            setLooper(ps, looper, "finishtarget", widxNow);
+            setLooper(ps, looper, "finishreq", 1.0f);
+            m_looperFinishReqReleaseAt[looper] = now_ms + 50;
             m_looperRecording[looper] = false;
         }
         m_looperFinishTargetPending[looper] = 0.0f;
@@ -551,10 +568,14 @@ void ApcGrid::onLiveEngageToggle(ParamStore& ps) {
         }
     }
 }
-void ApcGrid::onStopImmediate(ParamStore& ps, LinkBridge* link) {
+void ApcGrid::onStopImmediate(unsigned now_ms, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
     for (int lp = 0; lp < kLooperCount; lp++) {
         if (m_looperRecording[lp]) {
+            float widxNow = audio ? audio->snapshotTelemetry().looperWriteIdx[lp] : 0.0f;
             setLooper(ps, lp, "rec", 0.0f);
+            setLooper(ps, lp, "finishtarget", widxNow);
+            setLooper(ps, lp, "finishreq", 1.0f);
+            m_looperFinishReqReleaseAt[lp] = now_ms + 50;
             m_looperRecording[lp] = false;
         }
         m_looperFinishTargetPending[lp] = 0.0f;
@@ -564,10 +585,11 @@ void ApcGrid::onStopImmediate(ParamStore& ps, LinkBridge* link) {
     }
     publishTransport(link);
 }
-void ApcGrid::onClearAll(bool held, ParamStore& ps, LinkBridge* link) {
+void ApcGrid::onClearAll(unsigned now_ms, bool held, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
     ps.setByName("cmd/clearall", held ? 1.0f : 0.0f);
     if (!held) return;
     for (int lp = 0; lp < kLooperCount; lp++) {
+        bool wasRecording = m_looperRecording[lp];
         m_looperHeld[lp] = false;
         m_looperErased[lp] = false;
         m_looperArmedOnPress[lp] = false;
@@ -580,8 +602,15 @@ void ApcGrid::onClearAll(bool held, ParamStore& ps, LinkBridge* link) {
         setLooper(ps, lp, "sidechainsrc", 0.0f);
         setLooper(ps, lp, "play", 0.0f);
         setLooper(ps, lp, "rec", 0.0f);
-        setLooper(ps, lp, "finishreq", 0.0f);
-        m_looperFinishReqReleaseAt[lp] = 0;
+        if (wasRecording) {
+            float widxNow = audio ? audio->snapshotTelemetry().looperWriteIdx[lp] : 0.0f;
+            setLooper(ps, lp, "finishtarget", widxNow);
+            setLooper(ps, lp, "finishreq", 1.0f);
+            m_looperFinishReqReleaseAt[lp] = now_ms + 50;
+        } else {
+            setLooper(ps, lp, "finishreq", 0.0f);
+            m_looperFinishReqReleaseAt[lp] = 0;
+        }
         m_looperFinishTargetPending[lp] = 0.0f;
         m_looperPauseOthersOnFinish[lp] = false;
     }

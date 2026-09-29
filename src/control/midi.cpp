@@ -306,11 +306,11 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
                 if (type == 0x90 && d2 > 0) { grid.onPadPress((int)d1, now, ps, link, audio); continue; }
                 if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onPadRelease((int)d1, now, ps, link, audio); continue; }
             }
-            if (type == 0x90 && d2 > 0 && d1 == 0x51 && grid.shiftHeld()) { grid.onStopImmediate(ps, link); continue; }
+            if (type == 0x90 && d2 > 0 && d1 == 0x51 && grid.shiftHeld()) { grid.onStopImmediate(now, ps, link, audio); continue; }
             if (type == 0x90 && d2 > 0 && d1 == kApcBtnRec) { AudioThread::triggerClipExport(); continue; }
             if (d1 == 0x5B) {
-                if (type == 0x90 && d2 > 0) { grid.onClearAll(true, ps, link); continue; }
-                if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onClearAll(false, ps, link); continue; }
+                if (type == 0x90 && d2 > 0) { grid.onClearAll(now, true, ps, link, audio); continue; }
+                if (type == 0x80 || (type == 0x90 && d2 == 0)) { grid.onClearAll(now, false, ps, link, audio); continue; }
             }
         }
 
