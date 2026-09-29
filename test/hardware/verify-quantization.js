@@ -54,28 +54,75 @@ function queryTelemetry() {
   });
 }
 
+async function settleWrapLen(looperIndex, maxMs) {
+  let last = null, stableCount = 0;
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    const t = await queryTelemetry();
+    const w = t.loopers.wraplen[looperIndex];
+    if (w === last) {
+      stableCount++;
+      if (stableCount >= 3) return t;
+    } else {
+      stableCount = 0;
+    }
+    last = w;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return queryTelemetry();
+}
+
 async function recordLooper(looperIndex, holdMs) {
   const note = padNote(looperIndex);
   console.log(`[verify-quant] looper${looperIndex}: ARM (note ${note}), holding ${holdMs}ms`);
   await pressPad(note);
-  await new Promise((r) => setTimeout(r, holdMs));
-  console.log(`[verify-quant] looper${looperIndex}: FINISH`);
   await releasePad(note);
-  await new Promise((r) => setTimeout(r, 500));
-  const t = await queryTelemetry();
+  await new Promise((r) => setTimeout(r, holdMs));
+  console.log(`[verify-quant] looper${looperIndex}: FINISH (a second press -- ARM/FINISH both fire on PRESS, the matching release is a no-op)`);
+  await pressPad(note);
+  await releasePad(note);
+  const t = await settleWrapLen(looperIndex, 8000);
   const wrapLenSamples = t.loopers.wraplen[looperIndex];
   const wrapLenSeconds = wrapLenSamples / 48000;
   return { holdMs, wrapLenSamples, wrapLenSeconds };
 }
 
-function ceilingPow2Candidate(effectiveSamples, masterLenSamples) {
-  const gridPickEps = 0.0001;
-  const log2Ratio = Math.log2(effectiveSamples / masterLenSamples);
-  let lowerExp = Math.floor(log2Ratio + gridPickEps);
-  if (lowerExp < -4.0) lowerExp = -4.0;
-  const lowerCand = masterLenSamples * Math.pow(2, lowerExp);
-  const upperCand = masterLenSamples * Math.pow(2, lowerExp + 1);
-  return lowerCand >= effectiveSamples ? lowerCand : upperCand;
+function pickAnchorGridBeats(takeLenBeats) {
+  const eps = 0.01;
+  if (takeLenBeats > 16.0 + eps) return 16.0;
+  if (takeLenBeats > 8.0 + eps) return 8.0;
+  if (takeLenBeats > 4.0 + eps) return 4.0;
+  if (takeLenBeats > 2.0 + eps) return 2.0;
+  if (takeLenBeats > 1.0 + eps) return 1.0;
+  if (takeLenBeats > 0.5 + eps) return 0.5;
+  if (takeLenBeats > 0.25 + eps) return 0.25;
+  return 0.125;
+}
+
+function deriveTempoQuantBeats(recordedSeconds) {
+  const candidates = [1, 2, 4, 8, 16, 32, 64, 128];
+  let best = 16, bestDist = Infinity, bestInWindow = false;
+  for (const beats of candidates) {
+    const bpm = (60 * beats) / recordedSeconds;
+    const inWindow = bpm >= 80 && bpm <= 160;
+    const dist = Math.abs(bpm - 120);
+    if ((inWindow && !bestInWindow) || (inWindow === bestInWindow && dist < bestDist)) {
+      best = beats; bestDist = dist; bestInWindow = inWindow;
+    }
+  }
+  return best;
+}
+
+function nearCutFarExtendCandidate(effectiveSamples, masterLenSamples, recordedBeats) {
+  const oneBeatSamples = Math.max(1, masterLenSamples / Math.max(1, recordedBeats));
+  const takeLenBeats = effectiveSamples / oneBeatSamples;
+  const anchorGridBeats = pickAnchorGridBeats(takeLenBeats);
+  const pastMultiple = Math.floor(takeLenBeats / anchorGridBeats + 0.0001);
+  const pastNodeBeats = pastMultiple * anchorGridBeats;
+  const futureNodeBeats = pastNodeBeats + anchorGridBeats;
+  const overshootBeats = takeLenBeats - pastNodeBeats;
+  const finalBeats = (pastMultiple >= 1 && overshootBeats <= 1.0 + 0.0001) ? pastNodeBeats : futureNodeBeats;
+  return finalBeats * oneBeatSamples;
 }
 
 async function main() {
@@ -84,10 +131,12 @@ async function main() {
 
   const results = [];
   let masterLenSamples = null;
+  let recordedBeats = null;
   for (let i = 0; i < holds.length; i++) {
     const r = await recordLooper(i, holds[i]);
     if (i === 0) {
       masterLenSamples = r.wrapLenSamples;
+      recordedBeats = deriveTempoQuantBeats(masterLenSamples / 48000);
       const expectedSamples = (r.holdMs / 1000) * 48000;
       const errSamples = Math.abs(r.wrapLenSamples - expectedSamples);
       const errMs = (errSamples / 48000) * 1000;
@@ -95,10 +144,10 @@ async function main() {
       r.errMs = errMs;
       const injectionJitterToleranceMs = 250;
       r.pass = errMs < injectionJitterToleranceMs;
-      console.log(`[verify-quant] loop0 (FIRST): held=${r.holdMs}ms expected=${r.expectedSamples.toFixed(0)}samp actual=${r.wrapLenSamples}samp err=${r.errMs.toFixed(1)}ms ${r.pass ? 'PASS' : 'FAIL -- check for musical-snapping regression'}`);
+      console.log(`[verify-quant] loop0 (FIRST): held=${r.holdMs}ms expected=${r.expectedSamples.toFixed(0)}samp actual=${r.wrapLenSamples}samp err=${r.errMs.toFixed(1)}ms derivedBeats=${recordedBeats} ${r.pass ? 'PASS' : 'FAIL -- check for musical-snapping regression'}`);
     } else {
       const rawSamplesEstimate = (r.holdMs / 1000) * 48000;
-      const expectedCandidate = ceilingPow2Candidate(rawSamplesEstimate, masterLenSamples);
+      const expectedCandidate = nearCutFarExtendCandidate(rawSamplesEstimate, masterLenSamples, recordedBeats);
       const errSamples = Math.abs(r.wrapLenSamples - expectedCandidate);
       const errRatio = errSamples / expectedCandidate;
       r.expectedCandidate = expectedCandidate;
