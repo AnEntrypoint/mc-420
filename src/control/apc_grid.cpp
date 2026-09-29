@@ -200,6 +200,7 @@ int ApcGrid::monitorFoldSlot(ParamStore& ps) {
 
 void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
     if (m_looperRecording[looper]) {
+        if (m_looperFinishTargetPending[looper] > 0.0f) return;
         m_looperHasContent[looper] = true;
         m_looperWrapLenStaleAfterWipe[looper] = false;
         m_looperPlaying[looper] = true;
