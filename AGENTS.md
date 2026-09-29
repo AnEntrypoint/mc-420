@@ -476,24 +476,33 @@ powers-of-2, always the CEILING (`kMaxLoopSamples` top, M/16 bottom via
 other. `[[memory: control-surface-quantization-history]]`.
 
 **Content phase-anchor**: playback anchors to a shared `masterPhase`
-grid, never a per-take offset. Non-first-looper `armEdge` fires only on
-`masterPhaseWrapped` (`masterPhase<masterPhasePrev`) — every looper
-anchors the SAME reference beat (loop 1 arms instantly). A press within
-`kArmBackdateGraceSamples` (2400=50ms@48kHz) of the last phrase-top
-arms immediately, backdated via stateless
-`backdateEligible=masterPhase<kArmBackdateGraceSamples` (`masterPhase`
-IS already samples-since-phrase-top by construction, no separate
-counter); `rsmNext` still captures real `masterPhase` at armEdge,
-encoding the in-phrase offset. `wrapLen=gridMultiple*anchorGridLenNow`,
-ceiling always. **Disclosed**: `winSamples`/`xfSamples` can freeze at
-floor on a true zero-context cold start (unfixed). `[[memory:
-control-surface-quantization-history]]`.
+grid, never a per-take offset. Non-first-looper `armEdge` fires on
+`fineGridWrapped` (masterPhase crossing any 1/8-beat boundary — hoisted
+once in `loopEngine`, same pattern as `masterPhaseWrapped`, zero new
+per-looper state) — every looper waits at most ~30-60ms instead of up
+to a full phrase. `rsmNext` captures real `masterPhase` at armEdge.
+Real backward content recovery (audio from before the press, not just
+relabeling the anchor) is a deliberately deferred gap — two richer
+designs hit this file's compile-time-cliff; needs a C++ `ffunction`.
+FINISH length is near-cut/far-extend
+(`pickAnchorGridBeats` in `apc_grid.cpp`, same ladder Faust's own snap
+uses): overshoot past the most recently passed grid node <=1 beat cuts
+to it immediately, else extends to the next node (old ceiling, now only
+for genuinely longer takes) — closes the double-quantization-mismatch
+class for good. **Disclosed**: `winSamples`/`xfSamples` can freeze at
+floor on a cold start (unfixed). History + two dropped compile-cliff
+attempts + three missing-cancel-pulse bugs fixed along the way:
+`[[memory: control-surface-quantization-history]]`. Fuzzed in
+`tools/loop-quantization-sim/` (16000+ trials); not hardware-verified.
 
 First (master-establishing) recording's tempo/beats comes from a real
-synced Link tempo when present — `recorded_beats=
-round(recordedSeconds*bpm/60)`, real `recorded_bpm` directly when
-`link->audioRead().synced && bpm>1.0` at FINISH; `deriveTempoQuant` is
-fallback-only. Real APC Key25 re-sends note-on for an already-held pad
+synced Link tempo when present — `recorded_beats` snapped to the
+nearest power-of-2 in {1,2,4,8,16,32,64,128} (`snapBeatsToPow2`, fixed
+from a raw `round()` that could pick any integer, breaking the
+power-of-2-ratio invariant against a Link-established master), real
+`recorded_bpm` directly when `link->audioRead().synced && bpm>1.0` at
+FINISH; `deriveTempoQuant` is fallback-only (already power-of-2-only).
+Real APC Key25 re-sends note-on for an already-held pad
 — `onPadPress`/`m_looperHeld` treats a repeat as no-op. Guitar-fx held
 REDIRECTS looper pad presses to `onSidechainLooperToggle` (one-shot,
 not ARM/FINISH) while `m_guitarFxHeld`.
