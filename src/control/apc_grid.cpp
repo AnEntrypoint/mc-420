@@ -119,6 +119,16 @@ static TempoSolveResult deriveTempoQuant(double seconds) {
     return best;
 }
 static double deriveTempoBpm(double seconds) { return deriveTempoQuant(seconds).bpm; }
+static double snapBeatsToPow2(double continuousBeats) {
+    static const double kCandidates[] = {1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0};
+    double best = kCandidates[0];
+    double bestDist = 1e18;
+    for (double beats : kCandidates) {
+        double dist = std::fabs(std::log2(beats) - std::log2(std::max(continuousBeats, 0.001)));
+        if (dist < bestDist) { bestDist = dist; best = beats; }
+    }
+    return best;
+}
 
 constexpr long kShiftFoldBlockLatencySamples = 64;
 
@@ -214,8 +224,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             if (haveExternalTempo) {
                 double curBpm = link->audioRead().bpm;
                 solvedBpm = curBpm;
-                solvedBeats = std::round(recordedSeconds * curBpm / 60.0);
-                if (solvedBeats < 1.0) solvedBeats = 1.0;
+                solvedBeats = snapBeatsToPow2(recordedSeconds * curBpm / 60.0);
             } else {
                 TempoSolveResult solved = deriveTempoQuant(recordedSeconds);
                 solvedBpm = solved.bpm;
