@@ -483,17 +483,19 @@ per-looper state) — every looper waits at most ~30-60ms instead of up
 to a full phrase. `rsmNext` captures real `masterPhase` at armEdge.
 Real backward content recovery (audio from before the press, not just
 relabeling the anchor) is a deliberately deferred gap — two richer
-designs hit this file's compile-time-cliff; needs a C++ `ffunction`.
+designs hit the compile-time-cliff; needs a C++ `ffunction`.
 FINISH length is near-cut/far-extend
 (`pickAnchorGridBeats` in `apc_grid.cpp`, same ladder Faust's own snap
 uses): overshoot past the most recently passed grid node <=1 beat cuts
 to it immediately, else extends to the next node (old ceiling, now only
 for genuinely longer takes) — closes the double-quantization-mismatch
-class for good. **Disclosed**: `winSamples`/`xfSamples` can freeze at
-floor on a cold start (unfixed). History + two dropped compile-cliff
-attempts + three missing-cancel-pulse bugs fixed along the way:
+class for good. **Disclosed**: `winSamples`/`xfSamples` freeze at
+floor on a cold start (unfixed). History, two dropped compile-cliff
+attempts, three missing-cancel-pulse bugs fixed along the way:
 `[[memory: control-surface-quantization-history]]`. Fuzzed in
-`tools/loop-quantization-sim/` (16000+ trials); not hardware-verified.
+`tools/loop-quantization-sim/` (16000+ trials); live-confirmed on
+192.168.137.100 across 6+ phrase offsets and the exact cut/extend
+threshold.
 
 First (master-establishing) recording's tempo/beats comes from a real
 synced Link tempo when present — `recorded_beats` snapped to the
