@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=9f6a7e942986b362e9fd0d829a95392484fd7079">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=eb953a033c3a81450d14a686168f27ad5abdb7ea">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -330,8 +330,13 @@ never <code class="language-plaintext highlighter-rouge">16.0</code> — <code c
 <code class="language-plaintext highlighter-rouge">m_remoteStartPending</code> — a stale higher value makes every paused looper start
 mid-phrase.</p>
 
-<p>The idle/creation snap (<code class="language-plaintext highlighter-rouge">!anyAudible || masterJustCreated</code>) fires IMMEDIATELY at
-creation and waits for a snapshot stamped AFTER the master was created. Recording a master snaps
+<p>The idle/creation snap (<code class="language-plaintext highlighter-rouge">!anyAudible || masterJustCreated || creationSnapPending</code>) fires
+IMMEDIATELY at creation and waits for a snapshot stamped AFTER the master was created. The beat
+count is the FOLD BASIS for the Link phase: while <code class="language-plaintext highlighter-rouge">cmd/recorded_beats</code> is unknown there is NO Link
+target, and <code class="language-plaintext highlighter-rouge">creationSnapPending</code> holds the creation snap until a real one arrives — otherwise the
+anchor snaps on a guessed 16-beat fold and can only crawl back at 0.03 (measured 1.954 beats,
+32.8s). <code class="language-plaintext highlighter-rouge">applyRecPlayCycle</code> publishes bpm/beats BEFORE <code class="language-plaintext highlighter-rouge">master_len</code> because the audio thread
+preempts between writes. Recording a master snaps
 <code class="language-plaintext highlighter-rouge">masterLenSamples</code> to whole beats at the Link tempo and routes through
 <code class="language-plaintext highlighter-rouge">finishTargetPending</code> like every sub-loop finish. <code class="language-plaintext highlighter-rouge">[[memory:
 control-surface-quantization-history]]</code>.</p>
