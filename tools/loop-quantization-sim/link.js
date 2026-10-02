@@ -11,29 +11,33 @@ function phaseQuantum() { return g_phaseQuantum; }
 function createLinkSession(initialBpm) {
   return {
     tempo: initialBpm,
-    beatOriginTimeMs: 0,
+    gridOriginTimeMs: 0,
     beatOriginBeat: 0,
     isPlaying: false,
   };
 }
 
+function beatsSinceGrid(session, timeMs) {
+  const elapsedMin = (timeMs - session.gridOriginTimeMs) / 60000;
+  return elapsedMin * session.tempo;
+}
+
 function beatAtTime(session, timeMs) {
-  const elapsedMin = (timeMs - session.beatOriginTimeMs) / 60000;
-  return session.beatOriginBeat + elapsedMin * session.tempo;
+  return session.beatOriginBeat + beatsSinceGrid(session, timeMs);
 }
 
 function phaseAtTime(session, timeMs, quantum) {
-  const b = beatAtTime(session, timeMs);
-  let p = b % quantum;
+  let p = beatsSinceGrid(session, timeMs) % quantum;
   if (p < 0) p += quantum;
   return p;
 }
 
 function setTempoContinuous(session, bpm, atTimeMs) {
   const beatNow = beatAtTime(session, atTimeMs);
+  const beatsAtGrid = beatsSinceGrid(session, atTimeMs);
   session.tempo = bpm;
-  session.beatOriginTimeMs = atTimeMs;
-  session.beatOriginBeat = beatNow;
+  session.gridOriginTimeMs = atTimeMs - (beatsAtGrid / bpm) * 60000;
+  session.beatOriginBeat = beatNow - beatsAtGrid;
 }
 
 function setIsPlaying(session, playing, atTimeMs) {
@@ -42,16 +46,20 @@ function setIsPlaying(session, playing, atTimeMs) {
 
 function setIsPlayingAndRequestBeatAtTime(session, playing, atTimeMs, beat, quantum, peerCount) {
   session.isPlaying = playing;
+  const beatsNow = beatsSinceGrid(session, atTimeMs);
+  let beatsAtStart;
   if (peerCount > 0) {
-    const beatNow = beatAtTime(session, atTimeMs);
-    let targetBeat = Math.ceil((beatNow - beat) / quantum) * quantum + beat;
-    if (targetBeat <= beatNow) targetBeat += quantum;
-    session.beatOriginBeat = beat;
-    session.beatOriginTimeMs = atTimeMs + ((targetBeat - beatNow) / session.tempo) * 60000;
+    beatsAtStart = (Math.floor(beatsNow / quantum) + 1) * quantum;
   } else {
-    session.beatOriginTimeMs = atTimeMs;
-    session.beatOriginBeat = beat;
+    const want = ((beat % quantum) + quantum) % quantum;
+    const cur = ((beatsNow % quantum) + quantum) % quantum;
+    let d = want - cur;
+    if (d > quantum * 0.5) d -= quantum;
+    if (d <= -quantum * 0.5) d += quantum;
+    beatsAtStart = beatsNow + d;
+    session.gridOriginTimeMs = atTimeMs - (beatsAtStart / session.tempo) * 60000;
   }
+  session.beatOriginBeat = beat - beatsAtStart;
 }
 
 function createLinkPeer(name, session) {
