@@ -38,6 +38,7 @@ function circularGap(a, b, period) {
 
 function runPair(opts) {
   const holdMs = opts.holdMs;
+  const holdMsB = opts.holdMsB === undefined ? holdMs : opts.holdMsB;
   const staggerMs = opts.staggerMs === undefined ? kStaggerMs : opts.staggerMs;
   setPhaseQuantum(opts.phaseQuantum === undefined ? 128.0 : opts.phaseQuantum);
   const { a, b } = makeSharedPair(120.0);
@@ -50,10 +51,11 @@ function runPair(opts) {
   advancePair(a, b, msToSimSamples(staggerMs));
 
   onPadPress(b, 0); onPadRelease(b, 0);
-  advancePair(a, b, msToSimSamples(holdMs));
+  advancePair(a, b, msToSimSamples(holdMsB));
   onPadPress(b, 0); onPadRelease(b, 0);
   advancePair(a, b, msToSimSamples(500));
 
+  const period = Math.max(1, Math.min(a.recordedBeats, b.recordedBeats));
   let worst = 0;
   let samples = 0;
   for (let k = 0; k < 40; k++) {
@@ -61,7 +63,7 @@ function runPair(opts) {
     const pa = beatPhase(a);
     const pb = beatPhase(b);
     if (pa === null || pb === null) return { worst: NaN, samples };
-    worst = Math.max(worst, circularGap(pa, pb, Math.max(1, a.recordedBeats)));
+    worst = Math.max(worst, circularGap(pa, pb, period));
     samples += msToSimSamples(100);
   }
   return { worst, samples, beatsA: a.recordedBeats, beatsB: b.recordedBeats };
@@ -87,6 +89,31 @@ function main() {
       failed++;
     }
     if (!fixedGood) {
+      console.log('  FAIL: fixed run still off by ' + fixed.worst.toFixed(3) + ' beats');
+      failed++;
+    }
+  }
+
+  for (const asym of [[4000, 1000, 700], [1000, 4000, 700], [2000, 500, 700], [2600, 1300, 1100]]) {
+    const holdA = asym[0];
+    const holdB = asym[1];
+    const stagger = asym[2];
+    const legacy = runPair({ holdMs: holdA, holdMsB: holdB, staggerMs: stagger, phaseLock: false });
+    const fixed = runPair({ holdMs: holdA, holdMsB: holdB, staggerMs: stagger, phaseLock: true });
+
+    console.log(`asymmetric hold ${holdA}ms/${holdB}ms  beats=${fixed.beatsA}/${fixed.beatsB}`);
+    console.log(`  legacy (trim not applied to anchor): worst gap = ${legacy.worst.toFixed(3)} beats`);
+    console.log(`  fixed  (trim + idle/creation snap):  worst gap = ${fixed.worst.toFixed(3)} beats`);
+
+    if (fixed.beatsA === fixed.beatsB) {
+      console.log('  FAIL: both takes quantized to the same length, case proves nothing');
+      failed++;
+    }
+    if (!(legacy.worst > 0.25)) {
+      console.log('  FAIL: legacy run converged, so this case does not reproduce the bug');
+      failed++;
+    }
+    if (!(fixed.worst < 0.05)) {
       console.log('  FAIL: fixed run still off by ' + fixed.worst.toFixed(3) + ' beats');
       failed++;
     }
