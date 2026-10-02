@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=345e7f96aa70328d01b75acfb95b29be1c9ec005">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=9f6a7e942986b362e9fd0d829a95392484fd7079">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -57,49 +57,46 @@
 
       <h1 id="aloop--technical-constraints-reference">aloop — technical constraints reference</h1>
 
-<p>Real Pi 4 <code class="language-plaintext highlighter-rouge">192.168.137.100</code>, root/aloop; real Pi 3B+ debug device reaches the
-host via netboot (<code class="language-plaintext highlighter-rouge">.netboot-serve-pi3/</code>). Lean, current-state-only.
-Investigation history lives in auto-memory
-(<code class="language-plaintext highlighter-rouge">~/.claude/projects/&lt;project&gt;/memory/</code>); <code class="language-plaintext highlighter-rouge">[[memory: ...]]</code> pointers carry
-the “why”. Re-compacted at ~30KB.</p>
+<p>Real Pi 4 <code class="language-plaintext highlighter-rouge">192.168.137.100</code>, root/aloop; real Pi 3B+ netboots from the host.
+Current-state-only; the “why” lives in auto-memory behind <code class="language-plaintext highlighter-rouge">[[memory: ...]]</code>
+pointers.</p>
 
 <hr />
 
 <h1 id="working-rules">Working rules</h1>
 
-<p><strong>No comments in code, ever</strong> (C++, <code class="language-plaintext highlighter-rouge">.dsp</code>, JS, shell, YAML, config). A
-name/function-boundary IS the explanation; rationale belongs in THIS file or
-memory; a comment found anywhere becomes self-explanatory code the same turn
-(one sighting spawns a sweep of that file). Never trust an in-repo comment as
-ground truth — they have been confidently wrong. <code class="language-plaintext highlighter-rouge">[[memory: no-comments-rule]]</code>.</p>
+<p><strong>No comments in code, ever</strong> (C++, <code class="language-plaintext highlighter-rouge">.dsp</code>, JS, shell, YAML, config). A name or
+function boundary IS the explanation; rationale belongs here or in memory. A
+comment found anywhere becomes self-explanatory code the same turn (one sighting
+spawns a sweep of that file); never trust an in-repo comment as ground truth.
+<code class="language-plaintext highlighter-rouge">[[memory: no-comments-rule]]</code>.</p>
 
-<p><strong>Never add audio-path latency.</strong> The ~7ms block latency must never grow, even
-temporarily — stop and ask first. A wet effect’s own engaged-only algorithmic
+<p><strong>Never add audio-path latency</strong> — the ~7ms block latency must never grow, even
+temporarily; stop and ask first. A wet effect’s own engaged-only algorithmic
 latency (<code class="language-plaintext highlighter-rouge">ef.transpose</code>, SNAC) is exempt.</p>
 
-<p><strong>Real hardware over asking the user to reproduce input</strong>: byte-level MIDI
-injection (<code class="language-plaintext highlighter-rouge">tcp/9401</code>, <code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>) or SSH state inspection.</p>
+<p><strong>Test on real hardware, never ask the user to reproduce input</strong> — byte-level MIDI
+injection (<code class="language-plaintext highlighter-rouge">tcp/9401</code>) or SSH state inspection.</p>
 
-<p><strong>Compiling clean proves nothing about runtime safety</strong> — x86_64 A/B passed
-while real aarch64 codegen SIGSEGV’d (<code class="language-plaintext highlighter-rouge">-mapp</code>); a JIT <code class="language-plaintext highlighter-rouge">compile()</code> succeeded
-and crashed at <code class="language-plaintext highlighter-rouge">render()</code>. <code class="language-plaintext highlighter-rouge">[[memory: faust-verification-discipline]]</code>.</p>
+<p><strong>Compiling clean proves nothing about runtime safety</strong> — x86_64 A/B passed while
+real aarch64 codegen SIGSEGV’d (<code class="language-plaintext highlighter-rouge">-mapp</code>). <code class="language-plaintext highlighter-rouge">[[memory: faust-verification-discipline]]</code>.</p>
 
 <p><strong>Diagnostic logs carry wall-clock timestamps</strong> — <code class="language-plaintext highlighter-rouge">CLOCK_MONOTONIC</code> as
-<code class="language-plaintext highlighter-rouge">t=&lt;sec&gt;.&lt;ms&gt;</code>, or periodic-vs-bursty is indistinguishable.</p>
+<code class="language-plaintext highlighter-rouge">t=&lt;sec&gt;.&lt;ms&gt;</code>.</p>
 
-<p><strong>WebSearch hardware mechanics before irreversible real steps</strong> (OTP burn,
-firmware write).</p>
+<p><strong>WebSearch hardware mechanics before irreversible real steps</strong> (OTP burn, firmware
+write). <code class="language-plaintext highlighter-rouge">[[memory: feedback-verify-before-irreversible-hw]]</code>.</p>
 
 <hr />
 
 <h1 id="boards-images-boot-trees">Boards, images, boot trees</h1>
 
-<p><code class="language-plaintext highlighter-rouge">image/lib-boot-tree.sh</code> is BOARD-parameterized (<code class="language-plaintext highlighter-rouge">BOARD</code>:
-<code class="language-plaintext highlighter-rouge">pi3</code>/<code class="language-plaintext highlighter-rouge">pi4</code>/<code class="language-plaintext highlighter-rouge">pi5</code>/<code class="language-plaintext highlighter-rouge">opi-prime</code>, default <code class="language-plaintext highlighter-rouge">pi4</code>). <code class="language-plaintext highlighter-rouge">boot_tree_apkovl</code> (binary,
-LV2, services, vendored libs) is shared; only <code class="language-plaintext highlighter-rouge">boot_tree_fetch</code>
-(firmware/kernel/DTB) and <code class="language-plaintext highlighter-rouge">boot_tree_config</code> (cmdline/USB-gadget) dispatch
-per board. <code class="language-plaintext highlighter-rouge">board_supports_usb_gadget</code>/<code class="language-plaintext highlighter-rouge">board_wifi_irq_name</code>/
-<code class="language-plaintext highlighter-rouge">board_firmware_names</code> are authoritative, not this table:</p>
+<p><code class="language-plaintext highlighter-rouge">image/lib-boot-tree.sh</code> is BOARD-parameterized (<code class="language-plaintext highlighter-rouge">BOARD</code>: <code class="language-plaintext highlighter-rouge">pi3</code>/<code class="language-plaintext highlighter-rouge">pi4</code>/<code class="language-plaintext highlighter-rouge">pi5</code>/
+<code class="language-plaintext highlighter-rouge">opi-prime</code>, default <code class="language-plaintext highlighter-rouge">pi4</code>). <code class="language-plaintext highlighter-rouge">boot_tree_apkovl</code> (binary, LV2, services, vendored
+libs) is shared; only <code class="language-plaintext highlighter-rouge">boot_tree_fetch</code> (firmware/kernel/DTB) and
+<code class="language-plaintext highlighter-rouge">boot_tree_config</code> (cmdline/USB-gadget) dispatch per board.
+<code class="language-plaintext highlighter-rouge">board_supports_usb_gadget</code>/<code class="language-plaintext highlighter-rouge">board_wifi_irq_name</code>/<code class="language-plaintext highlighter-rouge">board_firmware_names</code> are
+authoritative, not this table:</p>
 
 <table>
   <thead>
@@ -138,121 +135,98 @@ per board. <code class="language-plaintext highlighter-rouge">board_supports_usb
   </tbody>
 </table>
 
-<p>All aarch64; WiFi is brcmfmac on every Pi, RTL8723BS on opi-prime. Pi 3B+/
-CM3+ ship netboot enabled from factory — no OTP burn (only plain 3B/CM3/3A+
-need the irreversible one). ROM order SD → USB → Network, so “prep for
-netboot” = wipe the card so no <code class="language-plaintext highlighter-rouge">bootcode.bin</code> remains. pi3 firmware names:
-<code class="language-plaintext highlighter-rouge">start.elf fixup.dat bcm2837-rpi-3-b-plus.dtb</code>.</p>
+<p>Pi 3B+/CM3+ ship netboot-enabled from factory — no OTP burn (only
+plain 3B/CM3/3A+ need the irreversible one). ROM order SD → USB → Network, so
+“prep for netboot” = wipe the card so no <code class="language-plaintext highlighter-rouge">bootcode.bin</code> remains. <code class="language-plaintext highlighter-rouge">[[memory: project-pi3-netboot]]</code>.</p>
 
-<p>opi-prime: USB-audio-gadget <strong>UNPROVEN</strong> (MUSB micro-USB OTG only; the 3
-USB-A ports are host-only) — fallback is the 3.5mm codec as ALSA HOST. BootROM
-reads a raw SPL/U-Boot image pre-partition-table, so the blob is everything
-before partition 1’s real start (<code class="language-plaintext highlighter-rouge">sfdisk</code>; offset NOT constant).
-<code class="language-plaintext highlighter-rouge">boot_tree_fetch_opi</code> must use Armbian’s stable redirect
-<code class="language-plaintext highlighter-rouge">dl.armbian.com/orangepiprime/Trixie_current_minimal</code> (a resolved github asset
-URL 404s within days).</p>
+<p>opi-prime: USB-audio-gadget <strong>UNPROVEN</strong> (MUSB micro-USB OTG only; the 3 USB-A
+ports are host-only) — fallback is the 3.5mm codec as ALSA HOST. BootROM reads a
+raw SPL/U-Boot image pre-partition-table, so the blob is everything before
+partition 1’s real start (<code class="language-plaintext highlighter-rouge">sfdisk</code>; the offset is not constant). <code class="language-plaintext highlighter-rouge">boot_tree_fetch_opi</code>
+must use Armbian’s stable redirect
+<code class="language-plaintext highlighter-rouge">dl.armbian.com/orangepiprime/Trixie_current_minimal</code>. <code class="language-plaintext highlighter-rouge">[[memory: opi-prime-boot-history]]</code>.</p>
 
 <h2 id="apkovl-assembly-constraints">apkovl assembly constraints</h2>
 
 <ul>
-  <li><code class="language-plaintext highlighter-rouge">boot_tree_apkovl</code> stamps <code class="language-plaintext highlighter-rouge">.default_boot_services</code> — Alpine’s <code class="language-plaintext highlighter-rouge">rc_add
-modloop sysinit</code> gate needs it or <code class="language-plaintext highlighter-rouge">/lib/modules</code>/<code class="language-plaintext highlighter-rouge">/proc/asound</code>/
-<code class="language-plaintext highlighter-rouge">usb_gadget/</code> never appear.</li>
-  <li><code class="language-plaintext highlighter-rouge">aloop</code>’s OpenRC needs <code class="language-plaintext highlighter-rouge">rc_ulimit="-l unlimited -r 95"</code> in the service
-file, not <code class="language-plaintext highlighter-rouge">local.d</code>; <code class="language-plaintext highlighter-rouge">depend()</code> needs <code class="language-plaintext highlighter-rouge">after local autoap</code> (Link binds its
-multicast socket at startup).</li>
-  <li>Vendor alsa-lib + lilv as real <code class="language-plaintext highlighter-rouge">.so</code>s under <code class="language-plaintext highlighter-rouge">vendor/lib-aarch64/</code>; never
-<code class="language-plaintext highlighter-rouge">apk add</code> at boot. alsa-lib also needs <code class="language-plaintext highlighter-rouge">vendor/share-alsa/</code> or
-<code class="language-plaintext highlighter-rouge">snd_pcm_open</code> segfaults. <code class="language-plaintext highlighter-rouge">hostapd</code>/<code class="language-plaintext highlighter-rouge">dnsmasq</code> need <code class="language-plaintext highlighter-rouge">libnl-3.so.200</code> <strong>and</strong>
-<code class="language-plaintext highlighter-rouge">libnl-genl-3.so.200</code>; <code class="language-plaintext highlighter-rouge">dnsmasq.conf</code> needs <code class="language-plaintext highlighter-rouge">user=root</code>.</li>
-  <li><code class="language-plaintext highlighter-rouge">cmdline.txt</code>/<code class="language-plaintext highlighter-rouge">extlinux.conf</code> APPEND stays one line (<code class="language-plaintext highlighter-rouge">tr '\n' ' '</code> +
-<code class="language-plaintext highlighter-rouge">tr -s ' '</code>); <code class="language-plaintext highlighter-rouge">core.autocrlf=true</code> corrupts scripts — fix via <code class="language-plaintext highlighter-rouge">rm</code> +
-<code class="language-plaintext highlighter-rouge">git checkout --</code>.</li>
-  <li>New vendored files need both <code class="language-plaintext highlighter-rouge">tar --mode='+x'</code> lists (NTFS has no exec
-bit); <code class="language-plaintext highlighter-rouge">find</code> building them must <code class="language-plaintext highlighter-rouge">cd</code> into the overlay dir first. Verify
-modes via <code class="language-plaintext highlighter-rouge">tar -tvzf</code> (LAST match per path). <code class="language-plaintext highlighter-rouge">[[memory:
-windows-host-constraints]]</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">boot_tree_apkovl</code> MUST stamp <code class="language-plaintext highlighter-rouge">.default_boot_services</code> or <code class="language-plaintext highlighter-rouge">/lib/modules</code>,
+<code class="language-plaintext highlighter-rouge">/proc/asound</code> and <code class="language-plaintext highlighter-rouge">usb_gadget/</code> never appear.</li>
+  <li><code class="language-plaintext highlighter-rouge">aloop</code>’s OpenRC needs <code class="language-plaintext highlighter-rouge">rc_ulimit="-l unlimited -r 95"</code> in the service file,
+not <code class="language-plaintext highlighter-rouge">local.d</code>; <code class="language-plaintext highlighter-rouge">depend()</code> needs <code class="language-plaintext highlighter-rouge">after local autoap</code>.</li>
+  <li>Vendor alsa-lib + lilv as real <code class="language-plaintext highlighter-rouge">.so</code>s under <code class="language-plaintext highlighter-rouge">vendor/lib-aarch64/</code>; never <code class="language-plaintext highlighter-rouge">apk
+add</code> at boot. alsa-lib also needs <code class="language-plaintext highlighter-rouge">vendor/share-alsa/</code> or <code class="language-plaintext highlighter-rouge">snd_pcm_open</code>
+segfaults. <code class="language-plaintext highlighter-rouge">hostapd</code>/<code class="language-plaintext highlighter-rouge">dnsmasq</code> need <code class="language-plaintext highlighter-rouge">libnl-3.so.200</code> <strong>and</strong> <code class="language-plaintext highlighter-rouge">libnl-genl-3.so.200</code>;
+<code class="language-plaintext highlighter-rouge">dnsmasq.conf</code> needs <code class="language-plaintext highlighter-rouge">user=root</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">cmdline.txt</code>/<code class="language-plaintext highlighter-rouge">extlinux.conf</code> APPEND stays one line (<code class="language-plaintext highlighter-rouge">tr '\n' ' '</code> + <code class="language-plaintext highlighter-rouge">tr -s ' '</code>);
+<code class="language-plaintext highlighter-rouge">core.autocrlf=true</code> corrupts scripts — fix via <code class="language-plaintext highlighter-rouge">rm</code> + <code class="language-plaintext highlighter-rouge">git checkout --</code>.</li>
+  <li>New vendored files need both <code class="language-plaintext highlighter-rouge">tar --mode='+x'</code> lists; <code class="language-plaintext highlighter-rouge">find</code> building them must
+<code class="language-plaintext highlighter-rouge">cd</code> into the overlay dir first. Verify modes via <code class="language-plaintext highlighter-rouge">tar -tvzf</code> (LAST match). <code class="language-plaintext highlighter-rouge">[[memory: windows-host-constraints]]</code>.</li>
 </ul>
 
 <hr />
 
 <h1 id="device-runtime-environment">Device runtime environment</h1>
 
-<p><strong>Alpine/musl/aarch64 — glibc/x86_64 artifacts silently fail to load</strong> (a
-<code class="language-plaintext highlighter-rouge">.so</code> built with host g++ dlopens fine, then fails at load). Split
+<p><strong>Alpine/musl/aarch64 — glibc/x86_64 artifacts silently fail to load.</strong> Split
 <code class="language-plaintext highlighter-rouge">faust2lv2</code>’s stages: <code class="language-plaintext highlighter-rouge">faust -i -a lv2.cpp</code> emits <code class="language-plaintext highlighter-rouge">.cpp</code>; <code class="language-plaintext highlighter-rouge">$HOST_CXX</code>
-compile+run emits <code class="language-plaintext highlighter-rouge">.ttl</code>; only the final <code class="language-plaintext highlighter-rouge">-shared .so</code> link targets the
-device, cross-compiled in a real Alpine aarch64 container. Verify:
-<code class="language-plaintext highlighter-rouge">objdump -p foo.so | grep NEEDED</code> → <code class="language-plaintext highlighter-rouge">libc.musl-aarch64.so.1</code>, never
-<code class="language-plaintext highlighter-rouge">libc.so.6</code>. Nested <code class="language-plaintext highlighter-rouge">docker run ... sh -c</code> needs <code class="language-plaintext highlighter-rouge">-e VAR="$VAR"</code>, never
-interpolation. <code class="language-plaintext highlighter-rouge">[[memory: windows-host-constraints]]</code>.</p>
+compile+run emits <code class="language-plaintext highlighter-rouge">.ttl</code>; only the final <code class="language-plaintext highlighter-rouge">-shared .so</code> link targets the device,
+cross-compiled in a real Alpine aarch64 container. Verify
+<code class="language-plaintext highlighter-rouge">objdump -p foo.so | grep NEEDED</code> → <code class="language-plaintext highlighter-rouge">libc.musl-aarch64.so.1</code>, never <code class="language-plaintext highlighter-rouge">libc.so.6</code>.
+Nested <code class="language-plaintext highlighter-rouge">docker run ... sh -c</code> needs <code class="language-plaintext highlighter-rouge">-e VAR="$VAR"</code>, never interpolation.
+<code class="language-plaintext highlighter-rouge">[[memory: windows-host-constraints]]</code>.</p>
 
-<p><strong><code class="language-plaintext highlighter-rouge">upload-artifact@v4</code> <code class="language-plaintext highlighter-rouge">path:</code></strong>: a literal path flattens the dir’s CONTENTS
-at the zip root, dropping the <code class="language-plaintext highlighter-rouge">.lv2/</code> wrapper — always use a wildcard.</p>
+<p><strong><code class="language-plaintext highlighter-rouge">upload-artifact@v4</code> <code class="language-plaintext highlighter-rouge">path:</code></strong>: a literal path flattens the dir’s CONTENTS at
+the zip root, dropping the <code class="language-plaintext highlighter-rouge">.lv2/</code> wrapper — always use a wildcard.</p>
 
-<p><strong><code class="language-plaintext highlighter-rouge">disable_core3_lv2</code> in <code class="language-plaintext highlighter-rouge">/etc/aloop.conf</code>.</strong> Uncommented <code class="language-plaintext highlighter-rouge">= 1</code> makes the
-worker skip <code class="language-plaintext highlighter-rouge">homeFx.process()</code>/<code class="language-plaintext highlighter-rouge">userFx.process()</code> entirely — fully silent,
-survives <code class="language-plaintext highlighter-rouge">rc-service aloop restart</code>. Grep it before debugging “effects don’t
-do anything” as a code bug.</p>
+<p><strong><code class="language-plaintext highlighter-rouge">disable_core3_lv2</code> in <code class="language-plaintext highlighter-rouge">/etc/aloop.conf</code>.</strong> Uncommented <code class="language-plaintext highlighter-rouge">= 1</code> makes the worker
+skip <code class="language-plaintext highlighter-rouge">homeFx.process()</code>/<code class="language-plaintext highlighter-rouge">userFx.process()</code> entirely — fully silent, survives
+<code class="language-plaintext highlighter-rouge">rc-service aloop restart</code>. Grep it before debugging silence as a code bug.</p>
 
 <hr />
 
 <h1 id="deploy-netboot-ssh">Deploy, netboot, SSH</h1>
 
 <p><strong>SSH: use a JS <code class="language-plaintext highlighter-rouge">ssh2</code> client, never Windows <code class="language-plaintext highlighter-rouge">ssh.exe</code>/<code class="language-plaintext highlighter-rouge">sshpass</code></strong> — a fresh
-netboot generates a new host key every boot, which breaks <code class="language-plaintext highlighter-rouge">known_hosts</code>
-tooling but not <code class="language-plaintext highlighter-rouge">ssh2</code>. The only committed Node ssh2 client is
-<code class="language-plaintext highlighter-rouge">image/dsp-hotdeploy.js</code> (binary + LV2 payload over SFTP only — it does NOT
-cover boot tree / kernel / OpenRC service changes); ad-hoc device SSH
-otherwise goes through a throwaway ssh2 script. <code class="language-plaintext highlighter-rouge">[[memory:
-windows-host-constraints]]</code>.</p>
+netboot generates a new host key every boot, which breaks <code class="language-plaintext highlighter-rouge">known_hosts</code> tooling but not <code class="language-plaintext highlighter-rouge">ssh2</code>. The only committed Node ssh2 client is <code class="language-plaintext highlighter-rouge">image/dsp-hotdeploy.js</code>
+(binary + LV2 payload over SFTP only). <code class="language-plaintext highlighter-rouge">[[memory: windows-host-constraints]]</code>.</p>
 
 <p><strong>The <code class="language-plaintext highlighter-rouge">REBOOT:&lt;token&gt;</code> UDP listener lives INSIDE the aloop process</strong>
 (<code class="language-plaintext highlighter-rouge">config/aloop.conf</code>’s <code class="language-plaintext highlighter-rouge">[remote] token=</code>, <code class="language-plaintext highlighter-rouge">udp/4446</code>, <code class="language-plaintext highlighter-rouge">remote_control.cpp</code>;
-client <code class="language-plaintext highlighter-rouge">image/aloop-reboot.js</code>). If <code class="language-plaintext highlighter-rouge">aloop</code> crashed, nothing listens —
-OpenRC’s <code class="language-plaintext highlighter-rouge">respawn_max=0</code> means it will not come back alone. Verify before
-trusting device state: <code class="language-plaintext highlighter-rouge">/proc/uptime</code> and <code class="language-plaintext highlighter-rouge">md5sum /opt/aloop/aloop</code> vs
-deployed, BEFORE reading logs. <code class="language-plaintext highlighter-rouge">[[memory: deploy-two-paths-lv2]]</code>.</p>
+client <code class="language-plaintext highlighter-rouge">image/aloop-reboot.js</code>). If <code class="language-plaintext highlighter-rouge">aloop</code> crashed, nothing listens — OpenRC’s
+<code class="language-plaintext highlighter-rouge">respawn_max=0</code> means it will not come back alone; SSH <code class="language-plaintext highlighter-rouge">reboot</code> is the fallback. Verify before trusting device state: <code class="language-plaintext highlighter-rouge">/proc/uptime</code> and <code class="language-plaintext highlighter-rouge">md5sum
+/opt/aloop/aloop</code> vs deployed, BEFORE reading logs. <code class="language-plaintext highlighter-rouge">[[memory:
+deploy-two-paths-lv2]]</code>.</p>
 
 <h2 id="netboot-self-update-two-rebuild-paths">Netboot self-update: two rebuild paths</h2>
 
-<p><strong>Automatic</strong>: <code class="language-plaintext highlighter-rouge">image/serve-netboot-win.js</code> polls <code class="language-plaintext highlighter-rouge">build-binary.yml</code>/
-<code class="language-plaintext highlighter-rouge">build-lv2.yml</code>’s green <code class="language-plaintext highlighter-rouge">main</code> every 30s; blind to <code class="language-plaintext highlighter-rouge">image/**</code> packaging
-changes; needs an elevated shell (ports 67/69). <strong>Manual</strong>: <code class="language-plaintext highlighter-rouge">ALOOP_BIN=&lt;path&gt;
-LV2_DIR=&lt;path&gt; RESONODE_LV2_DIR=&lt;path&gt; PITCHTRACKER_LV2_DIR=&lt;path&gt;
-DELAYVERB_LV2_DIR=&lt;path&gt; OUT=.netboot-serve NETBOOT_SERVER=192.168.137.1 bash
-image/build-netboot.sh</code> — all four <code class="language-plaintext highlighter-rouge">*_LV2_DIR</code> vars <strong>mandatory</strong>; verify via
-<code class="language-plaintext highlighter-rouge">tar -tzf .netboot-serve/aloop.apkovl.tar.gz | grep -oE
-'effects/[a-z]+/[a-z_]+[.]lv2' | sort -u</code> → delayverb, guitar_lofi_fx,
-pitchtracker, resonode. A new bundle needs wiring into BOTH <code class="language-plaintext highlighter-rouge">build-image.yml</code>
-AND <code class="language-plaintext highlighter-rouge">serve-netboot-win.js</code> — neither reads the other’s list.</p>
+<p><strong>Automatic</strong>: <code class="language-plaintext highlighter-rouge">image/serve-netboot-win.js</code> polls <code class="language-plaintext highlighter-rouge">build-binary.yml</code>/<code class="language-plaintext highlighter-rouge">build-lv2.yml</code>
+green <code class="language-plaintext highlighter-rouge">main</code> every 30s (blind to <code class="language-plaintext highlighter-rouge">image/**</code> changes); needs an elevated shell. <strong>Manual</strong>: <code class="language-plaintext highlighter-rouge">ALOOP_BIN=&lt;path&gt; LV2_DIR=&lt;path&gt;
+RESONODE_LV2_DIR=&lt;path&gt; PITCHTRACKER_LV2_DIR=&lt;path&gt; DELAYVERB_LV2_DIR=&lt;path&gt;
+OUT=.netboot-serve NETBOOT_SERVER=192.168.137.1 bash image/build-netboot.sh</code> —
+all four <code class="language-plaintext highlighter-rouge">*_LV2_DIR</code> vars <strong>mandatory</strong>; the apkovl must list delayverb,
+guitar_lofi_fx, pitchtracker, resonode. A new bundle needs
+wiring into BOTH <code class="language-plaintext highlighter-rouge">build-image.yml</code> AND <code class="language-plaintext highlighter-rouge">serve-netboot-win.js</code> — neither reads the
+other’s list.</p>
 
-<p>Netboot silently outranks the SD card — confirm which path booted. Publish is
-a staged-directory atomic <code class="language-plaintext highlighter-rouge">mv</code> (staging dir must be a SIBLING of the live
-serve dir). <code class="language-plaintext highlighter-rouge">SERVER_IP</code> is baked into the netboot root’s <code class="language-plaintext highlighter-rouge">cmdline.txt</code> ONCE —
+<p>Netboot silently outranks the SD card — confirm which path booted. Publish is a
+staged-directory atomic <code class="language-plaintext highlighter-rouge">mv</code> (staging dir a SIBLING of the live serve dir). <code class="language-plaintext highlighter-rouge">SERVER_IP</code> is baked into the netboot root’s <code class="language-plaintext highlighter-rouge">cmdline.txt</code> ONCE —
 restarting the server does not rewrite it; rebuild with <code class="language-plaintext highlighter-rouge">NETBOOT_SERVER</code> and
-power-cycle. Replies go to <code class="language-plaintext highlighter-rouge">192.168.137.255</code>, so a /16 mask hides them. A
-Windows Firewall rule for “Node.js JavaScript Runtime” can sit DISABLED while
+power-cycle. Replies go to <code class="language-plaintext highlighter-rouge">192.168.137.255</code>, so a /16 mask hides them. A Windows Firewall rule for “Node.js JavaScript Runtime” can sit DISABLED while
 sockets report “listening”. <code class="language-plaintext highlighter-rouge">[[memory: netboot-dhcp-diagnosis-history]]</code>.</p>
 
 <p>Fast DSP iteration: <code class="language-plaintext highlighter-rouge">node image/dsp-hotdeploy.js --target home|guitar|both</code>
-— stops the service BEFORE overwriting <code class="language-plaintext highlighter-rouge">/opt/aloop/aloop</code> (<code class="language-plaintext highlighter-rouge">fastPut</code> fails
-musl ETXTBSY).</p>
+(stops the service first; <code class="language-plaintext highlighter-rouge">fastPut</code> fails musl ETXTBSY).</p>
 
 <h2 id="ci-runner-docker-step-artifact-discipline">CI runner, docker-step, artifact discipline</h2>
 
-<p>Native <code class="language-plaintext highlighter-rouge">ubuntu-24.04-arm</code> runners (no QEMU — the emulated LINK step alone
-measured ~14min vs ~1min); Docker steps split with per-command <code class="language-plaintext highlighter-rouge">timeout</code>+
-<code class="language-plaintext highlighter-rouge">set -x</code>. <code class="language-plaintext highlighter-rouge">build-image.yml</code> downloads BOTH <code class="language-plaintext highlighter-rouge">home-fx-lv2</code> AND
+<p>Native <code class="language-plaintext highlighter-rouge">ubuntu-24.04-arm</code> runners (no QEMU); Docker steps split with per-command
+<code class="language-plaintext highlighter-rouge">timeout</code>. <code class="language-plaintext highlighter-rouge">build-image.yml</code> downloads BOTH <code class="language-plaintext highlighter-rouge">home-fx-lv2</code> AND
 <code class="language-plaintext highlighter-rouge">guitar-lofi-fx-lv2</code> from the SAME green run; <code class="language-plaintext highlighter-rouge">home-fx-lv2</code>’s bundle is
 <code class="language-plaintext highlighter-rouge">aloop.lv2</code>, which <code class="language-plaintext highlighter-rouge">lib-boot-tree.sh</code> filters back out. Rolling <code class="language-plaintext highlighter-rouge">latest</code>
 hard-gates on a real bundled binary (<code class="language-plaintext highlighter-rouge">payload_check</code>), stricter than
-<code class="language-plaintext highlighter-rouge">validate-image.sh</code> (WARNS only). Artifacts need <code class="language-plaintext highlighter-rouge">retention-days: 3</code> — the
-90-day default hit the storage quota and blocked uploads. <code class="language-plaintext highlighter-rouge">faust2bench</code> was
-removed from CI (3 of 4 attempts hung); run it manually, 20 runs, <code class="language-plaintext highlighter-rouge">-bs 64</code>.
-<code class="language-plaintext highlighter-rouge">test-loop-sim.yml</code> gates the looper sim — <code class="language-plaintext highlighter-rouge">smoketest.js</code>,
-<code class="language-plaintext highlighter-rouge">two-device-sync.js</code>, <code class="language-plaintext highlighter-rouge">fuzz.js --trials=3000 --events=50</code>, all three before
-touching <code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim/</code>. <code class="language-plaintext highlighter-rouge">[[memory:
+<code class="language-plaintext highlighter-rouge">validate-image.sh</code>. Artifacts need <code class="language-plaintext highlighter-rouge">retention-days: 3</code>. <code class="language-plaintext highlighter-rouge">faust2bench</code> was removed
+from CI (3 of 4 attempts hung); run it manually, 20 runs, <code class="language-plaintext highlighter-rouge">-bs 64</code>. <code class="language-plaintext highlighter-rouge">test-loop-sim.yml</code> gates the looper sim (<code class="language-plaintext highlighter-rouge">smoketest.js</code>,
+<code class="language-plaintext highlighter-rouge">two-device-sync.js</code>, <code class="language-plaintext highlighter-rouge">remote-join.js</code>, <code class="language-plaintext highlighter-rouge">fuzz.js --trials=3000 --events=50</code>). <code class="language-plaintext highlighter-rouge">[[memory:
 ci-build-pipeline-history]]</code>.</p>
 
 <hr />
@@ -261,9 +235,9 @@ ci-build-pipeline-history]]</code>.</p>
 
 <h2 id="aloop--esp-idf-link-paired-invariants-change-both-or-the-mesh-splits">aloop ↔ esp-idf-link paired invariants (change BOTH or the mesh splits)</h2>
 
-<p>aloop (Pi 4) and <code class="language-plaintext highlighter-rouge">../esp-idf-link</code> (ESP32, “ticker”) form ONE ad-hoc
-single-AP mesh for Link’s multicast peer discovery (<code class="language-plaintext highlighter-rouge">224.76.78.75:20808</code>,
-hardcoded in the Link library).</p>
+<p>aloop (Pi 4) and <code class="language-plaintext highlighter-rouge">../esp-idf-link</code> (ESP32, “ticker”) form ONE ad-hoc single-AP
+mesh for Link’s multicast peer discovery (<code class="language-plaintext highlighter-rouge">224.76.78.75:20808</code>, hardcoded in the
+Link library).</p>
 
 <table>
   <thead>
@@ -307,102 +281,103 @@ hardcoded in the Link library).</p>
   </tbody>
 </table>
 
-<p>Host election is MAC-ordered (never “host if scan found nothing” — splits the
-mesh). <code class="language-plaintext highlighter-rouge">src/net/autoap.sh</code>: hosts <code class="language-plaintext highlighter-rouge">ticker</code> never <code class="language-plaintext highlighter-rouge">aloop</code>; needs at least one
-active <code class="language-plaintext highlighter-rouge">network={}</code> block before <code class="language-plaintext highlighter-rouge">start_ap()</code> does anything. <code class="language-plaintext highlighter-rouge">start_ap()</code>
-clears previous hostapd not just wpa_supplicant (stale → <code class="language-plaintext highlighter-rouge">Could not set
-channel</code>, a red herring — ch6 is paired). <code class="language-plaintext highlighter-rouge">[[memory:
-mesh-link-midi-history]]</code>.</p>
+<p>Host election is MAC-ordered — never “host if scan found nothing”. <code class="language-plaintext highlighter-rouge">src/net/autoap.sh</code>:
+hosts <code class="language-plaintext highlighter-rouge">ticker</code> never <code class="language-plaintext highlighter-rouge">aloop</code>; needs at least one active <code class="language-plaintext highlighter-rouge">network={}</code> block before
+<code class="language-plaintext highlighter-rouge">start_ap()</code> does anything. <code class="language-plaintext highlighter-rouge">start_ap()</code> clears previous hostapd not just
+wpa_supplicant (stale → <code class="language-plaintext highlighter-rouge">Could not set channel</code>, a red herring — ch6 is paired).
+<code class="language-plaintext highlighter-rouge">[[memory: mesh-link-midi-history]]</code>, <code class="language-plaintext highlighter-rouge">[[memory: link-varispeed-trim-history]]</code>.</p>
 
 <h2 id="ableton-link-checklist-and-varispeedtransport-anchor">Ableton Link checklist and varispeed/transport-anchor</h2>
 
 <p><code class="language-plaintext highlighter-rouge">commitAppSessionState()</code> off-audio-thread, <code class="language-plaintext highlighter-rouge">commitAudioSessionState()</code>
-audio-thread only — hands the audio thread a lock-free double-buffered
-<code class="language-plaintext highlighter-rouge">LinkSnapshot</code> (ADR-005, ≤1 tick stale). <code class="language-plaintext highlighter-rouge">setTempo</code> rewrites EVERY peer;
-<code class="language-plaintext highlighter-rouge">proposeTempo</code> refuses when peers present and is the ONLY user of
-<code class="language-plaintext highlighter-rouge">weOwnTempo</code> — never gate <code class="language-plaintext highlighter-rouge">linkSpeedRatio</code> on it. Playback matches tempo by
-scaling read RATE (<code class="language-plaintext highlighter-rouge">linkSpeedRatio=linkBpm/recordedBpm</code> → <code class="language-plaintext highlighter-rouge">effSpeed</code>), never
-a position jump.</p>
+audio-thread only — the audio thread gets a lock-free double-buffered
+<code class="language-plaintext highlighter-rouge">LinkSnapshot</code> (ADR-005). <code class="language-plaintext highlighter-rouge">setTempo</code> rewrites EVERY peer;
+<code class="language-plaintext highlighter-rouge">proposeTempo</code> refuses when peers present and is the ONLY user of <code class="language-plaintext highlighter-rouge">weOwnTempo</code> —
+never gate <code class="language-plaintext highlighter-rouge">linkSpeedRatio</code> on it. Playback matches tempo by scaling read RATE
+(<code class="language-plaintext highlighter-rouge">linkSpeedRatio=linkBpm/recordedBpm</code> → <code class="language-plaintext highlighter-rouge">effSpeed</code>), never a position jump.
+<code class="language-plaintext highlighter-rouge">enableStartStopSync(true)</code> pairs <code class="language-plaintext highlighter-rouge">isPlaying()</code> reads with <code class="language-plaintext highlighter-rouge">setIsPlaying()</code>;
+readiness needs <code class="language-plaintext highlighter-rouge">depend(){ after local autoap; }</code> plus <code class="language-plaintext highlighter-rouge">waitForNetworkInterface()</code>.</p>
 
-<p>Residual phase error is a bounded speed trim on <code class="language-plaintext highlighter-rouge">effSpeed</code> only, never on
-<code class="language-plaintext highlighter-rouge">masterPhaseSamples</code> (the TARGET timeline) —
+<p>Residual phase error is a bounded speed trim on <code class="language-plaintext highlighter-rouge">effSpeed</code> <strong>and on the
+<code class="language-plaintext highlighter-rouge">masterPhaseSamples</code> advance</strong>, never a jump of the read position —
 <code class="language-plaintext highlighter-rouge">kLinkPhaseTrimPerSample=0.00005</code>, clamp <code class="language-plaintext highlighter-rouge">kLinkPhaseTrimMax=0.03</code> (51 cents),
-suspended while <code class="language-plaintext highlighter-rouge">abs(g_manualSpeedMul-1.0)&gt;0.3</code>. Trim runs only while
-<code class="language-plaintext highlighter-rouge">linkVarispeedEngaged</code> — before any take <code class="language-plaintext highlighter-rouge">recorded_bpm</code> is 0, the ratio is
-legitimately 1.0, and the trim saturates into a permanent 51-cent detune.
-<code class="language-plaintext highlighter-rouge">setTransportPlaying(true)</code> anchors beat 0 via
+suspended while <code class="language-plaintext highlighter-rouge">abs(g_manualSpeedMul-1.0)&gt;0.3</code>. The trim runs only while
+<code class="language-plaintext highlighter-rouge">linkVarispeedEngaged</code>, or it saturates into a permanent 51-cent detune: check
+<code class="language-plaintext highlighter-rouge">/run/aloop/status.json</code>’s <code class="language-plaintext highlighter-rouge">eff_speed</code> reads exactly <code class="language-plaintext highlighter-rouge">1.0000</code> with no loop
+recorded. <code class="language-plaintext highlighter-rouge">setTransportPlaying(true)</code> anchors beat 0 via
 <code class="language-plaintext highlighter-rouge">setIsPlayingAndRequestBeatAtTime(true,now,0.0,kLinkQuantum)</code>, never bare
-<code class="language-plaintext highlighter-rouge">setIsPlaying</code>. <code class="language-plaintext highlighter-rouge">[[memory: link-varispeed-trim-history]]</code>.</p>
+<code class="language-plaintext highlighter-rouge">setIsPlaying</code>. At 0.03 the trim needs ~8s to close a half-beat, so the first
+usable target after Link starts driving SNAPS the anchor when the circular
+error exceeds <code class="language-plaintext highlighter-rouge">kJoinSnapErrBeats=0.25</code> beats — without it a device that
+recorded before the mesh came up stays audibly desynced that whole time. The
+threshold also stops a flapping peer count from snapping repeatedly
+(<code class="language-plaintext highlighter-rouge">join-late.js</code>). Only the device that started the transport may re-anchor the
+shared grid (<code class="language-plaintext highlighter-rouge">m_weStartedTransport</code>) — otherwise every device snaps it to its
+own downbeat and the mesh splits.</p>
+
+<p><code class="language-plaintext highlighter-rouge">LinkSnapshot</code> carries a <code class="language-plaintext highlighter-rouge">CLOCK_MONOTONIC</code> stamp and the audio thread extrapolates
+phase forward at the session tempo — control ticks at 5 Hz, so an unextrapolated
+snapshot is up to 200ms (~0.4 beat) stale. <code class="language-plaintext highlighter-rouge">publishTransport</code> may stop the transport ONLY if this
+device started it. <code class="language-plaintext highlighter-rouge">[[memory: link-varispeed-trim-history]]</code>.</p>
 
 <h3 id="two-quantums--16-for-transport-128-for-phase-capture">Two quantums — 16 for transport, 128 for phase CAPTURE</h3>
 
-<p><code class="language-plaintext highlighter-rouge">kLinkQuantum=16.0</code> is the PAIRED value (transport anchor, <code class="language-plaintext highlighter-rouge">beatNow()</code>,
-24-PPQN clock). <code class="language-plaintext highlighter-rouge">controlTick()</code> captures phase at
-<code class="language-plaintext highlighter-rouge">kLinkPhaseQuantumBeats=128.0</code> and publishes <code class="language-plaintext highlighter-rouge">quantumMicroBeats</code> — a phase
-read at quantum 16 aliases any loop longer than 16 beats onto the wrong half
-of the phrase. Consumers must fold with <code class="language-plaintext highlighter-rouge">(quantumMicroBeats/1e6)</code>, never
-<code class="language-plaintext highlighter-rouge">16.0</code> — <code class="language-plaintext highlighter-rouge">linkTargetSamples</code>/<code class="language-plaintext highlighter-rouge">gridBeatIndex</code> and <code class="language-plaintext highlighter-rouge">applyRemoteTransport</code>
-(keeps the 16-beat grid so a quantized launch is never delayed up to 64s).</p>
+<p><code class="language-plaintext highlighter-rouge">kLinkQuantum=16.0</code> is the PAIRED value (transport anchor, <code class="language-plaintext highlighter-rouge">beatNow()</code>, 24-PPQN
+clock). <code class="language-plaintext highlighter-rouge">controlTick()</code> captures phase at <code class="language-plaintext highlighter-rouge">kLinkPhaseQuantumBeats=128.0</code> and
+publishes <code class="language-plaintext highlighter-rouge">quantumMicroBeats</code>. Consumers must fold with <code class="language-plaintext highlighter-rouge">(quantumMicroBeats/1e6)</code>,
+never <code class="language-plaintext highlighter-rouge">16.0</code> — <code class="language-plaintext highlighter-rouge">linkTargetSamples</code>/<code class="language-plaintext highlighter-rouge">gridBeatIndex</code> and <code class="language-plaintext highlighter-rouge">applyRemoteTransport</code>.
+<code class="language-plaintext highlighter-rouge">applyRemoteTransport</code> must reset <code class="language-plaintext highlighter-rouge">m_lastRemotePhaseMicroBeats</code> when it arms
+<code class="language-plaintext highlighter-rouge">m_remoteStartPending</code> — a stale higher value makes every paused looper start
+mid-phrase.</p>
 
-<p>The idle/creation snap (<code class="language-plaintext highlighter-rouge">!anyAudible || masterJustCreated</code>) fires IMMEDIATELY
-at creation — deferring it lands a whole-snapshot jump into playback.
-Recording a master snaps <code class="language-plaintext highlighter-rouge">masterLenSamples</code> to whole beats and routes through
+<p>The idle/creation snap (<code class="language-plaintext highlighter-rouge">!anyAudible || masterJustCreated</code>) fires IMMEDIATELY at
+creation and waits for a snapshot stamped AFTER the master was created. Recording a master snaps
+<code class="language-plaintext highlighter-rouge">masterLenSamples</code> to whole beats at the Link tempo and routes through
 <code class="language-plaintext highlighter-rouge">finishTargetPending</code> like every sub-loop finish. <code class="language-plaintext highlighter-rouge">[[memory:
 control-surface-quantization-history]]</code>.</p>
 
-<p><code class="language-plaintext highlighter-rouge">masterPhaseBuf</code> ramps at <code class="language-plaintext highlighter-rouge">masterPhaseSlope</code> = <code class="language-plaintext highlighter-rouge">linkSpeedRatio+linkPhaseTrim</code>
-— the rate <code class="language-plaintext highlighter-rouge">rpos</code> integrates. A fixed 1.0 slope desyncs the anchor from the
-read head inside every block whenever the take’s tempo differs from Link’s.</p>
+<p><code class="language-plaintext highlighter-rouge">masterPhaseBuf</code> ramps at <code class="language-plaintext highlighter-rouge">masterPhaseSlope</code> = <code class="language-plaintext highlighter-rouge">linkSpeedRatio+linkPhaseTrim</code> — the rate <code class="language-plaintext highlighter-rouge">rpos</code> integrates.</p>
 
 <h2 id="midi-clock-fan-out-and-other-mesh-facts">MIDI clock fan-out and other mesh facts</h2>
 
-<p><code class="language-plaintext highlighter-rouge">midi_clock.cpp</code>: 24 PPQN <code class="language-plaintext highlighter-rouge">0xF8</code>+<code class="language-plaintext highlighter-rouge">0xFA</code>/<code class="language-plaintext highlighter-rouge">0xFC</code> to every MIDI output except
-the control surface. No <code class="language-plaintext highlighter-rouge">/dev/snd/seq</code> — walks <code class="language-plaintext highlighter-rouge">/proc/asound/card*/midi*</code>,
-rescans every 2s, ticks off <code class="language-plaintext highlighter-rouge">LinkBridge::beatNow()</code>, catch-up bounded to
-<code class="language-plaintext highlighter-rouge">kMaxCatchUpPulses=4.0</code>. Surface excluded by the card actually opened
-(<code class="language-plaintext highlighter-rouge">controlSurfaceCard()</code>), not config parsing — <code class="language-plaintext highlighter-rouge">midi_device</code> is normally
-<code class="language-plaintext highlighter-rouge">auto</code>, which excludes nothing; the clock waits <code class="language-plaintext highlighter-rouge">kSurfaceGraceSeconds=15.0</code>
-and releases a port later found to be the surface. <code class="language-plaintext highlighter-rouge">[[memory:
-mesh-link-midi-history]]</code>. <code class="language-plaintext highlighter-rouge">pinLinkThreadsToControlCore</code> pins Link’s threads
-to <code class="language-plaintext highlighter-rouge">kControlCore=2</code>; <code class="language-plaintext highlighter-rouge">[link] enabled = true</code> parses as a word, not <code class="language-plaintext highlighter-rouge">%d</code>.</p>
+<p><code class="language-plaintext highlighter-rouge">midi_clock.cpp</code>: 24 PPQN <code class="language-plaintext highlighter-rouge">0xF8</code>+<code class="language-plaintext highlighter-rouge">0xFA</code>/<code class="language-plaintext highlighter-rouge">0xFC</code> to every MIDI output except the
+control surface. No <code class="language-plaintext highlighter-rouge">/dev/snd/seq</code> — walks <code class="language-plaintext highlighter-rouge">/proc/asound/card*/midi*</code>, rescans
+every 2s, ticks off <code class="language-plaintext highlighter-rouge">LinkBridge::beatNow()</code>, catch-up bounded to
+<code class="language-plaintext highlighter-rouge">kMaxCatchUpPulses=4.0</code>. The surface is excluded by <strong>USB id</strong> (<code class="language-plaintext highlighter-rouge">09e8:0027</code>, APC
+Key 25): <code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>’s scan runs a first pass accepting only that id,
+then the enumeration-order fallback. The clock skips EVERY card matching that id,
+not merely the one opened, and waits <code class="language-plaintext highlighter-rouge">kSurfaceGraceSeconds=15.0</code> for <code class="language-plaintext highlighter-rouge">controlSurfaceCard()</code>.
+<code class="language-plaintext highlighter-rouge">[[memory: mesh-link-midi-history]]</code>. <code class="language-plaintext highlighter-rouge">pinLinkThreadsToControlCore</code> pins Link’s
+threads to <code class="language-plaintext highlighter-rouge">kControlCore=2</code>; <code class="language-plaintext highlighter-rouge">[link] enabled = true</code> parses as a word, not <code class="language-plaintext highlighter-rouge">%d</code>.</p>
 
 <hr />
 
 <h1 id="audio-thread-and-alsa">Audio thread and ALSA</h1>
 
 <p><code class="language-plaintext highlighter-rouge">audio_thread.cpp</code>’s <code class="language-plaintext highlighter-rouge">worker()</code> opens two PCM devices — never conflate:
-<strong>instrument</strong> (default <code class="language-plaintext highlighter-rouge">hw:0,0</code>) tight-latency capture+playback, blocking,
-retried 30x/1s; <strong>OTG gadget</strong> (<code class="language-plaintext highlighter-rouge">f_uac2</code>) best-effort MIRROR, NONBLOCK
-(<code class="language-plaintext highlighter-rouge">-EAGAIN</code> expected). Instrument <strong>S32_LE only</strong> — class-compliant USB has no
-S16_LE fallback, requesting it “succeeds” while negotiating S32_LE anyway
-(loud static); buffer <code class="language-plaintext highlighter-rouge">int32_t</code>, divisor <code class="language-plaintext highlighter-rouge">2147483648.0f</code>.</p>
-
-<p>Playback needs <code class="language-plaintext highlighter-rouge">start_threshold</code> lowered to one period (default =
-<code class="language-plaintext highlighter-rouge">buffer_size</code> — stays <code class="language-plaintext highlighter-rouge">PREPARED</code> forever otherwise). <strong>4 periods min</strong> — 2
-(ALSA min) produces hundreds of xruns/sec. <code class="language-plaintext highlighter-rouge">f_uac2-gadget.sh</code>: <code class="language-plaintext highlighter-rouge">req_number</code>
-must be <strong>4</strong>, not default 2. Gadget is STEREO — L/R averaged to mono for
-Faust, DSP stays mono internally. <code class="language-plaintext highlighter-rouge">main.cpp</code> declares <code class="language-plaintext highlighter-rouge">AudioThread</code> BEFORE
-<code class="language-plaintext highlighter-rouge">audio.start()</code> — safe only because <code class="language-plaintext highlighter-rouge">snapshotTelemetry()</code> returns all-zero
-pre-<code class="language-plaintext highlighter-rouge">start()</code>. Flush-to-zero set explicitly — denormals in decaying IIR are
-10-100x slower. <code class="language-plaintext highlighter-rouge">AloopLoopDsp</code>/<code class="language-plaintext highlighter-rouge">Sampler</code> must be <code class="language-plaintext highlighter-rouge">std::make_unique</code>‘d at
-thread startup, never stack-local.</p>
+<strong>instrument</strong> (default <code class="language-plaintext highlighter-rouge">hw:0,0</code>) tight-latency capture+playback, blocking;
+<strong>OTG gadget</strong> (<code class="language-plaintext highlighter-rouge">f_uac2</code>) best-effort MIRROR, NONBLOCK (<code class="language-plaintext highlighter-rouge">-EAGAIN</code> expected).
+Instrument <strong>S32_LE only</strong> — buffer <code class="language-plaintext highlighter-rouge">int32_t</code>, divisor <code class="language-plaintext highlighter-rouge">2147483648.0f</code>.
+Playback needs <code class="language-plaintext highlighter-rouge">start_threshold</code> lowered to one period. <strong>4 periods min</strong>. <code class="language-plaintext highlighter-rouge">f_uac2-gadget.sh</code>: <code class="language-plaintext highlighter-rouge">req_number</code> must be <strong>4</strong>, not default 2.
+Gadget is STEREO — L/R averaged to mono for Faust.
+<code class="language-plaintext highlighter-rouge">main.cpp</code> declares <code class="language-plaintext highlighter-rouge">AudioThread</code> BEFORE <code class="language-plaintext highlighter-rouge">audio.start()</code> — safe only because
+<code class="language-plaintext highlighter-rouge">snapshotTelemetry()</code> returns all-zero pre-<code class="language-plaintext highlighter-rouge">start()</code>. Flush-to-zero set explicitly.
+<code class="language-plaintext highlighter-rouge">AloopLoopDsp</code>/<code class="language-plaintext highlighter-rouge">Sampler</code> must be <code class="language-plaintext highlighter-rouge">std::make_unique</code>‘d at thread startup, never
+stack-local.</p>
 
 <p><strong>Resolve string-keyed lookups ONCE, never per block</strong> — control WRITE and
-telemetry READ paths cache resolved <code class="language-plaintext highlighter-rouge">(ParamStore slot, Faust zone float*)</code>
-pairs at startup; per-block resolution blows the 1.333ms budget (block_size 64
-@ 48kHz). <code class="language-plaintext highlighter-rouge">FaustUI</code>’s bargraph adders must do
-<code class="language-plaintext highlighter-rouge">zones[full(l)]=z</code> or <code class="language-plaintext highlighter-rouge">hbargraph()</code> falls through to an O(n) scan.
-<code class="language-plaintext highlighter-rouge">targetToZone()</code> needs a case for every control target — a missing case
-returns <code class="language-plaintext highlighter-rouge">""</code>, silent. <code class="language-plaintext highlighter-rouge">masterPhaseBuf</code> must ramp per-sample, never
-<code class="language-plaintext highlighter-rouge">std::fill()</code> with a block-constant value (audible bitcrushing). Recording
-taps <code class="language-plaintext highlighter-rouge">loop.dsp</code>’s <code class="language-plaintext highlighter-rouge">prevFiltIn</code> fed from <code class="language-plaintext highlighter-rouge">prevFiltOut</code>; Sampler
-<code class="language-plaintext highlighter-rouge">captureBlock</code> reads the same <code class="language-plaintext highlighter-rouge">prevFiltOut</code>, never <code class="language-plaintext highlighter-rouge">fin</code> (would let a sample
-record itself).</p>
+telemetry READ cache <code class="language-plaintext highlighter-rouge">(ParamStore slot, Faust zone float*)</code> pairs at startup.
+<code class="language-plaintext highlighter-rouge">FaustUI</code>’s bargraph adders must do <code class="language-plaintext highlighter-rouge">zones[full(l)]=z</code> or <code class="language-plaintext highlighter-rouge">hbargraph()</code> falls
+through to an O(n) scan. <code class="language-plaintext highlighter-rouge">targetToZone()</code> needs a case for every control
+target — a missing case returns <code class="language-plaintext highlighter-rouge">""</code>, silent. <code class="language-plaintext highlighter-rouge">masterPhaseBuf</code> must ramp
+per-sample, never <code class="language-plaintext highlighter-rouge">std::fill()</code> with a block-constant value. Recording taps
+<code class="language-plaintext highlighter-rouge">loop.dsp</code>’s <code class="language-plaintext highlighter-rouge">prevFiltIn</code> fed from <code class="language-plaintext highlighter-rouge">prevFiltOut</code>; Sampler <code class="language-plaintext highlighter-rouge">captureBlock</code> reads the
+same <code class="language-plaintext highlighter-rouge">prevFiltOut</code>, never <code class="language-plaintext highlighter-rouge">fin</code>.</p>
 
-<p><strong>SHIFT (<code class="language-plaintext highlighter-rouge">fx/monitorfold</code>) fold</strong>: <code class="language-plaintext highlighter-rouge">fin[i] += prevLoopSum[i]*combinedFold</code>
-when engaged, ramping <code class="language-plaintext highlighter-rouge">foldGain</code> at <code class="language-plaintext highlighter-rouge">kFoldStepPerSample</code> = <code class="language-plaintext highlighter-rouge">(1/16)/N</code> — adds
-one block of recording lag, <code class="language-plaintext highlighter-rouge">kShiftFoldBlockLatencySamples</code> (64) written at
-FINISH if <code class="language-plaintext highlighter-rouge">m_looperShiftHeldDuringTake[looper]</code> was ever set, else 0.</p>
+<p><strong>SHIFT (<code class="language-plaintext highlighter-rouge">fx/monitorfold</code>) fold</strong>: <code class="language-plaintext highlighter-rouge">fin[i] += prevLoopSum[i]*combinedFold</code> when
+engaged, ramping <code class="language-plaintext highlighter-rouge">foldGain</code> at <code class="language-plaintext highlighter-rouge">kFoldStepPerSample</code> = <code class="language-plaintext highlighter-rouge">(1/16)/N</code> — adds one block
+of recording lag, <code class="language-plaintext highlighter-rouge">kShiftFoldBlockLatencySamples</code> (64) written at FINISH if
+<code class="language-plaintext highlighter-rouge">m_looperShiftHeldDuringTake[looper]</code> was ever set, else 0.</p>
 
 <hr />
 
@@ -410,140 +385,121 @@ FINISH if <code class="language-plaintext highlighter-rouge">m_looperShiftHeldDu
 
 <h2 id="language-gotchas">Language gotchas</h2>
 
-<p><code class="language-plaintext highlighter-rouge">par()</code>-replicated UI controls silently duplicate — <code class="language-plaintext highlighter-rouge">button()</code>/<code class="language-plaintext highlighter-rouge">hslider()</code>
-inside a <code class="language-plaintext highlighter-rouge">par()</code>-instantiated function RE-ELABORATES per call site even
-hoisted (verify via generated C++, <code class="language-plaintext highlighter-rouge">grep -c '"name"'</code> must be 1); fix by
-threading as a plain signal input. No runtime branching — <code class="language-plaintext highlighter-rouge">select2</code>/<code class="language-plaintext highlighter-rouge">ba.if</code>
-choose among ALREADY-COMPUTED signals (why Guitar/LofiFx are a permanent
-Core-3 LV2 bundle, Resonode/delayverb are conditionally-called). Direct
+<p><code class="language-plaintext highlighter-rouge">par()</code>-replicated UI controls silently duplicate — <code class="language-plaintext highlighter-rouge">button()</code>/<code class="language-plaintext highlighter-rouge">hslider()</code> inside a
+<code class="language-plaintext highlighter-rouge">par()</code>-instantiated function RE-ELABORATES per call site even hoisted (verify via
+generated C++, <code class="language-plaintext highlighter-rouge">grep -c '"name"'</code> must be 1); fix by threading as a plain signal
+input. No runtime branching — <code class="language-plaintext highlighter-rouge">select2</code>/<code class="language-plaintext highlighter-rouge">ba.if</code> choose among ALREADY-COMPUTED
+signals (why Guitar/LofiFx are a permanent Core-3 LV2 bundle). Direct
 function-call syntax substitutes whole expressions, not buses —
-<code class="language-plaintext highlighter-rouge">f(loop(...), a, b)</code> binds the ENTIRE <code class="language-plaintext highlighter-rouge">loop(...)</code> output to the FIRST
-parameter. <code class="language-plaintext highlighter-rouge">ef.transpose</code> has a HARDCODED <code class="language-plaintext highlighter-rouge">maxDelay=65536</code>. Faust CSEs
-<code class="language-plaintext highlighter-rouge">par()</code>-replicated pure-signal subexpressions even across <code class="language-plaintext highlighter-rouge">component()</code> files
-sharing a control (one <code class="language-plaintext highlighter-rouge">pow()</code> + one oscillator for all three effects).</p>
+<code class="language-plaintext highlighter-rouge">f(loop(...), a, b)</code> binds the ENTIRE <code class="language-plaintext highlighter-rouge">loop(...)</code> output to the FIRST parameter.
+<code class="language-plaintext highlighter-rouge">ef.transpose</code> has a HARDCODED <code class="language-plaintext highlighter-rouge">maxDelay=65536</code>. Faust CSEs <code class="language-plaintext highlighter-rouge">par()</code>-replicated pure-signal subexpressions across <code class="language-plaintext highlighter-rouge">component()</code>
+files sharing a control.</p>
 
 <h2 id="compiler-flags--currently-shipped">Compiler flags — currently shipped</h2>
 
-<p><code class="language-plaintext highlighter-rouge">-vec -fun -dfs -vs 32 -nvi -ct 0</code> at every real <code class="language-plaintext highlighter-rouge">faust</code> invocation (<code class="language-plaintext highlighter-rouge">-ct 0</code>
-safe, every <code class="language-plaintext highlighter-rouge">rwtable</code> index software-bounded); <code class="language-plaintext highlighter-rouge">-mcpu=cortex-a72</code> at
-target-compile steps only; <code class="language-plaintext highlighter-rouge">-O3</code>, no <code class="language-plaintext highlighter-rouge">-Ofast</code>/<code class="language-plaintext highlighter-rouge">-march=native</code>/fast-math.
-<strong>Not shipped</strong>: <code class="language-plaintext highlighter-rouge">-mapp</code> (real-aarch64 SIGSEGV), <code class="language-plaintext highlighter-rouge">-fm def</code> (unresolvable
-<code class="language-plaintext highlighter-rouge">fast_*</code> calls), <code class="language-plaintext highlighter-rouge">ba.tabulate</code> (not bit-exact), per-effect LV2 splitting,
-<code class="language-plaintext highlighter-rouge">-omp</code>/<code class="language-plaintext highlighter-rouge">-sch</code> (fights <code class="language-plaintext highlighter-rouge">pthread_setaffinity_np</code> pinning), <code class="language-plaintext highlighter-rouge">-mcd</code>/<code class="language-plaintext highlighter-rouge">-dlt</code>,
-<code class="language-plaintext highlighter-rouge">-clang</code>, <code class="language-plaintext highlighter-rouge">-mem</code>, <code class="language-plaintext highlighter-rouge">-vs 16</code> (SIGALRMs ~2min into <code class="language-plaintext highlighter-rouge">dsp/aloop_pre.dsp</code>).
-<code class="language-plaintext highlighter-rouge">[[memory: faust-compile-time-cliff]]</code>.</p>
+<p><code class="language-plaintext highlighter-rouge">-vec -fun -dfs -vs 32 -nvi -ct 0</code> at every real <code class="language-plaintext highlighter-rouge">faust</code> invocation;
+<code class="language-plaintext highlighter-rouge">-mcpu=cortex-a72</code> at target-compile steps only; <code class="language-plaintext highlighter-rouge">-O3</code>, no
+<code class="language-plaintext highlighter-rouge">-Ofast</code>/<code class="language-plaintext highlighter-rouge">-march=native</code>/fast-math. <strong>Not shipped</strong>: <code class="language-plaintext highlighter-rouge">-mapp</code> (real-aarch64
+SIGSEGV), <code class="language-plaintext highlighter-rouge">-fm def</code> (unresolvable <code class="language-plaintext highlighter-rouge">fast_*</code> calls), <code class="language-plaintext highlighter-rouge">ba.tabulate</code> (not bit-exact),
+per-effect LV2 splitting (more <code class="language-plaintext highlighter-rouge">instantiate()</code>/<code class="language-plaintext highlighter-rouge">process()</code> boundaries per block),
+<code class="language-plaintext highlighter-rouge">-omp</code>/<code class="language-plaintext highlighter-rouge">-sch</code> (fights <code class="language-plaintext highlighter-rouge">pthread_setaffinity_np</code> pinning), <code class="language-plaintext highlighter-rouge">-mcd</code>/<code class="language-plaintext highlighter-rouge">-dlt</code>, <code class="language-plaintext highlighter-rouge">-clang</code>
+(real builds are gcc), <code class="language-plaintext highlighter-rouge">-mem</code> (target heap already unified), <code class="language-plaintext highlighter-rouge">-vs 16</code> (SIGALRMs
+~2min into <code class="language-plaintext highlighter-rouge">dsp/aloop_pre.dsp</code>). <code class="language-plaintext highlighter-rouge">[[memory: faust-compile-time-cliff]]</code>.</p>
 
 <p><strong>Compile-time cliff</strong>: a NEW UI primitive in <code class="language-plaintext highlighter-rouge">resonode_synth.dsp</code>/
-<code class="language-plaintext highlighter-rouge">pitchtracker_ac.dsp</code>/<code class="language-plaintext highlighter-rouge">multitranspose.dsp</code> risks unbounded real compile time
-(<code class="language-plaintext highlighter-rouge">modeCount=24</code> dies by SIGALRM ~2min into <code class="language-plaintext highlighter-rouge">-i -a lv2.cpp</code>). A DawDreamer JIT
-success proves nothing. Declare new controls in <code class="language-plaintext highlighter-rouge">effects_runtime.dsp</code> and
-thread them in as plain signal arguments. Before accepting any <code class="language-plaintext highlighter-rouge">.dsp</code>
-optimization, regenerate real C++ and diff byte-for-byte — identical output
-means the change is a no-op. <code class="language-plaintext highlighter-rouge">flanger.dsp</code> <code class="language-plaintext highlighter-rouge">MAXD=4096</code>/<code class="language-plaintext highlighter-rouge">flutter.dsp</code>
-<code class="language-plaintext highlighter-rouge">MAXD=1024</code> are at their real ceiling. <code class="language-plaintext highlighter-rouge">[[memory:
-guitar-lofifx-cpu-audit-history]]</code>.</p>
+<code class="language-plaintext highlighter-rouge">pitchtracker_ac.dsp</code>/<code class="language-plaintext highlighter-rouge">multitranspose.dsp</code>/<code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code> risks unbounded real
+compile time (<code class="language-plaintext highlighter-rouge">modeCount=24</code> dies by SIGALRM ~2min into <code class="language-plaintext highlighter-rouge">-i -a lv2.cpp</code>). A
+DawDreamer JIT success proves nothing. Declare new controls in
+<code class="language-plaintext highlighter-rouge">effects_runtime.dsp</code> and thread them in as plain signal arguments. Before accepting any
+<code class="language-plaintext highlighter-rouge">.dsp</code> optimization, regenerate real C++ and diff byte-for-byte — identical output
+means the change is a no-op. <code class="language-plaintext highlighter-rouge">flanger.dsp</code> <code class="language-plaintext highlighter-rouge">MAXD=4096</code>/<code class="language-plaintext highlighter-rouge">flutter.dsp</code> <code class="language-plaintext highlighter-rouge">MAXD=1024</code> are at their ceiling. <code class="language-plaintext highlighter-rouge">[[memory: guitar-lofifx-cpu-audit-history]]</code>.</p>
 
-<p><code class="language-plaintext highlighter-rouge">effects/home/faust/chain.dsp</code> looks dead but is not — <code class="language-plaintext highlighter-rouge">build-lv2.yml</code> copies
-it into the homestack, so deleting it breaks the LV2 build; <code class="language-plaintext highlighter-rouge">compressor.dsp</code>
-is live only via <code class="language-plaintext highlighter-rouge">ab_fm_def.py</code>’s fast-math test.</p>
+<p><code class="language-plaintext highlighter-rouge">effects/home/faust/chain.dsp</code> looks dead but is not — <code class="language-plaintext highlighter-rouge">build-lv2.yml</code> copies it
+into the homestack, so deleting it breaks the LV2 build.</p>
 
-<p><strong>Buffer sizes, bit-exact via DawDreamer JIT</strong>: <code class="language-plaintext highlighter-rouge">delay.dsp</code>/<code class="language-plaintext highlighter-rouge">delayverb.dsp</code>
-<code class="language-plaintext highlighter-rouge">MAXD=52000</code>; <code class="language-plaintext highlighter-rouge">microrepeat.dsp</code> <code class="language-plaintext highlighter-rouge">MR_MAX=36000</code>; <code class="language-plaintext highlighter-rouge">bitcrush.dsp</code> <code class="language-plaintext highlighter-rouge">BITS_MAX=24</code>
-not 16 (S32_LE never round-trips int16). <code class="language-plaintext highlighter-rouge">SLEW=0.0001</code> slew must carry NO
-additive drift term. <code class="language-plaintext highlighter-rouge">effects_runtime.dsp</code>’s filter/delay/reverb/pitch stages
-have NO parameter smoothing upstream of <code class="language-plaintext highlighter-rouge">pow()</code>/<code class="language-plaintext highlighter-rouge">exp()</code>.</p>
+<p><strong>Buffer sizes</strong>: <code class="language-plaintext highlighter-rouge">delay.dsp</code>/<code class="language-plaintext highlighter-rouge">delayverb.dsp</code>
+<code class="language-plaintext highlighter-rouge">MAXD=52000</code>; <code class="language-plaintext highlighter-rouge">microrepeat.dsp</code> <code class="language-plaintext highlighter-rouge">MR_MAX=36000</code>; <code class="language-plaintext highlighter-rouge">bitcrush.dsp</code> <code class="language-plaintext highlighter-rouge">BITS_MAX=24</code> not
+16 (S32_LE never round-trips int16). <code class="language-plaintext highlighter-rouge">SLEW=0.0001</code> slew must carry NO additive
+drift term. <code class="language-plaintext highlighter-rouge">effects_runtime.dsp</code>’s filter/delay/reverb/pitch stages have NO
+parameter smoothing upstream of <code class="language-plaintext highlighter-rouge">pow()</code>/<code class="language-plaintext highlighter-rouge">exp()</code>.</p>
 
 <h2 id="multitransposedsp--polyphonic-pitch-lock-6-voices"><code class="language-plaintext highlighter-rouge">multitranspose.dsp</code> — polyphonic pitch-LOCK, 6 voices</h2>
 
-<p>NVOICES=6 absolute-pitch-lock (not an interval harmonizer), additive with the
-mono SNAC engine below; each voice owns its own <code class="language-plaintext highlighter-rouge">EngineSoladSnac</code>.
-<code class="language-plaintext highlighter-rouge">minTrackHz=60.0</code> floors <code class="language-plaintext highlighter-rouge">freqDet</code>, which prefers <code class="language-plaintext highlighter-rouge">pitchtracker.lv2</code>;
-<code class="language-plaintext highlighter-rouge">trackingAllowed = trustedTracker &gt; 0.5</code> only; <code class="language-plaintext highlighter-rouge">heldDetNote</code> reseeds every
-attack until <code class="language-plaintext highlighter-rouge">everTrusted</code> latches. <code class="language-plaintext highlighter-rouge">engaged</code> is held by a linear release
-counter <code class="language-plaintext highlighter-rouge">engageReleaseHoldS=0.06</code> — never gate on <code class="language-plaintext highlighter-rouge">gate&gt;0.5</code> or <code class="language-plaintext highlighter-rouge">voiceEnv&gt;0</code>
-(an asymptotic envelope may never cross a threshold).</p>
+<p>NVOICES=6 absolute-pitch-lock, additive with the mono SNAC engine below; each voice owns its own <code class="language-plaintext highlighter-rouge">EngineSoladSnac</code>, sharing one
+<code class="language-plaintext highlighter-rouge">snacPeriodTracker.h</code> sweep whose step MUST stay block-aligned (<code class="language-plaintext highlighter-rouge">m_sinceBlock==0</code>). <code class="language-plaintext highlighter-rouge">minTrackHz=60.0</code> floors <code class="language-plaintext highlighter-rouge">freqDet</code>; <code class="language-plaintext highlighter-rouge">trackingAllowed = trustedTracker &gt;
+0.5</code> only; <code class="language-plaintext highlighter-rouge">heldDetNote</code> reseeds every attack until <code class="language-plaintext highlighter-rouge">everTrusted</code> latches.
+<code class="language-plaintext highlighter-rouge">engaged</code> is held by a linear release counter <code class="language-plaintext highlighter-rouge">engageReleaseHoldS=0.06</code> — never gate on <code class="language-plaintext highlighter-rouge">gate&gt;0.5</code> or <code class="language-plaintext highlighter-rouge">voiceEnv&gt;0</code>. Summed bus: fixed 0.6 gain + static <code class="language-plaintext highlighter-rouge">ma.tanh</code>, never dynamic
+<code class="language-plaintext highlighter-rouge">1/sqrt(activeVoices)</code>. <code class="language-plaintext highlighter-rouge">[[memory: multitranspose-investigation-history]]</code>.</p>
 
 <p>Formant (CC53, deadzone 60-68) via <code class="language-plaintext highlighter-rouge">LpcFormantShifter</code> (<code class="language-plaintext highlighter-rouge">vowelFormant.h</code>,
-<code class="language-plaintext highlighter-rouge">kOrder=44</code> at 48kHz — order 10-12 measured a complete no-op;
-<code class="language-plaintext highlighter-rouge">kHpPole=0.5925</code>). <strong>The grain formant path is INERT on the poly path</strong> —
-<code class="language-plaintext highlighter-rouge">pitch_poly_ffi.h</code> never calls <code class="language-plaintext highlighter-rouge">setFormantDepth()</code>; live on MONO via
+<code class="language-plaintext highlighter-rouge">kOrder=44</code> @48kHz, <code class="language-plaintext highlighter-rouge">kHpPole=0.5925</code>). <strong>The grain formant path is INERT on the
+poly path</strong> — <code class="language-plaintext highlighter-rouge">pitch_poly_ffi.h</code> never calls <code class="language-plaintext highlighter-rouge">setFormantDepth()</code>; live on MONO via
 <code class="language-plaintext highlighter-rouge">pitch_ffi.h</code>. <code class="language-plaintext highlighter-rouge">[[memory: lpc-formant-shifter-history]]</code>.</p>
 
-<p><strong>Fixed</strong>: upward shifts ≥+18 clicked. Cause was <code class="language-plaintext highlighter-rouge">soladSnacOctaver.h</code>’s
-splice COOLDOWN, not the <code class="language-plaintext highlighter-rouge">m_scale</code> crossfade division: on an upshift the read
-pointer eats the delay line at <code class="language-plaintext highlighter-rouge">(m_scale-1)</code>/sample, so the gap to the writer
-burns at that rate, while <code class="language-plaintext highlighter-rouge">upshiftTargetLag()</code> reserves only 1.5 periods —
-past <code class="language-plaintext highlighter-rouge">(scale-1)*0.9 &gt; 1.5</code> (scale&gt;2.667 = +17st) one cooldown window burns
-more gap than the whole reserve, the reader crosses the writer, and
-<code class="language-plaintext highlighter-rouge">readSinc()</code> reads one-<code class="language-plaintext highlighter-rouge">DL</code>-stale samples. Cooldown is now rate-derived
-(<code class="language-plaintext highlighter-rouge">spliceCooldownSamples()</code>, <code class="language-plaintext highlighter-rouge">per*0.9/max(1,|m_scale-1|)</code>, a no-op below +12).
-Still OPEN: percussive material starves the same way while <code class="language-plaintext highlighter-rouge">m_transientHold</code>
-blocks splices (marimba +18..+24: 93 → 47 events, not 0); a yield gate
-measured WORSE at +24. <code class="language-plaintext highlighter-rouge">[[memory: multitranspose-investigation-history]]</code>.</p>
+<p><strong>Fixed</strong>: the ≥+18-semitone upshift click. Its splice cooldown is rate-derived
+(<code class="language-plaintext highlighter-rouge">spliceCooldownSamples()</code>, <code class="language-plaintext highlighter-rouge">per*0.9/max(1,|m_scale-1|)</code>, a no-op below +12). Still OPEN: percussive material starves while <code class="language-plaintext highlighter-rouge">m_transientHold</code> blocks splices. <code class="language-plaintext highlighter-rouge">[[memory:
+multitranspose-investigation-history]]</code>.</p>
 
 <h2 id="free-transpose-engine-soladsnacoctaverhenginesoladsnac">Free-transpose engine (<code class="language-plaintext highlighter-rouge">soladSnacOctaver.h</code>/<code class="language-plaintext highlighter-rouge">EngineSoladSnac</code>)</h2>
 
 <p>The <code class="language-plaintext highlighter-rouge">-12</code> live pitch engine (<code class="language-plaintext highlighter-rouge">pitch_ffi.h</code>/<code class="language-plaintext highlighter-rouge">pitch.dsp</code>’s <code class="language-plaintext highlighter-rouge">dubfx_pitch_tick</code>
-<code class="language-plaintext highlighter-rouge">ffunction</code>, ADR-004): SNAC tracker + solad delay-line PSOLA shifter +
-formant grain stage. <code class="language-plaintext highlighter-rouge">DL=32768</code> (131072 corrupts the Pi’s 32-bit-pointer
-build), <code class="language-plaintext highlighter-rouge">MIN_PERIOD=48</code>, <code class="language-plaintext highlighter-rouge">DUBFX_BS=64</code>, a permanent ~1.333ms latency while
-engaged. <code class="language-plaintext highlighter-rouge">m_xfadeLen</code> is DIVIDED by the pitch ratio (clamped ≥1.0) —
-undivided, readers drift <code class="language-plaintext highlighter-rouge">(scale-1)</code> periods apart during the fade. <strong>Open
-bug</strong>: SNAC drift on tremolo/AM content — <code class="language-plaintext highlighter-rouge">detectPitchStep()</code>’s anti-jitter
-clamp walks toward a wrong subharmonic instead of rejecting it. <code class="language-plaintext highlighter-rouge">[[memory:
-free-transpose-engine-history]]</code>, <code class="language-plaintext highlighter-rouge">[[memory: cold-start-self-trap]]</code>.</p>
+<code class="language-plaintext highlighter-rouge">ffunction</code>, ADR-004): SNAC tracker + solad delay-line PSOLA shifter + formant
+grain stage.
+<code class="language-plaintext highlighter-rouge">DL=32768</code> (131072 corrupts the Pi’s 32-bit-pointer build), <code class="language-plaintext highlighter-rouge">MIN_PERIOD=48</code>,
+<code class="language-plaintext highlighter-rouge">DUBFX_BS=64</code>, a permanent ~1.333ms latency while engaged. <code class="language-plaintext highlighter-rouge">m_xfadeLen</code> is DIVIDED
+by the pitch ratio (clamped ≥1.0) — undivided, readers drift apart during the fade.
+Splice knobs are at measured optima — do not re-tune blind: <code class="language-plaintext highlighter-rouge">m_respliceFrac</code> 1.0,
+<code class="language-plaintext highlighter-rouge">SINC_TAPS</code> 16, <code class="language-plaintext highlighter-rouge">m_transientHold</code> 2 periods, slope weight 80.0, crossfade 1.0 period. <strong>Open bug</strong>: SNAC drift on tremolo/AM content (<code class="language-plaintext highlighter-rouge">detectPitchStep()</code>’s anti-jitter
+clamp walks to a wrong subharmonic). <code class="language-plaintext highlighter-rouge">[[memory: free-transpose-engine-history]]</code>, <code class="language-plaintext highlighter-rouge">[[memory:
+cold-start-self-trap]]</code>.</p>
 
 <h2 id="pitchtrackerlv2dawdreamer"><code class="language-plaintext highlighter-rouge">pitchtracker.lv2</code>/DawDreamer</h2>
 
-<p><code class="language-plaintext highlighter-rouge">effects/pitchtracker-src/pitchtracker_ac.dsp</code> — separate compilation unit,
-own LV2 bundle, <code class="language-plaintext highlighter-rouge">Lv2Host pitchTrackerFx</code> (<code class="language-plaintext highlighter-rouge">/effects/pitchtracker</code>); normalized
-autocorrelation with local-maximum peak selection and a
-<code class="language-plaintext highlighter-rouge">holdLastGood</code>/<code class="language-plaintext highlighter-rouge">energyReady</code> onset gate; must deploy to
-<code class="language-plaintext highlighter-rouge">/effects/pitchtracker/pitchtracker.lv2/</code>. Accurate below 500Hz.
-<code class="language-plaintext highlighter-rouge">minTrackHz=60</code> is a deliberate floor — a 60Hz reading means “no lock”.
-DawDreamer’s <code class="language-plaintext highlighter-rouge">FaustProcessor</code> refuses <code class="language-plaintext highlighter-rouge">ffunction</code> externs, so
-<code class="language-plaintext highlighter-rouge">verify_highoctave_transient.py</code> can NEVER pass — unconditionally red, not a
-gate to triage. <code class="language-plaintext highlighter-rouge">tools/dsp-cli/build.bat</code> compiles ANY <code class="language-plaintext highlighter-rouge">.dsp</code> with real
-<code class="language-plaintext highlighter-rouge">faust.exe</code>+MSVC in ~1-2s. <code class="language-plaintext highlighter-rouge">[[memory: ci-build-pipeline-history]]</code>.</p>
+<p><code class="language-plaintext highlighter-rouge">effects/pitchtracker-src/pitchtracker_ac.dsp</code> — separate compilation unit, own LV2
+bundle, <code class="language-plaintext highlighter-rouge">Lv2Host pitchTrackerFx</code> (<code class="language-plaintext highlighter-rouge">/effects/pitchtracker</code>); normalized
+autocorrelation with local-maximum peak selection and a <code class="language-plaintext highlighter-rouge">holdLastGood</code>/<code class="language-plaintext highlighter-rouge">energyReady</code>
+onset gate; must deploy to <code class="language-plaintext highlighter-rouge">/effects/pitchtracker/pitchtracker.lv2/</code>. Accurate below 500Hz. DawDreamer’s <code class="language-plaintext highlighter-rouge">FaustProcessor</code> refuses <code class="language-plaintext highlighter-rouge">ffunction</code> externs, so
+<code class="language-plaintext highlighter-rouge">verify_highoctave_transient.py</code> can NEVER pass — unconditionally red, not a gate
+to triage. <code class="language-plaintext highlighter-rouge">tools/dsp-cli/build.bat</code> compiles ANY <code class="language-plaintext highlighter-rouge">.dsp</code> with real <code class="language-plaintext highlighter-rouge">faust.exe</code>+MSVC
+in ~1-2s. <code class="language-plaintext highlighter-rouge">[[memory: ci-build-pipeline-history]]</code>.</p>
 
 <hr />
 
 <h1 id="lv2-hosting">LV2 hosting</h1>
 
-<p><code class="language-plaintext highlighter-rouge">Lv2Host::instantiate()</code> needs a NULL-terminated <code class="language-plaintext highlighter-rouge">LV2_Feature* const*</code>, never
-bare <code class="language-plaintext highlighter-rouge">nullptr</code> — Faust’s <code class="language-plaintext highlighter-rouge">lv2.cpp</code> loops <code class="language-plaintext highlighter-rouge">features[i]</code> unchecked. Wrap
+<p><code class="language-plaintext highlighter-rouge">Lv2Host::instantiate()</code> needs a NULL-terminated <code class="language-plaintext highlighter-rouge">LV2_Feature* const*</code>, never bare
+<code class="language-plaintext highlighter-rouge">nullptr</code> — Faust’s <code class="language-plaintext highlighter-rouge">lv2.cpp</code> loops <code class="language-plaintext highlighter-rouge">features[i]</code> unchecked. Wrap
 <code class="language-plaintext highlighter-rouge">instantiate()</code>/<code class="language-plaintext highlighter-rouge">activate()</code> in the sigsetjmp crash watchdog <code class="language-plaintext highlighter-rouge">runOne()</code> uses
-(ADR-002). <code class="language-plaintext highlighter-rouge">readTtl()</code> must strip trailing slashes from the bundle path
-(lilv’s resolved path has one, <code class="language-plaintext highlighter-rouge">bundlePath</code> never does — else prefix compare
-fails silently, falls back to no-port-wiring <code class="language-plaintext highlighter-rouge">.so</code>-only, watchdog off).
-<code class="language-plaintext highlighter-rouge">setControl</code> matches Faust’s MANGLED port symbol
+(ADR-002). <code class="language-plaintext highlighter-rouge">readTtl()</code> must strip trailing slashes from the bundle path (lilv’s
+resolved path has one, <code class="language-plaintext highlighter-rouge">bundlePath</code> never does — else the watchdog is off). <code class="language-plaintext highlighter-rouge">setControl</code>
+matches Faust’s MANGLED port symbol
 (<code class="language-plaintext highlighter-rouge">mangleFaustLabel(rawLabel)+"_"+"&lt;portIndex&gt;"</code>, e.g.
 <code class="language-plaintext highlighter-rouge">fx2/FLANGEAMT</code>→<code class="language-plaintext highlighter-rouge">fx2_FLANGEAMT_3</code>) — verify via <code class="language-plaintext highlighter-rouge">grep lv2:symbol *.ttl</code>.
-<code class="language-plaintext highlighter-rouge">Lv2Plugin::descriptor</code> caches at <code class="language-plaintext highlighter-rouge">instantiate()</code>, never re-resolved on the RT
-path. <code class="language-plaintext highlighter-rouge">aloop.lv2</code> excluded from apkovl by name (ADR-003).</p>
+<code class="language-plaintext highlighter-rouge">aloop.lv2</code> excluded from apkovl by name (ADR-003).</p>
 
 <h2 id="resonode-separate-conditionally-called-lv2-bundle">Resonode: separate, conditionally-called LV2 bundle</h2>
 
-<p><code class="language-plaintext highlighter-rouge">resonode_synth.dsp</code> pulled off the always-on Faust graph (avoids a real ~2ms
-idle <code class="language-plaintext highlighter-rouge">readi</code> gap) into <code class="language-plaintext highlighter-rouge">resonode.lv2</code> (<code class="language-plaintext highlighter-rouge">Lv2Host resonodeFx</code>,
-<code class="language-plaintext highlighter-rouge">/effects/resonode</code>); called only when <code class="language-plaintext highlighter-rouge">fx/resonode/engaged</code>. Per-voice
-<code class="language-plaintext highlighter-rouge">note</code>/<code class="language-plaintext highlighter-rouge">gate</code>/<code class="language-plaintext highlighter-rouge">vel</code> are LV2 ports from <code class="language-plaintext highlighter-rouge">ApcGrid</code>’s MIDI handlers.
-<code class="language-plaintext highlighter-rouge">resonodeIn</code> is ZEROED when engaged with no plugins loaded; output re-enters
-the crossfade BEFORE <code class="language-plaintext highlighter-rouge">microStage:filterStage:delayStage:reverbStage</code>,
-REPLACING never layering the original. <code class="language-plaintext highlighter-rouge">RESONODE_ENGAGED</code> is written directly
-via <code class="language-plaintext highlighter-rouge">fui.set()</code> in the worker loop, bypassing <code class="language-plaintext highlighter-rouge">targetToZone</code> — two consumers,
-audit both. <code class="language-plaintext highlighter-rouge">ApcGrid::bindAll</code> must <code class="language-plaintext highlighter-rouge">ps.bind()</code> every internal flag a C++ path
-<code class="language-plaintext highlighter-rouge">setByName</code>s. NaN/Inf guard after <code class="language-plaintext highlighter-rouge">resonodeFx.process()</code> zeroes the block,
-rate-limited <code class="language-plaintext highlighter-rouge">[diag-resonode]</code> log.</p>
+<p><code class="language-plaintext highlighter-rouge">resonode_synth.dsp</code> pulled off the always-on Faust graph into <code class="language-plaintext highlighter-rouge">resonode.lv2</code>
+(<code class="language-plaintext highlighter-rouge">Lv2Host resonodeFx</code>, <code class="language-plaintext highlighter-rouge">/effects/resonode</code>); called only when
+<code class="language-plaintext highlighter-rouge">fx/resonode/engaged</code>, but cost is FLAT in held voices (Faust has no runtime
+branching). Per-voice <code class="language-plaintext highlighter-rouge">note</code>/<code class="language-plaintext highlighter-rouge">gate</code>/<code class="language-plaintext highlighter-rouge">vel</code> are LV2
+ports from <code class="language-plaintext highlighter-rouge">ApcGrid</code>’s MIDI handlers. <code class="language-plaintext highlighter-rouge">resonodeIn</code> is ZEROED when engaged with no
+plugins loaded; output re-enters the crossfade BEFORE
+<code class="language-plaintext highlighter-rouge">microStage:filterStage:delayStage:reverbStage</code>, REPLACING never layering the
+original. <code class="language-plaintext highlighter-rouge">RESONODE_ENGAGED</code> is written directly via <code class="language-plaintext highlighter-rouge">fui.set()</code> in the worker
+loop, bypassing <code class="language-plaintext highlighter-rouge">targetToZone</code> — two consumers, audit both. <code class="language-plaintext highlighter-rouge">ApcGrid::bindAll</code>
+must <code class="language-plaintext highlighter-rouge">ps.bind()</code> every internal flag a C++ path <code class="language-plaintext highlighter-rouge">setByName</code>s. NaN/Inf guard after
+<code class="language-plaintext highlighter-rouge">resonodeFx.process()</code> zeroes the block, rate-limited <code class="language-plaintext highlighter-rouge">[diag-resonode]</code> log.</p>
 
-<p><code class="language-plaintext highlighter-rouge">modeCount=16</code> (16-of-24 — 24 hits a real <code class="language-plaintext highlighter-rouge">faust</code> compile-time SIGALRM
-ceiling), 4 voices, physically-modeled, excited ONLY by live mic (silent
-input, held key = silence); shared broadband exciter, each mode’s own filter
-does frequency selection. <code class="language-plaintext highlighter-rouge">couple</code> (knob7) is nearest-neighbor <code class="language-plaintext highlighter-rouge">letrec</code>
-skew-symmetric energy exchange, <code class="language-plaintext highlighter-rouge">coupleSmallGainMax=0.45</code>, clamp
-<code class="language-plaintext highlighter-rouge">coupleGuardCeil=8.0</code> (tanh rejected — never exactly identity). 5 ratio
-tables x5 shape hsliders. Shipped: zero gaps idle. Disclosed: mono only.
-<code class="language-plaintext highlighter-rouge">[[memory: resonode-exciter-coupling-cpu-history]]</code>.</p>
+<p><code class="language-plaintext highlighter-rouge">modeCount=16</code> (16-of-24 — 24 hits a real <code class="language-plaintext highlighter-rouge">faust</code> compile-time SIGALRM ceiling), 4
+voices, physically-modeled, excited ONLY by live mic (silent input, held key =
+silence); the SHARED exciter is broadband highpass(60Hz)+lowpass(tone), each
+mode’s own filter does frequency selection — never a per-voice bandpass. <code class="language-plaintext highlighter-rouge">couple</code>
+(knob7) is nearest-neighbor <code class="language-plaintext highlighter-rouge">letrec</code> skew-symmetric energy exchange,
+<code class="language-plaintext highlighter-rouge">coupleSmallGainMax=0.45</code>, clamp <code class="language-plaintext highlighter-rouge">coupleGuardCeil=8.0</code> (tanh rejected — never
+exactly identity). 5 ratio tables x5 shape hsliders; internal constants with no
+knob: <code class="language-plaintext highlighter-rouge">positionDriftEnv</code> ~350ms, <code class="language-plaintext highlighter-rouge">stretchJitterAmt=0.02</code>, <code class="language-plaintext highlighter-rouge">bassBoost</code> 1.35x
+&lt;220Hz, <code class="language-plaintext highlighter-rouge">aliasGuard</code> top-5%-Nyquist fade. <code class="language-plaintext highlighter-rouge">[[memory: resonode-exciter-coupling-cpu-history]]</code>.</p>
 
 <p>Sweetspot patches (<code class="language-plaintext highlighter-rouge">kResonodePatches</code>, knobs1-4); knobs 5-7:
 <code class="language-plaintext highlighter-rouge">fx/resonode/{tone,level,couple}</code>:</p>
@@ -602,16 +558,13 @@ tables x5 shape hsliders. Shipped: zero gaps idle. Disclosed: mono only.
 
 <h2 id="delayverb-separate-conditionally-called-lv2-bundle">delayverb: separate, conditionally-called LV2 bundle</h2>
 
-<p><code class="language-plaintext highlighter-rouge">delayverb.dsp</code> extracted into <code class="language-plaintext highlighter-rouge">delayverb.lv2</code>, compiled in two halves
-(<code class="language-plaintext highlighter-rouge">aloop_pre.dsp</code>/<code class="language-plaintext highlighter-rouge">aloop_post.dsp</code>, both previously unconditional, ran TWICE
-regardless of amount) — <code class="language-plaintext highlighter-rouge">.process()</code> is called only when <code class="language-plaintext highlighter-rouge">delayVerbActive</code>.
-<strong>Two separate instances</strong> (<code class="language-plaintext highlighter-rouge">delayVerbFxCue</code> + <code class="language-plaintext highlighter-rouge">delayVerbFxMaster</code>) — sharing
-one corrupted its feedback state; <code class="language-plaintext highlighter-rouge">delayVerbActive</code> requires BOTH
-<code class="language-plaintext highlighter-rouge">hasPlugins()</code>. Build needs <code class="language-plaintext highlighter-rouge">libboost-dev</code>.</p>
-
-<p><code class="language-plaintext highlighter-rouge">cmd/halfspeed</code>/<code class="language-plaintext highlighter-rouge">cmd/doublespeed</code> stay <code class="language-plaintext highlighter-rouge">note70</code>/<code class="language-plaintext highlighter-rouge">note71</code>, never <code class="language-plaintext highlighter-rouge">cc70</code>/
-<code class="language-plaintext highlighter-rouge">cc71</code> (real APC Key25 sends NOTES 70/71 ch0). <code class="language-plaintext highlighter-rouge">note91</code> (<code class="language-plaintext highlighter-rouge">0x5B</code>) must never
-bind to <code class="language-plaintext highlighter-rouge">cmd/clearall</code> — races <code class="language-plaintext highlighter-rouge">ApcGrid</code>’s shadow-state reset.</p>
+<p><code class="language-plaintext highlighter-rouge">delayverb.dsp</code> extracted into <code class="language-plaintext highlighter-rouge">delayverb.lv2</code>, compiled in two halves;
+<code class="language-plaintext highlighter-rouge">.process()</code> is called only when
+<code class="language-plaintext highlighter-rouge">delayVerbActive</code>. <strong>Two separate instances</strong> (<code class="language-plaintext highlighter-rouge">delayVerbFxCue</code> +
+<code class="language-plaintext highlighter-rouge">delayVerbFxMaster</code>) — sharing one corrupted its feedback state;
+<code class="language-plaintext highlighter-rouge">delayVerbActive</code> requires BOTH <code class="language-plaintext highlighter-rouge">hasPlugins()</code>. <code class="language-plaintext highlighter-rouge">cmd/halfspeed</code>/<code class="language-plaintext highlighter-rouge">cmd/doublespeed</code> stay <code class="language-plaintext highlighter-rouge">note70</code>/<code class="language-plaintext highlighter-rouge">note71</code>, never <code class="language-plaintext highlighter-rouge">cc70</code>/<code class="language-plaintext highlighter-rouge">cc71</code>
+(real APC Key25 sends NOTES 70/71 ch0). <code class="language-plaintext highlighter-rouge">note91</code> (<code class="language-plaintext highlighter-rouge">0x5B</code>) must never bind to
+<code class="language-plaintext highlighter-rouge">cmd/clearall</code> — races <code class="language-plaintext highlighter-rouge">ApcGrid</code>’s shadow-state reset.</p>
 
 <p><strong>Tracktion Engine is REJECTED</strong> — do not re-open without new evidence
 (<code class="language-plaintext highlighter-rouge">[[memory: tracktion-engine-rejection]]</code>).</p>
@@ -620,82 +573,69 @@ bind to <code class="language-plaintext highlighter-rouge">cmd/clearall</code> �
 
 <h1 id="control-surface-srccontrolapc_gridcpp">Control surface (<code class="language-plaintext highlighter-rouge">src/control/apc_grid.cpp</code>)</h1>
 
-<p>MIDI routing (<code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>): APC Key25 pads/buttons are <strong>channel
-0</strong>; the keybed is <strong>channel 1</strong> — injecting keybed notes on ch0 produces no
-response. SHIFT is <code class="language-plaintext highlighter-rouge">kApcBtnShift=0x62</code> (note 98) ch0. Sustain is CC64
-(<code class="language-plaintext highlighter-rouge">d2&gt;=64</code>) on any channel, latching <code class="language-plaintext highlighter-rouge">m_sustainLatched</code>. <strong>A live playthrough
-capture is not representative until SHIFT and latch-sustain are both sent
-first</strong> (<code class="language-plaintext highlighter-rouge">raw 90 62 7f</code> then <code class="language-plaintext highlighter-rouge">raw B0 40 7F</code>) — without the latch,
-monitored/captured output is ~10x quieter. <code class="language-plaintext highlighter-rouge">[[memory:
-live-playthrough-cue-requires-shift-sustain]]</code>.</p>
+<p>MIDI routing (<code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>): APC Key25 pads/buttons are <strong>channel 0</strong>,
+the keybed <strong>channel 1</strong> — injecting keybed notes on ch0 produces no response.
+SHIFT is <code class="language-plaintext highlighter-rouge">kApcBtnShift=0x62</code> (note 98) ch0. Sustain is CC64 (<code class="language-plaintext highlighter-rouge">d2&gt;=64</code>), latching
+<code class="language-plaintext highlighter-rouge">m_sustainLatched</code>. <strong>A live playthrough capture is not
+representative until SHIFT and latch-sustain are both sent first</strong> (<code class="language-plaintext highlighter-rouge">raw 90 62 7f</code>
+then <code class="language-plaintext highlighter-rouge">raw B0 40 7F</code>, ≥0.3s apart): without the latch, monitored/captured output is
+~10x quieter. <code class="language-plaintext highlighter-rouge">[[memory: live-playthrough-cue-requires-shift-sustain]]</code>.</p>
 
-<p>Every momentary Faust gate must be explicitly released or it sticks at 1
-forever: <code class="language-plaintext highlighter-rouge">looperN/erase</code> (<code class="language-plaintext highlighter-rouge">pollHolds</code> releases after ~50ms),
-<code class="language-plaintext highlighter-rouge">looperN/finishreq</code>, <code class="language-plaintext highlighter-rouge">cmd/clearall</code> (genuinely HELD). Every abandon path
-(<code class="language-plaintext highlighter-rouge">applyRecPlayCycle</code>’s <code class="language-plaintext highlighter-rouge">rawSamples&lt;=0</code> abort, <code class="language-plaintext highlighter-rouge">pollHolds</code>’s hold-erase loop,
-<code class="language-plaintext highlighter-rouge">onClearAll</code>) must ALSO pulse <code class="language-plaintext highlighter-rouge">finishreq=1</code> with <code class="language-plaintext highlighter-rouge">finishtarget</code> set to the
-real telemetry <code class="language-plaintext highlighter-rouge">widx</code>, or Faust’s <code class="language-plaintext highlighter-rouge">pend</code> stays latched and fires a phantom
-arm→finish blip at the next phrase-top. <code class="language-plaintext highlighter-rouge">rec</code> is persistent <code class="language-plaintext highlighter-rouge">ParamStore</code>
-state — <code class="language-plaintext highlighter-rouge">applyRecPlayCycle</code> sets <code class="language-plaintext highlighter-rouge">rec=0</code> on FINISH or it re-records forever.
-Per-looper cycle: empty → ARM(<code class="language-plaintext highlighter-rouge">rec=1</code>) → FINISH(<code class="language-plaintext highlighter-rouge">rec=0</code>, <code class="language-plaintext highlighter-rouge">play=1</code>) →
-pause(<code class="language-plaintext highlighter-rouge">play=0</code>) → resume(<code class="language-plaintext highlighter-rouge">play=1</code>); ARM/FINISH on PRESS, pause/resume on
-release. <code class="language-plaintext highlighter-rouge">kLooperCount=20</code>; <code class="language-plaintext highlighter-rouge">looperN/hascontent</code> is the real content slot —
+<p>Every momentary Faust gate must be explicitly released or it sticks at 1 forever:
+<code class="language-plaintext highlighter-rouge">looperN/erase</code> (<code class="language-plaintext highlighter-rouge">pollHolds</code> releases after ~50ms), <code class="language-plaintext highlighter-rouge">looperN/finishreq</code>,
+<code class="language-plaintext highlighter-rouge">cmd/clearall</code>. Every abandon path (<code class="language-plaintext highlighter-rouge">applyRecPlayCycle</code>’s
+<code class="language-plaintext highlighter-rouge">rawSamples&lt;=0</code> abort, <code class="language-plaintext highlighter-rouge">pollHolds</code>’s hold-erase loop, <code class="language-plaintext highlighter-rouge">onClearAll</code>) must ALSO pulse
+<code class="language-plaintext highlighter-rouge">finishreq=1</code> with <code class="language-plaintext highlighter-rouge">finishtarget</code> set to the real telemetry <code class="language-plaintext highlighter-rouge">widx</code>, or Faust’s
+<code class="language-plaintext highlighter-rouge">pend</code> stays latched.
+<code class="language-plaintext highlighter-rouge">rec</code> is persistent <code class="language-plaintext highlighter-rouge">ParamStore</code> state — <code class="language-plaintext highlighter-rouge">applyRecPlayCycle</code> sets <code class="language-plaintext highlighter-rouge">rec=0</code> on FINISH
+or it re-records forever. Per-looper cycle: empty → ARM(<code class="language-plaintext highlighter-rouge">rec=1</code>) → FINISH(<code class="language-plaintext highlighter-rouge">rec=0</code>,
+<code class="language-plaintext highlighter-rouge">play=1</code>) → pause(<code class="language-plaintext highlighter-rouge">play=0</code>) → resume(<code class="language-plaintext highlighter-rouge">play=1</code>); ARM/FINISH on PRESS, pause/resume
+on release. <code class="language-plaintext highlighter-rouge">kLooperCount=20</code>; <code class="language-plaintext highlighter-rouge">looperN/hascontent</code> is the real content slot —
 Faust’s <code class="language-plaintext highlighter-rouge">wrapLen</code> is clamped to a minimum of 1.</p>
 
-<p><code class="language-plaintext highlighter-rouge">m_masterLenSamples</code>/<code class="language-plaintext highlighter-rouge">cmd/master_len</code>/<code class="language-plaintext highlighter-rouge">cmd/recorded_bpm</code> reset to 0 when the
-last looper with content is erased — <code class="language-plaintext highlighter-rouge">anyHasContent</code> cross-checks
+<p><code class="language-plaintext highlighter-rouge">m_masterLenSamples</code>/<code class="language-plaintext highlighter-rouge">cmd/master_len</code>/<code class="language-plaintext highlighter-rouge">cmd/recorded_bpm</code> reset to 0 when the last
+looper with content is erased — <code class="language-plaintext highlighter-rouge">anyHasContent</code> cross-checks
 <code class="language-plaintext highlighter-rouge">Telemetry::looperWrapLen</code> and self-heals the shadow, skipping loopers with
-<code class="language-plaintext highlighter-rouge">m_looperWrapLenStaleAfterWipe</code> (wipe never resets DSP <code class="language-plaintext highlighter-rouge">wraplen</code>, only FINISH
-writes it). Master phrase length is <code class="language-plaintext highlighter-rouge">writeIdx</code> telemetry, never wall-clock.</p>
+<code class="language-plaintext highlighter-rouge">m_looperWrapLenStaleAfterWipe</code> (only FINISH writes DSP <code class="language-plaintext highlighter-rouge">wraplen</code>). Master phrase length is <code class="language-plaintext highlighter-rouge">writeIdx</code> telemetry, never wall-clock.</p>
 
-<p><strong>Content phase-anchor</strong>: playback anchors to a shared <code class="language-plaintext highlighter-rouge">masterPhase</code> grid,
-never a per-take offset. Non-first-looper <code class="language-plaintext highlighter-rouge">armEdge</code> fires on
-<code class="language-plaintext highlighter-rouge">fineGridWrapped</code> (masterPhase crossing any 1/8-beat boundary — hoisted once
-in <code class="language-plaintext highlighter-rouge">loopEngine</code>, same pattern as <code class="language-plaintext highlighter-rouge">masterPhaseWrapped</code>) — every looper waits at
-most ~30-60ms instead of up to a full phrase. <code class="language-plaintext highlighter-rouge">rsmNext</code> captures real
-<code class="language-plaintext highlighter-rouge">masterPhase</code> at armEdge. Real backward content recovery is a deferred gap —
-needs a C++ <code class="language-plaintext highlighter-rouge">ffunction</code>. FINISH length is near-cut/far-extend
-(<code class="language-plaintext highlighter-rouge">pickAnchorGridBeats</code>, the same ladder Faust’s own snap uses — it REPLACED
-the old <code class="language-plaintext highlighter-rouge">lowerExp</code>/<code class="language-plaintext highlighter-rouge">lowerCand</code>/<code class="language-plaintext highlighter-rouge">upperCand</code> powers-of-masterLen scheme):
-overshoot past the most recently passed grid node ≤1 beat cuts to it
-immediately, else extends to the next node. Ceiling is <code class="language-plaintext highlighter-rouge">kMaxLoopSamples</code>
-(48000*60). <strong>Disclosed</strong>: <code class="language-plaintext highlighter-rouge">winSamples</code>/<code class="language-plaintext highlighter-rouge">xfSamples</code> freeze at floor on a cold
-start. <code class="language-plaintext highlighter-rouge">[[memory: control-surface-quantization-history]]</code>.</p>
+<p><strong>Content phase-anchor</strong>: playback anchors to a shared <code class="language-plaintext highlighter-rouge">masterPhase</code> grid, never a
+per-take offset. Non-first-looper <code class="language-plaintext highlighter-rouge">armEdge</code> fires on <code class="language-plaintext highlighter-rouge">fineGridWrapped</code> (masterPhase
+crossing any 1/8-beat boundary, hoisted once in <code class="language-plaintext highlighter-rouge">loopEngine</code> like
+<code class="language-plaintext highlighter-rouge">masterPhaseWrapped</code>). <code class="language-plaintext highlighter-rouge">rsmNext</code> captures real <code class="language-plaintext highlighter-rouge">masterPhase</code> at armEdge. FINISH length is
+near-cut/far-extend (<code class="language-plaintext highlighter-rouge">pickAnchorGridBeats</code>; it REPLACED the old
+<code class="language-plaintext highlighter-rouge">lowerExp</code>/<code class="language-plaintext highlighter-rouge">lowerCand</code>/<code class="language-plaintext highlighter-rouge">upperCand</code> scheme): overshoot past the most recently passed
+grid node ≤1 beat cuts to it immediately, else extends to the next node. Ceiling is
+<code class="language-plaintext highlighter-rouge">kMaxLoopSamples</code> (48000*60). <strong>Disclosed</strong>: <code class="language-plaintext highlighter-rouge">winSamples</code>/<code class="language-plaintext highlighter-rouge">xfSamples</code> freeze at
+floor on a cold start, and real backward content recovery is a deferred gap. <code class="language-plaintext highlighter-rouge">[[memory: control-surface-quantization-history]]</code>.</p>
 
-<p>First (master-establishing) recording’s tempo/beats comes from a real synced
-Link tempo when present — <code class="language-plaintext highlighter-rouge">recorded_beats</code> snapped to the nearest power-of-2
-in {1,2,4,8,16,32,64,128} (<code class="language-plaintext highlighter-rouge">snapBeatsToPow2</code>, fixed from a raw <code class="language-plaintext highlighter-rouge">round()</code> that
-could pick any integer, breaking the power-of-2-ratio invariant);
-<code class="language-plaintext highlighter-rouge">deriveTempoQuant</code> is fallback-only. Real APC Key25 re-sends note-on for an
-already-held pad — <code class="language-plaintext highlighter-rouge">onPadPress</code>/<code class="language-plaintext highlighter-rouge">m_looperHeld</code> treats a repeat as no-op.
-Guitar-fx held REDIRECTS looper pad presses to <code class="language-plaintext highlighter-rouge">onSidechainLooperToggle</code>
+<p>First (master-establishing) recording takes its tempo/beats from a real synced Link
+tempo when present — <code class="language-plaintext highlighter-rouge">recorded_beats</code> snapped to the nearest power-of-2 in
+{1,2,4,8,16,32,64,128} (<code class="language-plaintext highlighter-rouge">snapBeatsToPow2</code>); <code class="language-plaintext highlighter-rouge">deriveTempoQuant</code> is fallback-only.
+A re-sent note-on for an already-held pad is a no-op. Guitar-fx held REDIRECTS looper pad presses to <code class="language-plaintext highlighter-rouge">onSidechainLooperToggle</code>
 while <code class="language-plaintext highlighter-rouge">m_guitarFxHeld</code>.</p>
 
 <h2 id="lofifxgranulator-button--shift-disambiguates-note-69">LofiFx/granulator button — SHIFT disambiguates (note 69)</h2>
 
 <p>Both fire on PRESS: plain tap toggles <code class="language-plaintext highlighter-rouge">m_granulatorLatched</code>; SHIFT+tap toggles
-Resonode engage (always wins, forces granulator off; disengage releases every
-held voice). Resonode-engaged keybed drives 4 voices via
-<code class="language-plaintext highlighter-rouge">Lv2Host::setControl</code> to <code class="language-plaintext highlighter-rouge">fx/resonodevoice{v}/{note,gate,vel}</code> (skipped when
-disengaged, unlike <code class="language-plaintext highlighter-rouge">multitranspose.dsp</code>’s 6 always-on voices). LEDs: blinking
-red=Resonode, solid green=granulator.</p>
+Resonode engage (always wins, forces granulator off; disengage releases every held
+voice). Resonode-engaged keybed drives 4 voices via <code class="language-plaintext highlighter-rouge">Lv2Host::setControl</code> to
+<code class="language-plaintext highlighter-rouge">fx/resonodevoice{v}/{note,gate,vel}</code> (skipped when disengaged). An ambient (no-held-key) granulator voice is deliberately unimplemented. <code class="language-plaintext highlighter-rouge">[[memory:
+granulator-investigation-history]]</code>.</p>
 
 <h2 id="granulator-srcdspsamplersamplerh">Granulator (<code class="language-plaintext highlighter-rouge">src/dsp/sampler/sampler.h</code>)</h2>
 
-<p>C++ (not Faust): 7 params (<code class="language-plaintext highlighter-rouge">grainMs</code>/<code class="language-plaintext highlighter-rouge">grainRateHz</code>/<code class="language-plaintext highlighter-rouge">pitchSprayCents</code>/
-<code class="language-plaintext highlighter-rouge">posJitterMs</code>/<code class="language-plaintext highlighter-rouge">scanRate</code>/<code class="language-plaintext highlighter-rouge">reverseProb</code>/<code class="language-plaintext highlighter-rouge">envShape</code>), <code class="language-plaintext highlighter-rouge">MAX_GRAINS=48</code> shared
-across 16 voices; <code class="language-plaintext highlighter-rouge">scanRate=0</code> freezes, negative <code class="language-plaintext highlighter-rouge">rate</code>/<code class="language-plaintext highlighter-rouge">reverseProb</code>
-reverses. Direct dials (knobs 5-7) override the
-patch-blended field once touched. Grain pool budgeted PER VOICE
-(<code class="language-plaintext highlighter-rouge">MAX_GRAINS/voices</code>), never exhaustible. <code class="language-plaintext highlighter-rouge">[[memory:
+<p>C++ (not Faust): 7 params (<code class="language-plaintext highlighter-rouge">grainMs</code>/<code class="language-plaintext highlighter-rouge">grainRateHz</code>/<code class="language-plaintext highlighter-rouge">pitchSprayCents</code>/<code class="language-plaintext highlighter-rouge">posJitterMs</code>/
+<code class="language-plaintext highlighter-rouge">scanRate</code>/<code class="language-plaintext highlighter-rouge">reverseProb</code>/<code class="language-plaintext highlighter-rouge">envShape</code>), <code class="language-plaintext highlighter-rouge">MAX_GRAINS=48</code> shared across 16 voices. <code class="language-plaintext highlighter-rouge">scanRate=0</code> freezes; a negative <code class="language-plaintext highlighter-rouge">rate</code>
+reverses. Direct dials (knobs 5-7) override the patch-blended field once touched
+(<code class="language-plaintext highlighter-rouge">m_lofiFxKnobTouched</code>); <code class="language-plaintext highlighter-rouge">kGranPatchCount</code> is 4. Grain pool budgeted PER VOICE
+(<code class="language-plaintext highlighter-rouge">MAX_GRAINS/voices</code>), never exhaustible. <code class="language-plaintext highlighter-rouge">kGrainTimingJitterAmt=0.15</code>. <code class="language-plaintext highlighter-rouge">[[memory:
 granulator-investigation-history]]</code>.</p>
 
 <h2 id="three-page--regularshift--8-knob-control-surface">Three-page × regular/shift × 8-knob control surface</h2>
 
-<p>Every FX page (Dub, Guitar, LofiFx) has two independently-latching 8-knob
-banks via <code class="language-plaintext highlighter-rouge">ApcGrid::onFxKnobCC</code> on <code class="language-plaintext highlighter-rouge">m_activeBank</code>/<code class="language-plaintext highlighter-rouge">m_shift</code>.
-<code class="language-plaintext highlighter-rouge">kFxKnobCcNumbers={48,49,50,51,54,55,57,53}</code> (CC53 double-duties as Formant
-on Dub only):</p>
+<p>Every FX page (Dub, Guitar, LofiFx) has two independently-latching 8-knob banks
+via <code class="language-plaintext highlighter-rouge">ApcGrid::onFxKnobCC</code>.
+<code class="language-plaintext highlighter-rouge">kFxKnobCcNumbers={48,49,50,51,54,55,57,53}</code> (CC53 doubles as Formant on Dub):</p>
 
 <table>
   <thead>
@@ -725,43 +665,37 @@ on Dub only):</p>
 </table>
 
 <p>Groove shuffle: <code class="language-plaintext highlighter-rouge">kBeatPadNotes={15,23,31,39}</code> double as shuffle buttons,
-<code class="language-plaintext highlighter-rouge">fx/shuffle/mask</code> (4-bit) — true retrigger/reorder, block-boundary only, own
+<code class="language-plaintext highlighter-rouge">fx/shuffle/mask</code> (4-bit) — retrigger/reorder, block-boundary only, own
 <code class="language-plaintext highlighter-rouge">shuffleClockSamples</code> atop the real <code class="language-plaintext highlighter-rouge">masterPhaseSamples+i</code> ramp;
-<code class="language-plaintext highlighter-rouge">kShiftReorderTables[mask]</code> eliminates double-tap. <code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code> varispeed
-has NO deadzone (<code class="language-plaintext highlighter-rouge">varispeedActive=effSpeed!=1.0</code> exact); <code class="language-plaintext highlighter-rouge">resyncCoeff</code> gates
-to <code class="language-plaintext highlighter-rouge">0.0</code> when <code class="language-plaintext highlighter-rouge">manualPunchActive</code>; both varispeed’s instant jump and
-beat-shuffle’s hard clip are INTENTIONAL. <code class="language-plaintext highlighter-rouge">microrepeat.dsp</code>’s
-<code class="language-plaintext highlighter-rouge">sliceBlocks=max(1,int(beatBlocks/divSafe))*2</code>, <code class="language-plaintext highlighter-rouge">divSafe=max(1,DIV)</code> (never
-halve the divisor first). CC53 formant: <code class="language-plaintext highlighter-rouge">((data2-64)/63.0)*1.5</code>, deadzone
-60-68 — SHIFT never changes a knob’s own behavior.</p>
+<code class="language-plaintext highlighter-rouge">kShiftReorderTables[mask]</code> eliminates double-tap.
+<code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code> varispeed has NO deadzone (<code class="language-plaintext highlighter-rouge">varispeedActive=effSpeed!=1.0</code> exact);
+<code class="language-plaintext highlighter-rouge">resyncCoeff</code> gates to <code class="language-plaintext highlighter-rouge">0.0</code> when <code class="language-plaintext highlighter-rouge">manualPunchActive</code>; varispeed’s instant jump and
+beat-shuffle’s hard clip are INTENTIONAL — do not smooth either.
+<code class="language-plaintext highlighter-rouge">microrepeat.dsp</code>’s <code class="language-plaintext highlighter-rouge">sliceBlocks=max(1,int(beatBlocks/divSafe))*2</code>,
+<code class="language-plaintext highlighter-rouge">divSafe=max(1,DIV)</code>. CC53 formant:
+<code class="language-plaintext highlighter-rouge">((data2-64)/63.0)*1.5</code>, deadzone 60-68 — SHIFT never changes a knob’s own
+behavior. Loop ring reads use Catmull-Rom cubic, not linear; taps wrap at <code class="language-plaintext highlighter-rouge">wrapLen</code>, not <code class="language-plaintext highlighter-rouge">MAXLEN</code>.</p>
 
 <hr />
 
 <h1 id="storage-continuous-usb-drive-ring-recording">Storage: continuous USB-drive ring recording</h1>
 
-<p><code class="language-plaintext highlighter-rouge">src/storage/usb_recorder.{h,cpp}</code>. <code class="language-plaintext highlighter-rouge">src/usb/f_uac2-gadget.sh</code> is a different
-USB role (peripheral/gadget vs. host mode on the USB-A ports).</p>
+<p><code class="language-plaintext highlighter-rouge">src/storage/usb_recorder.{h,cpp}</code> (unrelated to <code class="language-plaintext highlighter-rouge">src/usb/f_uac2-gadget.sh</code>).</p>
 
 <p><strong>RT side</strong>: <code class="language-plaintext highlighter-rouge">UsbRecorder</code> owns a fixed, heap-allocated <code class="language-plaintext highlighter-rouge">int16_t</code> ring (5s);
-<code class="language-plaintext highlighter-rouge">audio_thread.cpp</code>’s worker calls <code class="language-plaintext highlighter-rouge">pushBlock(prevFiltOut.data(), N)</code> every
-block, next to <code class="language-plaintext highlighter-rouge">g_sampler-&gt;captureBlock(...)</code>. Single-atomic-counter SPSC
-ring, never blocks/allocates — a lagging consumer has <code class="language-plaintext highlighter-rouge">pushBlock</code> advance the
-read counter itself (drops oldest samples).</p>
+<code class="language-plaintext highlighter-rouge">audio_thread.cpp</code>’s worker calls <code class="language-plaintext highlighter-rouge">pushBlock(prevFiltOut.data(), N)</code> every block. Single-atomic-counter SPSC ring, never blocks or allocates.</p>
 
 <p><strong>Control side</strong>: file I/O happens in <code class="language-plaintext highlighter-rouge">UsbRecorder::poll()</code>, called from
-<code class="language-plaintext highlighter-rouge">main.cpp</code>’s 5 Hz control loop, not a dedicated pthread. Chunks fixed-size,
-cyclically <code class="language-plaintext highlighter-rouge">O_TRUNC</code>-reopened (bounds disk by construction); mount detection
-is a <code class="language-plaintext highlighter-rouge">stat()</code> device-id compare. Config:
-<code class="language-plaintext highlighter-rouge">[storage]</code> in <code class="language-plaintext highlighter-rouge">config/aloop.conf</code> — <code class="language-plaintext highlighter-rouge">usb_record</code>, <code class="language-plaintext highlighter-rouge">usb_mount_point</code>,
+<code class="language-plaintext highlighter-rouge">main.cpp</code>’s 5 Hz control loop. Chunks fixed-size,
+cyclically <code class="language-plaintext highlighter-rouge">O_TRUNC</code>-reopened.
+Config <code class="language-plaintext highlighter-rouge">[storage]</code> in <code class="language-plaintext highlighter-rouge">config/aloop.conf</code> — <code class="language-plaintext highlighter-rouge">usb_record</code>, <code class="language-plaintext highlighter-rouge">usb_mount_point</code>,
 <code class="language-plaintext highlighter-rouge">usb_chunk_minutes</code> (10), <code class="language-plaintext highlighter-rouge">usb_chunk_count</code> (6). Clip export (note 93,
 <code class="language-plaintext highlighter-rouge">src/storage/clip_exporter.cpp</code>) keys off <code class="language-plaintext highlighter-rouge">m_looperHasContent</code>, not <code class="language-plaintext highlighter-rouge">wrapLen</code>.</p>
 
-<p><strong>Automount</strong>: <code class="language-plaintext highlighter-rouge">src/usb/usb-automount.sh</code> (mdev hotplug) +
-<code class="language-plaintext highlighter-rouge">usb-automount-setup.sh</code> (APPENDS to <code class="language-plaintext highlighter-rouge">/etc/mdev.conf</code>, own coldplug pass since
-<code class="language-plaintext highlighter-rouge">local.d</code> runs AFTER <code class="language-plaintext highlighter-rouge">mdev -s</code>). Mount attempts: no <code class="language-plaintext highlighter-rouge">-t</code> first, then <code class="language-plaintext highlighter-rouge">ntfs3</code>
-(real read-write NTFS — BEFORE the legacy read-only <code class="language-plaintext highlighter-rouge">ntfs</code>), then
-vfat/ext4/exfat; <code class="language-plaintext highlighter-rouge">ntfs3</code> needs <code class="language-plaintext highlighter-rouge">force</code> or a dirty drive is rejected.
-UNVERIFIED on real hardware.</p>
+<p><strong>Automount</strong>: <code class="language-plaintext highlighter-rouge">src/usb/usb-automount.sh</code> (mdev hotplug) + <code class="language-plaintext highlighter-rouge">usb-automount-setup.sh</code>
+(APPENDS to <code class="language-plaintext highlighter-rouge">/etc/mdev.conf</code>; own coldplug pass since <code class="language-plaintext highlighter-rouge">local.d</code> runs AFTER <code class="language-plaintext highlighter-rouge">mdev -s</code>).
+Mount order: no <code class="language-plaintext highlighter-rouge">-t</code>, then <code class="language-plaintext highlighter-rouge">ntfs3</code> (read-write; BEFORE the legacy read-only <code class="language-plaintext highlighter-rouge">ntfs</code>),
+then vfat/ext4/exfat; <code class="language-plaintext highlighter-rouge">ntfs3</code> needs <code class="language-plaintext highlighter-rouge">force</code>. UNVERIFIED on real hardware.</p>
 
 
       </section>
