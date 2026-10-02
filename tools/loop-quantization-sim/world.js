@@ -456,6 +456,8 @@ function stepOneSample(w) {
       let anyAudible = false;
       for (const lp of w.loopers) if (lp.playing || lp.recording) { anyAudible = true; break; }
 
+      if (masterJustCreated && target !== null) w.lastLinkPhaseMicroBeats = -1;
+
       const fresh = target !== null && s.beatPhaseMicroBeats !== w.lastLinkPhaseMicroBeats;
       if (fresh) w.lastLinkPhaseMicroBeats = s.beatPhaseMicroBeats;
 
