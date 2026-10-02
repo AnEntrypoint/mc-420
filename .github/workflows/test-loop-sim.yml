@@ -45,5 +45,8 @@ jobs:
       - name: Retune after recording
         run: node tools/loop-quantization-sim/tempo-change.js
 
+      - name: Link dropout and reconnect
+        run: node tools/loop-quantization-sim/dropout.js
+
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50

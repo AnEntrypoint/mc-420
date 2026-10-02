@@ -24,7 +24,7 @@ function makePair(bpm) {
   const b = createWorld({ looperCount: 4, initialLinkBpm: bpm });
   a.link = { session, local: peerA, remote: peerB };
   b.link = { session, local: peerB, remote: peerA };
-  return { session, a, b };
+  return { session, peerA, peerB, a, b };
 }
 
 function advancePair(a, b, samples) {

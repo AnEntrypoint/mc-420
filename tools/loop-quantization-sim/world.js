@@ -91,6 +91,7 @@ function createWorld(opts) {
     linkPhaseTrim: 0.0,
     phaseLockEnabled: true,
     varispeedOnAnchor: true,
+    resnapOnReconnect: true,
     joinSnapEnabled: true,
     beatsGuessEnabled: false,
     deferBeatsWrite: false,
@@ -498,6 +499,7 @@ function stepOneSample(w) {
     } else {
       w.masterPhaseSamples += linkSpeedRatio + w.linkPhaseTrim;
       w.creationSnapPending = false;
+      if (w.resnapOnReconnect) w.wasLinkSynced = false;
       w.lastLinkBpmSeen = 0.0;
       w.tempoStableSamples = 0;
       w.lastLinkPhaseMicroBeats = -1;
@@ -509,6 +511,7 @@ function stepOneSample(w) {
     w.masterPhaseSamples = 0;
     w.linkPhaseErrBeats = 0.0;
     w.creationSnapPending = false;
+    if (w.resnapOnReconnect) w.wasLinkSynced = false;
   }
   const results = [];
   for (let i = 0; i < w.looperCount; i++) {
