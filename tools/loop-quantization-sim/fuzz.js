@@ -174,4 +174,23 @@ function fuzz(opts) {
   return results;
 }
 
+function main() {
+  const argValue = (name, fallback) => {
+    const hit = process.argv.find((a) => a.startsWith(name + '='));
+    return hit ? hit.slice(name.length + 1) : fallback;
+  };
+  const trials = Number(argValue('--trials', '3000'));
+  const eventsPerTrial = Number(argValue('--events', '50'));
+  const results = fuzz({ trials, eventsPerTrial });
+  for (const r of results) {
+    for (const f of r.findings) {
+      console.log(`seed ${r.seed} at event ${f.atEvent} (${f.event.kind}) ${f.kind}: ${f.message}`);
+    }
+  }
+  console.log(`fuzz: ${trials} trials x ${eventsPerTrial} events, ${results.length} finding(s)`);
+  process.exit(results.length === 0 ? 0 : 1);
+}
+
+if (require.main === module) main();
+
 module.exports = { mulberry32, genEvent, applyEvent, runSequence, shrink, fuzz, EVENT_KINDS };

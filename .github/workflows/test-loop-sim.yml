@@ -1,0 +1,34 @@
+name: test-loop-sim
+
+on:
+  push:
+    paths:
+      - 'tools/loop-quantization-sim/**'
+      - '.github/workflows/test-loop-sim.yml'
+  pull_request:
+    paths:
+      - 'tools/loop-quantization-sim/**'
+      - '.github/workflows/test-loop-sim.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  loop-sim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node version
+        run: node --version
+
+      - name: Smoketest
+        run: node tools/loop-quantization-sim/smoketest.js
+
+      - name: Two-device Link sync
+        run: node tools/loop-quantization-sim/two-device-sync.js
+
+      - name: Fuzz
+        run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50
