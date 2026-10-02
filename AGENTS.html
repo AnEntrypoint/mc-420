@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=a4be5dc0032c43d8681a2215cfed814b9716431d">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=44f3dce51d6b5b3d10e5440dbb9b0a8db1759407">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -333,7 +333,7 @@ single-AP mesh for Link’s multicast peer discovery.</p>
     </tr>
     <tr>
       <td>Link quantum</td>
-      <td><code class="language-plaintext highlighter-rouge">link_bridge.cpp</code> <code class="language-plaintext highlighter-rouge">quantum=16.0</code></td>
+      <td><code class="language-plaintext highlighter-rouge">link_bridge.cpp</code> <code class="language-plaintext highlighter-rouge">kLinkQuantum=16.0</code></td>
       <td><code class="language-plaintext highlighter-rouge">LINK_QUANTUM 16.0</code></td>
     </tr>
     <tr>
@@ -364,6 +364,36 @@ speed trim (<code class="language-plaintext highlighter-rouge">kLinkPhaseTrimPer
 <code class="language-plaintext highlighter-rouge">setIsPlayingAndRequestBeatAtTime(true,now,0.0,kLinkQuantum)</code>, never
 bare <code class="language-plaintext highlighter-rouge">setIsPlaying</code>. Live check: <code class="language-plaintext highlighter-rouge">eff_speed</code> reads exactly <code class="language-plaintext highlighter-rouge">1.0000</code>
 with nothing recorded. <code class="language-plaintext highlighter-rouge">[[memory: link-varispeed-trim-history]]</code>.</p>
+
+<h3 id="two-quantums--16-for-transport-128-for-phase-capture">Two quantums — 16 for transport, 128 for phase CAPTURE</h3>
+
+<p><code class="language-plaintext highlighter-rouge">kLinkQuantum=16.0</code> stays the PAIRED value (transport anchor +
+<code class="language-plaintext highlighter-rouge">beatNow()</code>/24-PPQN MIDI clock) and must not move. <code class="language-plaintext highlighter-rouge">LinkBridge::
+controlTick()</code> captures <code class="language-plaintext highlighter-rouge">phaseAtTime</code>/<code class="language-plaintext highlighter-rouge">beatAtTime</code> at
+<code class="language-plaintext highlighter-rouge">kLinkPhaseQuantumBeats=128.0</code> and publishes that quantum in
+<code class="language-plaintext highlighter-rouge">quantumMicroBeats</code>, because a phase read at quantum 16 aliases any
+loop longer than 16 beats onto the wrong half of the phrase (measured
+15.8 beats of drift on a 32-beat loop). Safe for shorter loops: for
+L in {1,2,4,8,16} — every value that divides 16 — <code class="language-plaintext highlighter-rouge">(B mod 128) mod L ==
+(B mod 16) mod L</code>, so behavior is byte-identical; L in {32,64,128} is
+strictly more correct.</p>
+
+<p>Every consumer dividing by <code class="language-plaintext highlighter-rouge">quantumMicroBeats</code> must then fold to beats
+itself — <code class="language-plaintext highlighter-rouge">frac * (quantumMicroBeats/1e6)</code>, never <code class="language-plaintext highlighter-rouge">frac * 16.0</code>. Three
+such sites: <code class="language-plaintext highlighter-rouge">audio_thread.cpp</code>’s <code class="language-plaintext highlighter-rouge">linkTargetSamples</code> and
+<code class="language-plaintext highlighter-rouge">gridBeatIndex</code>, and <code class="language-plaintext highlighter-rouge">apc_grid.cpp</code>’s <code class="language-plaintext highlighter-rouge">applyRemoteTransport</code> (which
+deliberately keeps the 16-beat grid so a quantized launch is never
+delayed by up to 64 s).</p>
+
+<h3 id="phrase-lock-anchor-rules">Phrase-lock anchor rules</h3>
+
+<p>The idle/creation snap (<code class="language-plaintext highlighter-rouge">!anyAudible || masterJustCreated</code>) fires
+IMMEDIATELY at creation — deferring it to the next snapshot refresh
+lands a whole-snapshot jump ~0.2 s into audible playback. Recording a
+master also snaps <code class="language-plaintext highlighter-rouge">masterLenSamples</code> to whole beats, and routes through
+<code class="language-plaintext highlighter-rouge">finishTargetPending</code> like every sub-loop finish, so the upward snap is
+actually written instead of leaving the DSP write gate open.
+<code class="language-plaintext highlighter-rouge">[[memory: control-surface-quantization-history]]</code>.</p>
 
 <h2 id="midi-clock-fan-out-and-other-mesh-facts">MIDI clock fan-out and other mesh facts</h2>
 
