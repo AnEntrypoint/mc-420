@@ -260,7 +260,9 @@ same `prevFiltOut`, never `fin`.
 **SHIFT (`fx/monitorfold`) fold**: `fin[i] += prevLoopSum[i]*combinedFold` when
 engaged, ramping `foldGain` at `kFoldStepPerSample` = `(1/16)/N` — adds one block
 of recording lag, `kShiftFoldBlockLatencySamples` (64) written at FINISH if
-`m_looperShiftHeldDuringTake[looper]` was ever set, else 0.
+`m_looperShiftHeldDuringTake[looper]` was ever set, else 0. Two consumers differ and must not be
+conflated: the Faust `MONITORFOLD` zone gets the ramped `foldGain`, while `freeXposeBuf`
+(free-transpose engage) is the RAW `monitorFoldVal > 0.5` threshold.
 
 ---
 
