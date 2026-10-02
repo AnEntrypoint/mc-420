@@ -347,12 +347,17 @@ Formant (CC53, deadzone 60-68) via `LpcFormantShifter` (`vowelFormant.h`,
 `pitch_poly_ffi.h` never calls `setFormantDepth()`; live on MONO via
 `pitch_ffi.h`. `[[memory: lpc-formant-shifter-history]]`.
 
-**Disclosed, unfixed**: upward shifts ≥+18 semitones click (clean -24..+17
-up, -24..-12 down) — start from `soladSnacOctaver.h`'s `m_scale`
-crossfade-length division and resplice-trigger threshold. A signal-path guard
-must derive from the same quantity the audio path uses, not the raw control
-that nominally sets it (the `freeXpose`/`foldGain` bug class). `[[memory:
-multitranspose-investigation-history]]`.
+**Fixed**: upward shifts ≥+18 clicked. Cause was `soladSnacOctaver.h`'s
+splice COOLDOWN, not the `m_scale` crossfade division: on an upshift the read
+pointer eats the delay line at `(m_scale-1)`/sample, so the gap to the writer
+burns at that rate, while `upshiftTargetLag()` reserves only 1.5 periods —
+past `(scale-1)*0.9 > 1.5` (scale>2.667 = +17st) one cooldown window burns
+more gap than the whole reserve, the reader crosses the writer, and
+`readSinc()` reads one-`DL`-stale samples. Cooldown is now rate-derived
+(`spliceCooldownSamples()`, `per*0.9/max(1,|m_scale-1|)`, a no-op below +12).
+Still OPEN: percussive material starves the same way while `m_transientHold`
+blocks splices (marimba +18..+24: 93 → 47 events, not 0); a yield gate
+measured WORSE at +24. `[[memory: multitranspose-investigation-history]]`.
 
 ## Free-transpose engine (`soladSnacOctaver.h`/`EngineSoladSnac`)
 
@@ -569,5 +574,3 @@ is a `stat()` device-id compare. Config:
 (real read-write NTFS — BEFORE the legacy read-only `ntfs`), then
 vfat/ext4/exfat; `ntfs3` needs `force` or a dirty drive is rejected.
 UNVERIFIED on real hardware.
-
-Faust libs: faustlibraries `doc/docs/libs/index.md`, `standardFunctions.md`, `faustdoc.grame.fr/manual/optimizing/`.
