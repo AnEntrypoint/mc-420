@@ -77,28 +77,29 @@ void Telemetry::publish() {
         if (rn == 0) { wifiRole[0] = 's'; wifiRole[1] = 't'; wifiRole[2] = 'a'; wifiRole[3] = 0; }
     }
 
-    char json[1280];
+    char json[1408];
     int n = snprintf(json, sizeof json,
         "{\"core_busy\":[%.0f,%.0f,%.0f,%.0f],\"xruns\":%llu,"
-        "\"link\":{\"synced\":%s,\"bpm\":%.1f,\"peers\":%d,\"playing\":%s},"
+        "\"link\":{\"synced\":%s,\"bpm\":%.1f,\"peers\":%d,\"playing\":%s,\"phase_err_beats\":%.3f},"
         "\"wifi\":\"%s\",\"monitor_mode\":%s,"
         "\"glitch_engaged\":%s,"
         "\"usb_recording\":%s,\"usb_rec_overruns\":%llu,"
         "\"audio_peak\":{\"in\":%.4f,\"out\":%.4f},\"eff_speed\":%.4f,"
         "\"sustain_cmd\":%.2f,\"sustain_gate\":%.2f,"
-        "\"grid_beat_index\":%d,"
+        "\"grid_beat_index\":%d,\"master_phase_beats\":%.3f,"
         "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s}}",
         t.coreBusyPct[0], t.coreBusyPct[1], t.coreBusyPct[2], t.coreBusyPct[3],
         (unsigned long long)t.xruns,
         t.linkSynced ? "true" : "false", t.bpm,
         t.linkPeers, t.linkPlaying ? "true" : "false",
+        t.linkPhaseErrBeats,
         wifiRole,
         t.monitorMode ? "true" : "false",
         t.glitchEngaged ? "true" : "false",
         t.usbRecording ? "true" : "false", (unsigned long long)t.usbRecOverruns,
         t.inPeak, t.outPeak, t.effSpeed,
         t.sustainCmd, t.sustainGate,
-        t.gridBeatIndex,
+        t.gridBeatIndex, t.masterPhaseBeats,
         recBits, playBits, vols, levels, wraplens, readposes);
 
     FILE* statusFile = fopen("/run/aloop/status.json", "w");

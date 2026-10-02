@@ -65,6 +65,8 @@ public:
         float    effSpeed = 1.0f;
         float    sustainCmd = 0.0f;
         float    sustainGate = 0.0f;
+        float    linkPhaseErrBeats = 0.0f;
+        float    masterPhaseBeats = 0.0f;
         static constexpr int kLoopers = 20;
         bool     looperRec[kLoopers]  = {};
         bool     looperPlay[kLoopers] = {};

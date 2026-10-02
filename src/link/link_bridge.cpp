@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdio>
+#include <ctime>
 
 #if __has_include(<ableton/Link.hpp>)
 #include <ableton/Link.hpp>
@@ -91,6 +92,8 @@ void LinkBridge::controlTick() {
 
     auto state = l->captureAppSessionState();
     const auto now = l->clock().micros();
+    timespec capTs{};
+    clock_gettime(CLOCK_MONOTONIC, &capTs);
 
     unsigned cur = g_active.load(std::memory_order_relaxed);
     unsigned nxt = cur ^ 1u;
@@ -103,6 +106,7 @@ void LinkBridge::controlTick() {
     s.phaseValid          = true;
     s.beatPhaseMicroBeats = (int64_t)(phase * 1e6);
     s.quantumMicroBeats   = (int64_t)(kLinkQuantum * 1e6);
+    s.captureMicros       = (int64_t)capTs.tv_sec * 1000000 + capTs.tv_nsec / 1000;
     s.isPlaying           = state.isPlaying();
     s.weOwnTempo          = g_weSetTempo.load(std::memory_order_relaxed);
     (void)beat;

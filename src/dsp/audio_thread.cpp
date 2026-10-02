@@ -695,6 +695,10 @@ static void* worker(void*) {
             }
             g_telem.monitorMode = g_params && monitorFoldVal > 0.5f;
             g_telem.glitchEngaged = g_params && microrepeatDivVal > 0.5f;
+            bool anyAudible = false;
+            for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) {
+                if (g_telem.looperPlay[lp] || g_telem.looperRec[lp]) { anyAudible = true; break; }
+            }
             bool linkDrivingLength = false;
             LinkSnapshot linkSnap{};
             if (g_link) {
@@ -758,8 +762,11 @@ static void* worker(void*) {
                     : (double)g_cfg.sampleRate * 0.5;
                 double fourBeatLenShared = beatLenSamplesShared * 4.0;
 
+                static double prevMasterLen = 0.0;
+                bool masterJustCreated = (prevMasterLen <= 0.0f && masterLen > 0.0f);
+                prevMasterLen = masterLen;
+
                 if (masterLen > 0.0f) {
-                    masterPhaseSamples += (double)N * (double)linkSpeedRatio;
                     if (linkDrivingLength && g_link) {
                         double curBpm = linkSnap.bpm;
                         bool bpmChanged = lastLinkBpmSeen > 0.0 && std::fabs(curBpm - lastLinkBpmSeen) > 0.05;
@@ -767,22 +774,45 @@ static void* worker(void*) {
                         tempoStableBlocks = bpmChanged ? 0 : (tempoStableBlocks + 1);
                         const int kTempoStableBlocksThreshold = (int)(g_cfg.sampleRate / (double)N);
 
-                        bool freshSnapshot = linkSnap.phaseValid && linkSnap.quantumMicroBeats > 0 &&
-                                              linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
-                        if (freshSnapshot) {
-                            lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
-                            double linkQuantumFrac = (double)linkSnap.beatPhaseMicroBeats / (double)linkSnap.quantumMicroBeats;
-                            if (linkQuantumFrac < 0.0) linkQuantumFrac = 0.0;
-                            if (linkQuantumFrac >= 1.0) linkQuantumFrac = 0.0;
+                        bool haveLinkTarget = false;
+                        double linkTargetSamples = 0.0;
+                        if (linkSnap.phaseValid && linkSnap.quantumMicroBeats > 0 && linkSnap.captureMicros > 0) {
+                            timespec nowTs{};
+                            clock_gettime(CLOCK_MONOTONIC, &nowTs);
+                            double nowMicros = (double)nowTs.tv_sec * 1e6 + (double)nowTs.tv_nsec / 1e3;
+                            double elapsedMicros = nowMicros - (double)linkSnap.captureMicros;
+                            if (elapsedMicros < 0.0) elapsedMicros = 0.0;
+                            if (elapsedMicros > 4e6) elapsedMicros = 4e6;
+                            double phaseMicroBeats = (double)linkSnap.beatPhaseMicroBeats
+                                                   + elapsedMicros * (linkSnap.bpm / 60.0);
+                            double linkQuantumFrac = phaseMicroBeats / (double)linkSnap.quantumMicroBeats;
+                            linkQuantumFrac -= std::floor(linkQuantumFrac);
                             double linkBeatWithinQuantum = linkQuantumFrac * kLinkQuantum;
                             double loopBeatPos = std::fmod(linkBeatWithinQuantum, (double)recordedBeatsShared);
                             if (loopBeatPos < 0.0) loopBeatPos += recordedBeatsShared;
-                            double linkTargetSamples = loopBeatPos * beatLenSamplesShared;
+                            linkTargetSamples = loopBeatPos * beatLenSamplesShared;
+                            haveLinkTarget = true;
+                        }
 
+                        if (haveLinkTarget && (masterJustCreated || !anyAudible)) {
+                            masterPhaseSamples = linkTargetSamples;
+                            linkPhaseTrim = 0.0;
+                            tempoStableBlocks = 0;
+                            lastLinkPhaseMicroBeats = -1;
+                            g_telem.linkPhaseErrBeats = 0.0f;
+                        } else {
+                            masterPhaseSamples += (double)N * ((double)linkSpeedRatio + linkPhaseTrim);
+                        }
+
+                        bool freshSnapshot = haveLinkTarget &&
+                                             linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
+                        if (freshSnapshot) {
+                            lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
                             double halfLen = (double)masterLen * 0.5;
                             double delta = std::fmod(linkTargetSamples - masterPhaseSamples + halfLen, (double)masterLen);
                             if (delta < 0.0) delta += masterLen;
                             delta -= halfLen;
+                            g_telem.linkPhaseErrBeats = (float)(delta / beatLenSamplesShared);
                             bool tempoStable = tempoStableBlocks >= kTempoStableBlocksThreshold;
                             if (tempoStable && linkVarispeedEngaged && !manualPunchActive) {
                                 double trim = delta * kLinkPhaseTrimPerSample;
@@ -794,13 +824,16 @@ static void* worker(void*) {
                             }
                         }
                     } else {
+                        masterPhaseSamples += (double)N * (double)linkSpeedRatio;
                         lastLinkBpmSeen = 0.0;
                         tempoStableBlocks = 0;
                         lastLinkPhaseMicroBeats = -1;
                         linkPhaseTrim = 0.0;
+                        g_telem.linkPhaseErrBeats = 0.0f;
                     }
                     masterPhaseSamples = std::fmod(masterPhaseSamples, (double)masterLen);
                     if (masterPhaseSamples < 0.0) masterPhaseSamples += masterLen;
+                    g_telem.masterPhaseBeats = (float)(masterPhaseSamples / beatLenSamplesShared);
 
                     float recordedBpmForQuantum = recordedBpmVal;
                     if (recordedBpmForQuantum > 1.0f) {
@@ -815,6 +848,8 @@ static void* worker(void*) {
                     masterPhaseSamples = 0.0;
                     standaloneQuantumPhaseSamples = 0.0;
                     lastLinkPhaseMicroBeats = -1;
+                    g_telem.masterPhaseBeats = 0.0f;
+                    g_telem.linkPhaseErrBeats = 0.0f;
                 }
 
                 double shuffleClockStart = shuffleClockSamples;
