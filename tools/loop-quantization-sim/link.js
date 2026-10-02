@@ -1,6 +1,12 @@
 'use strict';
 
 const LINK_QUANTUM = 16.0;
+const LINK_PHASE_QUANTUM = 128.0;
+
+let g_phaseQuantum = LINK_PHASE_QUANTUM;
+
+function setPhaseQuantum(q) { g_phaseQuantum = q; }
+function phaseQuantum() { return g_phaseQuantum; }
 
 function createLinkSession(initialBpm) {
   return {
@@ -34,10 +40,18 @@ function setIsPlaying(session, playing, atTimeMs) {
   session.isPlaying = playing;
 }
 
-function setIsPlayingAndRequestBeatAtTime(session, playing, atTimeMs, beat, quantum) {
+function setIsPlayingAndRequestBeatAtTime(session, playing, atTimeMs, beat, quantum, peerCount) {
   session.isPlaying = playing;
-  session.beatOriginTimeMs = atTimeMs;
-  session.beatOriginBeat = beat;
+  if (peerCount > 0) {
+    const beatNow = beatAtTime(session, atTimeMs);
+    let targetBeat = Math.ceil((beatNow - beat) / quantum) * quantum + beat;
+    if (targetBeat <= beatNow) targetBeat += quantum;
+    session.beatOriginBeat = beat;
+    session.beatOriginTimeMs = atTimeMs + ((targetBeat - beatNow) / session.tempo) * 60000;
+  } else {
+    session.beatOriginTimeMs = atTimeMs;
+    session.beatOriginBeat = beat;
+  }
 }
 
 function createLinkPeer(name, session) {
@@ -55,8 +69,8 @@ function createLinkPeer(name, session) {
         peers,
         playing: session.isPlaying,
         phaseValid: true,
-        beatPhaseMicroBeats: Math.round(phaseAtTime(session, timeMs, LINK_QUANTUM) * 1e6),
-        quantumMicroBeats: Math.round(LINK_QUANTUM * 1e6),
+        beatPhaseMicroBeats: Math.round(phaseAtTime(session, timeMs, g_phaseQuantum) * 1e6),
+        quantumMicroBeats: Math.round(g_phaseQuantum * 1e6),
       };
     },
     proposeTempo(bpm, atTimeMs) {
@@ -74,7 +88,7 @@ function createLinkPeer(name, session) {
       if (!this.connected) return;
       if (session.isPlaying === playing) return;
       if (playing) {
-        setIsPlayingAndRequestBeatAtTime(session, true, atTimeMs, 0.0, LINK_QUANTUM);
+        setIsPlayingAndRequestBeatAtTime(session, true, atTimeMs, 0.0, LINK_QUANTUM, countOtherConnected(this));
       } else {
         setIsPlaying(session, false, atTimeMs);
       }
@@ -107,7 +121,13 @@ function createLinkWorld(initialBpm) {
 
 module.exports = {
   LINK_QUANTUM,
+  LINK_PHASE_QUANTUM,
+  setPhaseQuantum,
+  phaseQuantum,
   createLinkWorld,
+  createLinkSession,
+  createLinkPeer,
+  registerPeer,
   beatAtTime,
   phaseAtTime,
   setTempoContinuous,

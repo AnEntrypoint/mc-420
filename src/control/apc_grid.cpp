@@ -169,8 +169,10 @@ void ApcGrid::applyRemoteTransport(ParamStore& ps, LinkBridge* link) {
 
     if (!m_remoteStartPending) return;
     if (ls.quantumMicroBeats <= 0) return;
-    bool wrappedPastQuantumStart = (ls.beatPhaseMicroBeats < m_lastRemotePhaseMicroBeats);
-    m_lastRemotePhaseMicroBeats = ls.beatPhaseMicroBeats;
+    double remotePhaseBeats = (double)ls.beatPhaseMicroBeats / 1e6;
+    int64_t remotePhase16 = (int64_t)(std::fmod(remotePhaseBeats, 16.0) * 1e6);
+    bool wrappedPastQuantumStart = (remotePhase16 < m_lastRemotePhaseMicroBeats);
+    m_lastRemotePhaseMicroBeats = remotePhase16;
     if (!wrappedPastQuantumStart) return;
 
     m_remoteStartPending = false;
@@ -265,7 +267,9 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             setLooper(ps, looper, "finishreq", 1.0f);
             setLooper(ps, looper, "rec", 0.0f);
             m_looperFinishReqReleaseAt[looper] = now_ms + 50;
-            m_looperRecording[looper] = false;
+            m_looperFinishTargetPending[looper] = (float)m_masterLenSamples;
+            m_looperFinishPendingSinceMs[looper] = now_ms;
+            m_looperPauseOthersOnFinish[looper] = false;
         } else {
             long rawSamples;
             if (audio) {

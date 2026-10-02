@@ -212,7 +212,7 @@ single-AP mesh for Link's multicast peer discovery.
 | Auth | open (`key_mgmt=NONE`) | `wifi_connect_sta("ticker", "")` |
 | AP/DHCP | `192.168.4.1/24`, dnsmasq `.2-.20` | `esp_netif_set_ip_info` same |
 | Channel | `hostapd.conf` `channel=6` | SoftAP ch6 |
-| Link quantum | `link_bridge.cpp` `quantum=16.0` | `LINK_QUANTUM 16.0` |
+| Link quantum | `link_bridge.cpp` `kLinkQuantum=16.0` | `LINK_QUANTUM 16.0` |
 | Host election | lowest MAC/BSSID wins | same |
 
 Host election is MAC-ordered (never "host if scan found nothing" —
@@ -235,6 +235,36 @@ speed trim (`kLinkPhaseTrimPerSample=0.00005`, clamp
 `setIsPlayingAndRequestBeatAtTime(true,now,0.0,kLinkQuantum)`, never
 bare `setIsPlaying`. Live check: `eff_speed` reads exactly `1.0000`
 with nothing recorded. `[[memory: link-varispeed-trim-history]]`.
+
+### Two quantums — 16 for transport, 128 for phase CAPTURE
+
+`kLinkQuantum=16.0` stays the PAIRED value (transport anchor +
+`beatNow()`/24-PPQN MIDI clock) and must not move. `LinkBridge::
+controlTick()` captures `phaseAtTime`/`beatAtTime` at
+`kLinkPhaseQuantumBeats=128.0` and publishes that quantum in
+`quantumMicroBeats`, because a phase read at quantum 16 aliases any
+loop longer than 16 beats onto the wrong half of the phrase (measured
+15.8 beats of drift on a 32-beat loop). Safe for shorter loops: for
+L in {1,2,4,8,16} — every value that divides 16 — `(B mod 128) mod L ==
+(B mod 16) mod L`, so behavior is byte-identical; L in {32,64,128} is
+strictly more correct.
+
+Every consumer dividing by `quantumMicroBeats` must then fold to beats
+itself — `frac * (quantumMicroBeats/1e6)`, never `frac * 16.0`. Three
+such sites: `audio_thread.cpp`'s `linkTargetSamples` and
+`gridBeatIndex`, and `apc_grid.cpp`'s `applyRemoteTransport` (which
+deliberately keeps the 16-beat grid so a quantized launch is never
+delayed by up to 64 s).
+
+### Phrase-lock anchor rules
+
+The idle/creation snap (`!anyAudible || masterJustCreated`) fires
+IMMEDIATELY at creation — deferring it to the next snapshot refresh
+lands a whole-snapshot jump ~0.2 s into audible playback. Recording a
+master also snaps `masterLenSamples` to whole beats, and routes through
+`finishTargetPending` like every sub-loop finish, so the upward snap is
+actually written instead of leaving the DSP write gate open.
+`[[memory: control-surface-quantization-history]]`.
 
 ## MIDI clock fan-out and other mesh facts
 

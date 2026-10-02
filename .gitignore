@@ -77,5 +77,6 @@ test-audio-corpus/multitranspose_harness
 test-audio-corpus/*.json
 .hotdeploy-work/
 .sdcard-update-work/
+.sdcard-backup/
 
 *-tmp.js

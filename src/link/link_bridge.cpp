@@ -101,11 +101,11 @@ void LinkBridge::controlTick() {
     s.bpm       = state.tempo();
     s.peerCount = (int)l->numPeers();
     s.synced    = (s.peerCount > 0);
-    const double beat  = state.beatAtTime(now, kLinkQuantum);
-    const double phase = state.phaseAtTime(now, kLinkQuantum);
+    const double beat  = state.beatAtTime(now, kLinkPhaseQuantumBeats);
+    const double phase = state.phaseAtTime(now, kLinkPhaseQuantumBeats);
     s.phaseValid          = true;
     s.beatPhaseMicroBeats = (int64_t)(phase * 1e6);
-    s.quantumMicroBeats   = (int64_t)(kLinkQuantum * 1e6);
+    s.quantumMicroBeats   = (int64_t)(kLinkPhaseQuantumBeats * 1e6);
     s.captureMicros       = (int64_t)capTs.tv_sec * 1000000 + capTs.tv_nsec / 1000;
     s.isPlaying           = state.isPlaying();
     s.weOwnTempo          = g_weSetTempo.load(std::memory_order_relaxed);

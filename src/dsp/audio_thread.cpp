@@ -747,7 +747,6 @@ static void* worker(void*) {
                 static int64_t lastLinkPhaseMicroBeats = -1;
                 static double lastLinkBpmSeen = 0.0;
                 static int tempoStableBlocks = 0;
-                static int64_t masterCreationSnapAfterMicros = -1;
                 static double shuffleClockSamples = 0.0;
                 static int shuffleMaskSlot = -1;
                 if (shuffleMaskSlot < 0 && g_params) shuffleMaskSlot = g_params->getSlot("fx/shuffle/mask");
@@ -788,7 +787,8 @@ static void* worker(void*) {
                                                    + elapsedMicros * (linkSnap.bpm / 60.0);
                             double linkQuantumFrac = phaseMicroBeats / (double)linkSnap.quantumMicroBeats;
                             linkQuantumFrac -= std::floor(linkQuantumFrac);
-                            double linkBeatWithinQuantum = linkQuantumFrac * kLinkQuantum;
+                            double linkBeatWithinQuantum = linkQuantumFrac
+                                                         * ((double)linkSnap.quantumMicroBeats / 1e6);
                             double loopBeatPos = std::fmod(linkBeatWithinQuantum, (double)recordedBeatsShared);
                             if (loopBeatPos < 0.0) loopBeatPos += recordedBeatsShared;
                             linkTargetSamples = loopBeatPos * beatLenSamplesShared;
@@ -796,19 +796,16 @@ static void* worker(void*) {
                         }
 
                         if (masterJustCreated && haveLinkTarget)
-                            masterCreationSnapAfterMicros = linkSnap.captureMicros;
+                            lastLinkPhaseMicroBeats = -1;
 
                         bool freshSnapshot = haveLinkTarget &&
                                              linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
                         if (freshSnapshot) lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
 
-                        bool postCreationSnapshot = haveLinkTarget && masterCreationSnapAfterMicros >= 0 &&
-                                                    linkSnap.captureMicros > masterCreationSnapAfterMicros;
-                        if (haveLinkTarget && (!anyAudible || postCreationSnapshot)) {
+                        if (haveLinkTarget && (!anyAudible || masterJustCreated)) {
                             masterPhaseSamples = linkTargetSamples;
                             linkPhaseTrim = 0.0;
                             tempoStableBlocks = 0;
-                            masterCreationSnapAfterMicros = -1;
                             g_telem.linkPhaseErrBeats = 0.0f;
                         } else {
                             masterPhaseSamples += (double)N * ((double)linkSpeedRatio + linkPhaseTrim);
@@ -834,7 +831,6 @@ static void* worker(void*) {
                         lastLinkBpmSeen = 0.0;
                         tempoStableBlocks = 0;
                         lastLinkPhaseMicroBeats = -1;
-                        masterCreationSnapAfterMicros = -1;
                         linkPhaseTrim = 0.0;
                         g_telem.linkPhaseErrBeats = 0.0f;
                     }
@@ -855,7 +851,6 @@ static void* worker(void*) {
                     masterPhaseSamples = 0.0;
                     standaloneQuantumPhaseSamples = 0.0;
                     lastLinkPhaseMicroBeats = -1;
-                    masterCreationSnapAfterMicros = -1;
                     g_telem.masterPhaseBeats = 0.0f;
                     g_telem.linkPhaseErrBeats = 0.0f;
                 }
@@ -902,7 +897,8 @@ static void* worker(void*) {
                         double frac = (double)linkSnap.beatPhaseMicroBeats / (double)linkSnap.quantumMicroBeats;
                         if (frac < 0.0) frac = 0.0;
                         if (frac >= 1.0) frac = 0.0;
-                        int idx = (int)(frac * 16.0);
+                        double gridBeat = std::fmod(frac * ((double)linkSnap.quantumMicroBeats / 1e6), 16.0);
+                        int idx = (int)gridBeat;
                         if (idx < 0) idx = 0;
                         if (idx > 15) idx = 15;
                         g_telem.gridBeatIndex = idx;

@@ -88,8 +88,47 @@ function createWorld(opts) {
     link: linkWorld,
     log: [],
     events: [],
+    linkPhaseTrim: 0.0,
+    phaseLockEnabled: true,
+    linkPhaseErrBeats: 0.0,
+    linkSnapHeld: null,
+    lastPublishedPlaying: false,
+    weStartedTransport: false,
+    lastLinkPhaseMicroBeats: -1,
+    lastLinkBpmSeen: 0.0,
+    tempoStableSamples: 0,
+    prevMasterLen: 0,
   };
+  refreshLinkSnapshot(w);
   return w;
+}
+
+const kSimSpeedup = 48000 / SIM_SAMPLE_RATE;
+const kControlTickSamples = SIM_SAMPLE_RATE / 5;
+const kLinkPhaseTrimPerSample = 0.00005 * kSimSpeedup;
+const kLinkPhaseTrimMax = 0.03;
+
+function refreshLinkSnapshot(w) {
+  const snap = w.link.local.audioRead((w.t / SIM_SAMPLE_RATE) * 1000);
+  snap.captureMicros = (w.t / SIM_SAMPLE_RATE) * 1e6;
+  w.linkSnapHeld = snap;
+  return snap;
+}
+
+function linkTargetSamplesAt(w, nowMicros) {
+  const s = w.linkSnapHeld;
+  if (!s || !s.phaseValid || !(s.quantumMicroBeats > 0) || !(s.captureMicros > 0)) return null;
+  let elapsed = nowMicros - s.captureMicros;
+  if (elapsed < 0) elapsed = 0;
+  if (elapsed > 4e6) elapsed = 4e6;
+  const phaseMicroBeats = s.beatPhaseMicroBeats + elapsed * (s.bpm / 60.0);
+  let frac = phaseMicroBeats / s.quantumMicroBeats;
+  frac -= Math.floor(frac);
+  const beats = Math.max(1.0, w.recordedBeats);
+  const oneBeat = w.masterLenSamples / beats;
+  const linkBeat = frac * (s.quantumMicroBeats / 1e6);
+  const loopBeatPos = ((linkBeat % beats) + beats) % beats;
+  return loopBeatPos * oneBeat;
 }
 
 function linkAudioRead(w) {
@@ -97,12 +136,12 @@ function linkAudioRead(w) {
 }
 
 function effSpeedNow(w) {
-  const linkSnap = linkAudioRead(w);
+  const s = w.linkSnapHeld;
   let linkSpeedRatio = 1.0;
-  if (w.recordedBpm > 1.0 && linkSnap.bpm > 1.0 && linkSnap.synced) {
-    linkSpeedRatio = linkSnap.bpm / w.recordedBpm;
+  if (s && s.synced && w.recordedBpm > 1.0 && s.bpm > 1.0) {
+    linkSpeedRatio = s.bpm / w.recordedBpm;
   }
-  return w.manualSpeedMul * linkSpeedRatio;
+  return w.manualSpeedMul * (linkSpeedRatio + w.linkPhaseTrim);
 }
 
 function snapshotWriteIdx(w, looper) {
@@ -116,6 +155,7 @@ function applyRecPlayCycle(w, looper) {
   const lp = w.loopers[looper];
   const timeMs = (w.t / SIM_SAMPLE_RATE) * 1000;
   if (lp.recording) {
+    if (lp.finishTargetPending > 0) return;
     lp.hasContent = true;
     lp.wrapLenStaleAfterWipe = false;
     lp.playing = true;
@@ -146,6 +186,10 @@ function applyRecPlayCycle(w, looper) {
         solvedBpm = solved.bpm;
         solvedBeats = solved.beats;
       }
+      if (haveExternalTempo) {
+        const beatSamples = (60.0 / solvedBpm) * SIM_SAMPLE_RATE;
+        w.masterLenSamples = Math.max(1, Math.min(Math.round(solvedBeats * beatSamples), SIM_MAXLEN));
+      }
       w.recordedBpm = solvedBpm;
       w.recordedBeats = solvedBeats;
       if (!haveExternalTempo) w.link.local.proposeTempo(solvedBpm, timeMs);
@@ -153,7 +197,9 @@ function applyRecPlayCycle(w, looper) {
       lp.ps_finishreq = 1;
       lp.ps_rec = 0;
       lp.finishReqReleaseAtT = w.t + msToSimSamples(50);
-      lp.recording = false;
+      lp.finishTargetPending = w.masterLenSamples;
+      lp.finishPendingSinceT = w.t;
+      lp.pauseOthersOnFinish = false;
     } else {
       const rawSamples = snapshotWriteIdx(w, looper);
       if (rawSamples <= 0) {
@@ -213,6 +259,12 @@ function publishTransport(w) {
   for (const lp of w.loopers) if (lp.playing) { anyPlaying = true; break; }
   if (w.lastPublishedPlaying === anyPlaying) return;
   w.lastPublishedPlaying = anyPlaying;
+  if (!anyPlaying) {
+    if (!w.weStartedTransport) return;
+    w.weStartedTransport = false;
+  } else {
+    w.weStartedTransport = true;
+  }
   const timeMs = (w.t / SIM_SAMPLE_RATE) * 1000;
   w.link.local.setTransportPlaying(anyPlaying, timeMs);
 }
@@ -350,13 +402,72 @@ function pollHoldsTick(w) {
 }
 
 function stepOneSample(w) {
+  if (w.t % kControlTickSamples === 0) refreshLinkSnapshot(w);
   const masterPhasePrev = w.masterPhaseSamples;
-  const effSpeed = effSpeedNow(w);
-  if (w.masterLenSamples > 0) {
-    w.masterPhaseSamples += effSpeed;
-    w.masterPhaseSamples = ((w.masterPhaseSamples % w.masterLenSamples) + w.masterLenSamples) % w.masterLenSamples;
+
+  const s = w.linkSnapHeld;
+  const linkDriving = !!(s && s.synced && s.bpm > 1.0);
+  const linkVarispeedEngaged = linkDriving && w.recordedBpm > 1.0;
+  let linkSpeedRatio = 1.0;
+  if (linkVarispeedEngaged) linkSpeedRatio = s.bpm / w.recordedBpm;
+  const manualPunchActive = Math.abs(w.manualSpeedMul - 1.0) > 0.3;
+  if (!linkVarispeedEngaged || manualPunchActive) w.linkPhaseTrim = 0.0;
+
+  const effSpeed = w.manualSpeedMul * (linkSpeedRatio + w.linkPhaseTrim);
+  const masterLen = w.masterLenSamples;
+  const masterJustCreated = w.prevMasterLen <= 0 && masterLen > 0;
+  w.prevMasterLen = masterLen;
+
+  if (masterLen > 0) {
+    if (linkDriving) {
+      const curBpm = s.bpm;
+      const bpmChanged = w.lastLinkBpmSeen > 0 && Math.abs(curBpm - w.lastLinkBpmSeen) > 0.05;
+      w.lastLinkBpmSeen = curBpm;
+      w.tempoStableSamples = bpmChanged ? 0 : w.tempoStableSamples + 1;
+
+      const target = linkTargetSamplesAt(w, (w.t / SIM_SAMPLE_RATE) * 1e6);
+      let anyAudible = false;
+      for (const lp of w.loopers) if (lp.playing || lp.recording) { anyAudible = true; break; }
+
+      const fresh = target !== null && s.beatPhaseMicroBeats !== w.lastLinkPhaseMicroBeats;
+      if (fresh) w.lastLinkPhaseMicroBeats = s.beatPhaseMicroBeats;
+
+      if (w.phaseLockEnabled && target !== null && (!anyAudible || masterJustCreated)) {
+        w.masterPhaseSamples = target;
+        w.linkPhaseTrim = 0.0;
+        w.tempoStableSamples = 0;
+        w.linkPhaseErrBeats = 0.0;
+      } else {
+        w.masterPhaseSamples += linkSpeedRatio + (w.phaseLockEnabled ? w.linkPhaseTrim : 0.0);
+        if (fresh && target !== null) {
+          const half = masterLen * 0.5;
+          const raw = (target - w.masterPhaseSamples + half) % masterLen;
+          const delta = ((raw < 0 ? raw + masterLen : raw)) - half;
+          const oneBeat = masterLen / Math.max(1.0, w.recordedBeats);
+          w.linkPhaseErrBeats = delta / oneBeat;
+          const tempoStable = w.tempoStableSamples >= SIM_SAMPLE_RATE;
+          if (tempoStable && linkVarispeedEngaged && !manualPunchActive) {
+            let trim = delta * kLinkPhaseTrimPerSample;
+            if (trim > kLinkPhaseTrimMax) trim = kLinkPhaseTrimMax;
+            if (trim < -kLinkPhaseTrimMax) trim = -kLinkPhaseTrimMax;
+            w.linkPhaseTrim = trim;
+          } else {
+            w.linkPhaseTrim = 0.0;
+          }
+        }
+      }
+    } else {
+      w.masterPhaseSamples += linkSpeedRatio + w.linkPhaseTrim;
+      w.lastLinkBpmSeen = 0.0;
+      w.tempoStableSamples = 0;
+      w.lastLinkPhaseMicroBeats = -1;
+      w.linkPhaseTrim = 0.0;
+      w.linkPhaseErrBeats = 0.0;
+    }
+    w.masterPhaseSamples = ((w.masterPhaseSamples % masterLen) + masterLen) % masterLen;
   } else {
     w.masterPhaseSamples = 0;
+    w.linkPhaseErrBeats = 0.0;
   }
   const results = [];
   for (let i = 0; i < w.looperCount; i++) {

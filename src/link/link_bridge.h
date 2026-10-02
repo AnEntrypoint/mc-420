@@ -6,6 +6,7 @@
 namespace aloop {
 
 constexpr double kLinkQuantum = 16.0;
+constexpr double kLinkPhaseQuantumBeats = 128.0;
 
 struct LinkSnapshot {
     double  bpm          = 120.0;
