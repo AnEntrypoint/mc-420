@@ -134,6 +134,7 @@ private:
     bool m_looperShiftHeldDuringTake[kLooperCount] = {};
     bool m_looperPauseOthersOnFinish[kLooperCount] = {};
     bool m_lastPublishedPlaying = false;
+bool m_weStartedTransport = false;
     bool    m_lastSeenRemotePlaying = false;
     bool    m_remoteStartPending    = false;
     int64_t m_lastRemotePhaseMicroBeats = 0;

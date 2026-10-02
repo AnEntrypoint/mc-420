@@ -190,6 +190,12 @@ void ApcGrid::publishTransport(LinkBridge* link) {
     }
     if (anyPlaying == m_lastPublishedPlaying) return;
     m_lastPublishedPlaying = anyPlaying;
+    if (!anyPlaying) {
+        if (!m_weStartedTransport) return;
+        m_weStartedTransport = false;
+    } else {
+        m_weStartedTransport = true;
+    }
     link->setTransportPlaying(anyPlaying);
 }
 
@@ -241,6 +247,14 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
                 TempoSolveResult solved = deriveTempoQuant(recordedSeconds);
                 solvedBpm = solved.bpm;
                 solvedBeats = solved.beats;
+            }
+            if (haveExternalTempo) {
+                double beatSamples = (60.0 / solvedBpm) * (double)kSampleRate;
+                long snapped = (long)(solvedBeats * beatSamples + 0.5);
+                if (snapped < 64) snapped = 64;
+                if (snapped > kMaxLoopSamples) snapped = kMaxLoopSamples;
+                m_masterLenSamples = snapped;
+                ps.setByName("cmd/master_len", (float)m_masterLenSamples);
             }
             ps.setByName("cmd/recorded_bpm", (float)solvedBpm);
             ps.setByName("cmd/recorded_beats", (float)solvedBeats);

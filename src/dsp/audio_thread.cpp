@@ -747,6 +747,7 @@ static void* worker(void*) {
                 static int64_t lastLinkPhaseMicroBeats = -1;
                 static double lastLinkBpmSeen = 0.0;
                 static int tempoStableBlocks = 0;
+                static int64_t masterCreationSnapAfterMicros = -1;
                 static double shuffleClockSamples = 0.0;
                 static int shuffleMaskSlot = -1;
                 if (shuffleMaskSlot < 0 && g_params) shuffleMaskSlot = g_params->getSlot("fx/shuffle/mask");
@@ -794,33 +795,38 @@ static void* worker(void*) {
                             haveLinkTarget = true;
                         }
 
-                        if (haveLinkTarget && (masterJustCreated || !anyAudible)) {
-                            masterPhaseSamples = linkTargetSamples;
-                            linkPhaseTrim = 0.0;
-                            tempoStableBlocks = 0;
-                            lastLinkPhaseMicroBeats = -1;
-                            g_telem.linkPhaseErrBeats = 0.0f;
-                        } else {
-                            masterPhaseSamples += (double)N * ((double)linkSpeedRatio + linkPhaseTrim);
-                        }
+                        if (masterJustCreated && haveLinkTarget)
+                            masterCreationSnapAfterMicros = linkSnap.captureMicros;
 
                         bool freshSnapshot = haveLinkTarget &&
                                              linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
-                        if (freshSnapshot) {
-                            lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
-                            double halfLen = (double)masterLen * 0.5;
-                            double delta = std::fmod(linkTargetSamples - masterPhaseSamples + halfLen, (double)masterLen);
-                            if (delta < 0.0) delta += masterLen;
-                            delta -= halfLen;
-                            g_telem.linkPhaseErrBeats = (float)(delta / beatLenSamplesShared);
-                            bool tempoStable = tempoStableBlocks >= kTempoStableBlocksThreshold;
-                            if (tempoStable && linkVarispeedEngaged && !manualPunchActive) {
-                                double trim = delta * kLinkPhaseTrimPerSample;
-                                if (trim >  kLinkPhaseTrimMax) trim =  kLinkPhaseTrimMax;
-                                if (trim < -kLinkPhaseTrimMax) trim = -kLinkPhaseTrimMax;
-                                linkPhaseTrim = trim;
-                            } else {
-                                linkPhaseTrim = 0.0;
+                        if (freshSnapshot) lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
+
+                        bool postCreationSnapshot = haveLinkTarget && masterCreationSnapAfterMicros >= 0 &&
+                                                    linkSnap.captureMicros > masterCreationSnapAfterMicros;
+                        if (haveLinkTarget && (!anyAudible || postCreationSnapshot)) {
+                            masterPhaseSamples = linkTargetSamples;
+                            linkPhaseTrim = 0.0;
+                            tempoStableBlocks = 0;
+                            masterCreationSnapAfterMicros = -1;
+                            g_telem.linkPhaseErrBeats = 0.0f;
+                        } else {
+                            masterPhaseSamples += (double)N * ((double)linkSpeedRatio + linkPhaseTrim);
+                            if (freshSnapshot) {
+                                double halfLen = (double)masterLen * 0.5;
+                                double delta = std::fmod(linkTargetSamples - masterPhaseSamples + halfLen, (double)masterLen);
+                                if (delta < 0.0) delta += masterLen;
+                                delta -= halfLen;
+                                g_telem.linkPhaseErrBeats = (float)(delta / beatLenSamplesShared);
+                                bool tempoStable = tempoStableBlocks >= kTempoStableBlocksThreshold;
+                                if (tempoStable && linkVarispeedEngaged && !manualPunchActive) {
+                                    double trim = delta * kLinkPhaseTrimPerSample;
+                                    if (trim >  kLinkPhaseTrimMax) trim =  kLinkPhaseTrimMax;
+                                    if (trim < -kLinkPhaseTrimMax) trim = -kLinkPhaseTrimMax;
+                                    linkPhaseTrim = trim;
+                                } else {
+                                    linkPhaseTrim = 0.0;
+                                }
                             }
                         }
                     } else {
@@ -828,6 +834,7 @@ static void* worker(void*) {
                         lastLinkBpmSeen = 0.0;
                         tempoStableBlocks = 0;
                         lastLinkPhaseMicroBeats = -1;
+                        masterCreationSnapAfterMicros = -1;
                         linkPhaseTrim = 0.0;
                         g_telem.linkPhaseErrBeats = 0.0f;
                     }
@@ -848,6 +855,7 @@ static void* worker(void*) {
                     masterPhaseSamples = 0.0;
                     standaloneQuantumPhaseSamples = 0.0;
                     lastLinkPhaseMicroBeats = -1;
+                    masterCreationSnapAfterMicros = -1;
                     g_telem.masterPhaseBeats = 0.0f;
                     g_telem.linkPhaseErrBeats = 0.0f;
                 }
