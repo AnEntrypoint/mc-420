@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=eb953a033c3a81450d14a686168f27ad5abdb7ea">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8eff1de236490ce491652c03bf9fa738b2cf4408">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -382,7 +382,9 @@ same <code class="language-plaintext highlighter-rouge">prevFiltOut</code>, neve
 <p><strong>SHIFT (<code class="language-plaintext highlighter-rouge">fx/monitorfold</code>) fold</strong>: <code class="language-plaintext highlighter-rouge">fin[i] += prevLoopSum[i]*combinedFold</code> when
 engaged, ramping <code class="language-plaintext highlighter-rouge">foldGain</code> at <code class="language-plaintext highlighter-rouge">kFoldStepPerSample</code> = <code class="language-plaintext highlighter-rouge">(1/16)/N</code> — adds one block
 of recording lag, <code class="language-plaintext highlighter-rouge">kShiftFoldBlockLatencySamples</code> (64) written at FINISH if
-<code class="language-plaintext highlighter-rouge">m_looperShiftHeldDuringTake[looper]</code> was ever set, else 0.</p>
+<code class="language-plaintext highlighter-rouge">m_looperShiftHeldDuringTake[looper]</code> was ever set, else 0. Two consumers differ and must not be
+conflated: the Faust <code class="language-plaintext highlighter-rouge">MONITORFOLD</code> zone gets the ramped <code class="language-plaintext highlighter-rouge">foldGain</code>, while <code class="language-plaintext highlighter-rouge">freeXposeBuf</code>
+(free-transpose engage) is the RAW <code class="language-plaintext highlighter-rouge">monitorFoldVal &gt; 0.5</code> threshold.</p>
 
 <hr />
 
