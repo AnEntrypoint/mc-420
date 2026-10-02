@@ -90,6 +90,8 @@ function createWorld(opts) {
     events: [],
     linkPhaseTrim: 0.0,
     phaseLockEnabled: true,
+    joinSnapEnabled: true,
+    wasLinkSynced: false,
     linkPhaseErrBeats: 0.0,
     linkSnapHeld: null,
     lastPublishedPlaying: false,
@@ -107,6 +109,7 @@ const kSimSpeedup = 48000 / SIM_SAMPLE_RATE;
 const kControlTickSamples = SIM_SAMPLE_RATE / 5;
 const kLinkPhaseTrimPerSample = 0.00005 * kSimSpeedup;
 const kLinkPhaseTrimMax = 0.03;
+const kJoinSnapErrBeats = 0.25;
 
 function refreshLinkSnapshot(w) {
   const snap = w.link.local.audioRead((w.t / SIM_SAMPLE_RATE) * 1000);
@@ -432,7 +435,19 @@ function stepOneSample(w) {
       const fresh = target !== null && s.beatPhaseMicroBeats !== w.lastLinkPhaseMicroBeats;
       if (fresh) w.lastLinkPhaseMicroBeats = s.beatPhaseMicroBeats;
 
-      if (w.phaseLockEnabled && target !== null && (!anyAudible || masterJustCreated)) {
+      const linkJoined = linkDriving && !w.wasLinkSynced;
+      let joinErrBeats = 0.0;
+      if (linkJoined && target !== null) {
+        w.wasLinkSynced = true;
+        const half = masterLen * 0.5;
+        const raw = (target - w.masterPhaseSamples + half) % masterLen;
+        const delta = ((raw < 0 ? raw + masterLen : raw)) - half;
+        joinErrBeats = Math.abs(delta) / (masterLen / Math.max(1.0, w.recordedBeats));
+      }
+
+      if (w.phaseLockEnabled && target !== null
+          && (!anyAudible || masterJustCreated
+              || (w.joinSnapEnabled && linkJoined && joinErrBeats > kJoinSnapErrBeats))) {
         w.masterPhaseSamples = target;
         w.linkPhaseTrim = 0.0;
         w.tempoStableSamples = 0;

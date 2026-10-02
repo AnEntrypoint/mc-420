@@ -725,6 +725,7 @@ static void* worker(void*) {
             static double linkPhaseTrim = 0.0;
             constexpr double kLinkPhaseTrimPerSample = 0.00005;
             constexpr double kLinkPhaseTrimMax = 0.03;
+            constexpr double kJoinSnapErrBeats = 0.25;
             float linkSpeedRatio = 1.0f;
             bool linkVarispeedEngaged = false;
             if (linkDrivingLength && g_params && g_link) {
@@ -742,6 +743,7 @@ static void* worker(void*) {
                 g_telem.effSpeed = effSpeed;
             }
             {
+                static bool wasLinkDriving = false;
                 static double masterPhaseSamples = 0.0;
                 static double standaloneQuantumPhaseSamples = 0.0;
                 static int64_t lastLinkPhaseMicroBeats = -1;
@@ -796,6 +798,17 @@ static void* worker(void*) {
                             haveLinkTarget = true;
                         }
 
+                        const bool linkJoined = !wasLinkDriving;
+                        double joinErrBeats = 0.0;
+                        if (linkJoined && haveLinkTarget) {
+                            wasLinkDriving = true;
+                            double halfLenJ = (double)masterLen * 0.5;
+                            double dj = std::fmod(linkTargetSamples - masterPhaseSamples + halfLenJ, (double)masterLen);
+                            if (dj < 0.0) dj += (double)masterLen;
+                            dj -= halfLenJ;
+                            joinErrBeats = std::fabs(dj) / beatLenSamplesShared;
+                        }
+
                         if (masterJustCreated && haveLinkTarget)
                             lastLinkPhaseMicroBeats = -1;
 
@@ -803,7 +816,8 @@ static void* worker(void*) {
                                              linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
                         if (freshSnapshot) lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
 
-                        if (haveLinkTarget && (!anyAudible || masterJustCreated)) {
+                        if (haveLinkTarget && (!anyAudible || masterJustCreated
+                                               || (linkJoined && joinErrBeats > kJoinSnapErrBeats))) {
                             masterPhaseSlope = (double)linkSpeedRatio;
                             masterPhaseSamples = linkTargetSamples;
                             linkPhaseTrim = 0.0;
@@ -832,6 +846,7 @@ static void* worker(void*) {
                     } else {
                         masterPhaseSlope = (double)linkSpeedRatio;
                         masterPhaseSamples += (double)N * masterPhaseSlope;
+                        wasLinkDriving = false;
                         lastLinkBpmSeen = 0.0;
                         tempoStableBlocks = 0;
                         lastLinkPhaseMicroBeats = -1;
@@ -853,6 +868,7 @@ static void* worker(void*) {
                     }
                 } else {
                     masterPhaseSamples = 0.0;
+                    wasLinkDriving = false;
                     standaloneQuantumPhaseSamples = 0.0;
                     lastLinkPhaseMicroBeats = -1;
                     g_telem.masterPhaseBeats = 0.0f;
