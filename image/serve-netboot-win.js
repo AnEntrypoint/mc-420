@@ -180,20 +180,23 @@ function handleRRQ(filename, rinfo, options) {
     tftpReadCount++;
     console.log('[TFTP] ' + safe + ' -> ' + rinfo.address + ' (' + data.length + 'B)');
     if (/initramfs-rpi$/.test(safe) && !httpSilenceWarned) {
+      dhcpAtInitramfsFetch = dhcpMsgCount;
       setTimeout(() => {
         if (httpReqCount === 0 && !httpSilenceWarned) {
           httpSilenceWarned = true;
-          console.error('[HTTP] DIAGNOSIS: initramfs was fetched over TFTP 30s ago and ZERO HTTP requests ' +
-            'have arrived since. The Pi\'s own initramfs fetches modloop/apkovl over HTTP:' + HTTP_PORT +
-            ' next (baked into cmdline.txt at build time) and does not retry after giving up -- it will sit ' +
-            'here answering ping with no other service up until power-cycled. Two known causes: (1) this ' +
-            'server\'s own HTTP listener failed to bind at startup (check for an earlier "[HTTP] listen ' +
-            'EADDRNOTAVAIL"/error line above -- a startup race with ensureCorrectSubnetMask() can cause this; ' +
-            'restart this process and confirm a "[HTTP] listening http://..." line appears before the Pi boots ' +
-            'again) or (2) cmdline.txt was baked with a different NETBOOT_SERVER than ' + SERVER_IP +
-            ' (rebuild the netboot tree). Either way this specific hung boot needs a physical power-cycle to retry.');
+          const reachedDhcp = dhcpMsgCount > dhcpAtInitramfsFetch;
+          const detail = reachedDhcp
+            ? 'The kernel DID reach userspace networking -- a second DHCP exchange followed the TFTP chain -- ' +
+              'so the NIC and its driver are fine and the fault is reachability of ' + SERVER_IP + ':' + HTTP_PORT +
+              ' from the client, or a cmdline.txt baked with a NETBOOT_SERVER other than ' + SERVER_IP + '.'
+            : 'The kernel NEVER reached userspace networking -- no second DHCP exchange followed the TFTP chain, ' +
+              'so it stalled before udhcpc ran. A healthy boot sends that second DISCOVER/REQUEST roughly 60-90s ' +
+              'after the TFTP chain, which is why this waits 150s before speaking up.';
+          console.error('[HTTP] DIAGNOSIS: initramfs was fetched over TFTP 150s ago and ZERO HTTP requests ' +
+            'have arrived since. ' + detail + ' The initramfs does not retry after giving up, so this boot ' +
+            'needs a physical power-cycle.');
         }
-      }, 30000);
+      }, 150000);
     }
     xfer.on('message', msg => {
       if (msg.readUInt16BE(0) !== OP_ACK) return;
@@ -220,6 +223,8 @@ tftp.bind(69, '0.0.0.0', () => console.log('[TFTP] listening :69'));
 
 const dhcpRequestCount = new Map();
 let tftpReadCount = 0;
+let dhcpMsgCount = 0;
+let dhcpAtInitramfsFetch = -1;
 let bootOptionWarned = false;
 let httpReqCount = 0;
 let httpSilenceWarned = false;
@@ -285,6 +290,7 @@ dhcp.on('message', (msg) => {
     }
     const offeredIp = allocate(macStr);
     console.log('[DHCP] ' + (msgType === 1 ? 'DISCOVER' : msgType === 3 ? 'REQUEST' : 'type' + msgType) + ' from ' + macStr + ' -> ' + offeredIp + ' (boot=' + BOOTFILE + ', tftp=' + SERVER_IP + ')');
+    dhcpMsgCount++;
     const reply = buildDhcpReply(msgType === 1 ? 2 : 5, xid, mac, offeredIp);
     const sendReply = () => {
       for (const dest of replyDestinations(offeredIp)) {
@@ -327,17 +333,30 @@ dhcp.bind(67, '0.0.0.0', () => {
 
 const mime = { '.tar': 'application/x-tar', '.gz': 'application/gzip' };
 const httpSrv = http.createServer((req, res) => {
-  httpReqCount++;
+  const from = req.socket.remoteAddress || '';
+  const selfRequest = reservedAddresses.has(from) || from === '127.0.0.1' || from === '::1' || from === '::ffff:127.0.0.1';
+  if (!selfRequest) httpReqCount++;
+  const tag = ' from ' + from + (selfRequest ? ' (this host, not the Pi)' : '');
   const safe = path.normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^(\.\.[/\\])+/, '');
   const full = path.join(ROOT, safe);
-  if (!full.startsWith(ROOT) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) { res.statusCode = 404; res.end('not found'); console.log('[HTTP] 404 ' + safe); return; }
+  if (!full.startsWith(ROOT) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) { res.statusCode = 404; res.end('not found'); console.log('[HTTP] 404 ' + safe + tag); return; }
   res.setHeader('Content-Type', mime[path.extname(full)] || 'application/octet-stream');
   res.setHeader('Content-Length', fs.statSync(full).size);
   fs.createReadStream(full).pipe(res);
-  console.log('[HTTP] 200 ' + safe + ' (' + fs.statSync(full).size + 'B)');
+  console.log('[HTTP] 200 ' + safe + ' (' + fs.statSync(full).size + 'B)' + tag);
 });
 httpSrv.on('error', err => console.error('[HTTP]', err.message));
 httpSrv.listen(HTTP_PORT, SERVER_IP, () => console.log('[HTTP] listening http://' + SERVER_IP + ':' + HTTP_PORT + '/'));
+
+let silentWireTicks = 0;
+const silentWireTimer = setInterval(() => {
+  if (dhcpMsgCount > 0) { clearInterval(silentWireTimer); return; }
+  silentWireTicks++;
+  console.error('[DHCP] DIAGNOSIS: ZERO DHCP DISCOVERs after ' + (silentWireTicks * 60) + 's -- nothing on the wire has ' +
+    'asked to netboot. A Pi only DHCPs during its firmware boot, so one that is already running, or hung, will never show up ' +
+    'here: it needs a real power-cycle (unplug, wait, replug) to try again. An inserted SD card also wins over netboot, so it ' +
+    'must be removed. This server is listening on ' + SERVER_IP + ' and will log the DISCOVER the moment one arrives.');
+}, 60000);
 
 let currentSha = null, rateLimitedUntil = 0;
 const EXPIRED_SHA_RETRY_MS = 5 * 60 * 1000;
