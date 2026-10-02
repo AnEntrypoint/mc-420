@@ -48,5 +48,8 @@ jobs:
       - name: Link dropout and reconnect
         run: node tools/loop-quantization-sim/dropout.js
 
+      - name: Arm on a fine-grid boundary
+        run: node tools/loop-quantization-sim/arm-boundary.js
+
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50

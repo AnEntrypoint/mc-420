@@ -38,7 +38,7 @@ function stepSample(s, inp) {
     : ((s.pend > 0.5 || armPulseGrid) && fineGridWrapped);
   const pendNext = masterLen < 0.5
     ? 0
-    : armPulseGrid ? 1 : (armEdge ? 0 : (cancelPend ? 0 : s.pend));
+    : (armEdge ? 0 : (cancelPend ? 0 : (armPulseGrid ? 1 : s.pend)));
 
   const rsmNext = armEdge ? masterPhase : s.rsm;
 

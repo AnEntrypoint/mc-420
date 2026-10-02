@@ -8,6 +8,7 @@ const SIM_SAMPLE_RATE = 48000 / SCALE;
 const SIM_MAXLEN = Math.round(MAXLEN / SCALE);
 const kHoldEraseSamples = Math.round((1000 / 1000) * SIM_SAMPLE_RATE);
 const kFinishSettleTimeoutSamples = Math.round((500 / 1000) * SIM_SAMPLE_RATE);
+const kBlockSizeSimSamples = 64 / SCALE;
 
 function msToSimSamples(ms) {
   return Math.round((ms / 1000) * SIM_SAMPLE_RATE);
@@ -176,7 +177,7 @@ function applyRecPlayCycle(w, looper) {
     lp.wrapLenStaleAfterWipe = false;
     lp.playing = true;
     lp.ps_play = 1;
-    const latencyBias = 1 + (lp.shiftHeldDuringTake ? 1 : 0);
+    const latencyBias = kBlockSizeSimSamples + (lp.shiftHeldDuringTake ? kBlockSizeSimSamples : 0);
     lp.ps_latencybias = latencyBias;
     w.masterLenSamples = w.masterLenSamples;
     if (w.masterLenSamples === 0) {
