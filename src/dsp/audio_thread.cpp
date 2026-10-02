@@ -747,6 +747,7 @@ static void* worker(void*) {
                 static int64_t lastLinkPhaseMicroBeats = -1;
                 static double lastLinkBpmSeen = 0.0;
                 static int tempoStableBlocks = 0;
+                double masterPhaseSlope = 1.0;
                 static double shuffleClockSamples = 0.0;
                 static int shuffleMaskSlot = -1;
                 if (shuffleMaskSlot < 0 && g_params) shuffleMaskSlot = g_params->getSlot("fx/shuffle/mask");
@@ -803,12 +804,14 @@ static void* worker(void*) {
                         if (freshSnapshot) lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
 
                         if (haveLinkTarget && (!anyAudible || masterJustCreated)) {
+                            masterPhaseSlope = (double)linkSpeedRatio;
                             masterPhaseSamples = linkTargetSamples;
                             linkPhaseTrim = 0.0;
                             tempoStableBlocks = 0;
                             g_telem.linkPhaseErrBeats = 0.0f;
                         } else {
-                            masterPhaseSamples += (double)N * ((double)linkSpeedRatio + linkPhaseTrim);
+                            masterPhaseSlope = (double)linkSpeedRatio + linkPhaseTrim;
+                            masterPhaseSamples += (double)N * masterPhaseSlope;
                             if (freshSnapshot) {
                                 double halfLen = (double)masterLen * 0.5;
                                 double delta = std::fmod(linkTargetSamples - masterPhaseSamples + halfLen, (double)masterLen);
@@ -827,7 +830,8 @@ static void* worker(void*) {
                             }
                         }
                     } else {
-                        masterPhaseSamples += (double)N * (double)linkSpeedRatio;
+                        masterPhaseSlope = (double)linkSpeedRatio;
+                        masterPhaseSamples += (double)N * masterPhaseSlope;
                         lastLinkBpmSeen = 0.0;
                         tempoStableBlocks = 0;
                         lastLinkPhaseMicroBeats = -1;
@@ -882,7 +886,7 @@ static void* worker(void*) {
                             int srcBeat = reorderTable[curBeat];
                             offset = (double)(srcBeat - curBeat) * beatLenSamplesShared;
                         }
-                        double p = masterPhaseSamples + (double)i + offset;
+                        double p = masterPhaseSamples + (double)i * masterPhaseSlope + offset;
                         p = std::fmod(p, lenD);
                         if (p < 0.0) p += lenD;
                         masterPhaseBuf[(size_t)i] = (float)p;
