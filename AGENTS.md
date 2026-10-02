@@ -136,8 +136,7 @@ Native `ubuntu-24.04-arm` runners (no QEMU); Docker steps split with per-command
 `aloop.lv2`, which `lib-boot-tree.sh` filters back out. Rolling `latest`
 hard-gates on a real bundled binary (`payload_check`), stricter than
 `validate-image.sh`. Artifacts need `retention-days: 3`. `faust2bench` was removed
-from CI (3 of 4 attempts hung); run it manually, 20 runs, `-bs 64`. `test-loop-sim.yml` gates the looper sim (`smoketest.js`,
-`two-device-sync.js`, `remote-join.js`, `fuzz.js --trials=3000 --events=50`). `[[memory:
+from CI (3 of 4 attempts hung); run it manually at `-bs 64`. `test-loop-sim.yml` gates every sim script (fuzz `--trials=3000 --events=50`). Per-sample coefficients in `looper.js` need `* kSimSpeedup` (100) or they settle 100x slower than the device's 42 ms. `[[memory:
 ci-build-pipeline-history]]`.
 
 ---
@@ -446,7 +445,7 @@ near-cut/far-extend (`pickAnchorGridBeats`; it REPLACED the old
 `lowerExp`/`lowerCand`/`upperCand` scheme): overshoot past the most recently passed
 grid node ≤1 beat cuts to it immediately, else extends to the next node. Ceiling is
 `kMaxLoopSamples` (48000*60). **Disclosed**: `winSamples`/`xfSamples` freeze at
-floor on a cold start, and real backward content recovery is a deferred gap. `[[memory: control-surface-quantization-history]]`.
+floor on a cold start; backward recovery is deferred. `[[memory: control-surface-quantization-history]]`.
 
 First (master-establishing) recording takes its tempo/beats from a real synced Link
 tempo when present — `recorded_beats` snapped to the nearest power-of-2 in

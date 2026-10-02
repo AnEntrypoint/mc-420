@@ -1,5 +1,7 @@
 'use strict';
 
+const { readHeadError } = require('./read-head-lineup');
+
 const { createLinkSession, createLinkPeer, registerPeer, setPhaseQuantum } = require('./link');
 const {
   createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples,
@@ -23,7 +25,7 @@ function makeLatePair(bpm) {
   const b = createWorld({ looperCount: 4, initialLinkBpm: bpm });
   a.link = { session, local: peerA, remote: peerB };
   b.link = { session, local: peerB, remote: peerA };
-  return { peerA, peerB, a, b };
+  return { session, peerA, peerB, a, b };
 }
 
 function advancePair(a, b, samples) {
@@ -44,7 +46,7 @@ function circularGap(a, b, period) {
 
 function runLatePair(joinSnap) {
   setPhaseQuantum(128.0);
-  const { peerA, peerB, a, b } = makeLatePair(120.0);
+  const { session, peerA, peerB, a, b } = makeLatePair(120.0);
   a.joinSnapEnabled = joinSnap;
   b.joinSnapEnabled = joinSnap;
 
@@ -69,6 +71,8 @@ function runLatePair(joinSnap) {
   const period = Math.max(1, Math.min(a.recordedBeats, b.recordedBeats));
   let settledMs = Infinity;
   let worst = 0;
+  let worstReadA = 0;
+  let worstReadB = 0;
   let elapsedMs = 0;
   for (let k = 0; k * kStepMs < kWatchMs; k++) {
     advancePair(a, b, msToSimSamples(kStepMs));
@@ -79,8 +83,15 @@ function runLatePair(joinSnap) {
     const gap = circularGap(pa, pb, period);
     worst = Math.max(worst, gap);
     if (settledMs === Infinity && gap < kToleranceBeats) settledMs = elapsedMs;
+    const ra = readHeadError(a, session, 0);
+    const rb = readHeadError(b, session, 0);
+    if (ra !== null) worstReadA = Math.max(worstReadA, ra);
+    if (rb !== null) worstReadB = Math.max(worstReadB, rb);
   }
-  return { settledMs, worst, joinPhaseA, joinPhaseB, beatsA: a.recordedBeats, beatsB: b.recordedBeats };
+  return {
+    settledMs, worst, joinPhaseA, joinPhaseB, worstReadA, worstReadB,
+    beatsA: a.recordedBeats, beatsB: b.recordedBeats,
+  };
 }
 
 function main() {
@@ -92,6 +103,8 @@ function main() {
   console.log(`  beats=${fixed.beatsA}/${fixed.beatsB}`);
   console.log(`  legacy (no snap on join): settled after ${legacy.settledMs} ms, worst gap ${legacy.worst.toFixed(3)} beats`);
   console.log(`  fixed  (snap on join):    settled after ${fixed.settledMs} ms, worst gap ${fixed.worst.toFixed(3)} beats`);
+  console.log(`  legacy read head vs grid: A ${legacy.worstReadA.toFixed(3)} beats, B ${legacy.worstReadB.toFixed(3)} beats`);
+  console.log(`  fixed  read head vs grid: A ${fixed.worstReadA.toFixed(3)} beats, B ${fixed.worstReadB.toFixed(3)} beats`);
 
   if (!(legacy.settledMs > 5000)) {
     console.log('  FAIL: legacy run settled quickly, so this case does not reproduce the slow crawl');
@@ -103,6 +116,18 @@ function main() {
   }
   if (!(fixed.worst < 0.25)) {
     console.log('  FAIL: fixed run peaked at ' + fixed.worst.toFixed(3) + ' beats of drift');
+    failed++;
+  }
+  if (!(legacy.worstReadA > kToleranceBeats || legacy.worstReadB > kToleranceBeats)) {
+    console.log('  FAIL: legacy read head tracked the grid, so this case does not reach the read head');
+    failed++;
+  }
+  if (!(fixed.worstReadA < kToleranceBeats)) {
+    console.log('  FAIL: fixed run, A read head off by ' + fixed.worstReadA.toFixed(3) + ' beats');
+    failed++;
+  }
+  if (!(fixed.worstReadB < kToleranceBeats)) {
+    console.log('  FAIL: fixed run, B read head off by ' + fixed.worstReadB.toFixed(3) + ' beats');
     failed++;
   }
 

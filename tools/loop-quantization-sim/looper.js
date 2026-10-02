@@ -82,7 +82,7 @@ function stepSample(s, inp) {
   const speedClamped = Math.max(0.1, Math.min(8.0, effSpeed));
   const varispeedActive = effSpeed !== 1.0;
   const manualPunchActive = Math.abs(effSpeed - 1.0) > 0.3;
-  const resyncCoeff = manualPunchActive ? 0.0 : 0.0005;
+  const resyncCoeff = manualPunchActive ? 0.0 : inp.resyncCoeff;
   const wrapDelta = (prev) => wrapAbs(absPos - prev + wrapLenCur * 0.5, wrapLenCur) - wrapLenCur * 0.5;
   const rposNext = (armEdge || finishEdge)
     ? absPos

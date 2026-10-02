@@ -113,6 +113,7 @@ const kSimSpeedup = 48000 / SIM_SAMPLE_RATE;
 const kControlTickSamples = SIM_SAMPLE_RATE / 5;
 const kLinkPhaseTrimPerSample = 0.00005 * kSimSpeedup;
 const kLinkPhaseTrimMax = 0.03;
+const kResyncCoeffPerSample = 0.0005 * kSimSpeedup;
 const kJoinSnapErrBeats = 0.25;
 
 function refreshLinkSnapshot(w) {
@@ -516,6 +517,7 @@ function stepOneSample(w) {
       masterPhase: w.masterPhaseSamples, masterPhasePrev, masterLen: w.masterLenSamples,
       recordedBeats: w.recordedBeats,
       effSpeed, latencyBiasN: lp.ps_latencybias,
+      resyncCoeff: kResyncCoeffPerSample,
     };
     const next = stepSample(lp.dsp, inp);
     lp.dsp = next;
