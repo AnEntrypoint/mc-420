@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5c6927e2e4f8950806b11f97964aae3a85d805a2">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=345e7f96aa70328d01b75acfb95b29be1c9ec005">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -469,12 +469,17 @@ counter <code class="language-plaintext highlighter-rouge">engageReleaseHoldS=0.
 <code class="language-plaintext highlighter-rouge">pitch_poly_ffi.h</code> never calls <code class="language-plaintext highlighter-rouge">setFormantDepth()</code>; live on MONO via
 <code class="language-plaintext highlighter-rouge">pitch_ffi.h</code>. <code class="language-plaintext highlighter-rouge">[[memory: lpc-formant-shifter-history]]</code>.</p>
 
-<p><strong>Disclosed, unfixed</strong>: upward shifts ≥+18 semitones click (clean -24..+17
-up, -24..-12 down) — start from <code class="language-plaintext highlighter-rouge">soladSnacOctaver.h</code>’s <code class="language-plaintext highlighter-rouge">m_scale</code>
-crossfade-length division and resplice-trigger threshold. A signal-path guard
-must derive from the same quantity the audio path uses, not the raw control
-that nominally sets it (the <code class="language-plaintext highlighter-rouge">freeXpose</code>/<code class="language-plaintext highlighter-rouge">foldGain</code> bug class). <code class="language-plaintext highlighter-rouge">[[memory:
-multitranspose-investigation-history]]</code>.</p>
+<p><strong>Fixed</strong>: upward shifts ≥+18 clicked. Cause was <code class="language-plaintext highlighter-rouge">soladSnacOctaver.h</code>’s
+splice COOLDOWN, not the <code class="language-plaintext highlighter-rouge">m_scale</code> crossfade division: on an upshift the read
+pointer eats the delay line at <code class="language-plaintext highlighter-rouge">(m_scale-1)</code>/sample, so the gap to the writer
+burns at that rate, while <code class="language-plaintext highlighter-rouge">upshiftTargetLag()</code> reserves only 1.5 periods —
+past <code class="language-plaintext highlighter-rouge">(scale-1)*0.9 &gt; 1.5</code> (scale&gt;2.667 = +17st) one cooldown window burns
+more gap than the whole reserve, the reader crosses the writer, and
+<code class="language-plaintext highlighter-rouge">readSinc()</code> reads one-<code class="language-plaintext highlighter-rouge">DL</code>-stale samples. Cooldown is now rate-derived
+(<code class="language-plaintext highlighter-rouge">spliceCooldownSamples()</code>, <code class="language-plaintext highlighter-rouge">per*0.9/max(1,|m_scale-1|)</code>, a no-op below +12).
+Still OPEN: percussive material starves the same way while <code class="language-plaintext highlighter-rouge">m_transientHold</code>
+blocks splices (marimba +18..+24: 93 → 47 events, not 0); a yield gate
+measured WORSE at +24. <code class="language-plaintext highlighter-rouge">[[memory: multitranspose-investigation-history]]</code>.</p>
 
 <h2 id="free-transpose-engine-soladsnacoctaverhenginesoladsnac">Free-transpose engine (<code class="language-plaintext highlighter-rouge">soladSnacOctaver.h</code>/<code class="language-plaintext highlighter-rouge">EngineSoladSnac</code>)</h2>
 
@@ -757,8 +762,6 @@ is a <code class="language-plaintext highlighter-rouge">stat()</code> device-id 
 (real read-write NTFS — BEFORE the legacy read-only <code class="language-plaintext highlighter-rouge">ntfs</code>), then
 vfat/ext4/exfat; <code class="language-plaintext highlighter-rouge">ntfs3</code> needs <code class="language-plaintext highlighter-rouge">force</code> or a dirty drive is rejected.
 UNVERIFIED on real hardware.</p>
-
-<p>Faust libs: faustlibraries <code class="language-plaintext highlighter-rouge">doc/docs/libs/index.md</code>, <code class="language-plaintext highlighter-rouge">standardFunctions.md</code>, <code class="language-plaintext highlighter-rouge">faustdoc.grame.fr/manual/optimizing/</code>.</p>
 
 
       </section>

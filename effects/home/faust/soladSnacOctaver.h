@@ -163,7 +163,7 @@ public:
                 if (driftedPastTrigger && m_envSlow > 0.003f
                     && m_xfadeRemain == 0 && m_spliceCooldown == 0
                     && m_transientHold == 0) {
-                    m_spliceCooldown = (int)(per * kSpliceCooldownFrac);
+                    m_spliceCooldown = spliceCooldownSamples(per);
                     triggerSpliceByPeriod(per, driftFromTarget, targetLag);
                 }
             }
@@ -252,7 +252,9 @@ private:
     static constexpr float kFormantDeadbandSetter = 0.35f;
     static constexpr float kFormantDeadbandBlock = 0.04f;
     static constexpr float kFormantMixCap = 0.6f;
-    static constexpr float kSpliceCooldownFrac = 0.9f;
+    static constexpr double kSpliceCooldownFrac = 0.9;
+    static constexpr double kSpliceCooldownMinRate = 1.0;
+    static constexpr double kSpliceCooldownFloor = 1.0;
     static constexpr double kUpshiftLagPeriods = 1.5;
     static constexpr float kGrainBypassFloor = 1.0e-4f;
 
@@ -381,6 +383,14 @@ private:
         }
         double ceiling = (double)(DL / 4);
         return lag > ceiling ? ceiling : lag;
+    }
+
+    int spliceCooldownSamples(double per) const {
+        double rate = fabs((double)m_scale - 1.0);
+        if (rate < kSpliceCooldownMinRate) rate = kSpliceCooldownMinRate;
+        double c = per * kSpliceCooldownFrac / rate;
+        if (c < kSpliceCooldownFloor) c = kSpliceCooldownFloor;
+        return (int)c;
     }
 
     static int shrinkSpliceCount(int n, double per, double rdActive,
