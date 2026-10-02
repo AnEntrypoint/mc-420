@@ -238,7 +238,6 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             if (lenSamples < 64) lenSamples = 64;
             if (lenSamples > kMaxLoopSamples) lenSamples = kMaxLoopSamples;
             m_masterLenSamples = lenSamples;
-            ps.setByName("cmd/master_len", (float)m_masterLenSamples);
             double recordedSeconds = (double)m_masterLenSamples / (double)kSampleRate;
             bool haveExternalTempo = link && link->audioRead().synced && link->audioRead().bpm > 1.0;
             double solvedBpm, solvedBeats;
@@ -257,10 +256,10 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
                 if (snapped < 64) snapped = 64;
                 if (snapped > kMaxLoopSamples) snapped = kMaxLoopSamples;
                 m_masterLenSamples = snapped;
-                ps.setByName("cmd/master_len", (float)m_masterLenSamples);
             }
             ps.setByName("cmd/recorded_bpm", (float)solvedBpm);
             ps.setByName("cmd/recorded_beats", (float)solvedBeats);
+            ps.setByName("cmd/master_len", (float)m_masterLenSamples);
             if (link && !haveExternalTempo) {
                 link->proposeTempo(solvedBpm);
             }

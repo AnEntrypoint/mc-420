@@ -91,6 +91,10 @@ function createWorld(opts) {
     linkPhaseTrim: 0.0,
     phaseLockEnabled: true,
     joinSnapEnabled: true,
+    beatsGuessEnabled: false,
+    deferBeatsWrite: false,
+    pendingBeats: null,
+    creationSnapPending: false,
     wasLinkSynced: false,
     linkPhaseErrBeats: 0.0,
     linkSnapHeld: null,
@@ -118,6 +122,11 @@ function refreshLinkSnapshot(w) {
   return snap;
 }
 
+function beatsFoldBasis(w) {
+  if (w.recordedBeats >= 1.0) return w.recordedBeats;
+  return w.beatsGuessEnabled ? 16.0 : 0.0;
+}
+
 function linkTargetSamplesAt(w, nowMicros) {
   const s = w.linkSnapHeld;
   if (!s || !s.phaseValid || !(s.quantumMicroBeats > 0) || !(s.captureMicros > 0)) return null;
@@ -127,7 +136,8 @@ function linkTargetSamplesAt(w, nowMicros) {
   const phaseMicroBeats = s.beatPhaseMicroBeats + elapsed * (s.bpm / 60.0);
   let frac = phaseMicroBeats / s.quantumMicroBeats;
   frac -= Math.floor(frac);
-  const beats = Math.max(1.0, w.recordedBeats);
+  const beats = beatsFoldBasis(w);
+  if (!(beats >= 1.0)) return null;
   const oneBeat = w.masterLenSamples / beats;
   const linkBeat = frac * (s.quantumMicroBeats / 1e6);
   const loopBeatPos = ((linkBeat % beats) + beats) % beats;
@@ -193,8 +203,12 @@ function applyRecPlayCycle(w, looper) {
         const beatSamples = (60.0 / solvedBpm) * SIM_SAMPLE_RATE;
         w.masterLenSamples = Math.max(1, Math.min(Math.round(solvedBeats * beatSamples), SIM_MAXLEN));
       }
-      w.recordedBpm = solvedBpm;
-      w.recordedBeats = solvedBeats;
+      if (w.deferBeatsWrite) {
+        w.pendingBeats = { bpm: solvedBpm, beats: solvedBeats, atT: w.t + 1 };
+      } else {
+        w.recordedBpm = solvedBpm;
+        w.recordedBeats = solvedBeats;
+      }
       if (!haveExternalTempo) w.link.local.proposeTempo(solvedBpm, timeMs);
       lp.ps_finishtarget = w.masterLenSamples;
       lp.ps_finishreq = 1;
@@ -405,6 +419,11 @@ function pollHoldsTick(w) {
 }
 
 function stepOneSample(w) {
+  if (w.pendingBeats && w.t >= w.pendingBeats.atT) {
+    w.recordedBpm = w.pendingBeats.bpm;
+    w.recordedBeats = w.pendingBeats.beats;
+    w.pendingBeats = null;
+  }
   if (w.t % kControlTickSamples === 0) refreshLinkSnapshot(w);
   const masterPhasePrev = w.masterPhaseSamples;
 
@@ -420,6 +439,7 @@ function stepOneSample(w) {
   const masterLen = w.masterLenSamples;
   const masterJustCreated = w.prevMasterLen <= 0 && masterLen > 0;
   w.prevMasterLen = masterLen;
+  if (masterJustCreated) w.creationSnapPending = true;
 
   if (masterLen > 0) {
     if (linkDriving) {
@@ -446,11 +466,12 @@ function stepOneSample(w) {
       }
 
       if (w.phaseLockEnabled && target !== null
-          && (!anyAudible || masterJustCreated
+          && (!anyAudible || masterJustCreated || w.creationSnapPending
               || (w.joinSnapEnabled && linkJoined && joinErrBeats > kJoinSnapErrBeats))) {
         w.masterPhaseSamples = target;
         w.linkPhaseTrim = 0.0;
         w.tempoStableSamples = 0;
+        w.creationSnapPending = false;
         w.linkPhaseErrBeats = 0.0;
       } else {
         w.masterPhaseSamples += linkSpeedRatio + (w.phaseLockEnabled ? w.linkPhaseTrim : 0.0);
@@ -473,6 +494,7 @@ function stepOneSample(w) {
       }
     } else {
       w.masterPhaseSamples += linkSpeedRatio + w.linkPhaseTrim;
+      w.creationSnapPending = false;
       w.lastLinkBpmSeen = 0.0;
       w.tempoStableSamples = 0;
       w.lastLinkPhaseMicroBeats = -1;
@@ -483,6 +505,7 @@ function stepOneSample(w) {
   } else {
     w.masterPhaseSamples = 0;
     w.linkPhaseErrBeats = 0.0;
+    w.creationSnapPending = false;
   }
   const results = [];
   for (let i = 0; i < w.looperCount; i++) {
@@ -512,5 +535,5 @@ module.exports = {
   onPadPress, onPadRelease, onClearAll, onShiftPress, onShiftRelease,
   msToSimSamples, SIM_SAMPLE_RATE, SIM_MAXLEN,
   snapshotWriteIdx, snapshotWrapLen, linkAudioRead, deriveTempoQuant, snapBeatsToPow2,
-  effSpeedNow,
+  effSpeedNow, beatsFoldBasis,
 };

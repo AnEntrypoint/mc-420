@@ -36,5 +36,8 @@ jobs:
       - name: Late join after standalone take
         run: node tools/loop-quantization-sim/join-late.js
 
+      - name: Master length lands before beat count
+        run: node tools/loop-quantization-sim/beat-count-race.js
+
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50
