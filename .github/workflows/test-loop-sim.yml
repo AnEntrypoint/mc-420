@@ -30,5 +30,8 @@ jobs:
       - name: Two-device Link sync
         run: node tools/loop-quantization-sim/two-device-sync.js
 
+      - name: Remote transport join
+        run: node tools/loop-quantization-sim/remote-join.js
+
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50
