@@ -155,6 +155,7 @@ void ApcGrid::applyRemoteTransport(ParamStore& ps, LinkBridge* link) {
         }
         if (ls.isPlaying) {
             m_remoteStartPending = true;
+            m_lastRemotePhaseMicroBeats = -1;
         } else {
             for (int lp = 0; lp < kLooperCount; lp++) {
                 if (!m_looperPlaying[lp]) continue;
