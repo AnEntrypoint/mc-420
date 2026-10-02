@@ -90,6 +90,7 @@ function createWorld(opts) {
     events: [],
     linkPhaseTrim: 0.0,
     phaseLockEnabled: true,
+    varispeedOnAnchor: true,
     joinSnapEnabled: true,
     beatsGuessEnabled: false,
     deferBeatsWrite: false,
@@ -433,6 +434,7 @@ function stepOneSample(w) {
   const linkVarispeedEngaged = linkDriving && w.recordedBpm > 1.0;
   let linkSpeedRatio = 1.0;
   if (linkVarispeedEngaged) linkSpeedRatio = s.bpm / w.recordedBpm;
+  const anchorRate = w.varispeedOnAnchor ? linkSpeedRatio : 1.0;
   const manualPunchActive = Math.abs(w.manualSpeedMul - 1.0) > 0.3;
   if (!linkVarispeedEngaged || manualPunchActive) w.linkPhaseTrim = 0.0;
 
@@ -475,7 +477,7 @@ function stepOneSample(w) {
         w.creationSnapPending = false;
         w.linkPhaseErrBeats = 0.0;
       } else {
-        w.masterPhaseSamples += linkSpeedRatio + (w.phaseLockEnabled ? w.linkPhaseTrim : 0.0);
+        w.masterPhaseSamples += anchorRate + (w.phaseLockEnabled ? w.linkPhaseTrim : 0.0);
         if (fresh && target !== null) {
           const half = masterLen * 0.5;
           const raw = (target - w.masterPhaseSamples + half) % masterLen;

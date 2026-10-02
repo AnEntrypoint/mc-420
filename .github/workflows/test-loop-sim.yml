@@ -42,5 +42,8 @@ jobs:
       - name: Read head tracks the shared grid
         run: node tools/loop-quantization-sim/read-head-lineup.js
 
+      - name: Retune after recording
+        run: node tools/loop-quantization-sim/tempo-change.js
+
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50
