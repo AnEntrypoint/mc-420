@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=944f897c6c8a5778c2d10191f552a1c465d834ca">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5c6927e2e4f8950806b11f97964aae3a85d805a2">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -350,6 +350,10 @@ Recording a master snaps <code class="language-plaintext highlighter-rouge">mast
 <code class="language-plaintext highlighter-rouge">finishTargetPending</code> like every sub-loop finish. <code class="language-plaintext highlighter-rouge">[[memory:
 control-surface-quantization-history]]</code>.</p>
 
+<p><code class="language-plaintext highlighter-rouge">masterPhaseBuf</code> ramps at <code class="language-plaintext highlighter-rouge">masterPhaseSlope</code> = <code class="language-plaintext highlighter-rouge">linkSpeedRatio+linkPhaseTrim</code>
+— the rate <code class="language-plaintext highlighter-rouge">rpos</code> integrates. A fixed 1.0 slope desyncs the anchor from the
+read head inside every block whenever the take’s tempo differs from Link’s.</p>
+
 <h2 id="midi-clock-fan-out-and-other-mesh-facts">MIDI clock fan-out and other mesh facts</h2>
 
 <p><code class="language-plaintext highlighter-rouge">midi_clock.cpp</code>: 24 PPQN <code class="language-plaintext highlighter-rouge">0xF8</code>+<code class="language-plaintext highlighter-rouge">0xFA</code>/<code class="language-plaintext highlighter-rouge">0xFC</code> to every MIDI output except
@@ -385,8 +389,8 @@ thread startup, never stack-local.</p>
 
 <p><strong>Resolve string-keyed lookups ONCE, never per block</strong> — control WRITE and
 telemetry READ paths cache resolved <code class="language-plaintext highlighter-rouge">(ParamStore slot, Faust zone float*)</code>
-pairs at startup; per-block resolution makes <code class="language-plaintext highlighter-rouge">readi()</code> take 2.2-2.7ms against
-a 1.333ms budget (block_size 64 @ 48kHz). <code class="language-plaintext highlighter-rouge">FaustUI</code>’s bargraph adders must do
+pairs at startup; per-block resolution blows the 1.333ms budget (block_size 64
+@ 48kHz). <code class="language-plaintext highlighter-rouge">FaustUI</code>’s bargraph adders must do
 <code class="language-plaintext highlighter-rouge">zones[full(l)]=z</code> or <code class="language-plaintext highlighter-rouge">hbargraph()</code> falls through to an O(n) scan.
 <code class="language-plaintext highlighter-rouge">targetToZone()</code> needs a case for every control target — a missing case
 returns <code class="language-plaintext highlighter-rouge">""</code>, silent. <code class="language-plaintext highlighter-rouge">masterPhaseBuf</code> must ramp per-sample, never
@@ -605,8 +609,7 @@ one corrupted its feedback state; <code class="language-plaintext highlighter-ro
 bind to <code class="language-plaintext highlighter-rouge">cmd/clearall</code> — races <code class="language-plaintext highlighter-rouge">ApcGrid</code>’s shadow-state reset.</p>
 
 <p><strong>Tracktion Engine is REJECTED</strong> — do not re-open without new evidence
-(<code class="language-plaintext highlighter-rouge">[[memory: tracktion-engine-rejection]]</code>); prefer folding
-<code class="language-plaintext highlighter-rouge">guitar_lofi_fx.lv2</code> into Core-3 Faust natively.</p>
+(<code class="language-plaintext highlighter-rouge">[[memory: tracktion-engine-rejection]]</code>).</p>
 
 <hr />
 
@@ -669,7 +672,7 @@ while <code class="language-plaintext highlighter-rouge">m_guitarFxHeld</code>.<
 Resonode engage (always wins, forces granulator off; disengage releases every
 held voice). Resonode-engaged keybed drives 4 voices via
 <code class="language-plaintext highlighter-rouge">Lv2Host::setControl</code> to <code class="language-plaintext highlighter-rouge">fx/resonodevoice{v}/{note,gate,vel}</code> (skipped when
-disengaged, unlike <code class="language-plaintext highlighter-rouge">multitranspose.dsp</code>’s 6 always-on voices). LED: blinking
+disengaged, unlike <code class="language-plaintext highlighter-rouge">multitranspose.dsp</code>’s 6 always-on voices). LEDs: blinking
 red=Resonode, solid green=granulator.</p>
 
 <h2 id="granulator-srcdspsamplersamplerh">Granulator (<code class="language-plaintext highlighter-rouge">src/dsp/sampler/sampler.h</code>)</h2>
@@ -677,9 +680,9 @@ red=Resonode, solid green=granulator.</p>
 <p>C++ (not Faust): 7 params (<code class="language-plaintext highlighter-rouge">grainMs</code>/<code class="language-plaintext highlighter-rouge">grainRateHz</code>/<code class="language-plaintext highlighter-rouge">pitchSprayCents</code>/
 <code class="language-plaintext highlighter-rouge">posJitterMs</code>/<code class="language-plaintext highlighter-rouge">scanRate</code>/<code class="language-plaintext highlighter-rouge">reverseProb</code>/<code class="language-plaintext highlighter-rouge">envShape</code>), <code class="language-plaintext highlighter-rouge">MAX_GRAINS=48</code> shared
 across 16 voices; <code class="language-plaintext highlighter-rouge">scanRate=0</code> freezes, negative <code class="language-plaintext highlighter-rouge">rate</code>/<code class="language-plaintext highlighter-rouge">reverseProb</code>
-reverses, <code class="language-plaintext highlighter-rouge">envShape</code> morphs Blackman→Hann→percussive. <code class="language-plaintext highlighter-rouge">kGranPatchCount=4</code>.
-Direct dials (knobs 5-7) override the patch-blended field once touched. Grain
-pool budgeted PER VOICE (<code class="language-plaintext highlighter-rouge">MAX_GRAINS/voices</code>), never exhaustible. <code class="language-plaintext highlighter-rouge">[[memory:
+reverses. Direct dials (knobs 5-7) override the
+patch-blended field once touched. Grain pool budgeted PER VOICE
+(<code class="language-plaintext highlighter-rouge">MAX_GRAINS/voices</code>), never exhaustible. <code class="language-plaintext highlighter-rouge">[[memory:
 granulator-investigation-history]]</code>.</p>
 
 <h2 id="three-page--regularshift--8-knob-control-surface">Three-page × regular/shift × 8-knob control surface</h2>
@@ -752,7 +755,7 @@ is a <code class="language-plaintext highlighter-rouge">stat()</code> device-id 
 <code class="language-plaintext highlighter-rouge">usb-automount-setup.sh</code> (APPENDS to <code class="language-plaintext highlighter-rouge">/etc/mdev.conf</code>, own coldplug pass since
 <code class="language-plaintext highlighter-rouge">local.d</code> runs AFTER <code class="language-plaintext highlighter-rouge">mdev -s</code>). Mount attempts: no <code class="language-plaintext highlighter-rouge">-t</code> first, then <code class="language-plaintext highlighter-rouge">ntfs3</code>
 (real read-write NTFS — BEFORE the legacy read-only <code class="language-plaintext highlighter-rouge">ntfs</code>), then
-<code class="language-plaintext highlighter-rouge">vfat</code>/<code class="language-plaintext highlighter-rouge">ext4</code>/<code class="language-plaintext highlighter-rouge">exfat</code>; <code class="language-plaintext highlighter-rouge">ntfs3</code> needs <code class="language-plaintext highlighter-rouge">force</code> or a dirty drive is rejected.
+vfat/ext4/exfat; <code class="language-plaintext highlighter-rouge">ntfs3</code> needs <code class="language-plaintext highlighter-rouge">force</code> or a dirty drive is rejected.
 UNVERIFIED on real hardware.</p>
 
 <p>Faust libs: faustlibraries <code class="language-plaintext highlighter-rouge">doc/docs/libs/index.md</code>, <code class="language-plaintext highlighter-rouge">standardFunctions.md</code>, <code class="language-plaintext highlighter-rouge">faustdoc.grame.fr/manual/optimizing/</code>.</p>

@@ -228,6 +228,10 @@ Recording a master snaps `masterLenSamples` to whole beats and routes through
 `finishTargetPending` like every sub-loop finish. `[[memory:
 control-surface-quantization-history]]`.
 
+`masterPhaseBuf` ramps at `masterPhaseSlope` = `linkSpeedRatio+linkPhaseTrim`
+— the rate `rpos` integrates. A fixed 1.0 slope desyncs the anchor from the
+read head inside every block whenever the take's tempo differs from Link's.
+
 ## MIDI clock fan-out and other mesh facts
 
 `midi_clock.cpp`: 24 PPQN `0xF8`+`0xFA`/`0xFC` to every MIDI output except
@@ -263,8 +267,8 @@ thread startup, never stack-local.
 
 **Resolve string-keyed lookups ONCE, never per block** — control WRITE and
 telemetry READ paths cache resolved `(ParamStore slot, Faust zone float*)`
-pairs at startup; per-block resolution makes `readi()` take 2.2-2.7ms against
-a 1.333ms budget (block_size 64 @ 48kHz). `FaustUI`'s bargraph adders must do
+pairs at startup; per-block resolution blows the 1.333ms budget (block_size 64
+@ 48kHz). `FaustUI`'s bargraph adders must do
 `zones[full(l)]=z` or `hbargraph()` falls through to an O(n) scan.
 `targetToZone()` needs a case for every control target — a missing case
 returns `""`, silent. `masterPhaseBuf` must ramp per-sample, never
@@ -438,8 +442,7 @@ one corrupted its feedback state; `delayVerbActive` requires BOTH
 bind to `cmd/clearall` — races `ApcGrid`'s shadow-state reset.
 
 **Tracktion Engine is REJECTED** — do not re-open without new evidence
-(`[[memory: tracktion-engine-rejection]]`); prefer folding
-`guitar_lofi_fx.lv2` into Core-3 Faust natively.
+(`[[memory: tracktion-engine-rejection]]`).
 
 ---
 
@@ -502,7 +505,7 @@ Both fire on PRESS: plain tap toggles `m_granulatorLatched`; SHIFT+tap toggles
 Resonode engage (always wins, forces granulator off; disengage releases every
 held voice). Resonode-engaged keybed drives 4 voices via
 `Lv2Host::setControl` to `fx/resonodevoice{v}/{note,gate,vel}` (skipped when
-disengaged, unlike `multitranspose.dsp`'s 6 always-on voices). LED: blinking
+disengaged, unlike `multitranspose.dsp`'s 6 always-on voices). LEDs: blinking
 red=Resonode, solid green=granulator.
 
 ## Granulator (`src/dsp/sampler/sampler.h`)
@@ -510,9 +513,9 @@ red=Resonode, solid green=granulator.
 C++ (not Faust): 7 params (`grainMs`/`grainRateHz`/`pitchSprayCents`/
 `posJitterMs`/`scanRate`/`reverseProb`/`envShape`), `MAX_GRAINS=48` shared
 across 16 voices; `scanRate=0` freezes, negative `rate`/`reverseProb`
-reverses, `envShape` morphs Blackman→Hann→percussive. `kGranPatchCount=4`.
-Direct dials (knobs 5-7) override the patch-blended field once touched. Grain
-pool budgeted PER VOICE (`MAX_GRAINS/voices`), never exhaustible. `[[memory:
+reverses. Direct dials (knobs 5-7) override the
+patch-blended field once touched. Grain pool budgeted PER VOICE
+(`MAX_GRAINS/voices`), never exhaustible. `[[memory:
 granulator-investigation-history]]`.
 
 ## Three-page × regular/shift × 8-knob control surface
@@ -564,7 +567,7 @@ is a `stat()` device-id compare. Config:
 `usb-automount-setup.sh` (APPENDS to `/etc/mdev.conf`, own coldplug pass since
 `local.d` runs AFTER `mdev -s`). Mount attempts: no `-t` first, then `ntfs3`
 (real read-write NTFS — BEFORE the legacy read-only `ntfs`), then
-`vfat`/`ext4`/`exfat`; `ntfs3` needs `force` or a dirty drive is rejected.
+vfat/ext4/exfat; `ntfs3` needs `force` or a dirty drive is rejected.
 UNVERIFIED on real hardware.
 
 Faust libs: faustlibraries `doc/docs/libs/index.md`, `standardFunctions.md`, `faustdoc.grame.fr/manual/optimizing/`.
