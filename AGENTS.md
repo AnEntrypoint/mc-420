@@ -208,8 +208,13 @@ never `16.0` — `linkTargetSamples`/`gridBeatIndex` and `applyRemoteTransport`.
 `m_remoteStartPending` — a stale higher value makes every paused looper start
 mid-phrase.
 
-The idle/creation snap (`!anyAudible || masterJustCreated`) fires IMMEDIATELY at
-creation and waits for a snapshot stamped AFTER the master was created. Recording a master snaps
+The idle/creation snap (`!anyAudible || masterJustCreated || creationSnapPending`) fires
+IMMEDIATELY at creation and waits for a snapshot stamped AFTER the master was created. The beat
+count is the FOLD BASIS for the Link phase: while `cmd/recorded_beats` is unknown there is NO Link
+target, and `creationSnapPending` holds the creation snap until a real one arrives — otherwise the
+anchor snaps on a guessed 16-beat fold and can only crawl back at 0.03 (measured 1.954 beats,
+32.8s). `applyRecPlayCycle` publishes bpm/beats BEFORE `master_len` because the audio thread
+preempts between writes. Recording a master snaps
 `masterLenSamples` to whole beats at the Link tempo and routes through
 `finishTargetPending` like every sub-loop finish. `[[memory:
 control-surface-quantization-history]]`.
