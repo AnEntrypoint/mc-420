@@ -56,8 +56,8 @@ dispatch per board. `board_supports_usb_gadget`/`board_wifi_irq_name`/
 
 Pi 3B+/CM3+ ship netboot-enabled from factory — no OTP burn (only plain 3B/CM3/3A+ need the
 irreversible one). ROM order SD → USB → Network, so "prep for netboot" = wipe the card so
-no `bootcode.bin` remains; a card with no `bootcode.bin` falls through to network, so a
-live netboot server silently takes such a device over — always confirm which path booted.
+no `bootcode.bin` remains; such a card falls through to network, so a live netboot server
+silently takes it over — always confirm which path booted.
 
 opi-prime: USB-audio-gadget **UNPROVEN** (MUSB micro-USB OTG only; the 3 USB-A ports are
 host-only) — fallback is the 3.5mm codec as ALSA HOST. The blob is everything before
@@ -158,7 +158,7 @@ Link's multicast peer discovery (`224.76.78.75:20808`, hardcoded in the Link lib
 | Channel | `hostapd.conf` `channel=6` | SoftAP ch6 |
 | quantum | `kLinkQuantum=16.0` | `LINK_QUANTUM 16.0` |
 | Host election | lowest MAC/BSSID wins | same |
-| Transport role | EMITTER — `setIsPlaying` on every play edge | CONSUMER — never calls `setIsPlaying`; bridges to MIDI Start/Stop/Continue + all-notes-off |
+| Transport | CLOCK-ONLY — `enableStartStopSync(false)`; never calls `setIsPlaying` | CLOCK-ONLY — no transport is shared either way |
 
 Host election is MAC-ordered — never "host if scan found nothing". `src/net/autoap.sh`:
 hosts `ticker` never `aloop`; needs at least one active `network={}` block before
@@ -176,8 +176,11 @@ hosts `ticker` never `aloop`; needs at least one active `network={}` block befor
   user of `weOwnTempo` — never gate `linkSpeedRatio` on it.
 - Playback matches tempo by scaling read RATE (`linkSpeedRatio=linkBpm/recordedBpm` →
   `effSpeed`), never a position jump.
-- `enableStartStopSync(true)` pairs `isPlaying()` reads with `setIsPlaying()`; readiness
-  needs `depend(){ after local autoap; }` plus `waitForNetworkInterface()`.
+- **Link is CLOCK-ONLY: tempo+phase shared, transport never.** `enableStartStopSync(false)`, so
+  pausing locally leaves every peer playing and no peer can start/stop us. `isPlaying` is now a
+  LOCAL flag (`setLocalTransportPlaying`, driven by `ApcGrid::updateLocalTransport`) that only
+  feeds `midi_clock.cpp`'s 0xFA/0xFC — never set it from peer state.
+- Readiness needs `depend(){ after local autoap; }` plus `waitForNetworkInterface()`.
 - Residual phase error is a bounded speed trim on `effSpeed` **AND on the
   `masterPhaseSamples` advance** (`kLinkPhaseTrimPerSample=0.00005`, clamp
   `kLinkPhaseTrimMax=0.03`, suspended while `abs(g_manualSpeedMul-1.0)>0.3`).
@@ -185,22 +188,14 @@ hosts `ticker` never `aloop`; needs at least one active `network={}` block befor
 - The trim runs only while `linkVarispeedEngaged`, or it saturates into a permanent 51-cent
   detune: `eff_speed` in `/run/aloop/status.json` must read exactly `1.0000` with no loop
   recorded.
-- `setTransportPlaying(true)` anchors beat 0 via
-  `setIsPlayingAndRequestBeatAtTime(true,now,0.0,kLinkQuantum)`.
 - At 0.03 the trim needs ~8s to close a half-beat, so the first usable target after Link
   starts driving SNAPS the anchor when the circular error exceeds `kJoinSnapErrBeats=0.25`
   beats; that threshold also stops a flapping peer count from snapping (`join-late.js`).
-- Only the device that started the transport may re-anchor or stop the shared grid
-  (`m_weStartedTransport`) — otherwise every device snaps it to its own downbeat and the mesh
-  splits; an armed-but-silent device must not publish STOPPED.
 
 **Two quantums — 16 for transport, 128 for phase CAPTURE.** `kLinkQuantum=16.0` is the
 PAIRED value (transport anchor, `beatNow()`, 24-PPQN clock). `controlTick()` captures phase
 at `kLinkPhaseQuantumBeats=128.0` and publishes `quantumMicroBeats`; consumers must fold with
-`(quantumMicroBeats/1e6)`, never `16.0` — `linkTargetSamples`/`gridBeatIndex` and
-`applyRemoteTransport`. `applyRemoteTransport` must reset `m_lastRemotePhaseMicroBeats` when
-it arms `m_remoteStartPending` — a stale higher value makes every paused looper start
-mid-phrase.
+`(quantumMicroBeats/1e6)`, never `16.0` — `linkTargetSamples`/`gridBeatIndex`.
 
 The idle/creation snap (`!anyAudible || masterJustCreated || creationSnapPending`) fires
 IMMEDIATELY at creation and waits for a snapshot stamped AFTER the master was created. The
@@ -359,8 +354,8 @@ skew-symmetric energy exchange, `coupleSmallGainMax=0.45`, clamp `coupleGuardCei
 rejected — never exactly identity); a real linear loop through 2+ coupled modes can exceed
 unity gain at some corners even with every pole damped. Internal constants with no knob:
 `positionDriftEnv` ~350ms, `stretchJitterAmt=0.02`, `bassBoost` 1.35x <220Hz, `aliasGuard`
-top-5%-Nyquist fade. Refuted, do not re-propose: `pow` for `exp`, the Lorentzian coupling
-bound, cos recurrence, un-glided morph knobs.
+top-5%-Nyquist fade. Refuted: `pow` for `exp`, the Lorentzian coupling bound, cos recurrence,
+un-glided morph knobs.
 `[[memory: resonode-exciter-coupling-cpu-history]]`
 
 Sweetspot patches (`kResonodePatches`, knobs1-4); knobs 5-7:
@@ -379,12 +374,10 @@ Sweetspot patches (`kResonodePatches`, knobs1-4); knobs 5-7:
 only when `delayVerbActive`. **Two separate instances** (`delayVerbFxCue` +
 `delayVerbFxMaster`) — sharing one corrupted its feedback state; `delayVerbActive` requires
 BOTH `hasPlugins()`. `cmd/halfspeed`/`cmd/doublespeed` stay `note70`/`note71`, never
-`cc70`/`cc71` (real APC Key25 sends NOTES 70/71 ch0). `note91` (`0x5B`) must never bind to
-`cmd/clearall`.
+`cc70`/`cc71` (APC Key25 sends NOTES 70/71 ch0). `0x5B`→`cmd/clearall` is owned ONLY by
+`midi.cpp`; a second `controls.conf` binding raced `ApcGrid`'s shadow reset (`b81fd17`).
 
-**Tracktion Engine is REJECTED** — do not re-open without new evidence: two-ALSA-device
-model vs `AudioDeviceManager`; `pthread_setaffinity_np` vs `tracktion_graph`'s thread pool;
-PDC latency vs a 1.333ms budget; GUI/licensing on headless.
+**Tracktion Engine is REJECTED** — do not re-open without new evidence.
 `[[memory: tracktion-engine-rejection]]`
 
 ---
@@ -422,14 +415,14 @@ Playback anchors to a shared `masterPhase` grid, never a per-take offset.
 
 **ARM snaps to the NEAREST fine-grid node.** `kFineGridBeats=0.125` beat; `fineGridWrapped` is
 hoisted once in `loopEngine` like `masterPhaseWrapped`, and non-first-looper `armEdge` fires on
-it. `armWaitSamples` measures press→node; over half a step, `rsmNext` pulls back one
-(`rsmNearestNode`) to the node nearest the press. Recording still starts at the next crossing.
-Worst case ±1/16 beat, no forward-only bias. Gate:
-`test/phrase-anchor/verify_phase_anchor.py` presses inside each HALF of a grid cell and asserts
-each half is jitter-free and the two halves sit exactly one grid step apart. Hardware check:
-`status.json`'s `writeidx` minus `readpos` during recording is `rsm−armNode` (0 forward, one cell
-back if pulled) — the only offset-free one, since the two schemes differ by half a cell inside the
-unknown Link→`masterPhase` offset.
+it. `armWaitSamples` measures press→node; over half a step `rsmNext` pulls back one
+(`rsmNearestNode`) to the node nearest the press, so worst case is ±1/16 beat with no
+forward-only bias. Gates: `test/phrase-anchor/verify_phase_anchor.py` presses inside each HALF
+of a cell and asserts both halves are jitter-free and one grid step apart;
+`test/hardware/verify-lineup.js` arms several loopers in ONE MIDI burst and asserts the read
+heads share one anchor. Two offset-free hardware checks: recording `writeidx`−`readpos` is `−latencybias`, one cell back when pulled and 0
+otherwise; playing `master_phase`−`readpos` is `rsm`−`latencybias`, a constant 64 samples
+(`kBlockSize`) off a cell. Neither needs the Link→`masterPhase` offset.
 
 **Per-loop beat scale `s`**: latched `1/speedClamped` at `finishEdge`, reset to `1.0` at
 `armEdge` (`beatLenNow = oneBeat/speedClamped` once `masterLen>=0.5`, `cycleInc =
@@ -441,9 +434,8 @@ must be a BEAT-LENGTH ratio, never `wlen/masterLen`: near-cut/far-extend can EXT
 `tempoScale`, drop the division from the finish target, and assert read heads against the
 ABSOLUTE grid beat captured at arm, not `rsm`.
 
-**FINISH length is near-cut/far-extend** (`pickAnchorGridBeats`; REPLACED
-`lowerExp`/`lowerCand`/`upperCand`, and supersedes the older "never let the snap discard
-recorded content" invariant): overshoot past the most recently passed grid node ≤1 beat cuts to
+**FINISH length is near-cut/far-extend** (`pickAnchorGridBeats`; supersedes
+`lowerExp`/`lowerCand`/`upperCand`): overshoot past the most recently passed grid node ≤1 beat cuts to
 it immediately (no padding, no further recording), else extends to the next tier. Ceiling
 `kMaxLoopSamples` (48000*60). `[[memory: control-surface-quantization-history]]`
 

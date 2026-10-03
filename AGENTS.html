@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=7fd8e42f5ebb066727eb5fc05e4f4d6aaac1184d">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=b4c4bcfbf96b2cd9df54f7e3d53d6f221806f600">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -143,8 +143,8 @@ dispatch per board. <code class="language-plaintext highlighter-rouge">board_sup
 
 <p>Pi 3B+/CM3+ ship netboot-enabled from factory — no OTP burn (only plain 3B/CM3/3A+ need the
 irreversible one). ROM order SD → USB → Network, so “prep for netboot” = wipe the card so
-no <code class="language-plaintext highlighter-rouge">bootcode.bin</code> remains; a card with no <code class="language-plaintext highlighter-rouge">bootcode.bin</code> falls through to network, so a
-live netboot server silently takes such a device over — always confirm which path booted.</p>
+no <code class="language-plaintext highlighter-rouge">bootcode.bin</code> remains; such a card falls through to network, so a live netboot server
+silently takes it over — always confirm which path booted.</p>
 
 <p>opi-prime: USB-audio-gadget <strong>UNPROVEN</strong> (MUSB micro-USB OTG only; the 3 USB-A ports are
 host-only) — fallback is the 3.5mm codec as ALSA HOST. The blob is everything before
@@ -279,9 +279,9 @@ Link’s multicast peer discovery (<code class="language-plaintext highlighter-r
       <td>same</td>
     </tr>
     <tr>
-      <td>Transport role</td>
-      <td>EMITTER — <code class="language-plaintext highlighter-rouge">setIsPlaying</code> on every play edge</td>
-      <td>CONSUMER — never calls <code class="language-plaintext highlighter-rouge">setIsPlaying</code>; bridges to MIDI Start/Stop/Continue + all-notes-off</td>
+      <td>Transport</td>
+      <td>CLOCK-ONLY — <code class="language-plaintext highlighter-rouge">enableStartStopSync(false)</code>; never calls <code class="language-plaintext highlighter-rouge">setIsPlaying</code></td>
+      <td>CLOCK-ONLY — no transport is shared either way</td>
     </tr>
   </tbody>
 </table>
@@ -303,8 +303,11 @@ beat stale).</li>
 user of <code class="language-plaintext highlighter-rouge">weOwnTempo</code> — never gate <code class="language-plaintext highlighter-rouge">linkSpeedRatio</code> on it.</li>
   <li>Playback matches tempo by scaling read RATE (<code class="language-plaintext highlighter-rouge">linkSpeedRatio=linkBpm/recordedBpm</code> →
 <code class="language-plaintext highlighter-rouge">effSpeed</code>), never a position jump.</li>
-  <li><code class="language-plaintext highlighter-rouge">enableStartStopSync(true)</code> pairs <code class="language-plaintext highlighter-rouge">isPlaying()</code> reads with <code class="language-plaintext highlighter-rouge">setIsPlaying()</code>; readiness
-needs <code class="language-plaintext highlighter-rouge">depend(){ after local autoap; }</code> plus <code class="language-plaintext highlighter-rouge">waitForNetworkInterface()</code>.</li>
+  <li><strong>Link is CLOCK-ONLY: tempo+phase shared, transport never.</strong> <code class="language-plaintext highlighter-rouge">enableStartStopSync(false)</code>, so
+pausing locally leaves every peer playing and no peer can start/stop us. <code class="language-plaintext highlighter-rouge">isPlaying</code> is now a
+LOCAL flag (<code class="language-plaintext highlighter-rouge">setLocalTransportPlaying</code>, driven by <code class="language-plaintext highlighter-rouge">ApcGrid::updateLocalTransport</code>) that only
+feeds <code class="language-plaintext highlighter-rouge">midi_clock.cpp</code>’s 0xFA/0xFC — never set it from peer state.</li>
+  <li>Readiness needs <code class="language-plaintext highlighter-rouge">depend(){ after local autoap; }</code> plus <code class="language-plaintext highlighter-rouge">waitForNetworkInterface()</code>.</li>
   <li>Residual phase error is a bounded speed trim on <code class="language-plaintext highlighter-rouge">effSpeed</code> <strong>AND on the
 <code class="language-plaintext highlighter-rouge">masterPhaseSamples</code> advance</strong> (<code class="language-plaintext highlighter-rouge">kLinkPhaseTrimPerSample=0.00005</code>, clamp
 <code class="language-plaintext highlighter-rouge">kLinkPhaseTrimMax=0.03</code>, suspended while <code class="language-plaintext highlighter-rouge">abs(g_manualSpeedMul-1.0)&gt;0.3</code>).
@@ -312,23 +315,15 @@ needs <code class="language-plaintext highlighter-rouge">depend(){ after local a
   <li>The trim runs only while <code class="language-plaintext highlighter-rouge">linkVarispeedEngaged</code>, or it saturates into a permanent 51-cent
 detune: <code class="language-plaintext highlighter-rouge">eff_speed</code> in <code class="language-plaintext highlighter-rouge">/run/aloop/status.json</code> must read exactly <code class="language-plaintext highlighter-rouge">1.0000</code> with no loop
 recorded.</li>
-  <li><code class="language-plaintext highlighter-rouge">setTransportPlaying(true)</code> anchors beat 0 via
-<code class="language-plaintext highlighter-rouge">setIsPlayingAndRequestBeatAtTime(true,now,0.0,kLinkQuantum)</code>.</li>
   <li>At 0.03 the trim needs ~8s to close a half-beat, so the first usable target after Link
 starts driving SNAPS the anchor when the circular error exceeds <code class="language-plaintext highlighter-rouge">kJoinSnapErrBeats=0.25</code>
 beats; that threshold also stops a flapping peer count from snapping (<code class="language-plaintext highlighter-rouge">join-late.js</code>).</li>
-  <li>Only the device that started the transport may re-anchor or stop the shared grid
-(<code class="language-plaintext highlighter-rouge">m_weStartedTransport</code>) — otherwise every device snaps it to its own downbeat and the mesh
-splits; an armed-but-silent device must not publish STOPPED.</li>
 </ul>
 
 <p><strong>Two quantums — 16 for transport, 128 for phase CAPTURE.</strong> <code class="language-plaintext highlighter-rouge">kLinkQuantum=16.0</code> is the
 PAIRED value (transport anchor, <code class="language-plaintext highlighter-rouge">beatNow()</code>, 24-PPQN clock). <code class="language-plaintext highlighter-rouge">controlTick()</code> captures phase
 at <code class="language-plaintext highlighter-rouge">kLinkPhaseQuantumBeats=128.0</code> and publishes <code class="language-plaintext highlighter-rouge">quantumMicroBeats</code>; consumers must fold with
-<code class="language-plaintext highlighter-rouge">(quantumMicroBeats/1e6)</code>, never <code class="language-plaintext highlighter-rouge">16.0</code> — <code class="language-plaintext highlighter-rouge">linkTargetSamples</code>/<code class="language-plaintext highlighter-rouge">gridBeatIndex</code> and
-<code class="language-plaintext highlighter-rouge">applyRemoteTransport</code>. <code class="language-plaintext highlighter-rouge">applyRemoteTransport</code> must reset <code class="language-plaintext highlighter-rouge">m_lastRemotePhaseMicroBeats</code> when
-it arms <code class="language-plaintext highlighter-rouge">m_remoteStartPending</code> — a stale higher value makes every paused looper start
-mid-phrase.</p>
+<code class="language-plaintext highlighter-rouge">(quantumMicroBeats/1e6)</code>, never <code class="language-plaintext highlighter-rouge">16.0</code> — <code class="language-plaintext highlighter-rouge">linkTargetSamples</code>/<code class="language-plaintext highlighter-rouge">gridBeatIndex</code>.</p>
 
 <p>The idle/creation snap (<code class="language-plaintext highlighter-rouge">!anyAudible || masterJustCreated || creationSnapPending</code>) fires
 IMMEDIATELY at creation and waits for a snapshot stamped AFTER the master was created. The
@@ -489,8 +484,8 @@ skew-symmetric energy exchange, <code class="language-plaintext highlighter-roug
 rejected — never exactly identity); a real linear loop through 2+ coupled modes can exceed
 unity gain at some corners even with every pole damped. Internal constants with no knob:
 <code class="language-plaintext highlighter-rouge">positionDriftEnv</code> ~350ms, <code class="language-plaintext highlighter-rouge">stretchJitterAmt=0.02</code>, <code class="language-plaintext highlighter-rouge">bassBoost</code> 1.35x &lt;220Hz, <code class="language-plaintext highlighter-rouge">aliasGuard</code>
-top-5%-Nyquist fade. Refuted, do not re-propose: <code class="language-plaintext highlighter-rouge">pow</code> for <code class="language-plaintext highlighter-rouge">exp</code>, the Lorentzian coupling
-bound, cos recurrence, un-glided morph knobs.
+top-5%-Nyquist fade. Refuted: <code class="language-plaintext highlighter-rouge">pow</code> for <code class="language-plaintext highlighter-rouge">exp</code>, the Lorentzian coupling bound, cos recurrence,
+un-glided morph knobs.
 <code class="language-plaintext highlighter-rouge">[[memory: resonode-exciter-coupling-cpu-history]]</code></p>
 
 <p>Sweetspot patches (<code class="language-plaintext highlighter-rouge">kResonodePatches</code>, knobs1-4); knobs 5-7:
@@ -554,12 +549,10 @@ bound, cos recurrence, un-glided morph knobs.
 only when <code class="language-plaintext highlighter-rouge">delayVerbActive</code>. <strong>Two separate instances</strong> (<code class="language-plaintext highlighter-rouge">delayVerbFxCue</code> +
 <code class="language-plaintext highlighter-rouge">delayVerbFxMaster</code>) — sharing one corrupted its feedback state; <code class="language-plaintext highlighter-rouge">delayVerbActive</code> requires
 BOTH <code class="language-plaintext highlighter-rouge">hasPlugins()</code>. <code class="language-plaintext highlighter-rouge">cmd/halfspeed</code>/<code class="language-plaintext highlighter-rouge">cmd/doublespeed</code> stay <code class="language-plaintext highlighter-rouge">note70</code>/<code class="language-plaintext highlighter-rouge">note71</code>, never
-<code class="language-plaintext highlighter-rouge">cc70</code>/<code class="language-plaintext highlighter-rouge">cc71</code> (real APC Key25 sends NOTES 70/71 ch0). <code class="language-plaintext highlighter-rouge">note91</code> (<code class="language-plaintext highlighter-rouge">0x5B</code>) must never bind to
-<code class="language-plaintext highlighter-rouge">cmd/clearall</code>.</p>
+<code class="language-plaintext highlighter-rouge">cc70</code>/<code class="language-plaintext highlighter-rouge">cc71</code> (APC Key25 sends NOTES 70/71 ch0). <code class="language-plaintext highlighter-rouge">0x5B</code>→<code class="language-plaintext highlighter-rouge">cmd/clearall</code> is owned ONLY by
+<code class="language-plaintext highlighter-rouge">midi.cpp</code>; a second <code class="language-plaintext highlighter-rouge">controls.conf</code> binding raced <code class="language-plaintext highlighter-rouge">ApcGrid</code>’s shadow reset (<code class="language-plaintext highlighter-rouge">b81fd17</code>).</p>
 
-<p><strong>Tracktion Engine is REJECTED</strong> — do not re-open without new evidence: two-ALSA-device
-model vs <code class="language-plaintext highlighter-rouge">AudioDeviceManager</code>; <code class="language-plaintext highlighter-rouge">pthread_setaffinity_np</code> vs <code class="language-plaintext highlighter-rouge">tracktion_graph</code>’s thread pool;
-PDC latency vs a 1.333ms budget; GUI/licensing on headless.
+<p><strong>Tracktion Engine is REJECTED</strong> — do not re-open without new evidence.
 <code class="language-plaintext highlighter-rouge">[[memory: tracktion-engine-rejection]]</code></p>
 
 <hr />
@@ -597,14 +590,14 @@ shadow, skipping loopers with <code class="language-plaintext highlighter-rouge"
 
 <p><strong>ARM snaps to the NEAREST fine-grid node.</strong> <code class="language-plaintext highlighter-rouge">kFineGridBeats=0.125</code> beat; <code class="language-plaintext highlighter-rouge">fineGridWrapped</code> is
 hoisted once in <code class="language-plaintext highlighter-rouge">loopEngine</code> like <code class="language-plaintext highlighter-rouge">masterPhaseWrapped</code>, and non-first-looper <code class="language-plaintext highlighter-rouge">armEdge</code> fires on
-it. <code class="language-plaintext highlighter-rouge">armWaitSamples</code> measures press→node; over half a step, <code class="language-plaintext highlighter-rouge">rsmNext</code> pulls back one
-(<code class="language-plaintext highlighter-rouge">rsmNearestNode</code>) to the node nearest the press. Recording still starts at the next crossing.
-Worst case ±1/16 beat, no forward-only bias. Gate:
-<code class="language-plaintext highlighter-rouge">test/phrase-anchor/verify_phase_anchor.py</code> presses inside each HALF of a grid cell and asserts
-each half is jitter-free and the two halves sit exactly one grid step apart. Hardware check:
-<code class="language-plaintext highlighter-rouge">status.json</code>’s <code class="language-plaintext highlighter-rouge">writeidx</code> minus <code class="language-plaintext highlighter-rouge">readpos</code> during recording is <code class="language-plaintext highlighter-rouge">rsm−armNode</code> (0 forward, one cell
-back if pulled) — the only offset-free one, since the two schemes differ by half a cell inside the
-unknown Link→<code class="language-plaintext highlighter-rouge">masterPhase</code> offset.</p>
+it. <code class="language-plaintext highlighter-rouge">armWaitSamples</code> measures press→node; over half a step <code class="language-plaintext highlighter-rouge">rsmNext</code> pulls back one
+(<code class="language-plaintext highlighter-rouge">rsmNearestNode</code>) to the node nearest the press, so worst case is ±1/16 beat with no
+forward-only bias. Gates: <code class="language-plaintext highlighter-rouge">test/phrase-anchor/verify_phase_anchor.py</code> presses inside each HALF
+of a cell and asserts both halves are jitter-free and one grid step apart;
+<code class="language-plaintext highlighter-rouge">test/hardware/verify-lineup.js</code> arms several loopers in ONE MIDI burst and asserts the read
+heads share one anchor. Two offset-free hardware checks: recording <code class="language-plaintext highlighter-rouge">writeidx</code>−<code class="language-plaintext highlighter-rouge">readpos</code> is <code class="language-plaintext highlighter-rouge">−latencybias</code>, one cell back when pulled and 0
+otherwise; playing <code class="language-plaintext highlighter-rouge">master_phase</code>−<code class="language-plaintext highlighter-rouge">readpos</code> is <code class="language-plaintext highlighter-rouge">rsm</code>−<code class="language-plaintext highlighter-rouge">latencybias</code>, a constant 64 samples
+(<code class="language-plaintext highlighter-rouge">kBlockSize</code>) off a cell. Neither needs the Link→<code class="language-plaintext highlighter-rouge">masterPhase</code> offset.</p>
 
 <p><strong>Per-loop beat scale <code class="language-plaintext highlighter-rouge">s</code></strong>: latched <code class="language-plaintext highlighter-rouge">1/speedClamped</code> at <code class="language-plaintext highlighter-rouge">finishEdge</code>, reset to <code class="language-plaintext highlighter-rouge">1.0</code> at
 <code class="language-plaintext highlighter-rouge">armEdge</code> (<code class="language-plaintext highlighter-rouge">beatLenNow = oneBeat/speedClamped</code> once <code class="language-plaintext highlighter-rouge">masterLen&gt;=0.5</code>, <code class="language-plaintext highlighter-rouge">cycleInc =
@@ -616,9 +609,8 @@ must be a BEAT-LENGTH ratio, never <code class="language-plaintext highlighter-r
 <code class="language-plaintext highlighter-rouge">tempoScale</code>, drop the division from the finish target, and assert read heads against the
 ABSOLUTE grid beat captured at arm, not <code class="language-plaintext highlighter-rouge">rsm</code>.</p>
 
-<p><strong>FINISH length is near-cut/far-extend</strong> (<code class="language-plaintext highlighter-rouge">pickAnchorGridBeats</code>; REPLACED
-<code class="language-plaintext highlighter-rouge">lowerExp</code>/<code class="language-plaintext highlighter-rouge">lowerCand</code>/<code class="language-plaintext highlighter-rouge">upperCand</code>, and supersedes the older “never let the snap discard
-recorded content” invariant): overshoot past the most recently passed grid node ≤1 beat cuts to
+<p><strong>FINISH length is near-cut/far-extend</strong> (<code class="language-plaintext highlighter-rouge">pickAnchorGridBeats</code>; supersedes
+<code class="language-plaintext highlighter-rouge">lowerExp</code>/<code class="language-plaintext highlighter-rouge">lowerCand</code>/<code class="language-plaintext highlighter-rouge">upperCand</code>): overshoot past the most recently passed grid node ≤1 beat cuts to
 it immediately (no padding, no further recording), else extends to the next tier. Ceiling
 <code class="language-plaintext highlighter-rouge">kMaxLoopSamples</code> (48000*60). <code class="language-plaintext highlighter-rouge">[[memory: control-surface-quantization-history]]</code></p>
 
