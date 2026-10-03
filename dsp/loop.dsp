@@ -22,8 +22,8 @@ with {
     oneBeat = max(1.0, masterLen / beatsPerMasterLen);
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
 
-    takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev) =
-        (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext)
+    takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev, sPrev) =
+        (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext, sNext)
     with {
         recPrevEdge = recN : mem;
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
@@ -52,7 +52,7 @@ with {
         writeIdxForLatch = ba.if(finNext, finishTargetN, float(widxNext));
         intendedTakeLen = ba.if(finishTargetN > 0.5, finishTargetN, writeIdxForLatch);
         finishTakeLen = max(1.0, intendedTakeLen);
-        takeLenBeats = finishTakeLen / oneBeat;
+        takeLenBeats = finishTakeLen / beatLenNow;
         gridPickEps = 0.01;
         anchorGridBeats = ba.if(takeLenBeats > 16.0 + gridPickEps, 16.0,
                            ba.if(takeLenBeats > 8.0 + gridPickEps, 8.0,
@@ -61,17 +61,20 @@ with {
                                  ba.if(takeLenBeats > 1.0 + gridPickEps, 1.0,
                                    ba.if(takeLenBeats > 0.5 + gridPickEps, 0.5,
                                      ba.if(takeLenBeats > 0.25 + gridPickEps, 0.25, 0.125)))))));
-        anchorGridLenNow = max(1.0, anchorGridBeats * oneBeat);
+        anchorGridLenNow = max(1.0, anchorGridBeats * beatLenNow);
         gridMultiple = max(1.0, ceil(takeLenBeats / anchorGridBeats - gridPickEps));
         snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, gridMultiple * anchorGridLenNow);
         wlenNext = ba.if(finishEdge, max(1.0, snappedWrapLen), wlenPrev);
+        beatLenNow = ba.if(masterLen < 0.5, oneBeat, oneBeat / speedClamped);
+        sNext = ba.if(armEdge, 1.0,
+                 ba.if(finishEdge, ba.if(masterLen < 0.5, 1.0, 1.0 / speedClamped), sPrev));
 
         wrapLenCur = max(1, wlenNext);
-        cycleInc = ba.if(masterLen < 0.5, wrapLenCur, masterLen);
+        cycleInc = ba.if(masterLen < 0.5, wrapLenCur, sNext * masterLen);
         coffNext = ba.if(armEdge, 0.0,
                     ba.if(masterPhaseWrapped, wrapAbs(coffPrev + cycleInc, wrapLenCur), coffPrev));
 
-        absPos = wrapAbs(masterPhase - rsmNext + latencyBiasN + coffNext, wrapLenCur);
+        absPos = wrapAbs(sNext * (masterPhase - rsmNext) + latencyBiasN + coffNext, wrapLenCur);
         speedClamped = max(0.1, min(8.0, effSpeed));
         varispeedActive = effSpeed != 1.0;
         manualPunchActive = abs(effSpeed - 1.0) > 0.3;
@@ -79,12 +82,12 @@ with {
         wrapDelta(prev) = wrapAbs(absPos - prev + wrapLenCur * 0.5, wrapLenCur) - wrapLenCur * 0.5;
         rposNext = ba.if(armEdge | finishEdge, absPos,
                     ba.if(varispeedActive,
-                          wrapAbs(rposPrev + speedClamped + wrapDelta(rposPrev) * resyncCoeff, wrapLenCur),
+                          wrapAbs(rposPrev + speedClamped * sNext + wrapDelta(rposPrev) * resyncCoeff, wrapLenCur),
                           absPos));
     };
 
-    takeStateBus = (_,_,_,_,_,_,_,_,_) ~ takeState;
-    pickState(k) = takeStateBus : (par(j, 9, *(j == k)) :> _);
+    takeStateBus = (_,_,_,_,_,_,_,_,_,_) ~ takeState;
+    pickState(k) = takeStateBus : (par(j, 10, *(j == k)) :> _);
     pend = pickState(0);
     fin = pickState(1);
     act = pickState(2);
