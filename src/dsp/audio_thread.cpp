@@ -579,7 +579,9 @@ static void* worker(void*) {
         }
 
         timespec lastReadTs{}; bool haveLastReadTs = false;
-        double roundTripEma = -1.0;
+        double roundTripEstSamples = -1.0;
+        double roundTripWindowSum = 0.0;
+        int    roundTripWindowBlocks = 0;
         int    roundTripUpdates = 0;
         const double kExpectedPeriodMs = (double)N / g_cfg.sampleRate * 1000.0;
         while (g_running.load()) {
@@ -1325,18 +1327,29 @@ static void* worker(void*) {
             if (r > 0 && w > 0) {
                 const double roundTripNow = (double)capDelayFrames + (double)playDelayFrames + (double)N;
                 if (roundTripNow >= 0.0 && roundTripNow < 16384.0) {
-                    if (roundTripEma < 0.0) roundTripEma = roundTripNow;
-                    else roundTripEma += (roundTripNow - roundTripEma) * 0.01;
+                    if (roundTripEstSamples < 0.0) {
+                        roundTripEstSamples = roundTripNow;
+                        roundTripWindowSum = roundTripNow;
+                        roundTripWindowBlocks = 1;
+                    } else {
+                        roundTripWindowSum += roundTripNow;
+                        roundTripWindowBlocks++;
+                        if ((double)roundTripWindowBlocks * (double)N >= 4.0 * (double)g_cfg.sampleRate) {
+                            roundTripEstSamples = roundTripWindowSum / (double)roundTripWindowBlocks;
+                            roundTripWindowSum = 0.0;
+                            roundTripWindowBlocks = 0;
+                        }
+                    }
                     const int trimSamples = g_cfg.latencyTrimSamples + g_liveLatencyTrimSamples.load(std::memory_order_relaxed);
-                    g_telem.alsaRoundTripSamples = (float)roundTripEma;
+                    g_telem.alsaRoundTripSamples = (float)roundTripEstSamples;
                     g_telem.latencyTrimSamples = (float)trimSamples;
-                    g_telem.latencyBiasSamples = (float)((double)N + roundTripEma + (double)trimSamples);
+                    g_telem.latencyBiasSamples = (float)((double)N + roundTripEstSamples + (double)trimSamples);
                     static double lastLoggedRoundTrip = -1.0;
                     if (++roundTripUpdates >= 400 &&
-                        (lastLoggedRoundTrip < 0.0 || std::fabs(roundTripEma - lastLoggedRoundTrip) > 16.0)) {
-                        lastLoggedRoundTrip = roundTripEma;
+                        (lastLoggedRoundTrip < 0.0 || std::fabs(roundTripEstSamples - lastLoggedRoundTrip) > 16.0)) {
+                        lastLoggedRoundTrip = roundTripEstSamples;
                         fprintf(stderr, "[audio] measured round trip %.0f samples (%.2f ms) -- looper latency bias %.0f samples\n",
-                                roundTripEma, roundTripEma / (g_cfg.sampleRate > 0 ? g_cfg.sampleRate : 48000) * 1000.0,
+                                roundTripEstSamples, roundTripEstSamples / (g_cfg.sampleRate > 0 ? g_cfg.sampleRate : 48000) * 1000.0,
                                 (double)g_telem.latencyBiasSamples);
                     }
                 }
