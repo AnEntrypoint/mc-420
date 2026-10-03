@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=66405f88580d504fd14dc6e58e8a184184006373">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=aa2f524a60a77696ac469a936b8960525a88bfa2">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -77,7 +77,13 @@ first. A wet effect’s own engaged-only algorithmic latency (<code class="langu
 <code class="language-plaintext highlighter-rouge">test/hardware/link-peer.cpp</code>, host-built <code class="language-plaintext highlighter-rouge">-static</code> with <code class="language-plaintext highlighter-rouge">-DLINK_PLATFORM_WINDOWS -D_WIN32_WINNT=0x0601
 -DASIO_STANDALONE -lws2_32 -lwinmm -liphlpapi -mthreads</code>, both <code class="language-plaintext highlighter-rouge">-I</code> roots under
 <code class="language-plaintext highlighter-rouge">build/_deps/abletonlink-src/</code> (<code class="language-plaintext highlighter-rouge">include</code>, <code class="language-plaintext highlighter-rouge">modules/asio-standalone/asio/include</code>), output inside <code class="language-plaintext highlighter-rouge">build/</code>
-(<code class="language-plaintext highlighter-rouge">deploy-binary.js</code> wipes <code class="language-plaintext highlighter-rouge">.deploy/</code>). <code class="language-plaintext highlighter-rouge">verify-peer-follows-loop.js</code> drives it.</p>
+(<code class="language-plaintext highlighter-rouge">deploy-binary.js</code> wipes <code class="language-plaintext highlighter-rouge">.deploy/</code>). <code class="language-plaintext highlighter-rouge">verify-peer-follows-loop.js</code> drives it.
+<strong>Telemetry (udp/4445) answers in ~190ms from the 5 Hz control loop and that lag JITTERS by tens of ms</strong> –
+any rate taken from two endpoint samples against the host clock measures the lag, not the device: a 10 s
+watch read a perfect take 0.14% slow (-2.5 cents) once and 0.36% the next. Fit a slope over every poll of a</p>
+<blockquote>
+  <p>=20 s watch instead (a 30 s probe of that same take reads +0.008 cents).</p>
+</blockquote>
 
 <p><strong>Compiling clean proves nothing</strong> – x86_64 A/B passed while real aarch64 codegen SIGSEGV’d (<code class="language-plaintext highlighter-rouge">-mapp</code>);
 <code class="language-plaintext highlighter-rouge">tools/dsp-cli</code> is not a device proof. <strong>Before accepting any <code class="language-plaintext highlighter-rouge">.dsp</code> optimization, regenerate real C++ and
