@@ -55,6 +55,7 @@ void Telemetry::publish() {
     char levels[20 * 7 + 2]; int lvp = 0; levels[lvp++] = '[';
     char wraplens[20 * 9 + 2]; int wlp = 0; wraplens[wlp++] = '[';
     char readposes[20 * 9 + 2]; int rpp = 0; readposes[rpp++] = '[';
+    char writeidxs[20 * 9 + 2]; int wip = 0; writeidxs[wip++] = '[';
     for (int i = 0; i < AudioThread::Telemetry::kLoopers; i++) {
         if (t.looperRec[i])  recBits  |= (1u << i);
         if (t.looperPlay[i]) playBits |= (1u << i);
@@ -62,11 +63,13 @@ void Telemetry::publish() {
         lvp += snprintf(levels + lvp, sizeof levels - lvp, i ? ",%.4f" : "%.4f", t.looperLevel[i]);
         wlp += snprintf(wraplens + wlp, sizeof wraplens - wlp, i ? ",%.0f" : "%.0f", t.looperWrapLen[i]);
         rpp += snprintf(readposes + rpp, sizeof readposes - rpp, i ? ",%.0f" : "%.0f", t.looperReadPos[i]);
+        wip += snprintf(writeidxs + wip, sizeof writeidxs - wip, i ? ",%.0f" : "%.0f", t.looperWriteIdx[i]);
     }
     vols[vp++] = ']'; vols[vp] = 0;
     levels[lvp++] = ']'; levels[lvp] = 0;
     wraplens[wlp++] = ']'; wraplens[wlp] = 0;
     readposes[rpp++] = ']'; readposes[rpp] = 0;
+    writeidxs[wip++] = ']'; writeidxs[wip] = 0;
 
     char wifiRole[8] = "sta";
     FILE* rf = fopen("/run/aloop/wifi_role", "r");
@@ -77,7 +80,7 @@ void Telemetry::publish() {
         if (rn == 0) { wifiRole[0] = 's'; wifiRole[1] = 't'; wifiRole[2] = 'a'; wifiRole[3] = 0; }
     }
 
-    char json[1408];
+    char json[1664];
     int n = snprintf(json, sizeof json,
         "{\"core_busy\":[%.0f,%.0f,%.0f,%.0f],\"xruns\":%llu,"
         "\"link\":{\"synced\":%s,\"bpm\":%.1f,\"peers\":%d,\"playing\":%s,\"phase_err_beats\":%.3f},"
@@ -87,7 +90,7 @@ void Telemetry::publish() {
         "\"audio_peak\":{\"in\":%.4f,\"out\":%.4f},\"eff_speed\":%.4f,"
         "\"sustain_cmd\":%.2f,\"sustain_gate\":%.2f,"
         "\"grid_beat_index\":%d,\"master_phase_beats\":%.3f,"
-        "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s}}",
+        "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s}}",
         t.coreBusyPct[0], t.coreBusyPct[1], t.coreBusyPct[2], t.coreBusyPct[3],
         (unsigned long long)t.xruns,
         t.linkSynced ? "true" : "false", t.bpm,
@@ -100,7 +103,7 @@ void Telemetry::publish() {
         t.inPeak, t.outPeak, t.effSpeed,
         t.sustainCmd, t.sustainGate,
         t.gridBeatIndex, t.masterPhaseBeats,
-        recBits, playBits, vols, levels, wraplens, readposes);
+        recBits, playBits, vols, levels, wraplens, readposes, writeidxs);
 
     FILE* statusFile = fopen("/run/aloop/status.json", "w");
     if (statusFile) { fwrite(json, 1, (size_t)n, statusFile); fclose(statusFile); }
