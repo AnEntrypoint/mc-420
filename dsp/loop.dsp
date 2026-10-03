@@ -5,7 +5,7 @@ MAXLEN   = 48000 * 60;
 NLOOPERS = 20;
 kFineGridBeats = 0.125;
 
-oneLooper(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped) = out : attachLevel
+oneLooper(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped) = out : attachLevel
 with {
     recN  = button("rec");
     playN = checkbox("play");
@@ -22,28 +22,22 @@ with {
     oneBeat = max(1.0, masterLen / beatsPerMasterLen);
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
 
-    takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev, sPrev, vPrev, pendPhasePrev) =
-        (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext, sNext, vNext, pendPhaseNext)
+    takeState(finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev, sPrev, vPrev) =
+        (finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext, sNext, vNext)
     with {
         recPrevEdge = recN : mem;
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
-        armPulseGrid = armPulse & (masterLen >= 0.5);
-
-        cancelPend = pendPrev & (finishReqN > 0.5) & (actPrev < 0.5);
-        pendOrArmingNow = pendPrev | armPulseGrid;
-        armEdge = ba.if(masterLen < 0.5, armPulse, pendOrArmingNow & fineGridWrapped);
-        pendNext = ba.if(masterLen < 0.5, 0,
-                    ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(armPulseGrid, 1, pendPrev))));
-
-        pendPhaseNext = ba.if(armPulseGrid, masterPhase, ba.if(armEdge, 0.0, pendPhasePrev));
+        armEdge = armPulse;
 
         fineGridSamples = max(1.0, kFineGridBeats * oneBeat);
-        armWaitSamples = ba.if(armPulseGrid, 0.0, wrapAbs(masterPhase - pendPhasePrev, max(1.0, masterLen)));
-        rsmNearestNode = wrapAbs(masterPhase - ba.if(armWaitSamples > fineGridSamples * 0.5, fineGridSamples, 0.0),
+        cellOffset = wrapAbs(masterPhase, fineGridSamples);
+        rsmNearestNode = wrapAbs(masterPhase + ba.if(cellOffset > fineGridSamples * 0.5,
+                                                     fineGridSamples - cellOffset,
+                                                     -cellOffset),
                                  max(1.0, masterLen));
         rsmNext = ba.if(armEdge, rsmNearestNode, rsmPrev);
 
-        finNext = ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(finishReqN > 0.5, 1, finPrev)));
+        finNext = ba.if(armEdge, 0, ba.if(finishReqN > 0.5, 1, finPrev));
         recKeepAlive = (recN > 0.5) | finNext;
         actNext = ba.if(armEdge, 1.0, ba.if(recKeepAlive, actPrev, 0.0));
 
@@ -97,17 +91,16 @@ with {
                           absPos));
     };
 
-    takeStateBus = (_,_,_,_,_,_,_,_,_,_,_,_) ~ takeState;
-    pickState(k) = takeStateBus : (par(j, 12, *(j == k)) :> _);
-    pend = pickState(0);
-    fin = pickState(1);
-    act = pickState(2);
-    widxRaw = pickState(3);
-    wlenRaw = pickState(4);
-    rsm = pickState(5);
-    coff = pickState(6);
-    readPos = pickState(7);
-    gateNow = pickState(8);
+    takeStateBus = (_,_,_,_,_,_,_,_,_,_) ~ takeState;
+    pickState(k) = takeStateBus : (par(j, 10, *(j == k)) :> _);
+    fin = pickState(0);
+    act = pickState(1);
+    widxRaw = pickState(2);
+    wlenRaw = pickState(3);
+    rsm = pickState(4);
+    coff = pickState(5);
+    readPos = pickState(6);
+    gateNow = pickState(7);
 
     wrapLen = max(1, wlenRaw);
     recordingGateNow = gateNow;
@@ -138,7 +131,7 @@ with {
     readPosMeter = hbargraph("readposdiag2", 0.0, float(MAXLEN));
     attachReadPos(x) = attach(x, x*0.0 + float(readPos) : readPosMeter);
     stateFlagsMeter = hbargraph("stateflagsdiag", 0.0, 15.0);
-    stateFlags = pend*1.0 + fin*2.0 + act*4.0 + gateNow*8.0;
+    stateFlags = fin*2.0 + act*4.0 + gateNow*8.0;
     attachStateFlags(x) = attach(x, x*0.0 + stateFlags : stateFlagsMeter);
     levelPeakDecay = pow(0.001, 1.0/4096.0);
     levelPeakFollow(x) = loop ~ _
@@ -148,8 +141,8 @@ with {
     attachLevel(x) = attach(x, levelPeakFollow(x) : levelMeter) : attachWriteIdx : attachWrapLen : attachReadPos : attachStateFlags;
 };
 
-looperOuts(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped) =
-    par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped)));
+looperOuts(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped) =
+    par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped)));
 
 loopEngine(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) =
     in, loopSum, loopSolos
@@ -157,12 +150,7 @@ with {
     masterPhasePrev = masterPhase : mem;
     masterPhaseWrapped = masterPhase < masterPhasePrev;
 
-    beatsPerMasterLenShared = max(1.0, recordedBeats);
-    oneBeatShared = max(1.0, masterLen / beatsPerMasterLenShared);
-    fineGridShared = max(1.0, kFineGridBeats * oneBeatShared);
-    fineGridWrapped = int(masterPhase / fineGridShared) != int(masterPhasePrev / fineGridShared);
-
-    outs = looperOuts(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped);
+    outs = looperOuts(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped);
     loopSum = outs :> _;
     loopSolos = outs;
 };
