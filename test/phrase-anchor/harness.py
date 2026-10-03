@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 import numpy as np
 import dawdreamer as daw
@@ -15,13 +16,31 @@ def _short_name(label):
     return label.replace("/", "_")
 
 
+def _shared_grid_block(body):
+    engine = re.search(r"^loopEngine\(([^)]*)\)[^=]*=\s*.*?with \{\n(.*?)\n\};", body, re.M | re.S)
+    if engine is None:
+        raise RuntimeError("dsp/loop.dsp no longer has a loopEngine with-block")
+    block = "\n".join(l for l in engine.group(2).split("\n")
+                      if not l.strip().startswith(("outs", "loopSum", "loopSolos")))
+    for name in ("masterPhaseWrapped", "fineGridWrapped"):
+        if name not in block:
+            raise RuntimeError("loopEngine no longer derives " + name)
+    return block
+
+
 def single_looper_dsp():
     body = DSP_PATH.read_text()
-    body = body.replace(
-        "loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = in, (par(i, NLOOPERS, vgroup(\"looper%2i\", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats))) :> _);\n\nprocess(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats);",
-        "process(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats);",
-    )
-    assert "process(in, prevFiltIn" in body and body.count("process(") == 1
+    proc = re.search(r"^process\(([^)]*)\).*$", body, re.M)
+    if proc is None:
+        raise RuntimeError("dsp/loop.dsp no longer has a process line")
+    if body[proc.end():].strip():
+        raise RuntimeError("dsp/loop.dsp has code after the process line")
+    args = proc.group(1)
+    shared = _shared_grid_block(body)
+    single = "process(%s) = oneLooper(%s, masterPhaseWrapped, fineGridWrapped)\nwith {\n%s\n};\n" % (
+        args, args, shared)
+    body = body[:proc.start()] + single
+    assert body.count("process(") == 1
     return body
 
 

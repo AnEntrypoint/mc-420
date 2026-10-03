@@ -42,11 +42,12 @@ function readHeadError(w, session, looper) {
   const lp = w.loopers[looper];
   const dsp = lp.dsp;
   const oneBeat = w.masterLenSamples / w.recordedBeats;
-  const loopBeats = Math.max(0.125, dsp.wlen / oneBeat);
+  const loopBeatLen = oneBeat * dsp.beatScale;
+  const loopBeats = Math.max(0.125, dsp.wlen / loopBeatLen);
   const rsmBeats = dsp.rsm / oneBeat;
   const originBeats = w.masterLooper === looper ? rsmBeats
     : (lp.armBeatAbs === null ? rsmBeats : lp.armBeatAbs);
-  const contentBeat = originBeats + dsp.rpos / oneBeat;
+  const contentBeat = originBeats + dsp.rpos / loopBeatLen;
   const nowBeats = beatAtTime(session, (w.t / SIM_SAMPLE_RATE) * 1000);
   return circGap(contentBeat, nowBeats, loopBeats);
 }

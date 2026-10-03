@@ -253,7 +253,8 @@ function applyRecPlayCycle(w, looper) {
       const finalBeats = (pastMultiple >= 1 && overshootBeats <= 1.0 + 0.0001)
         ? pastNodeBeats
         : futureNodeBeats;
-      let quantized = Math.round(w.tempoScaleInverted ? (finalBeats * oneBeat) / tempoScale : finalBeats * oneBeat);
+      const beatLenSamplesNow = w.tempoScaleInverted ? oneBeat / tempoScale : oneBeat * tempoScale;
+      let quantized = Math.round(finalBeats * beatLenSamplesNow);
       if (quantized < 1) quantized = 1;
       if (quantized > SIM_MAXLEN) quantized = SIM_MAXLEN;
       if (quantized > SIM_MAXLEN) quantized = SIM_MAXLEN;

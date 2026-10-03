@@ -41,7 +41,8 @@ function run(inverted, curBpm) {
   step(W.msToSimSamples(1000));
 
   const oneBeat = a.masterLenSamples / a.recordedBeats;
-  const loopBeats = a.loopers[1].dsp.wlen / oneBeat;
+  const loopBeatLen = oneBeat * a.loopers[1].dsp.beatScale;
+  const loopBeats = a.loopers[1].dsp.wlen / loopBeatLen;
 
   let worst = 0;
   for (let k = 0; k * kStepMs < kWatchMs; k++) {

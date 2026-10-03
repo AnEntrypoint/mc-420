@@ -36,6 +36,13 @@ def measure_tone_energy(seg, freq, sr=SR):
     return float(np.sum(band ** 2))
 
 
+def arm_sample(master_phase, fine_grid):
+    idx = np.floor(master_phase / fine_grid).astype(np.int64)
+    wrapped = np.zeros(len(master_phase), dtype=bool)
+    wrapped[1:] = idx[1:] != idx[:-1]
+    return int(np.argmax(wrapped))
+
+
 def run_multi_marker_take(master_len_samples, take_len_samples, marker_freqs):
     """
     Records a take spanning the WHOLE take_len_samples with N distinct tone
@@ -46,14 +53,18 @@ def run_multi_marker_take(master_len_samples, take_len_samples, marker_freqs):
     invariant is that every marker recorded within the raw take survives
     into playback somewhere in the loop, i.e. the snap changes WHERE content
     repeats, never drops content that was actually captured to the ring.
+    Recording starts at ARM, which is the first fine-grid crossing after the
+    pad press, not the next phrase downbeat, so markers are placed from ARM.
     """
     dsp = harness.single_looper_dsp()
     total_extra = take_len_samples * 3 + 6000
     n = take_len_samples + total_extra + master_len_samples * 2 + 8000
 
     arm_press_sample = 4000
-    next_downbeat = ((arm_press_sample // master_len_samples) + 1) * master_len_samples
-    finish_sample = next_downbeat + take_len_samples
+    master_phase = np.arange(n, dtype=np.float64) % master_len_samples
+    fine_grid = 0.125 * (master_len_samples / 4.0)
+    arm = arm_sample(master_phase[arm_press_sample:], fine_grid) + arm_press_sample
+    finish_sample = arm + take_len_samples
 
     masterPhase = (np.arange(n, dtype=np.float64) % master_len_samples).astype(np.float32)
     masterLen = harness.const(n, float(master_len_samples))
@@ -66,7 +77,7 @@ def run_multi_marker_take(master_len_samples, take_len_samples, marker_freqs):
     n_markers = len(marker_freqs)
     marker_len = 400
     marker_positions = [
-        next_downbeat + int((i + 0.5) * take_len_samples / n_markers)
+        arm + int((i + 0.5) * take_len_samples / n_markers)
         for i in range(n_markers)
     ]
     input_sig = np.zeros(n, dtype=np.float32)
