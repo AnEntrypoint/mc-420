@@ -62,7 +62,8 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("fx/microrepeat_div");
     ps.bind("fx/monitorfold");
     ps.bind("fx/formant");
-    ps.bind("fx/shuffle/mask", 0.0f);
+    ps.bind("fx/shuffle/mode", 0.0f);
+    ps.bind("fx/gate/mode", 0.0f);
     ps.bind("cmd/master_len", 0.0f);
     ps.bind("cmd/recorded_bpm", 0.0f);
     ps.bind("cmd/recorded_beats", 0.0f);
@@ -1101,30 +1102,28 @@ void ApcGrid::onGuitarFxRelease(ParamStore&) {
 }
 
 static int shuffleButtonIndex(int note) {
-    switch (note) {
-        case 15: return 0;
-        case 23: return 1;
-        case 31: return 2;
-        case 39: return 3;
-        default: return -1;
-    }
-}
-static void publishShuffleMask(const bool held[4], ParamStore& ps) {
-    uint8_t mask = 0;
-    for (int i = 0; i < 4; i++) if (held[i]) mask |= (uint8_t)(1u << i);
-    ps.setByName("fx/shuffle/mask", (float)mask);
+    for (int i = 0; i < 4; i++)
+        if (note == kApcBeatPadNotes[i]) return i;
+    return -1;
 }
 void ApcGrid::onShuffleButtonPress(int note, ParamStore& ps) {
     int i = shuffleButtonIndex(note);
     if (i < 0) return;
-    m_shuffleHeld[i] = true;
-    publishShuffleMask(m_shuffleHeld, ps);
+    if (m_gateModHeld) {
+        m_gateMode = (m_gateMode == i + 1) ? 0 : i + 1;
+        ps.setByName("fx/gate/mode", (float)m_gateMode);
+    } else {
+        m_shuffleMode = (m_shuffleMode == i + 1) ? 0 : i + 1;
+        ps.setByName("fx/shuffle/mode", (float)m_shuffleMode);
+    }
 }
-void ApcGrid::onShuffleButtonRelease(int note, ParamStore& ps) {
-    int i = shuffleButtonIndex(note);
-    if (i < 0) return;
-    m_shuffleHeld[i] = false;
-    publishShuffleMask(m_shuffleHeld, ps);
+void ApcGrid::onShuffleButtonRelease(int, ParamStore&) {
+}
+void ApcGrid::onGateModPress() {
+    m_gateModHeld = true;
+}
+void ApcGrid::onGateModRelease() {
+    m_gateModHeld = false;
 }
 
 void ApcGrid::onSidechainLooperToggle(int looper, ParamStore& ps) {

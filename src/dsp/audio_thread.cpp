@@ -191,24 +191,64 @@ static void setFlushToZero() {
 #endif
 }
 
-static constexpr int kBeatShuffleReorderByMask[16][4] = {
-    { 0, 1, 2, 3 },
-    { 0, 1, 3, 2 },
-    { 0, 1, 1, 3 },
-    { 1, 0, 3, 2 },
-    { 3, 2, 1, 0 },
-    { 3, 0, 1, 2 },
-    { 3, 2, 2, 0 },
-    { 0, 3, 1, 2 },
-    { 0, 0, 2, 3 },
-    { 0, 0, 3, 1 },
-    { 2, 0, 0, 3 },
-    { 1, 3, 0, 0 },
-    { 2, 3, 0, 1 },
-    { 3, 1, 0, 2 },
-    { 1, 2, 3, 0 },
-    { 2, 1, 3, 0 },
+struct GrooveSwing { double cellBeats; double lateRatio; };
+
+static constexpr GrooveSwing kGrooveSwings[5] = {
+    { 0.5, 0.5    },
+    { 0.5, 0.54   },
+    { 0.5, 0.62   },
+    { 0.5, 0.71   },
+    { 1.0, 0.6667 },
 };
+
+static constexpr double kGrooveGatePeriodBeats[5] = { 1.0, 1.0, 0.5, 1.0, 1.0 };
+
+static double grooveWrapSigned(double d) {
+    if (d > 0.5) return d - 1.0;
+    if (d < -0.5) return d + 1.0;
+    return d;
+}
+
+static double grooveRaisedCosine(double x) {
+    if (x <= 0.0) return 0.0;
+    if (x >= 1.0) return 1.0;
+    return 0.5 - 0.5 * std::cos(3.14159265358979323846 * x);
+}
+
+static float grooveGateGain(int mode, double phase01, double ramp01) {
+    switch (mode) {
+    case 1:
+    case 2: {
+        const double duty = 0.5;
+        const double rise = grooveRaisedCosine(0.5 + grooveWrapSigned(phase01) / ramp01);
+        const double fall = grooveRaisedCosine(0.5 - grooveWrapSigned(phase01 - duty) / ramp01);
+        return (float)(rise < fall ? rise : fall);
+    }
+    case 3: {
+        const double duckFloor = 0.12;
+        const double releaseFrac = 0.18;
+        if (phase01 >= 1.0 - ramp01) {
+            return (float)(1.0 + (duckFloor - 1.0) *
+                           grooveRaisedCosine((phase01 - (1.0 - ramp01)) / ramp01));
+        }
+        const double releaseSpan = 1.0 - ramp01;
+        const double recovered = 1.0 - std::exp(-phase01 / releaseFrac);
+        const double recoveredFull = 1.0 - std::exp(-releaseSpan / releaseFrac);
+        return (float)(duckFloor + (1.0 - duckFloor) * (recovered / recoveredFull));
+    }
+    case 4: {
+        const double swellRiseFrac = 0.7;
+        if (phase01 < swellRiseFrac) {
+            const double x = phase01 / swellRiseFrac;
+            return (float)(x * x * (3.0 - 2.0 * x));
+        }
+        const double x = (phase01 - swellRiseFrac) / (1.0 - swellRiseFrac);
+        return (float)(1.0 - x * x * (3.0 - 2.0 * x));
+    }
+    default:
+        return 1.0f;
+    }
+}
 
 static void* worker(void*) {
     setRealtimeSelf(g_cfg.homeFxCore, g_cfg.rtPriority);
@@ -257,6 +297,7 @@ static void* worker(void*) {
     std::vector<float> loopHarmonyWetBuf((size_t)N, 0.0f);
     std::vector<float> masterGatedBuf((size_t)N, 0.0f);
     std::vector<float> loopSumPreBuf((size_t)N, 0.0f);
+    std::vector<float> grooveGateBuf((size_t)N, 1.0f);
     std::vector<float> looperSoloBuf[AudioThread::Telemetry::kLoopers];
     for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) looperSoloBuf[lp].assign((size_t)N, 0.0f);
     std::vector<float> cueWetBuf((size_t)N, 0.0f);
@@ -757,11 +798,21 @@ static void* worker(void*) {
                 static double lastLinkBpmSeen = 0.0;
                 static int tempoStableBlocks = 0;
                 double masterPhaseSlope = 1.0;
-                static double shuffleClockSamples = 0.0;
-                static int shuffleMaskSlot = -1;
-                if (shuffleMaskSlot < 0 && g_params) shuffleMaskSlot = g_params->getSlot("fx/shuffle/mask");
-                int shuffleMaskNow = shuffleMaskSlot >= 0 && g_params
-                    ? (int)g_params->getBySlot(shuffleMaskSlot) : 0;
+                static double grooveFreeBeatPos = 0.0;
+                static int shuffleModeSlot = -1;
+                static int gateModeSlot = -1;
+                if (shuffleModeSlot < 0 && g_params) shuffleModeSlot = g_params->getSlot("fx/shuffle/mode");
+                if (gateModeSlot < 0 && g_params) gateModeSlot = g_params->getSlot("fx/gate/mode");
+                int shuffleModeNow = shuffleModeSlot >= 0 && g_params
+                    ? (int)g_params->getBySlot(shuffleModeSlot) : 0;
+                int gateModeNow = gateModeSlot >= 0 && g_params
+                    ? (int)g_params->getBySlot(gateModeSlot) : 0;
+                if (shuffleModeNow < 0) shuffleModeNow = 0;
+                if (shuffleModeNow > 4) shuffleModeNow = 4;
+                if (gateModeNow < 0) gateModeNow = 0;
+                if (gateModeNow > 4) gateModeNow = 4;
+                g_telem.shuffleMode = shuffleModeNow;
+                g_telem.gateMode = gateModeNow;
 
                 float masterLen = masterLenVal;
                 float recordedBeatsShared = g_params ? g_params->getBySlot(recordedBeatsSlot, 0.0f) : 0.0f;
@@ -771,7 +822,11 @@ static void* worker(void*) {
                 double beatLenSamplesShared = masterLen > 0.0f
                     ? (double)masterLen / (double)recordedBeatsShared
                     : (double)g_cfg.sampleRate * 0.5;
-                double fourBeatLenShared = beatLenSamplesShared * 4.0;
+                double grooveBpmNow = (double)recordedBpmVal * (double)g_telem.effSpeed;
+                if (grooveBpmNow <= 1.0) grooveBpmNow = (double)linkSnap.bpm;
+                if (grooveBpmNow <= 1.0) grooveBpmNow = 120.0;
+                double grooveBeatLen = (g_cfg.sampleRate * 60.0) / grooveBpmNow;
+                g_telem.grooveBeatLenSamples = (float)grooveBeatLen;
 
                 static double prevMasterLen = 0.0;
                 bool masterJustCreated = (prevMasterLen <= 0.0f && masterLen > 0.0f);
@@ -895,41 +950,58 @@ static void* worker(void*) {
                     g_telem.linkPhaseErrBeats = 0.0f;
                 }
 
-                double shuffleClockStart = shuffleClockSamples;
-                shuffleClockSamples += (double)N;
-                shuffleClockSamples = std::fmod(shuffleClockSamples, fourBeatLenShared);
-                if (shuffleClockSamples < 0.0) shuffleClockSamples += fourBeatLenShared;
+                grooveFreeBeatPos += (double)N / grooveBeatLen;
+                if (grooveFreeBeatPos > 1.0e9) grooveFreeBeatPos = std::fmod(grooveFreeBeatPos, 4.0);
                 {
-                    double gatePhase01 = shuffleClockStart / fourBeatLenShared;
-                    if (gatePhase01 < 0.0) gatePhase01 = 0.0;
+                    double gatePhase01 = masterLen > 0.0f
+                        ? std::fmod(masterPhaseSamples / grooveBeatLen, 4.0) / 4.0
+                        : std::fmod(grooveFreeBeatPos, 4.0) / 4.0;
+                    if (gatePhase01 < 0.0) gatePhase01 += 1.0;
                     if (gatePhase01 >= 1.0) gatePhase01 = 0.0;
                     Lv2Host::setControlFast(gatePhaseHandle, (float)gatePhase01);
                     if (dubgateClockphaseZone) *dubgateClockphaseZone = (float)gatePhase01;
                 }
 
-                bool shuffleActive = shuffleMaskNow != 0;
+                const double swingCellBeats = kGrooveSwings[shuffleModeNow].cellBeats;
+                const double swingDelaySamples = (kGrooveSwings[shuffleModeNow].lateRatio - 0.5)
+                    * 2.0 * swingCellBeats * grooveBeatLen;
+                const double gatePeriodBeats = kGrooveGatePeriodBeats[gateModeNow];
+                const double gateRamp01 = std::min(0.25,
+                                                  ((0.003 * (double)g_cfg.sampleRate) / grooveBeatLen) / gatePeriodBeats);
+                const double lenD = (double)masterLen;
+                float gateMin = 1.0f;
+                float gateMax = 0.0f;
                 if (masterLen > 0.0f) {
-                    const double lenD = (double)masterLen;
-                    const int* reorderTable = kBeatShuffleReorderByMask[shuffleMaskNow & 0xF];
                     for (int i = 0; i < N; i++) {
+                        double p = masterPhaseSamples + (double)i * masterPhaseSlope;
                         double offset = 0.0;
-                        if (shuffleActive) {
-                            double shuffleT = std::fmod(shuffleClockStart + (double)i, fourBeatLenShared);
-                            if (shuffleT < 0.0) shuffleT += fourBeatLenShared;
-                            int curBeat = (int)(shuffleT / beatLenSamplesShared);
-                            if (curBeat < 0) curBeat = 0;
-                            if (curBeat > 3) curBeat = 3;
-                            int srcBeat = reorderTable[curBeat];
-                            offset = (double)(srcBeat - curBeat) * beatLenSamplesShared;
+                        float gateGain = 1.0f;
+                        double beatPos = p / grooveBeatLen;
+                        if (swingDelaySamples > 0.0) {
+                            double cellIndex = std::floor(beatPos / swingCellBeats);
+                            if (std::fmod(cellIndex, 2.0) != 0.0) offset = -swingDelaySamples;
                         }
-                        double p = masterPhaseSamples + (double)i * masterPhaseSlope + offset;
-                        p = std::fmod(p, lenD);
-                        if (p < 0.0) p += lenD;
-                        masterPhaseBuf[(size_t)i] = (float)p;
+                        if (gateModeNow > 0) {
+                            double inPeriod = beatPos / gatePeriodBeats;
+                            inPeriod -= std::floor(inPeriod);
+                            gateGain = grooveGateGain(gateModeNow, inPeriod, gateRamp01);
+                        }
+                        double pr = std::fmod(p + offset, lenD);
+                        if (pr < 0.0) pr += lenD;
+                        masterPhaseBuf[(size_t)i] = (float)pr;
+                        grooveGateBuf[(size_t)i] = gateGain;
+                        if (gateGain < gateMin) gateMin = gateGain;
+                        if (gateGain > gateMax) gateMax = gateGain;
                     }
                 } else {
                     std::fill(masterPhaseBuf.begin(), masterPhaseBuf.end(), 0.0f);
+                    std::fill(grooveGateBuf.begin(), grooveGateBuf.end(), 1.0f);
+                    gateMin = 1.0f;
+                    gateMax = 1.0f;
                 }
+                g_telem.grooveGateMin = gateMin;
+                g_telem.grooveGateMax = gateMax;
+                g_telem.grooveSwingOffsetSamples = (float)(swingDelaySamples < 0.0 ? -swingDelaySamples : swingDelaySamples);
                 std::fill(masterLenBuf.begin(), masterLenBuf.end(), masterLen);
                 std::fill(recordedBeatsBuf.begin(), recordedBeatsBuf.end(), recordedBeatsShared);
                 if (linkDrivingLength && g_link) {
@@ -1144,6 +1216,9 @@ static void* worker(void*) {
                 }
             }
             faustPre.compute(N, fins, preOuts);
+            if (g_telem.gateMode > 0) {
+                for (int i = 0; i < N; i++) loopSumPreBuf[(size_t)i] *= grooveGateBuf[(size_t)i];
+            }
             {
                 static float lastLoggedShift = -999.0f;
                 float curShift = mtShiftAmountDiagZone ? *mtShiftAmountDiagZone : 0.0f;

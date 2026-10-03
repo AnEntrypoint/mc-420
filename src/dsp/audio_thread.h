@@ -71,6 +71,12 @@ public:
         float    latencyBiasSamples = 0.0f;
         float    linkPhaseErrBeats = 0.0f;
         float    masterPhaseBeats = 0.0f;
+        int      shuffleMode = 0;
+        int      gateMode = 0;
+        float    grooveBeatLenSamples = 0.0f;
+        float    grooveGateMin = 1.0f;
+        float    grooveGateMax = 1.0f;
+        float    grooveSwingOffsetSamples = 0.0f;
         static constexpr int kLoopers = 20;
         bool     looperRec[kLoopers]  = {};
         bool     looperPlay[kLoopers] = {};

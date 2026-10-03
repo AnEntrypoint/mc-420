@@ -63,7 +63,6 @@ public:
             }
         }
         {
-            static constexpr int kBeatPadNotes[4] = { 15, 23, 31, 39 };
             bool anyPlaying = false;
             for (int lp = 0; lp < kLooperCount; lp++) {
                 if (grid.looperPlaying(lp)) { anyPlaying = true; break; }
@@ -73,12 +72,23 @@ public:
             bool havePhrase = gridBeatIndex >= 0;
             for (int g = 0; g < 4; g++) {
                 uint8_t color;
-                if (!anyPlaying)                     color = kLedOff;
-                else if (havePhrase && g < activeGroup) color = kLedYellow;
-                else                                  color = kLedGreen;
-                if (anyPlaying && havePhrase && g == posInGroup) color = kLedRed;
-                sendCoalesced(kBeatPadNotes[g], color, write);
+                if (grid.gateModHeld()) {
+                    color = (grid.gateMode() == g + 1) ? kLedRed : kLedOff;
+                } else {
+                    if (!anyPlaying)                        color = kLedOff;
+                    else if (havePhrase && g < activeGroup) color = kLedYellow;
+                    else                                    color = kLedGreen;
+                    if (anyPlaying && havePhrase && g == posInGroup) color = kLedRed;
+                    if (grid.shuffleMode() == g + 1) {
+                        color = (color == kLedRed)    ? kLedRedBlink :
+                                (color == kLedYellow) ? kLedYellowBlink :
+                                                        kLedGreenBlink;
+                    }
+                }
+                sendCoalesced(kApcBeatPadNotes[g], color, write);
             }
+            sendCoalesced(kApcPadGateMod, grid.gateModHeld() ? kLedYellow :
+                                          grid.gateMode() > 0 ? kLedGreen : kLedOff, write);
         }
         sendCoalesced(kApcBtnPlay, grid.shiftHeld() ? kLedYellow : kLedOff, write);
         sendCoalesced(kApcLiveLedNote,

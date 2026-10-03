@@ -94,6 +94,7 @@ void Telemetry::publish() {
         "\"alsa_roundtrip_samples\":%.1f,\"latency_bias_samples\":%.1f,\"latency_trim_samples\":%.1f,"
         "\"sustain_cmd\":%.2f,\"sustain_gate\":%.2f,"
         "\"grid_beat_index\":%d,\"master_phase_beats\":%.5f,"
+        "\"groove\":{\"shuffle\":%d,\"gate\":%d,\"beat_len_samples\":%.1f,\"gate_min\":%.3f,\"gate_max\":%.3f,\"swing_offset_samples\":%.1f},"
         "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s,\"stateflags\":%s}}",
         t.coreBusyPct[0], t.coreBusyPct[1], t.coreBusyPct[2], t.coreBusyPct[3],
         (unsigned long long)t.xruns,
@@ -108,6 +109,8 @@ void Telemetry::publish() {
         t.alsaRoundTripSamples, t.latencyBiasSamples, t.latencyTrimSamples,
         t.sustainCmd, t.sustainGate,
         t.gridBeatIndex, t.masterPhaseBeats,
+        t.shuffleMode, t.gateMode, t.grooveBeatLenSamples, t.grooveGateMin, t.grooveGateMax,
+        t.grooveSwingOffsetSamples,
         recBits, playBits, vols, levels, wraplens, readposes, writeidxs, stateflags);
 
     FILE* statusFile = fopen("/run/aloop/status.json", "w");

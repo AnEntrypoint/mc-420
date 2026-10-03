@@ -22,6 +22,8 @@ constexpr int kBlockSize  = 64;
 constexpr int kMaxLoopSamples = 48000 * 60;
 constexpr int kApcBtnShift = 0x62;
 constexpr int kApcBtnRec = 0x5D;
+constexpr int kApcPadGateMod = 7;
+constexpr int kApcBeatPadNotes[4] = { 15, 23, 31, 39 };
 
 enum class FxBank : uint8_t { Dub = 0, Guitar = 1, LofiFx = 2 };
 constexpr int kFxBankCount = 3;
@@ -103,6 +105,11 @@ public:
 
     void onShuffleButtonPress(int note, ParamStore& ps);
     void onShuffleButtonRelease(int note, ParamStore& ps);
+    void onGateModPress();
+    void onGateModRelease();
+    int shuffleMode() const { return m_shuffleMode; }
+    int gateMode() const { return m_gateMode; }
+    bool gateModHeld() const { return m_gateModHeld; }
     FxBank activeBank() const { return m_activeBank; }
     bool bankFlashActive() const { return m_bankFlashReleaseAt != 0; }
     FxBank bankFlashWhich() const { return m_bankFlashWhich; }
@@ -200,7 +207,9 @@ private:
     bool m_guitarFxConsumedByLooperPress = false;
     bool m_looperIsSidechainSource[kLooperCount] = {};
 
-    bool m_shuffleHeld[4] = {};
+    int m_shuffleMode = 0;
+    int m_gateMode = 0;
+    bool m_gateModHeld = false;
 
     void applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, class LinkBridge* link, class AudioThread* audio = nullptr);
     void capturePreset(int p, ParamStore& ps);
