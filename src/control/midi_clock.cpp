@@ -202,19 +202,6 @@ void MidiClock::run() {
             continue;
         }
 
-        if (!b.isPlaying) {
-            if (sentStart) {
-                unsigned char stop = kClockStop;
-                outs.write(&stop, 1);
-                sentStart = false;
-                havePulseRef = false;
-                fprintf(stderr, "[midi-clock] transport stopped, sent 0xFC to %d output(s)\n", outs.count);
-            }
-            timespec ts{0, kSleepCeilingNs};
-            nanosleep(&ts, nullptr);
-            continue;
-        }
-
         const int64_t pulseIdx = (int64_t)std::floor(b.beat * (double)kPulsesPerQuarter);
 
         if (!sentStart) {
@@ -265,10 +252,6 @@ void MidiClock::run() {
         }
     }
 
-    if (sentStart && outs.count > 0) {
-        unsigned char stop = kClockStop;
-        outs.write(&stop, 1);
-    }
     outs.closeAll();
 }
 

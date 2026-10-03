@@ -150,14 +150,9 @@ long measuredLatencyBias(AudioThread* audio) {
 }
 
 void ApcGrid::updateLocalTransport(LinkBridge* link) {
-    if (!link) return;
-    bool anyPlaying = false;
-    for (int lp = 0; lp < kLooperCount; lp++) {
-        if (m_looperPlaying[lp]) { anyPlaying = true; break; }
-    }
-    if (anyPlaying == m_localTransportRunning) return;
-    m_localTransportRunning = anyPlaying;
-    link->setLocalTransportPlaying(anyPlaying);
+    if (!link || m_localTransportRunning) return;
+    m_localTransportRunning = true;
+    link->setLocalTransportPlaying(true);
 }
 
 int ApcGrid::monitorFoldSlot(ParamStore& ps) {

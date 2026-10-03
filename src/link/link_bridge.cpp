@@ -18,7 +18,7 @@ std::atomic<bool> g_weSetTempo{false};
 
 std::atomic<int> g_lastLoggedPeers{-1};
 std::atomic<double> g_lastLoggedTempo{-1.0};
-std::atomic<bool> g_localTransportRunning{false};
+std::atomic<bool> g_localTransportRunning{true};
 std::atomic<std::size_t> g_pendingPeers{0};
 std::atomic<double> g_pendingTempo{120.0};
 std::atomic<bool> g_havePendingPeers{false};

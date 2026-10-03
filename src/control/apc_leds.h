@@ -63,10 +63,6 @@ public:
             }
         }
         {
-            bool anyPlaying = false;
-            for (int lp = 0; lp < kLooperCount; lp++) {
-                if (grid.looperPlaying(lp)) { anyPlaying = true; break; }
-            }
             int activeGroup = gridBeatIndex >= 0 ? (gridBeatIndex >> 2) : -1;
             int posInGroup  = gridBeatIndex >= 0 ? (gridBeatIndex & 0x3) : 0;
             bool havePhrase = gridBeatIndex >= 0;
@@ -75,10 +71,10 @@ public:
                 if (grid.gateModHeld()) {
                     color = (grid.gateMode() == g + 1) ? kLedRed : kLedOff;
                 } else {
-                    if (!anyPlaying)                        color = kLedOff;
-                    else if (havePhrase && g < activeGroup) color = kLedYellow;
-                    else                                    color = kLedGreen;
-                    if (anyPlaying && havePhrase && g == posInGroup) color = kLedRed;
+                    if (!havePhrase)             color = kLedOff;
+                    else if (g < activeGroup)    color = kLedYellow;
+                    else                         color = kLedGreen;
+                    if (havePhrase && g == posInGroup) color = kLedRed;
                     if (grid.shuffleMode() == g + 1) {
                         color = (color == kLedRed)    ? kLedRedBlink :
                                 (color == kLedYellow) ? kLedYellowBlink :
