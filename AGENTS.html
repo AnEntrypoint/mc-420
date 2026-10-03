@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d9daa524e70f4c88d637a7f648b5ec5b5b672035">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=a5f2dde659ebc12e903695e805d041b60fac5e9c">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -259,7 +259,9 @@ locally leaves every peer playing and no peer can start/stop us. <code class="la
 <code class="language-plaintext highlighter-rouge">abs(g_manualSpeedMul-1.0)&gt;0.3</code>); <code class="language-plaintext highlighter-rouge">masterPhaseBuf</code> ramps at <code class="language-plaintext highlighter-rouge">masterPhaseSlope =
 linkSpeedRatio+linkPhaseTrim</code>. It runs only while <code class="language-plaintext highlighter-rouge">linkVarispeedEngaged</code>, or it saturates into a
 permanent 51-cent detune – <code class="language-plaintext highlighter-rouge">eff_speed</code> in <code class="language-plaintext highlighter-rouge">/run/aloop/status.json</code> must read exactly <code class="language-plaintext highlighter-rouge">1.0000</code> with no
-loop recorded. The first usable target SNAPS when the circular error exceeds <code class="language-plaintext highlighter-rouge">kJoinSnapErrBeats=0.25</code>.</li>
+loop recorded. The first usable target SNAPS when the circular error exceeds <code class="language-plaintext highlighter-rouge">kJoinSnapErrBeats=0.25</code>.
+After a tempo jump the trim needs seconds to converge: a fresh impose shows up to ~90 samples of
+grid slip for the first few seconds, so measure steady state only after ~6 s.</li>
 </ul>
 
 <p><strong>Two quantums – 16 for transport, 128 for phase CAPTURE.</strong> <code class="language-plaintext highlighter-rouge">kLinkQuantum=16.0</code> is the PAIRED value
@@ -479,7 +481,10 @@ Link session, which is what makes <code class="language-plaintext highlighter-ro
 peers present. Adopting the peer tempo instead (the old path) re-derived <code class="language-plaintext highlighter-rouge">master_len</code> from the peer’s beat
 length and TRUNCATED the take to fit: a 2.0 s take at 157.2 bpm came back as a 1.53 s 4-beat loop.
 Gate: <code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim/first-loop-tempo-owner.js</code> (repeat period == performed length,
-<code class="language-plaintext highlighter-rouge">eff_speed</code> 1.0000, session bpm == <code class="language-plaintext highlighter-rouge">recorded_bpm</code>).</p>
+<code class="language-plaintext highlighter-rouge">eff_speed</code> 1.0000, session bpm == <code class="language-plaintext highlighter-rouge">recorded_bpm</code>).
+Hardware proof: <code class="language-plaintext highlighter-rouge">test/hardware/verify-first-loop-owner.js</code> (one take with a peer up, then
+<code class="language-plaintext highlighter-rouge">link.bpm</code> == the derived take tempo, <code class="language-plaintext highlighter-rouge">eff_speed</code> 1.0000, repeat count over 10 s == <code class="language-plaintext highlighter-rouge">masterLen</code>,
+read head holds its grid lock within 48 samples, and no peer re-asserts its old tempo).</p>
 
 <h2 id="varispeed-punch-is-baked-into-the-take">Varispeed punch is BAKED into the take</h2>
 
