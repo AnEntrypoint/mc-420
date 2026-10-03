@@ -67,6 +67,7 @@ public:
         float    sustainCmd = 0.0f;
         float    sustainGate = 0.0f;
         float    alsaRoundTripSamples = 0.0f;
+        float    latencyTrimSamples = 0.0f;
         float    latencyBiasSamples = 0.0f;
         float    linkPhaseErrBeats = 0.0f;
         float    masterPhaseBeats = 0.0f;
@@ -86,6 +87,7 @@ public:
     Telemetry snapshotTelemetry() const;
 
     static void triggerClipExport();
+    static void setLatencyTrim(int samples);
 
     Sampler* sampler() const;
 

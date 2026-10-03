@@ -120,6 +120,7 @@ namespace {
 std::atomic<bool> g_running{false};
 pthread_t g_worker;
 AudioThread::Telemetry g_telem{};
+std::atomic<int> g_liveLatencyTrimSamples{0};
 AudioConfig g_cfg;
 ParamStore* g_params = nullptr;
 LinkBridge* g_link = nullptr;
@@ -1235,9 +1236,14 @@ static void* worker(void*) {
                 if (roundTripNow >= 0.0 && roundTripNow < 16384.0) {
                     if (roundTripEma < 0.0) roundTripEma = roundTripNow;
                     else roundTripEma += (roundTripNow - roundTripEma) * 0.01;
+                    const int trimSamples = g_cfg.latencyTrimSamples + g_liveLatencyTrimSamples.load(std::memory_order_relaxed);
                     g_telem.alsaRoundTripSamples = (float)roundTripEma;
-                    g_telem.latencyBiasSamples = (float)((double)N + roundTripEma + (double)g_cfg.latencyTrimSamples);
-                    if (++roundTripUpdates == 400) {
+                    g_telem.latencyTrimSamples = (float)trimSamples;
+                    g_telem.latencyBiasSamples = (float)((double)N + roundTripEma + (double)trimSamples);
+                    static double lastLoggedRoundTrip = -1.0;
+                    if (++roundTripUpdates >= 400 &&
+                        (lastLoggedRoundTrip < 0.0 || std::fabs(roundTripEma - lastLoggedRoundTrip) > 16.0)) {
+                        lastLoggedRoundTrip = roundTripEma;
                         fprintf(stderr, "[audio] measured round trip %.0f samples (%.2f ms) -- looper latency bias %.0f samples\n",
                                 roundTripEma, roundTripEma / (g_cfg.sampleRate > 0 ? g_cfg.sampleRate : 48000) * 1000.0,
                                 (double)g_telem.latencyBiasSamples);
@@ -1286,6 +1292,7 @@ UsbRecorder* AudioThread::usbRecorder() const { return g_usbRecorder; }
 ClipExporter* AudioThread::clipExporter() const { return g_clipExporter; }
 
 void AudioThread::triggerClipExport() { g_clipExportTriggerPending.store(true, std::memory_order_relaxed); }
+void AudioThread::setLatencyTrim(int samples) { g_liveLatencyTrimSamples.store(samples, std::memory_order_relaxed); }
 bool AudioThread::setRealtime(int core, int prio) { return setRealtimeSelf(core, prio); }
 void AudioThread::workerLoop() {}
 

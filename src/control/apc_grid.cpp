@@ -143,6 +143,15 @@ static double snapBeatsToPow2(double continuousBeats) {
 
 constexpr long kShiftFoldBlockLatencySamples = 64;
 
+int readRuntimeLatencyTrim() {
+    FILE* f = fopen("/run/aloop/latency_trim", "rb");
+    if (!f) return 0;
+    int v = 0;
+    if (fscanf(f, "%d", &v) != 1) v = 0;
+    fclose(f);
+    return v;
+}
+
 long measuredLatencyBias(AudioThread* audio) {
     long bias = 0;
     if (audio) bias = (long)(audio->snapshotTelemetry().latencyBiasSamples + 0.5f);
@@ -375,6 +384,7 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
         snprintf(name, sizeof name, "looper%d/hascontent", looper);
         ps.setByName(name, m_looperHasContent[looper] ? 1.0f : 0.0f);
     }
+    AudioThread::setLatencyTrim(readRuntimeLatencyTrim());
     {
         const long bias = measuredLatencyBias(audio);
         if (bias != m_latencyBiasWritten) {
