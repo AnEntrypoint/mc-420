@@ -422,12 +422,14 @@ Playback anchors to a shared `masterPhase` grid, never a per-take offset.
 
 **ARM snaps to the NEAREST fine-grid node.** `kFineGridBeats=0.125` beat; `fineGridWrapped` is
 hoisted once in `loopEngine` like `masterPhaseWrapped`, and non-first-looper `armEdge` fires on
-it. `armWaitSamples` measures press→the node the DSP chose; when it exceeds half a grid step,
-`rsmNext` is pulled back one step (`rsmNearestNode`) so the take is attributed to the node
-nearest the press. Recording still starts at the next crossing, so no material is lost.
-Worst-case placement error ±1/16 beat and the forward-only mean bias is gone. Gate:
+it. `armWaitSamples` measures press→node; over half a step, `rsmNext` pulls back one
+(`rsmNearestNode`) to the node nearest the press. Recording still starts at the next crossing.
+Worst case ±1/16 beat, no forward-only bias. Gate:
 `test/phrase-anchor/verify_phase_anchor.py` presses inside each HALF of a grid cell and asserts
-each half is jitter-free and the two halves sit exactly one grid step apart.
+each half is jitter-free and the two halves sit exactly one grid step apart. Hardware check:
+`status.json`'s `writeidx` minus `readpos` during recording is `rsm−armNode` (0 forward, one cell
+back if pulled) — the only offset-free one, since the two schemes differ by half a cell inside the
+unknown Link→`masterPhase` offset.
 
 **Per-loop beat scale `s`**: latched `1/speedClamped` at `finishEdge`, reset to `1.0` at
 `armEdge` (`beatLenNow = oneBeat/speedClamped` once `masterLen>=0.5`, `cycleInc =
