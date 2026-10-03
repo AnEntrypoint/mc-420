@@ -17,9 +17,10 @@ constexpr int    kPulsesPerQuarter   = 24;
 constexpr int    kMaxOutputs         = 8;
 constexpr double kRescanSeconds      = 2.0;
 constexpr double kSurfaceGraceSeconds = 15.0;
-constexpr double kMaxCatchUpPulses   = 4.0;
+constexpr int64_t kResyncLogPulses   = 2;
 constexpr long   kSleepFloorNs       = 250000;
 constexpr long   kSleepCeilingNs     = 5000000;
+constexpr long   kSpinNs             = 500000;
 
 constexpr unsigned char kClockTick = 0xF8;
 constexpr unsigned char kClockStart = 0xFA;
@@ -69,8 +70,9 @@ struct OutputSet {
         return false;
     }
 
-    void write(const unsigned char* bytes, size_t n) {
-        for (int i = 0; i < count; i++) {
+    void write(const unsigned char* bytes, size_t n, int from = 0, int to = -1) {
+        const int end = to < 0 ? count : to;
+        for (int i = from; i < end; i++) {
             if (!handles[i]) continue;
             if (snd_rawmidi_write(handles[i], bytes, n) < 0) {
                 snd_rawmidi_close(handles[i]);
@@ -166,10 +168,10 @@ void* MidiClock::trampoline(void* self) {
 
 void MidiClock::run() {
     OutputSet outs;
-    double nextRescan = 0.0;
-    bool   sentStart = false;
-    double lastPulse = 0.0;
-    bool   havePulseRef = false;
+    double   nextRescan   = 0.0;
+    bool     sentStart    = false;
+    bool     havePulseRef = false;
+    int64_t  lastPulseIdx = 0;
 
     const double startedAt = monotonicSeconds();
 
@@ -180,11 +182,19 @@ void MidiClock::run() {
             || (nowSec - startedAt) >= kSurfaceGraceSeconds;
         if (surfaceCard >= 0) outs.release(surfaceCard);
         if (surfaceSettled && nowSec >= nextRescan) {
+            const int beforeCount = outs.count;
             rescan(outs, surfaceCard);
+            if (sentStart && outs.count > beforeCount) {
+                unsigned char startByte = kClockStart;
+                outs.write(&startByte, 1, beforeCount, outs.count);
+                fprintf(stderr, "[midi-clock] transport already running, sent 0xFA to %d late output(s)\n",
+                        outs.count - beforeCount);
+            }
             nextRescan = nowSec + kRescanSeconds;
         }
 
         LinkBridge::BeatNow b = link_ ? link_->beatNow() : LinkBridge::BeatNow{};
+        const double sampledMono = monotonicSeconds();
 
         if (!b.valid || outs.count == 0) {
             timespec ts{0, kSleepCeilingNs};
@@ -205,39 +215,54 @@ void MidiClock::run() {
             continue;
         }
 
-        const double pulse = b.beat * (double)kPulsesPerQuarter;
+        const int64_t pulseIdx = (int64_t)std::floor(b.beat * (double)kPulsesPerQuarter);
 
         if (!sentStart) {
             unsigned char startByte = kClockStart;
             outs.write(&startByte, 1);
             sentStart = true;
-            lastPulse = std::floor(pulse);
             havePulseRef = true;
+            lastPulseIdx = pulseIdx;
             fprintf(stderr, "[midi-clock] transport started, sent 0xFA to %d output(s)\n", outs.count);
-        }
-
-        if (!havePulseRef) {
-            lastPulse = std::floor(pulse);
+        } else if (!havePulseRef) {
             havePulseRef = true;
+            lastPulseIdx = pulseIdx;
         }
 
-        double due = std::floor(pulse) - lastPulse;
-        if (due > kMaxCatchUpPulses) {
-            lastPulse = std::floor(pulse) - kMaxCatchUpPulses;
-            due = kMaxCatchUpPulses;
-        }
-        if (due > 0.0) {
+        if (pulseIdx > lastPulseIdx) {
+            if (pulseIdx - lastPulseIdx > kResyncLogPulses)
+                fprintf(stderr, "[midi-clock] dropped %lld pulse(s) to stay on the Link phase\n",
+                        (long long)(pulseIdx - lastPulseIdx - 1));
             unsigned char tick = kClockTick;
-            for (int i = 0; i < (int)due; i++) outs.write(&tick, 1);
-            lastPulse += (double)(int)due;
+            outs.write(&tick, 1);
+            lastPulseIdx = pulseIdx;
         }
 
-        const double secondsPerPulse = 60.0 / (b.bpm > 1.0 ? b.bpm : 120.0) / (double)kPulsesPerQuarter;
-        long sleepNs = (long)(secondsPerPulse * 0.25 * 1e9);
-        if (sleepNs < kSleepFloorNs)   sleepNs = kSleepFloorNs;
-        if (sleepNs > kSleepCeilingNs) sleepNs = kSleepCeilingNs;
-        timespec ts{0, sleepNs};
-        nanosleep(&ts, nullptr);
+        const int64_t deadlineMicros =
+            link_ ? link_->microsAtBeat((double)(lastPulseIdx + 1) / (double)kPulsesPerQuarter) : 0;
+        long waitNs = -1;
+        if (deadlineMicros > 0)
+            waitNs = (long)((sampledMono + (double)(deadlineMicros - b.nowMicros) * 1e-6
+                             - monotonicSeconds()) * 1e9);
+        if (waitNs < 0) {
+            const double secondsPerPulse = 60.0 / (b.bpm > 1.0 ? b.bpm : 120.0) / (double)kPulsesPerQuarter;
+            waitNs = (long)(secondsPerPulse * 0.25 * 1e9);
+        }
+        if (waitNs < kSleepFloorNs) waitNs = kSleepFloorNs;
+
+        if (waitNs > kSpinNs) {
+            long sleepNs = waitNs - kSpinNs;
+            if (sleepNs > kSleepCeilingNs) sleepNs = kSleepCeilingNs;
+            timespec ts{0, sleepNs};
+            nanosleep(&ts, nullptr);
+        }
+        if (deadlineMicros > 0) {
+            const double deadlineMono = sampledMono + (double)(deadlineMicros - b.nowMicros) * 1e-6;
+            const double remainSec = deadlineMono - monotonicSeconds();
+            if (remainSec > 0.0 && remainSec < 2.0 * (double)kSpinNs * 1e-9) {
+                while (run_.load(std::memory_order_acquire) && monotonicSeconds() < deadlineMono) {}
+            }
+        }
     }
 
     if (sentStart && outs.count > 0) {

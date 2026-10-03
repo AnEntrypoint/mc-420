@@ -35,13 +35,15 @@ public:
     void setLocalTransportPlaying(bool playing);
 
     struct BeatNow {
-        bool   valid     = false;
-        bool   isPlaying = false;
-        double beat      = 0.0;
-        double bpm       = 120.0;
-        int    peerCount = 0;
+        bool    valid     = false;
+        bool    isPlaying = false;
+        double  beat      = 0.0;
+        double  bpm       = 120.0;
+        int     peerCount = 0;
+        int64_t nowMicros = 0;
     };
     BeatNow beatNow() const;
+    int64_t microsAtBeat(double beat) const;
 
 private:
     void* link_ = nullptr;

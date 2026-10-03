@@ -21,8 +21,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function openInject() {
   return new Promise((resolve, reject) => {
-    const sock = net.connect({ host, port: 9401 }, () => resolve(sock));
-    sock.setTimeout(5000);
+    const sock = net.connect({ host, port: 9401 }, () => { sock.setTimeout(0); resolve(sock); });
     sock.on('timeout', () => { sock.destroy(); reject(new Error(`connect to ${host}:9401 timed out`)); });
     sock.on('error', reject);
   });
@@ -60,7 +59,8 @@ function unwrap(d, period) {
   return v;
 }
 
-async function measureRate(looper, wlen, masterLen, oneBeat, samples = 4, gapMs = 350) {
+async function measureRate(looper, wlen, masterLen, oneBeat, samples = 6) {
+  const gapMs = Math.max(230, (0.35 * masterLen * 1000) / SAMPLE_RATE);
   let sum = 0, n = 0;
   let prev = await queryTelemetry();
   for (let k = 0; k < samples; k++) {
@@ -68,7 +68,8 @@ async function measureRate(looper, wlen, masterLen, oneBeat, samples = 4, gapMs 
     const cur = await queryTelemetry();
     const dPhase = unwrap((cur.master_phase_beats - prev.master_phase_beats) * oneBeat, masterLen);
     const dRead = unwrap(cur.loopers.readpos[looper] - prev.loopers.readpos[looper], wlen);
-    if (Math.abs(dPhase) > 1) { sum += dRead / dPhase; n++; }
+    const unambiguous = Math.abs(dPhase) > 1 && Math.abs(dPhase) < masterLen * 0.45;
+    if (unambiguous) { sum += dRead / dPhase; n++; }
     prev = cur;
   }
   return n ? sum / n : NaN;

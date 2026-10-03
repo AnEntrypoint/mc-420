@@ -141,8 +141,21 @@ LinkBridge::BeatNow LinkBridge::beatNow() const {
     b.beat      = state.beatAtTime(now, kLinkQuantum);
     b.bpm       = state.tempo();
     b.peerCount = (int)l->numPeers();
+    b.nowMicros = (int64_t)now.count();
 #endif
     return b;
+}
+
+int64_t LinkBridge::microsAtBeat(double beat) const {
+#ifdef ALOOP_HAVE_LINK
+    if (!link_) return 0;
+    auto* l = (ableton::Link*)link_;
+    auto state = l->captureAppSessionState();
+    return (int64_t)state.timeAtBeat(beat, kLinkQuantum).count();
+#else
+    (void)beat;
+    return 0;
+#endif
 }
 
 void LinkBridge::setLocalTransportPlaying(bool playing) {
