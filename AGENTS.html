@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d0b1e0fe87060349c821ea641941b1ae20d7fbfe">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d9e852ccb426075677a9a2f91c80bf04bd538986">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -556,8 +556,26 @@ negative <code class="language-plaintext highlighter-rouge">rate</code> reverses
   </tbody>
 </table>
 
-<p>Groove shuffle: <code class="language-plaintext highlighter-rouge">kBeatPadNotes={15,23,31,39}</code> double as shuffle buttons, <code class="language-plaintext highlighter-rouge">fx/shuffle/mask</code> (4-bit),
-block-boundary only. <code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code> varispeed has NO deadzone (<code class="language-plaintext highlighter-rouge">varispeedActive=(effSpeed!=1.0)|vBaked</code>
+<p><strong>Groove: swing + volume gates on the metronome pads.</strong> <code class="language-plaintext highlighter-rouge">kApcBeatPadNotes={15,23,31,39}</code> are
+one-of-four latching selectors; <code class="language-plaintext highlighter-rouge">fx/shuffle/mode</code> (0..4) picks a groovebox swing from <code class="language-plaintext highlighter-rouge">kGrooveSwings</code>
+(1/8-cell late ratios 0.5/0.54/0.62/0.71, plus a 1/4-cell triplet 0.6667). Swing is a READ-POSITION
+offset – every ODD cell (<code class="language-plaintext highlighter-rouge">floor(beatPos/cellBeats)</code> odd) is delayed by
+<code class="language-plaintext highlighter-rouge">(lateRatio-0.5)*2*cellBeats*grooveBeatLen</code> as a negative offset into <code class="language-plaintext highlighter-rouge">masterPhaseBuf</code>, so the late cell
+lands at <code class="language-plaintext highlighter-rouge">lateRatio</code> of the pair instead of halfway, pitch is untouched and the hard step is intentional
+(never smoothed).
+Note 7 (<code class="language-plaintext highlighter-rouge">kApcPadGateMod</code>) held while a beat pad is pressed turns the same four pads into
+<code class="language-plaintext highlighter-rouge">fx/gate/mode</code> (0..4): chop 1 beat, chop 1/2 beat, pump (duck floor 0.12, exp release 0.18 beat),
+swell. The gate multiplies <code class="language-plaintext highlighter-rouge">loopSumPreBuf</code> – the ONE point that reaches master out, the cue loop term
+and the SHIFT-fold resample tap identically. Ramps are raised-cosine with <code class="language-plaintext highlighter-rouge">gateRampBeats =
+min(period*0.25, 3ms)</code>. <strong><code class="language-plaintext highlighter-rouge">grooveBeatLen</code> is TEMPO-derived</strong> (<code class="language-plaintext highlighter-rouge">sr*60/(recordedBpm*effSpeed)</code>, falls back
+to Link bpm then 120) – never <code class="language-plaintext highlighter-rouge">masterLen/recordedBeats</code>, which made every repeat length a function of
+the first loop’s length. <code class="language-plaintext highlighter-rouge">beatLenSamplesShared</code> is still <code class="language-plaintext highlighter-rouge">masterLen/recordedBeatsShared</code> but feeds only
+the legacy grid, never groove. <code class="language-plaintext highlighter-rouge">grooveFreeBeatPos</code> keeps the gate alive with no loop recorded.
+Telemetry: <code class="language-plaintext highlighter-rouge">groove{shuffle,gate,beat_len_samples,gate_min,gate_max,swing_offset_samples}</code>.
+Proof: <code class="language-plaintext highlighter-rouge">test/hardware/verify-groove-gates.js</code> (two takes of different performed lengths must share one
+beat length and one phrase-length repeat; each gate’s min/max envelope).</p>
+
+<p><code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code> varispeed has NO deadzone (<code class="language-plaintext highlighter-rouge">varispeedActive=(effSpeed!=1.0)|vBaked</code>
 exact); <code class="language-plaintext highlighter-rouge">resyncCoeff</code> gates to <code class="language-plaintext highlighter-rouge">0.0</code> on <code class="language-plaintext highlighter-rouge">manualPunchActive|vBaked</code>; varispeed’s instant jump and shuffle’s
 hard clip are INTENTIONAL – do not smooth either. Loop ring reads use Catmull-Rom cubic; taps wrap at
 <code class="language-plaintext highlighter-rouge">wrapLen</code>, not <code class="language-plaintext highlighter-rouge">MAXLEN</code>.</p>

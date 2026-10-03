@@ -431,8 +431,26 @@ Every FX page (Dub, Guitar, LofiFx) has two independently-latching 8-knob banks 
 | Guitar | `fx2/{FLANGE,TREMOLO,BANKSPEED,PHASER,DIST,VINYL,FLUTTER}AMT`, CC53=`fx2/GATEAMT` | 8-dial dual-ADSR to `Sampler` |
 | LofiFx | `fx2/BITCRUSHAMT` + 4 patch weights | direct dials (knobs 5-7) |
 
-Groove shuffle: `kBeatPadNotes={15,23,31,39}` double as shuffle buttons, `fx/shuffle/mask` (4-bit),
-block-boundary only. `dsp/loop.dsp` varispeed has NO deadzone (`varispeedActive=(effSpeed!=1.0)|vBaked`
+**Groove: swing + volume gates on the metronome pads.** `kApcBeatPadNotes={15,23,31,39}` are
+one-of-four latching selectors; `fx/shuffle/mode` (0..4) picks a groovebox swing from `kGrooveSwings`
+(1/8-cell late ratios 0.5/0.54/0.62/0.71, plus a 1/4-cell triplet 0.6667). Swing is a READ-POSITION
+offset -- every ODD cell (`floor(beatPos/cellBeats)` odd) is delayed by
+`(lateRatio-0.5)*2*cellBeats*grooveBeatLen` as a negative offset into `masterPhaseBuf`, so the late cell
+lands at `lateRatio` of the pair instead of halfway, pitch is untouched and the hard step is intentional
+(never smoothed).
+Note 7 (`kApcPadGateMod`) held while a beat pad is pressed turns the same four pads into
+`fx/gate/mode` (0..4): chop 1 beat, chop 1/2 beat, pump (duck floor 0.12, exp release 0.18 beat),
+swell. The gate multiplies `loopSumPreBuf` -- the ONE point that reaches master out, the cue loop term
+and the SHIFT-fold resample tap identically. Ramps are raised-cosine with `gateRampBeats =
+min(period*0.25, 3ms)`. **`grooveBeatLen` is TEMPO-derived** (`sr*60/(recordedBpm*effSpeed)`, falls back
+to Link bpm then 120) -- never `masterLen/recordedBeats`, which made every repeat length a function of
+the first loop's length. `beatLenSamplesShared` is still `masterLen/recordedBeatsShared` but feeds only
+the legacy grid, never groove. `grooveFreeBeatPos` keeps the gate alive with no loop recorded.
+Telemetry: `groove{shuffle,gate,beat_len_samples,gate_min,gate_max,swing_offset_samples}`.
+Proof: `test/hardware/verify-groove-gates.js` (two takes of different performed lengths must share one
+beat length and one phrase-length repeat; each gate's min/max envelope).
+
+`dsp/loop.dsp` varispeed has NO deadzone (`varispeedActive=(effSpeed!=1.0)|vBaked`
 exact); `resyncCoeff` gates to `0.0` on `manualPunchActive|vBaked`; varispeed's instant jump and shuffle's
 hard clip are INTENTIONAL -- do not smooth either. Loop ring reads use Catmull-Rom cubic; taps wrap at
 `wrapLen`, not `MAXLEN`.
