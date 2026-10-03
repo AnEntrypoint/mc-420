@@ -162,6 +162,8 @@ auth block.
   linkSpeedRatio+linkPhaseTrim`. It runs only while `linkVarispeedEngaged`, or it saturates into a
   permanent 51-cent detune -- `eff_speed` in `/run/aloop/status.json` must read exactly `1.0000` with no
   loop recorded. The first usable target SNAPS when the circular error exceeds `kJoinSnapErrBeats=0.25`.
+After a tempo jump the trim needs seconds to converge: a fresh impose shows up to ~90 samples of
+grid slip for the first few seconds, so measure steady state only after ~6 s.
 
 **Two quantums -- 16 for transport, 128 for phase CAPTURE.** `kLinkQuantum=16.0` is the PAIRED value
 (transport anchor, `beatNow()`, 24-PPQN clock). `controlTick()` captures phase at
@@ -379,6 +381,9 @@ peers present. Adopting the peer tempo instead (the old path) re-derived `master
 length and TRUNCATED the take to fit: a 2.0 s take at 157.2 bpm came back as a 1.53 s 4-beat loop.
 Gate: `tools/loop-quantization-sim/first-loop-tempo-owner.js` (repeat period == performed length,
 `eff_speed` 1.0000, session bpm == `recorded_bpm`).
+Hardware proof: `test/hardware/verify-first-loop-owner.js` (one take with a peer up, then
+`link.bpm` == the derived take tempo, `eff_speed` 1.0000, repeat count over 10 s == `masterLen`,
+read head holds its grid lock within 48 samples, and no peer re-asserts its old tempo).
 
 ## Varispeed punch is BAKED into the take
 
