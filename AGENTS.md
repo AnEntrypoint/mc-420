@@ -56,8 +56,8 @@ dispatch per board. `board_supports_usb_gadget`/`board_wifi_irq_name`/
 
 Pi 3B+/CM3+ ship netboot-enabled from factory — no OTP burn (only plain 3B/CM3/3A+ need the
 irreversible one). ROM order SD → USB → Network, so "prep for netboot" = wipe the card so
-no `bootcode.bin` remains; a card with no `bootcode.bin` falls through to network, so a
-live netboot server silently takes such a device over — always confirm which path booted.
+no `bootcode.bin` remains; such a card falls through to network, so a live netboot server
+silently takes it over — always confirm which path booted.
 
 opi-prime: USB-audio-gadget **UNPROVEN** (MUSB micro-USB OTG only; the 3 USB-A ports are
 host-only) — fallback is the 3.5mm codec as ALSA HOST. The blob is everything before
@@ -359,8 +359,8 @@ skew-symmetric energy exchange, `coupleSmallGainMax=0.45`, clamp `coupleGuardCei
 rejected — never exactly identity); a real linear loop through 2+ coupled modes can exceed
 unity gain at some corners even with every pole damped. Internal constants with no knob:
 `positionDriftEnv` ~350ms, `stretchJitterAmt=0.02`, `bassBoost` 1.35x <220Hz, `aliasGuard`
-top-5%-Nyquist fade. Refuted, do not re-propose: `pow` for `exp`, the Lorentzian coupling
-bound, cos recurrence, un-glided morph knobs.
+top-5%-Nyquist fade. Refuted: `pow` for `exp`, the Lorentzian coupling bound, cos recurrence,
+un-glided morph knobs.
 `[[memory: resonode-exciter-coupling-cpu-history]]`
 
 Sweetspot patches (`kResonodePatches`, knobs1-4); knobs 5-7:
@@ -379,12 +379,10 @@ Sweetspot patches (`kResonodePatches`, knobs1-4); knobs 5-7:
 only when `delayVerbActive`. **Two separate instances** (`delayVerbFxCue` +
 `delayVerbFxMaster`) — sharing one corrupted its feedback state; `delayVerbActive` requires
 BOTH `hasPlugins()`. `cmd/halfspeed`/`cmd/doublespeed` stay `note70`/`note71`, never
-`cc70`/`cc71` (real APC Key25 sends NOTES 70/71 ch0). `note91` (`0x5B`) must never bind to
-`cmd/clearall`.
+`cc70`/`cc71` (APC Key25 sends NOTES 70/71 ch0). `0x5B`→`cmd/clearall` is owned ONLY by
+`midi.cpp`; a second `controls.conf` binding raced `ApcGrid`'s shadow reset (`b81fd17`).
 
-**Tracktion Engine is REJECTED** — do not re-open without new evidence: two-ALSA-device
-model vs `AudioDeviceManager`; `pthread_setaffinity_np` vs `tracktion_graph`'s thread pool;
-PDC latency vs a 1.333ms budget; GUI/licensing on headless.
+**Tracktion Engine is REJECTED** — do not re-open without new evidence.
 `[[memory: tracktion-engine-rejection]]`
 
 ---
@@ -422,14 +420,14 @@ Playback anchors to a shared `masterPhase` grid, never a per-take offset.
 
 **ARM snaps to the NEAREST fine-grid node.** `kFineGridBeats=0.125` beat; `fineGridWrapped` is
 hoisted once in `loopEngine` like `masterPhaseWrapped`, and non-first-looper `armEdge` fires on
-it. `armWaitSamples` measures press→node; over half a step, `rsmNext` pulls back one
-(`rsmNearestNode`) to the node nearest the press. Recording still starts at the next crossing.
-Worst case ±1/16 beat, no forward-only bias. Gate:
-`test/phrase-anchor/verify_phase_anchor.py` presses inside each HALF of a grid cell and asserts
-each half is jitter-free and the two halves sit exactly one grid step apart. Hardware check:
-`status.json`'s `writeidx` minus `readpos` during recording is `rsm−armNode` (0 forward, one cell
-back if pulled) — the only offset-free one, since the two schemes differ by half a cell inside the
-unknown Link→`masterPhase` offset.
+it. `armWaitSamples` measures press→node; over half a step `rsmNext` pulls back one
+(`rsmNearestNode`) to the node nearest the press, so worst case is ±1/16 beat with no
+forward-only bias. Gates: `test/phrase-anchor/verify_phase_anchor.py` presses inside each HALF
+of a cell and asserts both halves are jitter-free and one grid step apart;
+`test/hardware/verify-lineup.js` arms several loopers in ONE MIDI burst and asserts the read
+heads share one anchor. Two offset-free hardware checks: recording `writeidx`−`readpos` is `−latencybias`, one cell back when pulled and 0
+otherwise; playing `master_phase`−`readpos` is `rsm`−`latencybias`, a constant 64 samples
+(`kBlockSize`) off a cell. Neither needs the Link→`masterPhase` offset.
 
 **Per-loop beat scale `s`**: latched `1/speedClamped` at `finishEdge`, reset to `1.0` at
 `armEdge` (`beatLenNow = oneBeat/speedClamped` once `masterLen>=0.5`, `cycleInc =
@@ -441,9 +439,8 @@ must be a BEAT-LENGTH ratio, never `wlen/masterLen`: near-cut/far-extend can EXT
 `tempoScale`, drop the division from the finish target, and assert read heads against the
 ABSOLUTE grid beat captured at arm, not `rsm`.
 
-**FINISH length is near-cut/far-extend** (`pickAnchorGridBeats`; REPLACED
-`lowerExp`/`lowerCand`/`upperCand`, and supersedes the older "never let the snap discard
-recorded content" invariant): overshoot past the most recently passed grid node ≤1 beat cuts to
+**FINISH length is near-cut/far-extend** (`pickAnchorGridBeats`; supersedes
+`lowerExp`/`lowerCand`/`upperCand`): overshoot past the most recently passed grid node ≤1 beat cuts to
 it immediately (no padding, no further recording), else extends to the next tier. Ceiling
 `kMaxLoopSamples` (48000*60). `[[memory: control-surface-quantization-history]]`
 
