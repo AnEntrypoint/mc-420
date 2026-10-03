@@ -56,7 +56,8 @@ function analyze(events) {
   console.log(`Inter-event intervals (seconds): n=${intervals.length}, mean=${mean.toFixed(4)}, median=${median.toFixed(4)}, stddev=${stddev.toFixed(4)}`);
   console.log(`Min=${Math.min(...intervals).toFixed(4)}s, Max=${Math.max(...intervals).toFixed(4)}s`);
 
-  const isRegular = stddev < mean * 0.1;   // within 10% of mean = "regular period", not noise
+  const regularPeriodStddevToMeanRatio = 0.1;
+  const isRegular = stddev < mean * regularPeriodStddevToMeanRatio;
   if (isRegular) {
     console.log(`VERDICT: REGULAR PERIOD ~${mean.toFixed(3)}s (stddev is <10% of mean) -- matches a genuine periodic cause, not random jitter.`);
   } else {

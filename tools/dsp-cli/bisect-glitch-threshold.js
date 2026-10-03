@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-// Finds the exact semitone offset where glitches begin for a given
-// instrument, by testing every semitone in a range (not just a sparse
-// sweep) with the shifter trusted from t=0 (steady-state, isolates the
-// shifter's own behavior from tracking-transition effects).
 const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');

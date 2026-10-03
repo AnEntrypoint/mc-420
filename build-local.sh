@@ -1,16 +1,4 @@
 #!/bin/sh
-# Resilient local build for aloop, replacing GitHub Actions CI while its
-# artifact-storage quota is blocked. Builds two persistent, cached Docker
-# images ONCE (aloop-codegen for Faust codegen, aloop-arm64build for the
-# arm64/musl cross-compile) instead of re-downloading the whole toolchain
-# on every invocation -- this is the actual fix for the repeated-download
-# waste this session hit. Each network-dependent step is retried with
-# backoff to ride out the transient connectivity gaps witnessed this
-# session (a `wget` that hung twice succeeded on a 3rd retry -- real,
-# short-lived gaps, not a persistent block), with a hard per-attempt
-# timeout so a genuine hang doesn't stall forever undetected.
-#
-# Usage: ./build-local.sh [--codegen-only|--compile-only]
 set -eu
 cd "$(dirname "$0")"
 
@@ -18,7 +6,6 @@ MSYS_NO_PATHCONV=1
 export MSYS_NO_PATHCONV
 
 retry() {
-  # retry <timeout_seconds> <description> -- <command...>
   timeout_s="$1"; desc="$2"; shift 2
   [ "$1" = "--" ] && shift
   attempt=1
@@ -57,29 +44,6 @@ ensure_arm64build_image() {
 do_codegen() {
   ensure_codegen_image
   mkdir -p build
-  # -vec -fun -dfs -vs 32: vectorized codegen (separated simpler loops over a
-  # fixed-size internal buffer instead of one big scalar loop), function
-  # inlining, depth-first scheduling -- Faust's own documented standard
-  # optimization recipe (faustdoc.grame.fr/manual/optimizing/). -nvi drops the
-  # 'virtual' keyword from the generated C++ class (Faust's own docs: "can be
-  # especially useful in embedded devices context", directly on point for the
-  # Pi 4 target) -- pure codegen-strategy flags, no DSP math change, so the
-  # signal graph is bit-identical; only how the compiler schedules/inlines it
-  # differs.
-  # -ct 0: disables Faust's table range-checking (on by default since Faust
-  # v2.53.4). Verified safe for every rwtable in this program: dsp/loop.dsp's
-  # readIdx0/readIdx1 are always `... % wrapLen` (explicit modulo, always in
-  # [0,wrapLen)) and writeIdx is clamped to MAXLEN-1; microrepeat.dsp's
-  # wpos/rpos are likewise always clamped/modulo'd against MR_MAX/sliceLen
-  # before use. Every index into every rwtable in this codebase is already
-  # software-bounded by existing logic, so the extra runtime check is
-  # provably redundant here -- see AGENTS.md's Faust optimization section.
-  # -mapp DELIBERATELY NOT USED: a real SIGSEGV (si_addr=0x0, inside
-  # AloopLoopDsp::compute()) was WITNESSED live on a real Pi 4 the instant
-  # real, non-synthetic audio first reached the DSP -- see AGENTS.md's
-  # "-mapp -- SHIPPED, then REVERTED" entry. This local codegen path must
-  # match build-binary.yml's real invocation exactly, or a local build
-  # silently ships the same crash the CI path was fixed to avoid.
   retry 60 "faust codegen" -- \
     docker run --rm -v "$(pwd -W 2>/dev/null || pwd):/w" -w /w aloop-codegen \
       faust -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopLoopDsp -I dsp -I effects/home/faust dsp/aloop.dsp -o build/loop.cpp

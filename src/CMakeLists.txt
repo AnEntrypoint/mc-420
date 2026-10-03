@@ -1,11 +1,3 @@
-# aloop native binary — a PURE LINUX project: the loop engine + in-process LV2
-# host + Link + control, built as one process with per-core RT threads.
-#
-# WHY the structure: aloop is a Linux application. Its EFFECTS are the dubfx LV2
-# plugin (a Faust-built .lv2 bundle), loaded at runtime from /effects/home — NOT
-# compiled in, and NOT sourced from the Circle looper project (that is a different
-# platform; no looper source appears here). The loop engine + host/link/control/
-# net are aloop's own Linux code. Built for aarch64 under musl in CI.
 cmake_minimum_required(VERSION 3.16)
 project(aloop CXX)
 
@@ -15,47 +7,23 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 add_compile_options(-O3 -Wall)
-# -mcpu=cortex-a72: the Pi 4's real CPU core (ARMv8-A/aarch64) -- the
-# aarch64-correct equivalent of the Faust optimizing-compiler manual's
-# -march=cpu advice (faustdoc.grame.fr/manual/optimizing/, "Multi-CPU
-# Compilation" section: compile with gcc/clang for the specific target
-# processor to get CPU-tuned instruction scheduling/NEON usage). Since this
-# build already cross-compiles specifically for aarch64/musl inside a real
-# Alpine container (never a generic aarch64 target), pinning the exact core
-# is a safe, additive win with no portability cost -- the binary was never
-# going to run on any other CPU anyway.
 add_compile_options(-mcpu=cortex-a72)
 
-# The aloop source — all Linux-native, no Circle/looper dependency. The effects
-# are the dubfx LV2 bundle, loaded at runtime by the in-process host (host/).
-# The loop engine is FAUST (dsp/loop.dsp), compiled to C++ by the build (faust
-# -lang cpp -> build/loop.cpp) and included by the audio thread — NOT a
-# hand-written .cpp. The effects are the dubfx LV2, loaded at runtime by the host.
-# So the DSP is Faust; these .cpp are only the thin native RT shell.
 set(DSP_SOURCES
-  dsp/audio_thread.cpp    # RT audio thread: drives the Faust loop engine + effect LV2 per block
-  host/lv2_host.cpp       # in-process LV2 host (loads the dubfx effect bundle + user LV2)
-  link/link_bridge.cpp    # Ableton Link -> the lock-free snapshot
-  control/telemetry.cpp   # the diagnosability surface
-  control/midi.cpp        # ALSA rawmidi + the control mapping
-  control/apc_grid.cpp    # APC Key25 grid/tap-hold/preset/live-pitch/microrepeat engine
-  control/apc_leds.cpp    # APC Key25 LED output (grid/preset/transport/live-pitch colors)
-  control/midi_clock.cpp  # 24ppqn MIDI clock fan-out to every other rawmidi output, phase-locked to Link
-  control/remote_control.cpp  # remote reboot + log-tail (udp/4446, token-authenticated)
-  storage/usb_recorder.cpp    # continuous USB-drive ring recorder (lock-free handoff from the RT thread)
-  storage/clip_exporter.cpp   # REC-button clip export: per-looper WAV + Ableton/FL project files
-  main.cpp                # the wiring
+  dsp/audio_thread.cpp
+  host/lv2_host.cpp
+  link/link_bridge.cpp
+  control/telemetry.cpp
+  control/midi.cpp
+  control/apc_grid.cpp
+  control/apc_leds.cpp
+  control/midi_clock.cpp
+  control/remote_control.cpp
+  storage/usb_recorder.cpp
+  storage/clip_exporter.cpp
+  main.cpp
 )
 
-# The Faust loop engine is compiled to C++ in TWO halves (loop_pre.cpp,
-# loop_post.cpp), #included by audio_thread.cpp, with delay.dsp/reverb.dsp
-# hosted as a separately-invoked LV2 bundle (delayverb.lv2) processed by C++
-# in between the two -- both were fully unconditional in Faust (no runtime
-# branching to skip their real cost even at amount=0) and ran twice
-# (cue+master), a real, measured, structural cost. CI pre-generates both
-# halves (where faust exists) into ${CMAKE_BINARY_DIR}/loop_pre.cpp and
-# loop_post.cpp; if already present we use them, otherwise generate here
-# (local builds that have faust).
 if(NOT EXISTS ${CMAKE_BINARY_DIR}/loop_pre.cpp OR NOT EXISTS ${CMAKE_BINARY_DIR}/loop_post.cpp)
   find_program(FAUST_BIN faust)
   if(FAUST_BIN)
@@ -74,21 +42,14 @@ if(NOT EXISTS ${CMAKE_BINARY_DIR}/loop_pre.cpp OR NOT EXISTS ${CMAKE_BINARY_DIR}
     message(FATAL_ERROR "loop_pre.cpp/loop_post.cpp not pre-generated and faust not found — pre-generate them or install faust")
   endif()
 else()
-  add_custom_target(faust_loop)   # pre-generated; nothing to do
+  add_custom_target(faust_loop)
 endif()
 
-# Dependencies (musl-built in the Alpine container): ALSA (audio I/O), lilv
-# (LV2 discovery/loading), the LV2 headers.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ALSA REQUIRED alsa)
 pkg_check_modules(LILV lilv-0)
 
-# Ableton Link — the official header-only C++ library. Fetched at configure time
-# (CI has network); link_bridge.cpp is guarded with __has_include, so if Link is
-# absent the binary still builds (Link inactive) — but CI fetches it so it is real.
 include(FetchContent)
-# Link bundles asio as a submodule (its platform code needs it), so fetch
-# submodules. Not shallow — submodule fetch is more reliable with full history.
 FetchContent_Declare(abletonlink
   GIT_REPOSITORY https://github.com/Ableton/link.git
   GIT_TAG        Link-3.1.3
@@ -96,7 +57,6 @@ FetchContent_Declare(abletonlink
 set(LINK_INCLUDE "")
 FetchContent_GetProperties(abletonlink)
 if(NOT abletonlink_POPULATED)
-  # Best-effort: don't fail the build if the fetch is unavailable (guarded source).
   FetchContent_Populate(abletonlink)
 endif()
 if(abletonlink_SOURCE_DIR)
@@ -106,26 +66,17 @@ endif()
 add_executable(aloop ${DSP_SOURCES})
 target_include_directories(aloop PRIVATE
   ${CMAKE_SOURCE_DIR}
-  ${CMAKE_BINARY_DIR}        # the generated Faust loop.cpp
-  ${CMAKE_SOURCE_DIR}/../effects/home/faust   # pitch ffunction engine headers
+  ${CMAKE_BINARY_DIR}
+  ${CMAKE_SOURCE_DIR}/../effects/home/faust
   ${ALSA_INCLUDE_DIRS}
   ${LILV_INCLUDE_DIRS}
-  ${LINK_INCLUDE}            # Ableton Link + its bundled asio (fetched)
+  ${LINK_INCLUDE}
 )
-# Ableton Link needs its platform selected (Linux) and asio in standalone,
-# header-only mode. These are the standard Link-on-Linux build defines.
 if(LINK_INCLUDE)
   target_compile_definitions(aloop PRIVATE
     LINK_PLATFORM_LINUX=1
     ASIO_STANDALONE=1)
-  # Force-include the musl compat shim (provides htonll/ntohll, which musl lacks)
-  # before anything else, so Link's byte-stream serializer compiles under musl.
   target_compile_options(aloop PRIVATE -include ${CMAKE_SOURCE_DIR}/compat/musl_compat.h)
 endif()
 target_link_libraries(aloop PRIVATE ${ALSA_LIBRARIES} ${LILV_LIBRARIES} pthread dl z)
 add_dependencies(aloop faust_loop)
-
-# The effects are NOT a build dependency — they are the dubfx LV2 bundle deployed
-# to /effects/home at image-assembly time and dlopen'd at runtime. aloop the
-# binary never links effect code; it hosts the plugin. That is the whole point:
-# effects are a swappable file, not compiled in.

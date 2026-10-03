@@ -48,16 +48,6 @@ function localAddressesOnNetbootSubnet() {
   return found;
 }
 
-// A /16 (or any non-/24) mask on the netboot interface makes 192.168.137.255
-// -- the address every DHCP OFFER/ACK broadcasts to -- read as an ordinary
-// host address instead of this interface's local broadcast, so replies never
-// reach the Pi: it re-DISCOVERs forever with zero TFTP reads (see AGENTS.md's
-// "Netboot DHCP diagnosis" section). This has recurred more than once with no
-// script in this repo ever setting the mask, so it drifts from outside --
-// most likely Windows ICS or a manual `New-NetIPAddress` re-assigning the
-// interface without `-PrefixLength 24`. Self-heal on every startup rather
-// than requiring a human to notice silent DHCP failure and manually run the
-// documented PowerShell fix each time.
 function ensureCorrectSubnetMask(iface, address) {
   const ifaces = os.networkInterfaces();
   const entry = (ifaces[iface] || []).find(a => a.family === 'IPv4' && a.address === address);

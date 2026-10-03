@@ -1,9 +1,4 @@
 #!/usr/bin/env node
-// Sweeps multitranspose.dsp across real corpus instruments x a wide range of
-// target-note offsets, glitch-checking every render. Local, fast (no CI/
-// hardware round trip) -- the efficient-iteration counterpart to live
-// hardware spot-checks. Requires dsp_cli.exe already built against
-// multitranspose.dsp (run build.bat first).
 const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -13,7 +8,6 @@ const DSP_CLI = path.join(__dirname, 'dsp_cli.exe');
 const OUT_DIR = path.join(__dirname, '.sweep-out');
 if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR);
 
-// filename -> approximate source MIDI note (from manifest.json descriptions)
 const INSTRUMENTS = {
   'piano_low_A1.wav': 33,
   'piano_mid_C4.wav': 60,
@@ -33,12 +27,13 @@ const INSTRUMENTS = {
   'vocal_male_baritone_scale.wav': 53,
 };
 
-// Representative offsets: unison, small intervals both directions, larger
-// leaps, octave extremes -- not every one of 7744 combos, a representative
-// spread across the practically reachable shift range.
 const OFFSETS = [-24, -19, -12, -7, -5, -3, -1, 0, 1, 3, 5, 7, 12, 19, 24];
 
 function midiToHz(note) { return 440.0 * Math.pow(2, (note - 69) / 12); }
+
+const EXT_FREQ_DET_CHANNEL = 4;
+const TARGET_NOTE_CHANNEL = 5;
+const GATE_CHANNEL = 6;
 
 let total = 0, glitchCount = 0;
 const failures = [];
@@ -53,9 +48,9 @@ for (const [file, sourceNote] of Object.entries(INSTRUMENTS)) {
     const outWav = path.join(OUT_DIR, `${file.replace('.wav', '')}_off${offset >= 0 ? '+' : ''}${offset}.wav`);
     const args = [
       '--gen0', `wav:${wavPath}`,
-      '--gen4', `step:0:${sourceHz.toFixed(2)}:0.04:6.0`, // extFreqDet: untrusted 40ms then real lock
-      '--gen5', `step:${targetNote}:${targetNote}:0:6.0`,  // n0 = target note
-      '--gen6', 'step:1:1:0:6.0',                          // g0 = gate held
+      '--gen' + EXT_FREQ_DET_CHANNEL, `step:0:${sourceHz.toFixed(2)}:0.04:6.0`,
+      '--gen' + TARGET_NOTE_CHANNEL, `step:${targetNote}:${targetNote}:0:6.0`,
+      '--gen' + GATE_CHANNEL, 'step:1:1:0:6.0',
       outWav,
     ];
     try {
@@ -68,7 +63,6 @@ for (const [file, sourceNote] of Object.entries(INSTRUMENTS)) {
     try {
       glitchOut = execFileSync(DSP_CLI, ['--glitch-check', outWav, 'threshold=0.15', 'minGapMs=3'], { stdio: 'pipe', timeout: 10000 }).toString();
     } catch (e) {
-      // non-zero exit = glitches found; stdout still has the report
       glitchOut = e.stdout ? e.stdout.toString() : '';
       const m = glitchOut.match(/glitches=(\d+)/);
       const n = m ? parseInt(m[1], 10) : -1;

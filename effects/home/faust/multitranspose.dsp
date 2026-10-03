@@ -81,19 +81,6 @@ with {
     lastConvergedNote = ba.if(ba.time == 0, targetNote, lastConvergedNoteRaw);
     smoothPole = ba.tau2pole(0.008);
     trackingAllowed = trustedTracker > 0.5;
-    // heldDetNote only ever updates while trackingAllowed is true (external
-    // tracker genuinely locked). A seed at ba.time==0 alone is not enough on
-    // real hardware: the process starts long before any note is ever played,
-    // so by the time a real first note attacks, that seed has already gone
-    // stale (frozen at "no note held", i.e. 0) -- WITNESSED live on the real
-    // Pi 4: a note played with the external tracker never yet trusted read
-    // shiftAmount=60.00 (a 5-octave runaway) instead of the intended safe
-    // unity fallback. everTrusted latches permanently the first time
-    // trackingAllowed is ever true; until then, EVERY attackEdge reseeds
-    // heldDetNote to that note's own targetNote (safe unity), not just the
-    // literal first sample of the DSP instance's life. Once real trust has
-    // been established even once, this reseed never fires again and the
-    // existing lastConvergedNote-based behavior is unchanged.
     everTrustedStep(prev) = max(prev, trackingAllowed);
     everTrusted = everTrustedStep ~ _;
     smoothedDetNoteStep(prev) = ba.if(attackEdge, lastConvergedNote,
@@ -130,13 +117,6 @@ with {
     w3 = voiceOut(3.0,sig,freqDet,trustedTracker,formant,n3,g3) : (_,!,!);
     w4 = voiceOut(4.0,sig,freqDet,trustedTracker,formant,n4,g4) : (_,!,!);
     w5 = voiceOut(5.0,sig,freqDet,trustedTracker,formant,n5,g5) : (_,!,!);
-    // Voice 0 only, tapped via the same attach() probe idiom freqDetDiag/
-    // extFreqDetDiagRaw already use below -- attach(a,b) returns a
-    // UNCHANGED while computing b (the bargraph) as a side effect, so this
-    // has zero effect on the actual audio and only needs voice 0's own
-    // shiftAmount/heldDetNote to reach a real output (matches
-    // shiftamountdiag/helddetnotediag, the zone names audio_thread.cpp's
-    // [diag-multitranspose] log already looks up by name).
     w0Tapped = attach(attach(w0, sh0 : hbargraph("shiftamountdiag", -60.0, 60.0)),
                        hd0 : hbargraph("helddetnotediag", 0.0, 127.0));
     wetSum = w0Tapped + w1 + w2 + w3 + w4 + w5;
