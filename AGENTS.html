@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — technical constraints reference","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=b4c4bcfbf96b2cd9df54f7e3d53d6f221806f600">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8737f877308fd0390461d2de47c65387c12ad6b7">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -610,9 +610,18 @@ must be a BEAT-LENGTH ratio, never <code class="language-plaintext highlighter-r
 ABSOLUTE grid beat captured at arm, not <code class="language-plaintext highlighter-rouge">rsm</code>.</p>
 
 <p><strong>FINISH length is near-cut/far-extend</strong> (<code class="language-plaintext highlighter-rouge">pickAnchorGridBeats</code>; supersedes
-<code class="language-plaintext highlighter-rouge">lowerExp</code>/<code class="language-plaintext highlighter-rouge">lowerCand</code>/<code class="language-plaintext highlighter-rouge">upperCand</code>): overshoot past the most recently passed grid node ≤1 beat cuts to
-it immediately (no padding, no further recording), else extends to the next tier. Ceiling
-<code class="language-plaintext highlighter-rouge">kMaxLoopSamples</code> (48000*60). <code class="language-plaintext highlighter-rouge">[[memory: control-surface-quantization-history]]</code></p>
+<code class="language-plaintext highlighter-rouge">lowerExp</code>/<code class="language-plaintext highlighter-rouge">lowerCand</code>/<code class="language-plaintext highlighter-rouge">upperCand</code>), on a grid capped at ONE MASTER PHRASE: <code class="language-plaintext highlighter-rouge">anchorGridBeats =
+min(pickAnchorGridBeats(takeLenBeats), max(1, cmd/recorded_beats))</code>. Overshoot past the last
+node ≤ <code class="language-plaintext highlighter-rouge">max(1 beat, min(anchor/2, takeLen/8))</code> cuts to it (no padding, no further recording),
+else extends to the next node. The cap is what keeps a long take from doubling: uncapped, the
+16-beat tier extends a 17-beat take to 32, and the cut tolerance must exceed the 5 Hz
+control-tick slop (~0.8 beat: up to one stale telemetry tick plus one late MIDI tick) or the
+same performance yields 16 or 32 depending on tick phase. Ceiling <code class="language-plaintext highlighter-rouge">kMaxLoopSamples</code> (48000*60).
+<code class="language-plaintext highlighter-rouge">[[memory: control-surface-quantization-history]]</code></p>
+
+<p><code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code>’s own <code class="language-plaintext highlighter-rouge">snappedWrapLen</code> must stay IDEMPOTENT for a phrase-multiple target — its
+anchor length is <code class="language-plaintext highlighter-rouge">min(anchorGridBeats*beatLenNow, masterLen)</code>, never the bare tier, so a
+varispeed-shifted <code class="language-plaintext highlighter-rouge">beatLenNow</code> cannot re-snap 16 beats to 32.</p>
 
 <p>First (master-establishing) recording takes its tempo/beats from a real synced Link tempo when
 present — <code class="language-plaintext highlighter-rouge">recorded_beats</code> snapped to the nearest power-of-2 in {1,2,4,8,16,32,64,128}
