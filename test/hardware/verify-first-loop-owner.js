@@ -50,6 +50,11 @@ function queryTelemetry() {
   });
 }
 
+function gridBeatLen(t) {
+  if (t.master_len_samples > 0 && t.recorded_beats >= 1) return t.master_len_samples / t.recorded_beats;
+  return (60 / t.link.bpm) * kSampleRate;
+}
+
 function deriveTempoQuantBeats(recordedSeconds, anchorBpm) {
   const anchor = (anchorBpm > 1) ? anchorBpm : 120;
   const candidates = [1, 2, 4, 8, 16, 32, 64, 128];
@@ -190,7 +195,7 @@ async function main() {
     fail(`eff_speed ${effSpeed.toFixed(4)} resamples the take instead of repeating it at natural pitch`);
   }
 
-  const beatLenSamples = (60 / postBpm) * kSampleRate;
+  const beatLenSamples = gridBeatLen(t);
   const beatsPerCycle = wrapLen / beatLenSamples;
   const watch = await watchPlayback(wrapLen, beatLenSamples, beatsPerCycle);
   const rateErrCents = 1200 * Math.log2(watch.readRate);

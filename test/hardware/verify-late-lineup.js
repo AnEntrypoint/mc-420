@@ -15,7 +15,7 @@ const kTrimSettleMs = 4000;
 const kWatchMs = 12000;
 const kPollMs = 150;
 const kClearAllSettleMs = 1200;
-const kToleranceSamples = 64;
+const kToleranceSamples = 16;
 
 function gridBeatLen(t) {
   if (t.master_len_samples > 0 && t.recorded_beats >= 1) return t.master_len_samples / t.recorded_beats;
