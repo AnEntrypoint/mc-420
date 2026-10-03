@@ -435,9 +435,18 @@ must be a BEAT-LENGTH ratio, never `wlen/masterLen`: near-cut/far-extend can EXT
 ABSOLUTE grid beat captured at arm, not `rsm`.
 
 **FINISH length is near-cut/far-extend** (`pickAnchorGridBeats`; supersedes
-`lowerExp`/`lowerCand`/`upperCand`): overshoot past the most recently passed grid node ≤1 beat cuts to
-it immediately (no padding, no further recording), else extends to the next tier. Ceiling
-`kMaxLoopSamples` (48000*60). `[[memory: control-surface-quantization-history]]`
+`lowerExp`/`lowerCand`/`upperCand`), on a grid capped at ONE MASTER PHRASE: `anchorGridBeats =
+min(pickAnchorGridBeats(takeLenBeats), max(1, cmd/recorded_beats))`. Overshoot past the last
+node ≤ `max(1 beat, min(anchor/2, takeLen/8))` cuts to it (no padding, no further recording),
+else extends to the next node. The cap is what keeps a long take from doubling: uncapped, the
+16-beat tier extends a 17-beat take to 32, and the cut tolerance must exceed the 5 Hz
+control-tick slop (~0.8 beat: up to one stale telemetry tick plus one late MIDI tick) or the
+same performance yields 16 or 32 depending on tick phase. Ceiling `kMaxLoopSamples` (48000*60).
+`[[memory: control-surface-quantization-history]]`
+
+`dsp/loop.dsp`'s own `snappedWrapLen` must stay IDEMPOTENT for a phrase-multiple target — its
+anchor length is `min(anchorGridBeats*beatLenNow, masterLen)`, never the bare tier, so a
+varispeed-shifted `beatLenNow` cannot re-snap 16 beats to 32.
 
 First (master-establishing) recording takes its tempo/beats from a real synced Link tempo when
 present — `recorded_beats` snapped to the nearest power-of-2 in {1,2,4,8,16,32,64,128}

@@ -245,12 +245,18 @@ function applyRecPlayCycle(w, looper) {
       const beatsPerMasterLen = Math.max(1.0, w.recordedBeats);
       const oneBeat = Math.max(1.0, w.masterLenSamples / beatsPerMasterLen);
       const takeLenBeats = effectiveSamples / oneBeat;
-      const anchorGridBeats = pickAnchorGridBeats(takeLenBeats);
+      let anchorGridBeats = pickAnchorGridBeats(takeLenBeats);
+      const phraseBeats = Math.max(1.0, beatsPerMasterLen);
+      const legacy = w.legacyFinishAnchor === true;
+      if (!legacy && anchorGridBeats > phraseBeats) anchorGridBeats = phraseBeats;
       const pastMultiple = Math.floor(takeLenBeats / anchorGridBeats + 0.0001);
       const pastNodeBeats = pastMultiple * anchorGridBeats;
       const futureNodeBeats = pastNodeBeats + anchorGridBeats;
       const overshootBeats = takeLenBeats - pastNodeBeats;
-      const finalBeats = (pastMultiple >= 1 && overshootBeats <= 1.0 + 0.0001)
+      const cutToleranceBeats = legacy
+        ? 1.0
+        : Math.max(1.0, Math.min(anchorGridBeats * 0.5, takeLenBeats * 0.125));
+      const finalBeats = (pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001)
         ? pastNodeBeats
         : futureNodeBeats;
       const beatLenSamplesNow = w.tempoScaleInverted ? oneBeat / tempoScale : oneBeat * tempoScale;

@@ -100,6 +100,27 @@ async function anchors(oneBeat, samples = 4) {
   return out;
 }
 
+async function waitForFinish(before, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs;
+  let prevIdx = null;
+  let last = null;
+  while (Date.now() < deadline) {
+    const t = await queryTelemetry();
+    last = t;
+    const idx = LOOPERS.map(i => t.loopers.writeidx[i]);
+    const lengthened = LOOPERS.some(i => t.loopers.wraplen[i] !== before[i]);
+    const parked = prevIdx !== null && idx.every((v, k) => v === prevIdx[k]);
+    prevIdx = idx;
+    if (lengthened && parked) return t;
+    await sleep(250);
+  }
+  if (last) {
+    console.log(`[verify-lineup]   timeout state: wlens=${LOOPERS.map(i => last.loopers.wraplen[i]).join(',')} ` +
+      `widx=${LOOPERS.map(i => last.loopers.writeidx[i]).join(',')} rec=${last.loopers.rec} play=${last.loopers.play}`);
+  }
+  return null;
+}
+
 async function main() {
   console.log(`[verify-lineup] target=${host} trials=${TRIALS}`);
   const sock = await openInject();
@@ -134,8 +155,15 @@ async function main() {
 
     burst(sock, TAKE_PADS);
     await sleep(hold);
+    const beforeFinish = await queryTelemetry();
     burst(sock, TAKE_PADS);
-    await sleep(700);
+    const startedAt = Date.now();
+    const settled = await waitForFinish(beforeFinish.loopers.wraplen);
+    if (!settled) {
+      console.log(`[verify-lineup] trial ${trial}: take never finished within 30s of FINISH (pre-arm wlens=${LOOPERS.map(i => beforeFinish.loopers.wraplen[i]).join(',')})`);
+      continue;
+    }
+    const finishMs = Date.now() - startedAt;
 
     const got = (await anchors(oneBeat)).filter(Boolean);
     if (got.length < 2) {
@@ -144,7 +172,7 @@ async function main() {
     }
     const spread = Math.max(...got.map(g => g.anchor)) - Math.min(...got.map(g => g.anchor));
     rows.push({ trial, got, spread });
-    console.log(`[verify-lineup] trial ${trial} (hold ${hold}ms): wlens=${got.map(g => g.wlen).join(',')} ` +
+    console.log(`[verify-lineup] trial ${trial} (hold ${hold}ms, finished +${finishMs}ms): wlens=${got.map(g => g.wlen).join(',')} ` +
       `anchors mod cell=${got.map(g => wrap(g.anchor, cell).toFixed(1)).join(',')} ` +
       `within-trial spread=${spread.toFixed(1)} samples`);
   }

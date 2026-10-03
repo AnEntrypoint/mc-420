@@ -254,11 +254,14 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             double oneBeatSamples = std::max(1.0, (double)m_masterLenSamples / beatsPerMasterLen);
             double takeLenBeats = effectiveSamples / oneBeatSamples;
             double anchorGridBeats = pickAnchorGridBeats(takeLenBeats);
+            double phraseBeats = std::max(1.0, beatsPerMasterLen);
+            if (anchorGridBeats > phraseBeats) anchorGridBeats = phraseBeats;
             double pastMultiple = std::floor(takeLenBeats / anchorGridBeats + 0.0001);
             double pastNodeBeats = pastMultiple * anchorGridBeats;
             double futureNodeBeats = pastNodeBeats + anchorGridBeats;
             double overshootBeats = takeLenBeats - pastNodeBeats;
-            double finalBeats = (pastMultiple >= 1.0 && overshootBeats <= 1.0 + 0.0001)
+            double cutToleranceBeats = std::max(1.0, std::min(anchorGridBeats * 0.5, takeLenBeats * 0.125));
+            double finalBeats = (pastMultiple >= 1.0 && overshootBeats <= cutToleranceBeats + 0.0001)
                 ? pastNodeBeats
                 : futureNodeBeats;
             double beatLenSamplesNow = oneBeatSamples * tempoScale;
