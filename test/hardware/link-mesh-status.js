@@ -82,9 +82,13 @@ function fmtAloop(host, s) {
 function fmtEsp(host, s) {
   if (s.error) return `esp   ${host.padEnd(15)}  ERROR: ${s.error}`;
   if (s.link === false) return `esp   ${host.padEnd(15)}  Link not constructed yet`;
+  const m = s.metro || {};
+  const metro = m.fired === undefined ? '' :
+    ` metro n=${m.fired} late(last=${m.late_last_us}us worst=${m.late_worst_us}us` +
+    ` mean=${Number(m.late_mean_us).toFixed(0)}us rms=${Number(m.late_rms_us).toFixed(0)}us)`;
   return `esp   ${host.padEnd(15)}  role=${s.ap ? 'ap ' : 'sta'} peers=${String(s.peers).padEnd(3)}` +
          ` bpm=${Number(s.bpm).toFixed(2).padStart(7)} phase=${Number(s.phase).toFixed(3)}` +
-         ` quantum=${s.quantum} playing=${s.playing}`;
+         ` quantum=${s.quantum} playing=${s.playing}${metro}`;
 }
 
 async function pollOnce(args) {
