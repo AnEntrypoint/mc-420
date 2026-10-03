@@ -18,6 +18,11 @@ ROOT_NOTE = 60.0
 CHORD_CENTS_LIMIT = 40.0
 STEAL_CLICK_RATIO_LIMIT = 6.0
 SILENT_LIMIT = 1e-6
+VOICE_COUNT = 6
+INPUT_CHANNEL_COUNT = 17
+UNISON_SEMITONES = 0.0
+MAJOR_THIRD_SEMITONES = 4.0
+PERFECT_FIFTH_SEMITONES = 7.0
 
 
 def midi_to_hz(m):
@@ -61,7 +66,7 @@ def check_disabled_silent(text):
     dur = 0.3
     n = int(dur * SAMPLE_RATE)
     dry = sine(n, 220.0)
-    inputs = np.zeros((17, n), dtype=np.float64)
+    inputs = np.zeros((INPUT_CHANNEL_COUNT, n), dtype=np.float64)
     inputs[0] = dry
     audio = run(text, inputs, dur)
     peak = float(np.max(np.abs(audio)))
@@ -77,15 +82,17 @@ def check_chord(text):
     gate = np.zeros(n)
     gate[gate_start:] = 1.0
     zero = np.zeros(n)
-    # Absolute pitch-lock: each voice's target is the KEY itself, independent
-    # of the 220Hz dry input -- unison/major-3rd/5th expressed as target MIDI
-    # notes relative to ROOT_NOTE, not as shift amounts from the input pitch.
-    target_notes = [ROOT_NOTE, ROOT_NOTE + 4.0, ROOT_NOTE + 7.0]
-    # dry, loopSum, free, formant, extFreqDet, n0,g0, n1,g1, n2,g2, n3,g3, n4,g4, n5,g5 (17 total)
-    inputs_rows = [dry, zero, zero, zero, zero]
+    target_notes = [ROOT_NOTE + UNISON_SEMITONES,
+                    ROOT_NOTE + MAJOR_THIRD_SEMITONES,
+                    ROOT_NOTE + PERFECT_FIFTH_SEMITONES]
+    silent_loop_sum = np.zeros(n)
+    silent_free = np.zeros(n)
+    silent_formant = np.zeros(n)
+    silent_ext_freq_det = np.zeros(n)
+    inputs_rows = [dry, silent_loop_sum, silent_free, silent_formant, silent_ext_freq_det]
     for note in target_notes:
         inputs_rows += [np.full(n, note), gate]
-    for _ in range(3):
+    for _ in range(VOICE_COUNT - len(target_notes)):
         inputs_rows += [zero, zero]
     inputs = np.stack(inputs_rows, axis=0)
     audio = run(text, inputs, dur)
@@ -136,7 +143,7 @@ def check_voice_steal(text):
     note[steal_sample:] = ROOT_NOTE + 12.0
     zero = np.zeros(n)
     inputs_rows = [dry, zero, zero, zero, zero, note, gate]
-    for _ in range(5):
+    for _ in range(VOICE_COUNT - 1):
         inputs_rows += [zero, zero]
     inputs = np.stack(inputs_rows, axis=0)
     audio = run(text, inputs, dur)

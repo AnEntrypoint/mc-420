@@ -12,18 +12,7 @@ BLOCK_SIZE = 64
 COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
 ROOT_NOTE = 60.0
-# Two SEPARATE faust.compile() JIT calls of the IDENTICAL source are not
-# guaranteed bit-exact -- verified directly: rendering the same already-
-# compiled processor instance twice is exactly 0.0 diff, while two fresh
-# compiles of the same source differ by ~2.35e-06 (a per-compile codegen/
-# scheduling artifact from heldDetNote's recursive signal graph interacting
-# with the vectorized -vs 32 codegen, not a runtime state-carryover bug --
-# the actually-shipped runtime compiles once and stays deterministic for its
-# whole lifetime). 1e-9 was tight enough to falsely fail on this artifact;
-# 1e-4 comfortably covers it while still catching a real non-determinism
-# regression (which would be orders of magnitude larger, per this file's own
-# formant-sweep results showing real changes in the tens-to-hundreds Hz range).
-DETERMINISM_LIMIT = 1e-4
+JIT_RECOMPILE_DETERMINISM_LIMIT = 1e-4
 MIN_CENTROID_SPREAD_HZ = 5.0
 
 
@@ -84,7 +73,7 @@ def check_formant_zero_is_identity(text):
     a2, _ = render(text, 0.0)
     diff = float(np.max(np.abs(a1 - a2)))
     print(f"  formant=0 determinism max abs diff: {diff:.2e}")
-    return diff < DETERMINISM_LIMIT
+    return diff < JIT_RECOMPILE_DETERMINISM_LIMIT
 
 
 def check_formant_is_audible_and_bounded(text):

@@ -15,8 +15,8 @@ BLOCK_SIZE = 64
 COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
 ROOT_NOTE = 60.0
-MIC_LEAD_IN_MS = 400.0
-WORST_STEADY_CENTS_LIMIT = 30.0
+TRACKER_SETTLE_LEAD_IN_MS = 400.0
+DIAGNOSTIC_STEADY_CENTS_LIMIT = 30.0
 LOW_FREQ_RATIO_MIN = 0.55
 
 
@@ -59,19 +59,12 @@ def make_inputs(n, dry, formant, target_note, gate):
 
 
 def render(dsp_text, freq_hz, semitone_shift, formant, dur=None):
-    # Real performance: the mic signal is already sustaining well before the key is
-    # pressed, so freqDet has converged by the time heldDetNote latches at attackEdge.
-    # A key gated on with zero prior audio context risks BOTH a stale/cold-start
-    # heldDetNote latch (wrong shiftAmount, a real note error under absolute pitch-lock)
-    # AND the separate, disclosed, pre-existing cold-start freeze gap in
-    # windowForFormant's own smoother (see AGENTS.md, "winFrozenStep/xfFrozenStep
-    # true-cold-start freeze gap") -- the lead-in here specifically avoids the former.
     if dur is None:
-        dur = MIC_LEAD_IN_MS / 1000 + 0.4
+        dur = TRACKER_SETTLE_LEAD_IN_MS / 1000 + 0.4
     engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
     n = int(dur * SAMPLE_RATE)
     dry = vocal_like_tone(n, freq_hz)
-    gate_start = int(MIC_LEAD_IN_MS / 1000 * SAMPLE_RATE)
+    gate_start = int(TRACKER_SETTLE_LEAD_IN_MS / 1000 * SAMPLE_RATE)
     gate = np.zeros(n)
     gate[gate_start:] = 1.0
     target_note = ROOT_NOTE + semitone_shift
@@ -114,23 +107,6 @@ def check_downward_lock(text, source_hz, semitone_shift, formant):
 
 
 def main():
-    # DIAGNOSTIC, not a hard CI gate. Under the current absolute-pitch-lock
-    # architecture, expected_hz is now the target KEY's absolute pitch
-    # (midi_to_hz(ROOT_NOTE + semitone_shift)), not source_hz*2^(shift/12) --
-    # steady-state accuracy here now depends on heldDetNote (freqDet latched at
-    # attackEdge) being correct, unlike the prior interval-harmonizer design where
-    # shiftAmount had no tracker dependency at all. A separate, pre-existing,
-    # architecture-independent limitation remains reproducible here too: xpose's
-    # own 2-tap crossfaded-delay shifter develops a real, audible crossfade-wrap-rate
-    # artifact at EXTREME downward shift ratios (2+ octaves down) combined with a
-    # formant-skewed window -- large negative semitone shifts produce a large `i`
-    # per-sample delay-index step (i = 1 - pow(2, s/12)), which wraps `d` against `w`
-    # fast enough to become itself an audible tone (lowFreqRatio stays high in these
-    # cases -- the true fundamental is still the dominant spectral energy; it is
-    # measure_freq's own autocorrelation that gets pulled onto the wrap-rate tone).
-    # Do not tighten this into a hard gate without first reducing the wrap-rate
-    # artifact itself, and do not consider a `steady_c`-only reading trustworthy at
-    # 2+ octaves down with nonzero formant without cross-checking lowFreqRatio too.
     print("Voice-as-hard-dance-bass diagnostic: lock a vocal-like harmonic input down")
     print("1-3 octaves, sweep formant, report lock accuracy (against the absolute target")
     print("key pitch) and bass-register spectral dominance.")
@@ -147,7 +123,7 @@ def main():
     ok_count = 0
     for source_hz, semitone_shift, formant in cases:
         expected_hz, steady_c, ratio, finite, peak = check_downward_lock(text, source_hz, semitone_shift, formant)
-        ok = (abs(steady_c) < WORST_STEADY_CENTS_LIMIT and ratio >= LOW_FREQ_RATIO_MIN
+        ok = (abs(steady_c) < DIAGNOSTIC_STEADY_CENTS_LIMIT and ratio >= LOW_FREQ_RATIO_MIN
               and finite and peak < 2.0)
         ok_count += 1 if ok else 0
         print(f"  src={source_hz:6.1f}Hz shift={semitone_shift:+.1f}st -> expected={expected_hz:6.1f}Hz: "
@@ -155,7 +131,7 @@ def main():
               f"({'OK' if ok else 'NOTABLE'})")
 
     print()
-    print(f"{ok_count}/{len(cases)} cases within the tight ({WORST_STEADY_CENTS_LIMIT:.0f}c) tuning bar.")
+    print(f"{ok_count}/{len(cases)} cases within the tight ({DIAGNOSTIC_STEADY_CENTS_LIMIT:.0f}c) tuning bar.")
     print("Notable cases above may reflect either heldDetNote tracking error (a real")
     print("concern under absolute pitch-lock, unlike the prior interval-harmonizer design)")
     print("or the shifter's own extreme-ratio crossfade-wrap artifact (see module")

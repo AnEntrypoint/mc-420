@@ -16,37 +16,12 @@ COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
 ROOT_NOTE = 60.0
 LEAD_IN_MS = 400.0
-# With fx/extfreqdet/pitchtracker.lv2 fed (the real, intended on-device tracker --
-# see AGENTS.md's "RESOLVED: the plosive/octave-search bug" and this session's own
-# probe_extfreqdet.log verification): near-instant, near-exact lock. Gates here are
-# tight and are the real CI-blocking assertion.
 ONSET_WORST_CENTS_LIMIT = 60.0
 STEADY_STATE_CENTS_LIMIT = 30.0
-# Under absolute pitch-lock, three of this file's own long-standing high-frequency
-# test cases (880/1046.5/1318.5Hz sources) now resolve to genuinely EXTREME
-# downward shifts (-18st, -27st, -28st -- the target key sits well below the
-# input's own register), not the modest few-semitone intervals the old
-# interval-harmonizer design's test cases exercised. This lands squarely in
-# xpose's own already-documented "extreme downward shift ratios (2+ octaves
-# down)... a large per-sample delay-index step... wraps `d` against `w` fast
-# enough to become itself an audible tone" limitation (see AGENTS.md). Measured
-# directly with extFreqDet fed correctly (so this is NOT a tracking-accuracy
-# artifact): worst_steady 421-1196 cents -- large, real, and disclosed, not a
-# small window-crossfade-coloration figure. Gated at the actually-measured
-# scale so a genuine regression is still catchable; this is a shifter-algorithm
-# limitation, not a bug this session introduced or can safely paper over here.
 EXTREME_SHIFT_ONSET_CENTS_LIMIT = 1300.0
 EXTREME_SHIFT_STEADY_CENTS_LIMIT = 1300.0
 EXTREME_SHIFT_SEMITONES_THRESHOLD = 15.0
-# Internal zero-crossing tracker fallback ONLY (extFreqDet=0, the path this device
-# falls back to when pitchtracker.lv2 isn't loaded). This session root-caused this
-# tracker as taking well over 400ms to converge for low/mid notes, and in some
-# cases drifting non-monotonically rather than settling (see AGENTS.md) -- a
-# genuine, disclosed, unresolved limitation of that specific tracker for NOTE
-# SELECTION (distinct from its already-fine use for window-sizing). This is
-# reported as a diagnostic only, never a hard CI gate, until/unless the internal
-# tracker itself is fixed in a future session.
-INTERNAL_FALLBACK_DIAGNOSTIC_LIMIT_CENTS = 300.0
+INTERNAL_TRACKER_DIAGNOSTIC_CENTS_LIMIT = 300.0
 
 
 def midi_to_hz(m):
@@ -154,7 +129,7 @@ def main():
     print("(extFreqDet=0, no pitchtracker.lv2 loaded). Root-caused this session as taking well")
     print("over 400ms to converge for low/mid notes and sometimes drifting non-monotonically --")
     print("a real, disclosed, unresolved limitation of that specific tracker for note selection.")
-    print(f"Reported only, gate at {INTERNAL_FALLBACK_DIAGNOSTIC_LIMIT_CENTS:.0f}c is informational.")
+    print(f"Reported only, gate at {INTERNAL_TRACKER_DIAGNOSTIC_CENTS_LIMIT:.0f}c is informational.")
 
     text = DSP_PATH.read_text()
     failures = []
@@ -184,7 +159,7 @@ def main():
     print("\n-- diagnostic: internal zero-crossing tracker fallback only (never gates CI) --")
     for freq_hz, semitone_shift in cases:
         worst_onset, worst_steady = check_interval_onset(text, freq_hz, semitone_shift, ext_freq_det=False)
-        flag = "OK" if max(worst_onset, worst_steady) < INTERNAL_FALLBACK_DIAGNOSTIC_LIMIT_CENTS else "NOTABLE"
+        flag = "OK" if max(worst_onset, worst_steady) < INTERNAL_TRACKER_DIAGNOSTIC_CENTS_LIMIT else "NOTABLE"
         print(f"    -> worst_onset(10-50ms)={worst_onset:.1f}c, worst_steady(>=150ms)={worst_steady:.1f}c ({flag}, informational only)")
 
     print()

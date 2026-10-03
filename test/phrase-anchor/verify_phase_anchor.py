@@ -36,6 +36,13 @@ def find_all_onsets(x, thresh_frac=0.3, min_gap=200):
     return onsets
 
 
+def seed_master_phase_at_first_finish(masterPhase, masterLen, n, finish_sample, take_len_samples):
+    established_len = max(1, take_len_samples)
+    post = np.arange(n - finish_sample, dtype=np.float64) % established_len
+    masterPhase[finish_sample:] = post.astype(np.float32)
+    masterLen[finish_sample:] = float(established_len)
+
+
 def run_take(master_len_samples, arm_offset_samples, take_len_samples,
              marker_len=400, total_extra=None):
     """
@@ -71,31 +78,18 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
         arm = arm_press_sample + harness.arm_sample(masterPhase[arm_press_sample:], fine_grid)
     else:
         arm = arm_press_sample
-        established_len = max(1, take_len_samples)
         masterPhase = np.zeros(n, dtype=np.float32)
         masterLen = np.zeros(n, dtype=np.float32)
     finish_sample = arm + take_len_samples
     if master_len_samples == 0:
-        # masterLen (and with it masterPhase advancing) only becomes real the
-        # instant loop1's own recording finishes, matching
-        # audio_thread.cpp's masterPhaseSamples/cmd_master_len staying at 0
-        # while no loop has established a phrase length yet.
-        established_len = max(1, take_len_samples)
-        post = np.arange(n - finish_sample, dtype=np.float64) % established_len
-        masterPhase[finish_sample:] = post.astype(np.float32)
-        masterLen[finish_sample:] = float(established_len)
+        seed_master_phase_at_first_finish(masterPhase, masterLen, n, finish_sample, take_len_samples)
     effSpeed = harness.const(n, 1.0)
     clearAll = harness.const(n, 0.0)
     sidechainEnv = harness.const(n, 0.0)
     recordedBeats = harness.const(n, 4.0)
     in_unused = harness.const(n, 0.0)
-    # Marker sits at the MIDDLE of the take, anchored to the armEdge instant
-    # the DSP actually chose (the next fine-grid crossing after the press),
-    # not to the raw press, so it is the same material for every press inside
-    # one fine-grid cell and the test measures the DSP's jitter absorption
-    # rather than its own placement arithmetic.
-    marker_sample = arm + take_len_samples // 2
-    marker_track = marker_tone(n, marker_sample, marker_len)
+    take_middle_marker_sample = arm + take_len_samples // 2
+    marker_track = marker_tone(n, take_middle_marker_sample, marker_len)
 
     rec_auto = np.zeros(n, dtype=np.float32)
     rec_auto[arm_press_sample:] = 1.0
@@ -119,14 +113,6 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
         },
     )
     out = audio[0]
-    # finish_sample is always >= the true finishEdge instant (recording end),
-    # so it is a reliable, fixed-phase anchor relative to the take's own
-    # repeat period regardless of arm-timing jitter -- report onsets as an
-    # offset FROM finish_sample (never from an arbitrary search-window
-    # origin whose own phase-within-period can itself shift between test
-    # cases, which silently broke the modulo-invariance this used to rely
-    # on once armEdge's defer window grew from a 16th-grid cell to a full
-    # masterLen).
     search_start = max(0, finish_sample - master_len_samples - 4000)
     playback = out[search_start:]
     onsets = find_all_onsets(playback)
@@ -135,8 +121,8 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     period = onsets[1] - onsets[0]
     if period <= 0:
         return onsets
-    anchor = finish_sample - search_start
-    return [(o - anchor) % period for o in onsets]
+    finish_instant_in_window = finish_sample - search_start
+    return [(o - finish_instant_in_window) % period for o in onsets]
 
 
 def check_case(name, master_len_samples, take_len_samples, offset_groups, tol=8):
