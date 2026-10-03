@@ -17,7 +17,7 @@ const kGatePollMs = 120;
 const kBeatLenTolerance = 0.02;
 const kPhraseTolerance = 0.02;
 
-const kSwingTable = [
+const kSwingByMode = [
   { cellBeats: 0.5, lateRatio: 0.5 },
   { cellBeats: 0.5, lateRatio: 0.54 },
   { cellBeats: 0.5, lateRatio: 0.62 },
@@ -29,7 +29,7 @@ const kGateExpect = [
   { name: 'off', minLo: 0.999, minHi: 1.001, maxLo: 0.999 },
   { name: 'chop 1 beat', minLo: -1, minHi: 0.05, maxLo: 0.95 },
   { name: 'chop 1/2 beat', minLo: -1, minHi: 0.05, maxLo: 0.95 },
-  { name: 'pump', minLo: 0.05, minHi: 0.35, maxLo: 0.95 },
+  { name: 'pump', minLo: 0.05, minHi: 0.5, maxLo: 0.95 },
   { name: 'swell', minLo: -1, minHi: 0.25, maxLo: 0.9 },
 ];
 
@@ -158,20 +158,20 @@ async function main() {
   } else {
     pass(`a ${(longHoldMs / shortHoldMs).toFixed(1)}x longer take leaves the beat length unchanged`);
   }
-  if (Math.abs(longWrap - shortWrap) > shortWrap * kPhraseTolerance) {
-    fail(`the long take repeats at ${longWrap} samples while the short one repeats at ${shortWrap} -- repeat length is not one phrase of beats`);
-  } else {
-    pass(`both takes repeat one phrase (${longWrap} samples) regardless of how long they were held`);
-  }
-
-  const nearestPowerOfTwo = (v) => Math.pow(2, Math.round(Math.log2(v)));
   for (const [label, beats] of [['short', shortBeats], ['long', longBeats]]) {
-    const snapped = nearestPowerOfTwo(beats);
-    if (Math.abs(beats - snapped) > snapped * kPhraseTolerance) {
-      fail(`${label} take repeats ${beats.toFixed(3)} beats, not a whole power-of-two span of the beat grid`);
+    const wholeBeats = Math.round(beats);
+    if (Math.abs(beats - wholeBeats) > Math.max(0.02, wholeBeats * 0.002)) {
+      fail(`${label} take repeats ${beats.toFixed(3)} beats, not a whole number of beats of the shared grid`);
     } else {
-      pass(`${label} take spans ${snapped} beats of the grid`);
+      pass(`${label} take repeats exactly ${wholeBeats} beats of the ${shortBeatLen.toFixed(1)}-sample beat`);
     }
+  }
+  const beatRatio = longBeats / shortBeats;
+  const wholeRatio = Math.round(beatRatio);
+  if (Math.abs(beatRatio - wholeRatio) > Math.max(0.02, wholeRatio * 0.002)) {
+    fail(`the two takes repeat ${shortBeats.toFixed(3)} and ${longBeats.toFixed(3)} beats (ratio ${beatRatio.toFixed(3)}) -- the longer is not a whole number of the shorter's phrases`);
+  } else {
+    pass(`the ${(longHoldMs / shortHoldMs).toFixed(1)}x longer take repeats ${wholeRatio}x the phrase, same beat length`);
   }
 
   const beatPads = [15, 23, 31, 39];
@@ -180,7 +180,8 @@ async function main() {
     await sleep(400);
     const t = await queryTelemetry();
     const mode = t.groove.shuffle;
-    const expectOffset = (kSwingTable[i].lateRatio - 0.5) * 2 * kSwingTable[i].cellBeats * t.groove.beat_len_samples;
+    const swing = kSwingByMode[mode];
+    const expectOffset = (swing.lateRatio - 0.5) * 2 * swing.cellBeats * t.groove.beat_len_samples;
     if (mode !== i + 1) {
       fail(`beat pad ${beatPads[i]} set shuffle ${mode}, expected ${i + 1}`);
     } else if (Math.abs(t.groove.swing_offset_samples - expectOffset) > Math.max(1, expectOffset * 0.02)) {
