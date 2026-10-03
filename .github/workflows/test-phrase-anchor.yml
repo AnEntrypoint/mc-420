@@ -1,0 +1,49 @@
+name: test-phrase-anchor
+
+on:
+  push:
+    paths:
+      - 'dsp/loop.dsp'
+      - 'test/phrase-anchor/**'
+      - '.github/workflows/test-phrase-anchor.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phrase-anchor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip wheels (dawdreamer is a large libfaust-bearing wheel)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-dawdreamer-${{ runner.os }}-312-${{ hashFiles('.github/workflows/test-phrase-anchor.yml') }}
+
+      - name: Install Faust + Python DawDreamer deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y faust
+          pip install --upgrade pip
+          pip install dawdreamer numpy
+
+      - name: Take speed survives tempo drift
+        run: python3 test/phrase-anchor/verify_take_speed_at_drift.py
+
+      - name: Grid snap never drops recorded content
+        run: python3 test/phrase-anchor/verify_take_content_integrity.py
+
+      - name: Content phase anchor
+        run: python3 test/phrase-anchor/verify_phase_anchor.py
+
+      - name: Master length jitter
+        run: python3 test/phrase-anchor/verify_masterlen_jitter.py

@@ -41,11 +41,8 @@ def run_take(master_len_samples, take_len_samples, record_marker_offset,
     if total_extra is None:
         total_extra = take_len_samples * 3 + 6000
     dsp = harness.single_looper_dsp()
-    # dsp/loop.dsp's armEdge is RC-505-style downbeat-only quantize: the
-    # deferred recording start always lands exactly on the next
-    # masterPhase==0 downbeat, never a finer sub-grid tick.
-    grid_step = float(max(1, master_len_samples))
-    margin = int(grid_step) + 500
+    fine_grid = harness.fine_grid_samples(master_len_samples, 4.0)
+    margin = int(float(max(1, master_len_samples))) + 500
     n = take_len_samples + total_extra + margin + 4000
 
     masterPhase = (np.arange(n, dtype=np.float64) % max(1, master_len_samples)).astype(np.float32)
@@ -57,13 +54,12 @@ def run_take(master_len_samples, take_len_samples, record_marker_offset,
     in_unused = harness.const(n, 0.0)
 
     arm_press_sample = 4000
-    next_downbeat = ((arm_press_sample // master_len_samples) + 1) * master_len_samples
-    finish_reference_sample = next_downbeat + 200
-    marker_track = marker_tone(n, finish_reference_sample + record_marker_offset, marker_len)
+    arm = arm_press_sample + harness.arm_sample(masterPhase[arm_press_sample:], fine_grid)
+    marker_track = marker_tone(n, arm + record_marker_offset, marker_len)
 
     rec_auto = np.zeros(n, dtype=np.float32)
     rec_auto[arm_press_sample:] = 1.0
-    finish_sample = finish_reference_sample + take_len_samples
+    finish_sample = arm + take_len_samples
     rec_auto[finish_sample:] = 0.0
 
     finishreq_auto = np.zeros(n, dtype=np.float32)
@@ -100,15 +96,13 @@ def check_masterlen_jitter(name, true_master_len, jitter_samples_list, take_len_
     (a clean multiple of the "true" phrase) records the same musical gesture.
     Invariant under test: the second take's marker should land at ROUGHLY the
     SAME playback-relative position regardless of loop 1's own small timing
-    jitter. dsp/loop.dsp's armEdge is RC-505-style downbeat-only quantize:
-    the second take's recording start always lands exactly on the next
-    masterPhase==0 downbeat, i.e. at absolute sample `master_len` itself (the
-    jittered value) -- a few samples of masterLen jitter therefore produce a
-    directly proportional shift in where that downbeat falls, which then
-    proportionally shifts the marker's absolute recording instant too. This
-    is expected structural sensitivity to loop 1's own establish-length
-    jitter, not a bug -- tolerance scales with take_len_samples with a small
-    fixed floor.
+    jitter. dsp/loop.dsp defers the second take's recording start to the next
+    fine-grid crossing (1/8 of a beat), which itself sits at a position set by
+    the jittered masterLen -- a few samples of masterLen jitter therefore
+    shift where that crossing falls and proportionally shift the marker's
+    recording instant. This is expected structural sensitivity to loop 1's own
+    establish-length jitter, not a bug -- tolerance scales with
+    take_len_samples with a small fixed floor.
     """
     if tol is None:
         tol = max(8, int(take_len_samples * 0.01))

@@ -71,5 +71,16 @@ def render_take(dsp_text, channels, dur_samples, automation=None, params=None):
     return audio, index, full_name
 
 
+def arm_sample(master_phase, fine_grid):
+    idx = np.floor(np.asarray(master_phase, dtype=np.float64) / fine_grid).astype(np.int64)
+    wrapped = np.zeros(len(idx), dtype=bool)
+    wrapped[1:] = idx[1:] != idx[:-1]
+    return int(np.argmax(wrapped))
+
+
+def fine_grid_samples(master_len_samples, recorded_beats):
+    return 0.125 * (master_len_samples / max(1.0, recorded_beats))
+
+
 def const(n, v):
     return np.full(n, v, dtype=np.float32)
