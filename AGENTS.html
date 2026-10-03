@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=cc2d1704b7118fe6e10baeb55506d0ccda710c09">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d9daa524e70f4c88d637a7f648b5ec5b5b672035">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -242,9 +242,13 @@ auth block.</p>
   <li><code class="language-plaintext highlighter-rouge">commitAppSessionState()</code> off-audio-thread, <code class="language-plaintext highlighter-rouge">commitAudioSessionState()</code> audio-thread only; the audio
 thread gets a lock-free double-buffered <code class="language-plaintext highlighter-rouge">LinkSnapshot</code> stamped <code class="language-plaintext highlighter-rouge">CLOCK_MONOTONIC</code>, extrapolated forward
 at the session tempo (5 Hz ticks =&gt; up to ~0.4 beat stale).</li>
-  <li><code class="language-plaintext highlighter-rouge">setTempo</code> rewrites EVERY peer; <code class="language-plaintext highlighter-rouge">proposeTempo</code> refuses when peers present and is the ONLY user of
-<code class="language-plaintext highlighter-rouge">weOwnTempo</code> – never gate <code class="language-plaintext highlighter-rouge">linkSpeedRatio</code> on it. Playback matches tempo by scaling read RATE
-(<code class="language-plaintext highlighter-rouge">linkSpeedRatio=linkBpm/recordedBpm</code> -&gt; <code class="language-plaintext highlighter-rouge">effSpeed</code>), never a position jump.</li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">setTempo</code> rewrites EVERY peer; <code class="language-plaintext highlighter-rouge">imposeTempo(bpm)</code> is the unconditioned version (the first loop owns the
+tempo, see below) and the only writer of <code class="language-plaintext highlighter-rouge">weOwnTempo</code> – never gate <code class="language-plaintext highlighter-rouge">linkSpeedRatio</code> on it. Playback
+matches tempo by scaling read RATE (<code class="language-plaintext highlighter-rouge">linkSpeedRatio=linkBpm/recordedBpm</code> -&gt; <code class="language-plaintext highlighter-rouge">effSpeed</code>), never a
+position jump. <code class="language-plaintext highlighter-rouge">imposeTempo()</code> republishes the snapshot via <code class="language-plaintext highlighter-rouge">publishSnapshot()</code> in the same call: the
+audio thread quantizes the finish edge against the 5 Hz snapshot, and a stale one doubles the take.</p>
+  </li>
   <li><strong>Link is CLOCK-ONLY: tempo+phase shared, transport never.</strong> <code class="language-plaintext highlighter-rouge">enableStartStopSync(false)</code>, so pausing
 locally leaves every peer playing and no peer can start/stop us. <code class="language-plaintext highlighter-rouge">isPlaying</code> is a LOCAL flag
 (<code class="language-plaintext highlighter-rouge">setLocalTransportPlaying</code>, driven by <code class="language-plaintext highlighter-rouge">ApcGrid::updateLocalTransport</code>) feeding only <code class="language-plaintext highlighter-rouge">midi_clock.cpp</code>’s
@@ -441,12 +445,12 @@ clamps to min 1). Guitar-fx held REDIRECTS looper pads to <code class="language-
 
 <p>Playback anchors to a shared <code class="language-plaintext highlighter-rouge">masterPhase</code> grid, never a per-take offset.</p>
 
-<p><strong>ARM snaps to the NEAREST fine-grid node.</strong> <code class="language-plaintext highlighter-rouge">kFineGridBeats=0.125</code> beat; <code class="language-plaintext highlighter-rouge">fineGridWrapped</code> is hoisted
-once in <code class="language-plaintext highlighter-rouge">loopEngine</code> like <code class="language-plaintext highlighter-rouge">masterPhaseWrapped</code>, and non-first-looper <code class="language-plaintext highlighter-rouge">armEdge</code> fires on it.
-<code class="language-plaintext highlighter-rouge">armWaitSamples</code> measures press-&gt;node; over half a step <code class="language-plaintext highlighter-rouge">rsmNext</code> pulls back one (<code class="language-plaintext highlighter-rouge">rsmNearestNode</code>), so
-worst case is +/-1/16 beat with no forward-only bias. Gates: <code class="language-plaintext highlighter-rouge">verify_phase_anchor.py</code> presses each HALF of
-a cell and asserts both halves jitter-free and one grid step apart; <code class="language-plaintext highlighter-rouge">verify-lineup.js</code> arms several
-loopers in ONE MIDI burst and asserts one shared anchor.</p>
+<p><strong>ARM records from the press and anchors at the NEAREST fine-grid node.</strong> <code class="language-plaintext highlighter-rouge">kFineGridBeats=0.125</code> beat; at
+<code class="language-plaintext highlighter-rouge">armEdge</code> <code class="language-plaintext highlighter-rouge">rsmNext = rsmNearestNode</code> (circular correction &lt;= half a cell, no forward-only bias) and
+recording starts on the press itself, so the take keeps its attack and the only displacement left is the
+player’s own press error. Gates: <code class="language-plaintext highlighter-rouge">verify_phase_anchor.py</code> presses each HALF of a cell and asserts both
+halves jitter-free and one grid step apart; <code class="language-plaintext highlighter-rouge">verify-lineup.js</code> arms several loopers in ONE MIDI burst and
+asserts one shared anchor.</p>
 
 <p><strong>Per-loop beat scale <code class="language-plaintext highlighter-rouge">s</code></strong>: latched <code class="language-plaintext highlighter-rouge">1/speedClamped</code> at <code class="language-plaintext highlighter-rouge">finishEdge</code>, reset to <code class="language-plaintext highlighter-rouge">1.0</code> at <code class="language-plaintext highlighter-rouge">armEdge</code>
 (<code class="language-plaintext highlighter-rouge">beatLenNow = oneBeat/speedClamped</code> once <code class="language-plaintext highlighter-rouge">masterLen&gt;=0.5</code>, <code class="language-plaintext highlighter-rouge">cycleInc = sNext*masterLen</code>) – a take plays
@@ -464,9 +468,18 @@ last passed grid node within <code class="language-plaintext highlighter-rouge">
 (no padding, no further recording), else extends to the next tier. Ceiling <code class="language-plaintext highlighter-rouge">kMaxLoopSamples</code> (48000*60).
 <code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code> clamps its own anchor with
 <code class="language-plaintext highlighter-rouge">anchorGridLenNow = max(1.0, min(anchorGridBeats*beatLenNow, masterLen))</code> so a phrase-multiple target
-passes through untouched and a varispeed-shifted <code class="language-plaintext highlighter-rouge">beatLenNow</code> cannot re-snap 16 beats to 32. First
-(master-establishing) recording takes tempo/beats from a real synced Link tempo when present,
-<code class="language-plaintext highlighter-rouge">recorded_beats</code> snapped to the nearest power-of-2 in {1..128} (<code class="language-plaintext highlighter-rouge">snapBeatsToPow2</code>).</p>
+passes through untouched and a varispeed-shifted <code class="language-plaintext highlighter-rouge">beatLenNow</code> cannot re-snap 16 beats to 32.</p>
+
+<p><strong>The first (master-establishing) take OWNS the tempo.</strong> Its length is the truth: <code class="language-plaintext highlighter-rouge">master_len</code> stays the
+raw write index and <code class="language-plaintext highlighter-rouge">deriveTempoQuant(seconds, anchor)</code> picks a power-of-2 beat count {1..128} whose bpm is
+log-closest to <code class="language-plaintext highlighter-rouge">anchor</code> (the synced Link tempo when peers are present, else 120) inside <code class="language-plaintext highlighter-rouge">anchor/2..anchor*2</code>
+– so a 1.5 s take next to a 157.2 bpm peer solves to 4 beats at 160.2, not 2 beats at 80.
+<code class="language-plaintext highlighter-rouge">cmd/recorded_bpm</code>/<code class="language-plaintext highlighter-rouge">cmd/recorded_beats</code> follow, and <code class="language-plaintext highlighter-rouge">LinkBridge::imposeTempo()</code> pushes that bpm onto the
+Link session, which is what makes <code class="language-plaintext highlighter-rouge">effSpeed</code> land on exactly <code class="language-plaintext highlighter-rouge">1.0000</code> (natural pitch, exact repeat) with
+peers present. Adopting the peer tempo instead (the old path) re-derived <code class="language-plaintext highlighter-rouge">master_len</code> from the peer’s beat
+length and TRUNCATED the take to fit: a 2.0 s take at 157.2 bpm came back as a 1.53 s 4-beat loop.
+Gate: <code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim/first-loop-tempo-owner.js</code> (repeat period == performed length,
+<code class="language-plaintext highlighter-rouge">eff_speed</code> 1.0000, session bpm == <code class="language-plaintext highlighter-rouge">recorded_bpm</code>).</p>
 
 <h2 id="varispeed-punch-is-baked-into-the-take">Varispeed punch is BAKED into the take</h2>
 
