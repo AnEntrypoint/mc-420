@@ -267,7 +267,7 @@ export class AloopFaustEngine {
       this.looperHasContent[index] = true;
       this.looperPlaying[index] = true;
       this.setLooperField(index, "play", 1.0);
-      const latencyBias = 64 + (this.looperShiftHeldDuringTake[index] ? 64 : 0);
+      const latencyBias = 64 + (this.alsaRoundTripSamples || 0) + (this.looperShiftHeldDuringTake[index] ? 64 : 0);
       this.setLooperField(index, "latencybias", latencyBias);
 
       if (this.masterLenSamples === 0) {
