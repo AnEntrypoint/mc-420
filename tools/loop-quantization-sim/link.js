@@ -81,11 +81,8 @@ function createLinkPeer(name, session) {
         quantumMicroBeats: Math.round(g_phaseQuantum * 1e6),
       };
     },
-    proposeTempo(bpm, atTimeMs) {
+    imposeTempo(bpm, atTimeMs) {
       if (!this.connected) return;
-      const peers = countOtherConnected(this);
-      const sessionIdle = !session.isPlaying;
-      if (peers > 0 && !this.weOwnTempo && !sessionIdle) return;
       setTempoContinuous(session, bpm, atTimeMs);
       this.weOwnTempo = true;
     },

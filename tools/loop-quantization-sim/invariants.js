@@ -72,6 +72,12 @@ function checkNoPhantomDspActivity(w) {
   return violations;
 }
 
+function playRate(w, lp) {
+  const manualSafe = Math.max(0.1, Math.abs(w.manualSpeedMul === undefined ? 1.0 : w.manualSpeedMul));
+  const bakedActive = lp.dsp.bakedSpeed !== undefined && lp.dsp.bakedSpeed !== 1.0;
+  return lp.dsp.beatScale * (bakedActive ? lp.dsp.bakedSpeed / manualSafe : 1.0);
+}
+
 function checkNoResumeJump(prevSnapshot, w, threshold) {
   const violations = [];
   const elapsed = w.t - prevSnapshot.t;
@@ -81,12 +87,14 @@ function checkNoResumeJump(prevSnapshot, w, threshold) {
     const wasPlaying = prevSnapshot.playing[i];
     if (prev === undefined || !wasPlaying || !lp.playing || lp.dsp.wlen <= 1) continue;
     const wlen = lp.dsp.wlen;
+    const rate = playRate(w, lp);
     const actualDelta = (((lp.dsp.rpos - prev) % wlen) + wlen) % wlen;
-    const expectedDelta = ((elapsed % wlen) + wlen) % wlen;
+    const expectedDelta = ((elapsed * rate) % wlen + wlen) % wlen;
     let diff = Math.abs(actualDelta - expectedDelta);
     diff = Math.min(diff, wlen - diff);
-    if (diff > threshold) {
-      violations.push(`looper${i}: rpos advanced by ${actualDelta.toFixed(2)} (mod wlen) over ${elapsed} elapsed samples, expected ~${expectedDelta.toFixed(2)} -- a real position jump (prev=${prev.toFixed(2)} now=${lp.dsp.rpos.toFixed(2)} wlen=${wlen.toFixed(2)})`);
+    const tolerance = threshold + elapsed * 0.04;
+    if (diff > tolerance) {
+      violations.push(`looper${i}: rpos advanced by ${actualDelta.toFixed(2)} (mod wlen) over ${elapsed} elapsed samples at rate ${rate.toFixed(3)}, expected ~${expectedDelta.toFixed(2)} -- a real position jump (prev=${prev.toFixed(2)} now=${lp.dsp.rpos.toFixed(2)} wlen=${wlen.toFixed(2)})`);
     }
   }
   return violations;

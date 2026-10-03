@@ -29,7 +29,7 @@ public:
 
     LinkSnapshot audioRead() const;
 
-    void proposeTempo(double bpm);
+    void imposeTempo(double bpm);
     void resetTempoAuthority();
 
     void setLocalTransportPlaying(bool playing);
@@ -46,6 +46,8 @@ public:
     int64_t microsAtBeat(double beat) const;
 
 private:
+    void publishSnapshot();
+
     void* link_ = nullptr;
     LinkSnapshot buf_[2];
     unsigned active_ = 0;

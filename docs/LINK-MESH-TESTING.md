@@ -42,7 +42,8 @@ Link and speak the identical wire protocol (verified: `Messages.hpp` is
 byte-identical between the two trees, and both use Link's own hardcoded
 multicast group `224.76.78.75:20808` — this cannot drift, it's baked into
 Link itself). Both implement standards-compliant tempo-write
-(`LinkBridge::proposeTempo` on aloop's side, ordinary `setTempo`/
+(`LinkBridge::imposeTempo` on aloop's side — unconditioned `setTempo`, so the
+first loop's tempo wins even with peers present — ordinary `setTempo`/
 `commitAppSessionState` on esp-idf-link's side) — so **two-way sync should
 work automatically once discovery completes**, no protocol-level glue code
 needed between the two projects specifically.

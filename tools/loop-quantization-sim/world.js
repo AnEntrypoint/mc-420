@@ -16,20 +16,21 @@ function msToSimSamples(ms) {
 
 const kCandidates = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0];
 
-function deriveTempoQuant(seconds) {
+function deriveTempoQuant(seconds, anchorBpm) {
+  const anchor = (anchorBpm !== undefined && anchorBpm > 1.0) ? anchorBpm : 120.0;
   if (seconds <= 0.0) return { bpm: 120.0, beats: 16.0 };
   let best = { bpm: 120.0, beats: 16.0 };
-  let bestDist = 1e18;
+  let bestScore = 1e18;
   let bestInWindow = false;
   for (const beats of kCandidates) {
     const bpm = (60.0 * beats) / seconds;
-    const inWindow = bpm >= 80.0 && bpm <= 160.0;
-    const dist = Math.abs(bpm - 120.0);
-    const better = inWindow && !bestInWindow;
-    const tieBreak = inWindow === bestInWindow && dist < bestDist;
-    if (better || tieBreak) {
+    const inWindow = bpm >= anchor * 0.5 && bpm <= anchor * 2.0;
+    const score = Math.abs(Math.log2(bpm / anchor));
+    const better = (inWindow && !bestInWindow)
+      || (inWindow === bestInWindow && score < bestScore);
+    if (better) {
       best = { bpm, beats };
-      bestDist = dist;
+      bestScore = score;
       bestInWindow = inWindow;
     }
   }
@@ -208,17 +209,20 @@ function applyRecPlayCycle(w, looper) {
       w.masterLooper = looper;
       const recordedSeconds = w.masterLenSamples / SIM_SAMPLE_RATE;
       const linkSnap = linkAudioRead(w);
-      const haveExternalTempo = linkSnap.synced && linkSnap.bpm > 1.0;
-      let solvedBpm, solvedBeats;
-      if (haveExternalTempo) {
+      const adoptLinkTempo = w.legacyAdoptLinkTempo === true
+        && linkSnap.synced && linkSnap.bpm > 1.0;
+      let solvedBpm;
+      let solvedBeats;
+      if (adoptLinkTempo) {
         solvedBpm = linkSnap.bpm;
         solvedBeats = snapBeatsToPow2((recordedSeconds * linkSnap.bpm) / 60.0);
       } else {
-        const solved = deriveTempoQuant(recordedSeconds);
+        const solved = deriveTempoQuant(recordedSeconds,
+          (linkSnap.synced && linkSnap.bpm > 1.0) ? linkSnap.bpm : 120.0);
         solvedBpm = solved.bpm;
         solvedBeats = solved.beats;
       }
-      if (haveExternalTempo) {
+      if (adoptLinkTempo) {
         const beatSamples = (60.0 / solvedBpm) * SIM_SAMPLE_RATE;
         w.masterLenSamples = Math.max(1, Math.min(Math.round(solvedBeats * beatSamples), SIM_MAXLEN));
       }
@@ -228,7 +232,10 @@ function applyRecPlayCycle(w, looper) {
         w.recordedBpm = solvedBpm;
         w.recordedBeats = solvedBeats;
       }
-      if (!haveExternalTempo) w.link.local.proposeTempo(solvedBpm, timeMs);
+      if (!adoptLinkTempo) {
+        w.link.local.imposeTempo(solvedBpm, timeMs);
+        refreshLinkSnapshot(w);
+      }
       lp.ps_finishtarget = w.masterLenSamples;
       lp.ps_finishreq = 1;
       lp.ps_rec = 0;

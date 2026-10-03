@@ -59,7 +59,6 @@ void LinkBridge::stop() {
 void LinkBridge::controlTick() {
 #ifdef ALOOP_HAVE_LINK
     if (!link_) return;
-    auto* l = (ableton::Link*)link_;
 
     if (g_havePendingPeers.exchange(false, std::memory_order_acquire)) {
         int peers = (int)g_pendingPeers.load(std::memory_order_relaxed);
@@ -75,6 +74,14 @@ void LinkBridge::controlTick() {
             fprintf(stderr, "[link] session tempo now %.3f bpm\n", bpm);
         }
     }
+    publishSnapshot();
+#endif
+}
+
+void LinkBridge::publishSnapshot() {
+#ifdef ALOOP_HAVE_LINK
+    if (!link_) return;
+    auto* l = (ableton::Link*)link_;
     auto state = l->captureAppSessionState();
     const auto now = l->clock().micros();
     timespec capTs{};
@@ -86,7 +93,6 @@ void LinkBridge::controlTick() {
     s.bpm       = state.tempo();
     s.peerCount = (int)l->numPeers();
     s.synced    = (s.peerCount > 0);
-    const double beat  = state.beatAtTime(now, kLinkPhaseQuantumBeats);
     const double phase = state.phaseAtTime(now, kLinkPhaseQuantumBeats);
     s.phaseValid          = true;
     s.beatPhaseMicroBeats = (int64_t)(phase * 1e6);
@@ -94,7 +100,6 @@ void LinkBridge::controlTick() {
     s.captureMicros       = (int64_t)capTs.tv_sec * 1000000 + capTs.tv_nsec / 1000;
     s.isPlaying           = g_localTransportRunning.load(std::memory_order_relaxed);
     s.weOwnTempo          = g_weSetTempo.load(std::memory_order_relaxed);
-    (void)beat;
     g_active.store(nxt, std::memory_order_release);
 #endif
 }
@@ -104,22 +109,17 @@ LinkSnapshot LinkBridge::audioRead() const {
     return buf_[cur];
 }
 
-void LinkBridge::proposeTempo(double bpm) {
+void LinkBridge::imposeTempo(double bpm) {
 #ifdef ALOOP_HAVE_LINK
     if (!link_) return;
     auto* l = (ableton::Link*)link_;
-    const bool havePeers = (l->numPeers() > 0);
     auto state = l->captureAppSessionState();
-    const bool weIdle = !g_localTransportRunning.load(std::memory_order_relaxed);
-    if (havePeers && !g_weSetTempo.load(std::memory_order_relaxed) && !weIdle) {
-        fprintf(stderr, "[link] not proposing %.3f bpm — %u peer(s) actively playing at the session tempo\n",
-                bpm, (unsigned)l->numPeers());
-        return;
-    }
     state.setTempo(bpm, l->clock().micros());
     l->commitAppSessionState(state);
     g_weSetTempo.store(true, std::memory_order_relaxed);
-    fprintf(stderr, "[link] proposed session tempo %.3f bpm\n", bpm);
+    publishSnapshot();
+    fprintf(stderr, "[link] first loop owns the tempo: session set to %.3f bpm, %u peer(s) follow\n",
+            bpm, (unsigned)l->numPeers());
 #else
     (void)bpm;
 #endif

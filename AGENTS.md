@@ -145,9 +145,12 @@ auth block.
 - `commitAppSessionState()` off-audio-thread, `commitAudioSessionState()` audio-thread only; the audio
   thread gets a lock-free double-buffered `LinkSnapshot` stamped `CLOCK_MONOTONIC`, extrapolated forward
   at the session tempo (5 Hz ticks => up to ~0.4 beat stale).
-- `setTempo` rewrites EVERY peer; `proposeTempo` refuses when peers present and is the ONLY user of
-  `weOwnTempo` -- never gate `linkSpeedRatio` on it. Playback matches tempo by scaling read RATE
-  (`linkSpeedRatio=linkBpm/recordedBpm` -> `effSpeed`), never a position jump.
+- `setTempo` rewrites EVERY peer; `imposeTempo(bpm)` is the unconditioned version (the first loop owns the
+  tempo, see below) and the only writer of `weOwnTempo` -- never gate `linkSpeedRatio` on it. Playback
+  matches tempo by scaling read RATE (`linkSpeedRatio=linkBpm/recordedBpm` -> `effSpeed`), never a
+  position jump. `imposeTempo()` republishes the snapshot via `publishSnapshot()` in the same call: the
+  audio thread quantizes the finish edge against the 5 Hz snapshot, and a stale one doubles the take.
+
 - **Link is CLOCK-ONLY: tempo+phase shared, transport never.** `enableStartStopSync(false)`, so pausing
   locally leaves every peer playing and no peer can start/stop us. `isPlaying` is a LOCAL flag
   (`setLocalTransportPlaying`, driven by `ApcGrid::updateLocalTransport`) feeding only `midi_clock.cpp`'s
@@ -341,12 +344,12 @@ clamps to min 1). Guitar-fx held REDIRECTS looper pads to `onSidechainLooperTogg
 
 Playback anchors to a shared `masterPhase` grid, never a per-take offset.
 
-**ARM snaps to the NEAREST fine-grid node.** `kFineGridBeats=0.125` beat; `fineGridWrapped` is hoisted
-once in `loopEngine` like `masterPhaseWrapped`, and non-first-looper `armEdge` fires on it.
-`armWaitSamples` measures press->node; over half a step `rsmNext` pulls back one (`rsmNearestNode`), so
-worst case is +/-1/16 beat with no forward-only bias. Gates: `verify_phase_anchor.py` presses each HALF of
-a cell and asserts both halves jitter-free and one grid step apart; `verify-lineup.js` arms several
-loopers in ONE MIDI burst and asserts one shared anchor.
+**ARM records from the press and anchors at the NEAREST fine-grid node.** `kFineGridBeats=0.125` beat; at
+`armEdge` `rsmNext = rsmNearestNode` (circular correction <= half a cell, no forward-only bias) and
+recording starts on the press itself, so the take keeps its attack and the only displacement left is the
+player's own press error. Gates: `verify_phase_anchor.py` presses each HALF of a cell and asserts both
+halves jitter-free and one grid step apart; `verify-lineup.js` arms several loopers in ONE MIDI burst and
+asserts one shared anchor.
 
 **Per-loop beat scale `s`**: latched `1/speedClamped` at `finishEdge`, reset to `1.0` at `armEdge`
 (`beatLenNow = oneBeat/speedClamped` once `masterLen>=0.5`, `cycleInc = sNext*masterLen`) -- a take plays
@@ -364,9 +367,18 @@ last passed grid node within `cutTolerance = max(1 beat, min(anchor/2, takeLen/8
 (no padding, no further recording), else extends to the next tier. Ceiling `kMaxLoopSamples` (48000*60).
 `dsp/loop.dsp` clamps its own anchor with
 `anchorGridLenNow = max(1.0, min(anchorGridBeats*beatLenNow, masterLen))` so a phrase-multiple target
-passes through untouched and a varispeed-shifted `beatLenNow` cannot re-snap 16 beats to 32. First
-(master-establishing) recording takes tempo/beats from a real synced Link tempo when present,
-`recorded_beats` snapped to the nearest power-of-2 in {1..128} (`snapBeatsToPow2`).
+passes through untouched and a varispeed-shifted `beatLenNow` cannot re-snap 16 beats to 32.
+
+**The first (master-establishing) take OWNS the tempo.** Its length is the truth: `master_len` stays the
+raw write index and `deriveTempoQuant(seconds, anchor)` picks a power-of-2 beat count {1..128} whose bpm is
+log-closest to `anchor` (the synced Link tempo when peers are present, else 120) inside `anchor/2..anchor*2`
+-- so a 1.5 s take next to a 157.2 bpm peer solves to 4 beats at 160.2, not 2 beats at 80.
+`cmd/recorded_bpm`/`cmd/recorded_beats` follow, and `LinkBridge::imposeTempo()` pushes that bpm onto the
+Link session, which is what makes `effSpeed` land on exactly `1.0000` (natural pitch, exact repeat) with
+peers present. Adopting the peer tempo instead (the old path) re-derived `master_len` from the peer's beat
+length and TRUNCATED the take to fit: a 2.0 s take at 157.2 bpm came back as a 1.53 s 4-beat loop.
+Gate: `tools/loop-quantization-sim/first-loop-tempo-owner.js` (repeat period == performed length,
+`eff_speed` 1.0000, session bpm == `recorded_bpm`).
 
 ## Varispeed punch is BAKED into the take
 

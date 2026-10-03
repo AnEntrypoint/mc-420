@@ -99,15 +99,16 @@ function pickAnchorGridBeats(takeLenBeats) {
   return 0.125;
 }
 
-function deriveTempoQuantBeats(recordedSeconds) {
+function deriveTempoQuantBeats(recordedSeconds, anchorBpm) {
+  const anchor = (anchorBpm > 1) ? anchorBpm : 120;
   const candidates = [1, 2, 4, 8, 16, 32, 64, 128];
-  let best = 16, bestDist = Infinity, bestInWindow = false;
+  let best = 16, bestScore = Infinity, bestInWindow = false;
   for (const beats of candidates) {
     const bpm = (60 * beats) / recordedSeconds;
-    const inWindow = bpm >= 80 && bpm <= 160;
-    const dist = Math.abs(bpm - 120);
-    if ((inWindow && !bestInWindow) || (inWindow === bestInWindow && dist < bestDist)) {
-      best = beats; bestDist = dist; bestInWindow = inWindow;
+    const inWindow = bpm >= anchor * 0.5 && bpm <= anchor * 2;
+    const score = Math.abs(Math.log2(bpm / anchor));
+    if ((inWindow && !bestInWindow) || (inWindow === bestInWindow && score < bestScore)) {
+      best = beats; bestScore = score; bestInWindow = inWindow;
     }
   }
   return best;
@@ -137,11 +138,19 @@ async function main() {
   const results = [];
   let masterLenSamples = null;
   let recordedBeats = null;
+  let tempoAnchorBpm = 120;
+  try {
+    const pre = await queryTelemetry();
+    if (pre.link && pre.link.synced && pre.link.bpm > 1) tempoAnchorBpm = pre.link.bpm;
+  } catch (e) {
+    tempoAnchorBpm = 120;
+  }
+  console.log(`[verify-quant] tempo anchor=${tempoAnchorBpm.toFixed(1)} bpm (synced Link tempo when peers are present)`);
   for (let i = 0; i < holds.length; i++) {
     const r = await recordLooper(i, holds[i]);
     if (i === 0) {
       masterLenSamples = r.wrapLenSamples;
-      recordedBeats = deriveTempoQuantBeats(masterLenSamples / 48000);
+      recordedBeats = deriveTempoQuantBeats(masterLenSamples / 48000, tempoAnchorBpm);
       const expectedSamples = (r.holdMs / 1000) * 48000;
       const errSamples = Math.abs(r.wrapLenSamples - expectedSamples);
       const errMs = (errSamples / 48000) * 1000;

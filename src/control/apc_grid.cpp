@@ -98,27 +98,27 @@ struct TempoSolveResult {
     double bpm;
     double beats;
 };
-static TempoSolveResult deriveTempoQuant(double seconds) {
+static TempoSolveResult deriveTempoQuant(double seconds, double anchorBpm = 120.0) {
+    const double anchor = (anchorBpm > 1.0) ? anchorBpm : 120.0;
     if (seconds <= 0.0) return {120.0, 16.0};
     static const double kCandidates[] = {1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0};
     TempoSolveResult best = {120.0, 16.0};
-    double bestDist = 1e18;
+    double bestScore = 1e18;
     bool bestInWindow = false;
     for (double beats : kCandidates) {
         double bpm = 60.0 * beats / seconds;
-        bool inWindow = (bpm >= 80.0 && bpm <= 160.0);
-        double dist = std::fabs(bpm - 120.0);
-        bool better = inWindow && !bestInWindow;
-        bool tieBreak = (inWindow == bestInWindow) && (dist < bestDist);
-        if (better || tieBreak) {
+        bool inWindow = (bpm >= anchor * 0.5 && bpm <= anchor * 2.0);
+        double score = std::fabs(std::log2(bpm / anchor));
+        bool better = (inWindow && !bestInWindow)
+                   || (inWindow == bestInWindow && score < bestScore);
+        if (better) {
             best = {bpm, beats};
-            bestDist = dist;
+            bestScore = score;
             bestInWindow = inWindow;
         }
     }
     return best;
 }
-static double deriveTempoBpm(double seconds) { return deriveTempoQuant(seconds).bpm; }
 static double pickAnchorGridBeats(double takeLenBeats) {
     const double eps = 0.01;
     if (takeLenBeats > 16.0 + eps) return 16.0;
@@ -129,16 +129,6 @@ static double pickAnchorGridBeats(double takeLenBeats) {
     if (takeLenBeats > 0.5 + eps) return 0.5;
     if (takeLenBeats > 0.25 + eps) return 0.25;
     return 0.125;
-}
-static double snapBeatsToPow2(double continuousBeats) {
-    static const double kCandidates[] = {1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0};
-    double best = kCandidates[0];
-    double bestDist = 1e18;
-    for (double beats : kCandidates) {
-        double dist = std::fabs(std::log2(beats) - std::log2(std::max(continuousBeats, 0.001)));
-        if (dist < bestDist) { bestDist = dist; best = beats; }
-    }
-    return best;
 }
 
 constexpr long kShiftFoldBlockLatencySamples = 64;
@@ -206,30 +196,16 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             if (lenSamples > kMaxLoopSamples) lenSamples = kMaxLoopSamples;
             m_masterLenSamples = lenSamples;
             double recordedSeconds = (double)m_masterLenSamples / (double)kSampleRate;
-            bool haveExternalTempo = link && link->audioRead().synced && link->audioRead().bpm > 1.0;
-            double solvedBpm, solvedBeats;
-            if (haveExternalTempo) {
-                double curBpm = link->audioRead().bpm;
-                solvedBpm = curBpm;
-                solvedBeats = snapBeatsToPow2(recordedSeconds * curBpm / 60.0);
-            } else {
-                TempoSolveResult solved = deriveTempoQuant(recordedSeconds);
-                solvedBpm = solved.bpm;
-                solvedBeats = solved.beats;
+            double tempoAnchorBpm = 120.0;
+            if (link) {
+                LinkSnapshot tempoSnap = link->audioRead();
+                if (tempoSnap.synced && tempoSnap.bpm > 1.0) tempoAnchorBpm = tempoSnap.bpm;
             }
-            if (haveExternalTempo) {
-                double beatSamples = (60.0 / solvedBpm) * (double)kSampleRate;
-                long snapped = (long)(solvedBeats * beatSamples + 0.5);
-                if (snapped < 64) snapped = 64;
-                if (snapped > kMaxLoopSamples) snapped = kMaxLoopSamples;
-                m_masterLenSamples = snapped;
-            }
-            ps.setByName("cmd/recorded_bpm", (float)solvedBpm);
-            ps.setByName("cmd/recorded_beats", (float)solvedBeats);
+            TempoSolveResult solved = deriveTempoQuant(recordedSeconds, tempoAnchorBpm);
+            ps.setByName("cmd/recorded_bpm", (float)solved.bpm);
+            ps.setByName("cmd/recorded_beats", (float)solved.beats);
             ps.setByName("cmd/master_len", (float)m_masterLenSamples);
-            if (link && !haveExternalTempo) {
-                link->proposeTempo(solvedBpm);
-            }
+            if (link) link->imposeTempo(solved.bpm);
             setLooper(ps, looper, "finishtarget", (float)m_masterLenSamples);
             setLooper(ps, looper, "finishreq", 1.0f);
             setLooper(ps, looper, "rec", 0.0f);
