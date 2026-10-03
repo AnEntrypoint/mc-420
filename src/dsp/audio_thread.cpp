@@ -774,10 +774,14 @@ static void* worker(void*) {
                 double fourBeatLenShared = beatLenSamplesShared * 4.0;
 
                 static double prevMasterLen = 0.0;
-                static bool creationSnapPending = false;
                 bool masterJustCreated = (prevMasterLen <= 0.0f && masterLen > 0.0f);
                 prevMasterLen = masterLen;
-                if (masterJustCreated) creationSnapPending = true;
+                if (masterJustCreated && g_link) {
+                    timespec imposeTs{};
+                    clock_gettime(CLOCK_MONOTONIC, &imposeTs);
+                    const int64_t imposeMicros = (int64_t)imposeTs.tv_sec * 1000000 + imposeTs.tv_nsec / 1000;
+                    g_link->requestPhaseImpose(0.0, imposeMicros, (double)recordedBeatsShared);
+                }
 
                 if (masterLen > 0.0f) {
                     if (linkDrivingLength && g_link) {
@@ -808,7 +812,7 @@ static void* worker(void*) {
                             haveLinkTarget = true;
                         }
 
-                        const bool linkJoined = !wasLinkDriving;
+                        const bool linkJoined = !wasLinkDriving && !masterJustCreated;
                         double joinErrBeats = 0.0;
                         if (linkJoined && haveLinkTarget) {
                             wasLinkDriving = true;
@@ -826,13 +830,12 @@ static void* worker(void*) {
                                              linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
                         if (freshSnapshot) lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
 
-                        if (haveLinkTarget && (!anyAudible || masterJustCreated || creationSnapPending
+                        if (haveLinkTarget && (!anyAudible
                                                || (linkJoined && joinErrBeats > kJoinSnapErrBeats))) {
                             masterPhaseSlope = (double)linkSpeedRatio;
                             masterPhaseSamples = linkTargetSamples;
                             linkPhaseTrim = 0.0;
                             tempoStableBlocks = 0;
-                            creationSnapPending = false;
                             g_telem.linkPhaseErrBeats = 0.0f;
                         } else {
                             masterPhaseSlope = (double)linkSpeedRatio + linkPhaseTrim;
@@ -858,7 +861,6 @@ static void* worker(void*) {
                         masterPhaseSlope = (double)linkSpeedRatio;
                         masterPhaseSamples += (double)N * masterPhaseSlope;
                         wasLinkDriving = false;
-                        creationSnapPending = false;
                         lastLinkBpmSeen = 0.0;
                         tempoStableBlocks = 0;
                         lastLinkPhaseMicroBeats = -1;
@@ -881,7 +883,6 @@ static void* worker(void*) {
                 } else {
                     masterPhaseSamples = 0.0;
                     wasLinkDriving = false;
-                    creationSnapPending = false;
                     standaloneQuantumPhaseSamples = 0.0;
                     lastLinkPhaseMicroBeats = -1;
                     g_telem.masterPhaseBeats = 0.0f;

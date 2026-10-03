@@ -23,6 +23,11 @@ std::atomic<std::size_t> g_pendingPeers{0};
 std::atomic<double> g_pendingTempo{120.0};
 std::atomic<bool> g_havePendingPeers{false};
 std::atomic<bool> g_havePendingTempo{false};
+
+std::atomic<bool> g_havePhaseImpose{false};
+std::atomic<double> g_imposeBeat{0.0};
+std::atomic<double> g_imposeQuantum{16.0};
+std::atomic<int64_t> g_imposeAtMicros{0};
 }
 
 void LinkBridge::start(double sampleRate, bool enabled) {
@@ -74,6 +79,17 @@ void LinkBridge::controlTick() {
             fprintf(stderr, "[link] session tempo now %.3f bpm\n", bpm);
         }
     }
+    if (g_havePhaseImpose.exchange(false, std::memory_order_acquire)) {
+        auto* l = (ableton::Link*)link_;
+        const double beat = g_imposeBeat.load(std::memory_order_relaxed);
+        const double quantum = g_imposeQuantum.load(std::memory_order_relaxed);
+        const int64_t atMicros = g_imposeAtMicros.load(std::memory_order_relaxed);
+        auto state = l->captureAppSessionState();
+        state.forceBeatAtTime(beat, std::chrono::microseconds(atMicros), quantum);
+        l->commitAppSessionState(state);
+        fprintf(stderr, "[link] first loop owns the phase: session beat %.3f forced at t=%lldus (quantum %.3f), %u peer(s) follow\n",
+                beat, (long long)atMicros, quantum, (unsigned)l->numPeers());
+    }
     publishSnapshot();
 #endif
 }
@@ -123,6 +139,13 @@ void LinkBridge::imposeTempo(double bpm) {
 #else
     (void)bpm;
 #endif
+}
+
+void LinkBridge::requestPhaseImpose(double beat, int64_t atMicros, double quantum) {
+    g_imposeBeat.store(beat, std::memory_order_relaxed);
+    g_imposeQuantum.store(quantum > 0.0 ? quantum : kLinkQuantum, std::memory_order_relaxed);
+    g_imposeAtMicros.store(atMicros, std::memory_order_relaxed);
+    g_havePhaseImpose.store(true, std::memory_order_release);
 }
 
 void LinkBridge::resetTempoAuthority() {

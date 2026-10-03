@@ -32,6 +32,8 @@ public:
     void imposeTempo(double bpm);
     void resetTempoAuthority();
 
+    void requestPhaseImpose(double beat, int64_t atMicros, double quantum);
+
     void setLocalTransportPlaying(bool playing);
 
     struct BeatNow {
