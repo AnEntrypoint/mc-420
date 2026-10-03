@@ -111,10 +111,8 @@ async function main() {
   const arm = await queryTelemetry();
   const armPhaseBeats = arm.master_phase_beats;
   const armWriteIdx = arm.loopers.writeidx[looper];
-  // ARM resets the write index, so a take always starts at 0; whether the looper was clean is a
-  // device fact read before the press, not a host-clock back-extrapolation of the reply.
-  const armBase = 0;
-  const armHadContent = ((base.loopers.play >> looper) & 1) === 1;
+  const writeIdxAfterArmReset = 0;
+  const looperHadContentBeforeArm = ((base.loopers.play >> looper) & 1) === 1;
   console.log(`[watch-take] ARM: grid beat ${armPhaseBeats.toFixed(3)}, writeidx ${armWriteIdx.toFixed(0)}`);
 
   const holdStart = Date.now();
@@ -127,8 +125,8 @@ async function main() {
   await releasePad(padNote);
   const postFinish = await queryTelemetry();
   const writeIdxAtFinish = postFinish.loopers.writeidx[looper];
-  const takeSamples = writeIdxAtFinish - armBase;
-  console.log(`[watch-take] FINISH after ${holdActualMs}ms; write index ${writeIdxAtFinish.toFixed(0)} having started at ${armBase.toFixed(0)} -> the take wrote ${takeSamples.toFixed(0)} samples`);
+  const takeSamples = writeIdxAtFinish - writeIdxAfterArmReset;
+  console.log(`[watch-take] FINISH after ${holdActualMs}ms; write index ${writeIdxAtFinish.toFixed(0)} having started at ${writeIdxAfterArmReset.toFixed(0)} -> the take wrote ${takeSamples.toFixed(0)} samples`);
 
   const samples = [];
   const watchStart = Date.now();
@@ -188,11 +186,9 @@ async function main() {
   let masterWraps = 0;
   let readOff = 0;
   let gridOff = 0;
-  // Telemetry answers from the 5 Hz control loop and that lag jitters, so a rate taken from the
-  // two end points alone measures the lag, not the take. Fit a slope over EVERY poll instead:
-  // the jitter averages out across the whole watch, a real rate error does not.
   const readSeries = [];
   const gridSeries = [];
+  const readAgainstGridPerPoll = [];
   for (const s of samples) {
     const grid = s.masterPhase * beatLenSamples;
     if (s.ms < kTrimSettleSkipMs) { prevRead = s.readpos; prevGrid = grid; continue; }
@@ -209,6 +205,7 @@ async function main() {
     lastMs = s.ms;
     readSeries.push([(s.ms - firstMs) / 1000, s.readpos + readOff - firstRead]);
     gridSeries.push([(s.ms - firstMs) / 1000, grid + gridOff]);
+    readAgainstGridPerPoll.push([grid + gridOff, s.readpos + readOff - firstRead]);
     const L = wrap(grid + masterWraps * masterLenSamples - s.readpos, wlen);
     minL = Math.min(minL, L);
     maxL = Math.max(maxL, L);
@@ -224,9 +221,7 @@ async function main() {
   const elapsedSec = (lastMs - firstMs) / 1000;
   const readRate = slopePerSecond(readSeries) / kSampleRate;
   const gridRate = slopePerSecond(gridSeries) / kSampleRate;
-  // Read against grid, both out of the SAME reply: the control-loop lag is common mode and
-  // cancels, so this slip never touches the host clock at all.
-  const gridSlip = slopePerSecond(readSeries.map((p, i) => [gridSeries[i][1], p[1]]));
+  const gridSlip = slopePerSecond(readAgainstGridPerPoll);
 
   console.log(`[watch-take] downbeat at ${(meanL / beatLenSamples).toFixed(4)} beats into the loop (spread ${(maxL - minL).toFixed(1)} samples)`);
   console.log(`[watch-take] ARM anchor expects the downbeat at ${(expectedDownbeatSamples / beatLenSamples).toFixed(4)} beats`);
@@ -236,7 +231,7 @@ async function main() {
 
   let failed = 0;
   const fail = (msg) => { console.log(`[watch-take]   FAIL: ${msg}`); failed++; };
-  if (armHadContent) {
+  if (looperHadContentBeforeArm) {
     fail(`looper${looper} was still playing ${base.loopers.wraplen[looper]} samples at ARM -- not a clean slate`);
   }
   const gridRatioOct = Math.log2(wlen / masterLenSamples);
