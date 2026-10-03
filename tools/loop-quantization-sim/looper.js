@@ -10,7 +10,7 @@ function wrapAbs(p, len) {
 function initLooperDsp() {
   return {
     pend: 0, fin: 0, act: 0, widx: 0, wlen: 1, rsm: 0, coff: 0, rpos: 0, gate: 0,
-    beatScale: 1,
+    beatScale: 1, pendPhase: 0,
     recPrevEdge: 0,
   };
 }
@@ -42,7 +42,15 @@ function stepSample(s, inp) {
     ? 0
     : (armEdge ? 0 : (cancelPend ? 0 : (armPulseGrid ? 1 : s.pend)));
 
-  const rsmNext = armEdge ? masterPhase : s.rsm;
+  const pendPhaseNext = armPulseGrid ? masterPhase : (armEdge ? 0.0 : s.pendPhase);
+
+  const fineGridSamples = Math.max(1.0, kFineGridBeats * oneBeat);
+  const armWaitSamples = armPulseGrid ? 0.0 : wrapAbs(masterPhase - s.pendPhase, Math.max(1.0, masterLen));
+  const armPullbackBeats = armEdge && armWaitSamples > fineGridSamples * 0.5 ? kFineGridBeats : 0.0;
+  const rsmNearestNode = wrapAbs(
+    masterPhase - (armWaitSamples > fineGridSamples * 0.5 ? fineGridSamples : 0.0),
+    Math.max(1.0, masterLen));
+  const rsmNext = armEdge ? rsmNearestNode : s.rsm;
 
   const finNext = armEdge ? 0 : cancelPend ? 0 : (finishReqN > 0.5 ? 1 : s.fin);
   const recKeepAlive = recN > 0.5 || finNext > 0.5;
@@ -98,9 +106,9 @@ function stepSample(s, inp) {
   return {
     pend: pendNext, fin: finNext, act: actNext, widx: widxNext, wlen: wlenNext,
     rsm: rsmNext, coff: coffNext, rpos: rposNext, gate: gateNext,
-    beatScale: beatScaleNext,
+    beatScale: beatScaleNext, pendPhase: pendPhaseNext,
     recPrevEdge: recN > 0.5 ? 1 : 0,
-    armEdge, finishEdge,
+    armEdge, finishEdge, armPullbackBeats,
   };
 }
 

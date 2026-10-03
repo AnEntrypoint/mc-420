@@ -539,7 +539,7 @@ function stepOneSample(w) {
     };
     const next = stepSample(lp.dsp, inp);
     lp.dsp = next;
-    if (next.armEdge) lp.armBeatAbs = beatAtTime(w.link.session, (w.t / SIM_SAMPLE_RATE) * 1000);
+    if (next.armEdge) lp.armBeatAbs = beatAtTime(w.link.session, (w.t / SIM_SAMPLE_RATE) * 1000) - next.armPullbackBeats;
     results.push(next);
   }
   w.t += 1;

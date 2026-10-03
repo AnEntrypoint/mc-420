@@ -22,8 +22,8 @@ with {
     oneBeat = max(1.0, masterLen / beatsPerMasterLen);
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
 
-    takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev, sPrev) =
-        (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext, sNext)
+    takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev, sPrev, pendPhasePrev) =
+        (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext, sNext, pendPhaseNext)
     with {
         recPrevEdge = recN : mem;
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
@@ -35,7 +35,13 @@ with {
         pendNext = ba.if(masterLen < 0.5, 0,
                     ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(armPulseGrid, 1, pendPrev))));
 
-        rsmNext = ba.if(armEdge, masterPhase, rsmPrev);
+        pendPhaseNext = ba.if(armPulseGrid, masterPhase, ba.if(armEdge, 0.0, pendPhasePrev));
+
+        fineGridSamples = max(1.0, kFineGridBeats * oneBeat);
+        armWaitSamples = ba.if(armPulseGrid, 0.0, wrapAbs(masterPhase - pendPhasePrev, max(1.0, masterLen)));
+        rsmNearestNode = wrapAbs(masterPhase - ba.if(armWaitSamples > fineGridSamples * 0.5, fineGridSamples, 0.0),
+                                 max(1.0, masterLen));
+        rsmNext = ba.if(armEdge, rsmNearestNode, rsmPrev);
 
         finNext = ba.if(armEdge, 0, ba.if(cancelPend, 0, ba.if(finishReqN > 0.5, 1, finPrev)));
         recKeepAlive = (recN > 0.5) | finNext;
@@ -86,8 +92,8 @@ with {
                           absPos));
     };
 
-    takeStateBus = (_,_,_,_,_,_,_,_,_,_) ~ takeState;
-    pickState(k) = takeStateBus : (par(j, 10, *(j == k)) :> _);
+    takeStateBus = (_,_,_,_,_,_,_,_,_,_,_) ~ takeState;
+    pickState(k) = takeStateBus : (par(j, 11, *(j == k)) :> _);
     pend = pickState(0);
     fin = pickState(1);
     act = pickState(2);

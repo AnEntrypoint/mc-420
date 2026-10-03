@@ -43,10 +43,10 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     arm_offset_samples: how far (in samples) the performer's raw press lands
         after the base press of this case. dsp/loop.dsp's armEdge defers real
         recording start to the next fine-grid crossing (kFineGridBeats = 1/8 of
-        a beat), so every offset inside one fine-grid cell must arm at the same
-        instant and therefore land the material at the same place in playback.
-        Offsets that cross a fine-grid boundary legitimately arm one grid step
-        later, so callers keep every offset inside a single cell.
+        a beat) and places the take at the grid node nearest the press, so
+        every offset inside one half of a fine-grid cell must land the material
+        at the same place in playback. Callers therefore keep each group of
+        offsets inside a single half-cell.
     take_len_samples: raw recording duration requested via rec-hold and
         finishtarget (the performer's felt phrase length before power-of-2
         snapping upstream in apc_grid.cpp -- here fed directly since this
@@ -60,6 +60,9 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     n = take_len_samples + total_extra + margin + 4000
 
     base_press = int(fine_grid) * 7 + 1 if master_len_samples > 0 else 4000
+    if master_len_samples > 0:
+        block = harness.BLOCK_SIZE
+        base_press = ((base_press + block - 1) // block) * block
     arm_press_sample = base_press + arm_offset_samples
 
     if master_len_samples > 0:
@@ -136,69 +139,96 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     return [(o - anchor) % period for o in onsets]
 
 
-def check_case(name, master_len_samples, take_len_samples, arm_offsets, tol=8):
+def check_case(name, master_len_samples, take_len_samples, offset_groups, tol=8):
     """
     Records the SAME intended musical gesture (marker at a fixed offset from
-    the raw press) across several different raw press timings within one
-    grid cell -- the loose, imprecise-but-close-to-the-beat presses a real
-    performer produces. The goal invariant: the quantizer's chosen loop
-    start/end must not let this press-timing jitter change where the
-    downbeat lands in playback -- all variants must land the marker at the
-    SAME playback-relative sample, within a small tolerance.
-    """
-    positions = []
-    for off in arm_offsets:
-        onsets = run_take(master_len_samples, off, take_len_samples)
-        if not onsets:
-            print(f"[{name}] FAIL: arm_offset={off} produced no marker in playback")
-            return False
-        positions.append(onsets[0])
+    the raw press) across groups of different raw press timings, each group
+    confined to one HALF of a fine-grid cell.
 
-    spread = max(positions) - min(positions)
-    ok = spread <= tol
-    status = "PASS" if ok else "FAIL"
-    print(f"[{name}] {status}: playback-relative marker positions across arm offsets "
-          f"{arm_offsets} = {positions} (spread={spread}, tol={tol})")
-    return ok
+    dsp/loop.dsp defers real recording start to the next fine-grid crossing
+    (kFineGridBeats) and then places the take at whichever grid node is
+    NEAREST to the raw press: presses in the first half of a cell snap back
+    to the node that opens it, presses in the second half snap forward to
+    the node that closes it. Both halves must therefore be internally
+    jitter-free -- every press in a half lands the marker at the same
+    playback sample -- and the two halves must sit exactly one grid step
+    apart. That is what keeps two performers, or two devices on the same
+    Link grid, agreeing on where a loop starts when they press slightly
+    either side of the same beat; a quantizer that only ever snapped
+    forward would strand one of them a full grid step late.
+    """
+    fine_grid = harness.fine_grid_samples(master_len_samples, 4.0)
+    groups = []
+    for offsets in offset_groups:
+        positions = []
+        for off in offsets:
+            onsets = run_take(master_len_samples, off, take_len_samples)
+            if not onsets:
+                print(f"[{name}] FAIL: arm_offset={off} produced no marker in playback")
+                return False
+            positions.append(onsets[0])
+        spread = max(positions) - min(positions)
+        if spread > tol:
+            print(f"[{name}] FAIL: offsets {offsets} inside one half-grid window "
+                  f"landed at {positions} (spread={spread}, tol={tol})")
+            return False
+        groups.append(positions[0])
+
+    if len(groups) == 2:
+        gap = abs(groups[1] - groups[0])
+        gap = min(gap, take_len_samples - gap)
+        if abs(gap - fine_grid) > tol:
+            print(f"[{name}] FAIL: the two half-grid windows sit {gap} samples apart, "
+                  f"expected one fine grid step ({fine_grid:.0f}, tol={tol})")
+            return False
+
+    print(f"[{name}] PASS: half-grid windows {offset_groups} landed at {groups} "
+          f"(grid={fine_grid:.0f}, tol={tol})")
+    return True
 
 
 def main():
     results = []
 
+    block = harness.BLOCK_SIZE
+    first_half = [0, block, 2 * block, 3 * block]
+    second_half = [5 * block, 6 * block, 7 * block, 8 * block]
+    halves = [first_half, second_half]
+
     results.append(check_case(
         "loop1-establish-raw-duration",
         master_len_samples=0, take_len_samples=9600,
-        arm_offsets=[0],
+        offset_groups=[[0]],
     ))
 
     results.append(check_case(
         "half-phrase-loose-arm-timing",
         master_len_samples=19200, take_len_samples=9600,
-        arm_offsets=[0, 120, 300, 450, 590],
+        offset_groups=halves,
     ))
 
     results.append(check_case(
         "full-phrase-loose-arm-timing",
         master_len_samples=19200, take_len_samples=19200,
-        arm_offsets=[0, 120, 300, 450, 590],
+        offset_groups=halves,
     ))
 
     results.append(check_case(
         "two-phrase-loose-arm-timing",
         master_len_samples=19200, take_len_samples=38400,
-        arm_offsets=[0, 120, 300, 450, 590],
+        offset_groups=halves,
     ))
 
     results.append(check_case(
         "sixteenth-grid-loose-arm-timing",
         master_len_samples=19200, take_len_samples=2400,
-        arm_offsets=[0, 120, 300, 450, 590],
+        offset_groups=halves,
     ))
 
     results.append(check_case(
         "quarter-phrase-loose-arm-timing",
         master_len_samples=19200, take_len_samples=4800,
-        arm_offsets=[0, 120, 300, 450, 590],
+        offset_groups=halves,
     ))
 
     print()
