@@ -1,0 +1,170 @@
+#!/usr/bin/env node
+const net = require('net');
+const dgram = require('dgram');
+
+const [, , host, trialsArg] = process.argv;
+if (!host) {
+  console.error('usage: node verify-lineup.js <host> [trials]');
+  process.exit(2);
+}
+const TRIALS = trialsArg ? Number(trialsArg) : 3;
+const SAMPLE_RATE = 48000;
+const LATENCY_BIAS = 64;
+const HOLD_MS = 2000;
+const HOLD_ERASE_MS = 1150;
+const WITHIN_TRIAL_TOLERANCE = 8;
+const ON_GRID_TOLERANCE = LATENCY_BIAS;
+
+const MASTER_PAD = 2;
+const TAKE_PADS = [3, 4, 5];
+const LOOPERS = [1, 2, 3];
+const CLEAR_ALL_NOTE = 0x5b;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const wrap = (x, p) => ((x % p) + p) % p;
+
+function openInject() {
+  return new Promise((resolve, reject) => {
+    const sock = net.connect({ host, port: 9401 }, () => resolve(sock));
+    sock.setTimeout(5000);
+    sock.on('timeout', () => { sock.destroy(); reject(new Error(`connect to ${host}:9401 timed out`)); });
+    sock.on('error', reject);
+  });
+}
+
+function burst(sock, notes) {
+  const on = [], off = [];
+  for (const n of notes) { on.push(0x90, n, 127); off.push(0x80, n, 0); }
+  sock.write(Buffer.from(on));
+  sock.write(Buffer.from(off));
+}
+function burstHold(sock, notes) { sock.write(Buffer.from(notes.flatMap(n => [0x90, n, 127]))); }
+function burstRelease(sock, notes) { sock.write(Buffer.from(notes.flatMap(n => [0x80, n, 0]))); }
+
+function queryTelemetry() {
+  return new Promise((resolve, reject) => {
+    const sock = dgram.createSocket('udp4');
+    const timeout = setTimeout(() => { sock.close(); reject(new Error('telemetry query timed out')); }, 3000);
+    sock.on('message', msg => {
+      clearTimeout(timeout);
+      sock.close();
+      try { resolve(JSON.parse(msg.toString())); }
+      catch (e) { reject(e); }
+    });
+    sock.on('error', e => { clearTimeout(timeout); reject(e); });
+    sock.send('status', 4445, host);
+  });
+}
+
+function circularMean(values, period) {
+  let sx = 0, sy = 0;
+  for (const v of values) {
+    const a = (v / period) * 2 * Math.PI;
+    sx += Math.cos(a);
+    sy += Math.sin(a);
+  }
+  return wrap((Math.atan2(sy, sx) / (2 * Math.PI)) * period, period);
+}
+
+function anchorOf(t, looper, oneBeat) {
+  const wlen = t.loopers.wraplen[looper];
+  if (!wlen || wlen <= 1) return null;
+  const beats = Math.round(wlen / oneBeat);
+  if (beats < 1) return null;
+  const beatScale = wlen / (beats * oneBeat);
+  const masterPhase = t.master_phase_beats * oneBeat;
+  const readPos = t.loopers.readpos[looper];
+  return wrap(beatScale * masterPhase - readPos + LATENCY_BIAS, wlen) / beatScale;
+}
+
+async function anchors(oneBeat, samples = 4) {
+  const acc = new Map();
+  const wlenOf = new Map();
+  for (let k = 0; k < samples; k++) {
+    const t = await queryTelemetry();
+    for (const i of LOOPERS) {
+      const a = anchorOf(t, i, oneBeat);
+      if (a === null) continue;
+      if (!acc.has(i)) { acc.set(i, []); wlenOf.set(i, t.loopers.wraplen[i]); }
+      acc.get(i).push(a);
+    }
+    await sleep(120);
+  }
+  const out = [];
+  for (const i of LOOPERS) {
+    const vals = acc.get(i);
+    if (!vals || vals.length < 2) { out.push(null); continue; }
+    out.push({ i, anchor: circularMean(vals, wlenOf.get(i)), wlen: wlenOf.get(i) });
+  }
+  return out;
+}
+
+async function main() {
+  console.log(`[verify-lineup] target=${host} trials=${TRIALS}`);
+  const sock = await openInject();
+  await burst(sock, [CLEAR_ALL_NOTE]);
+  await sleep(1200);
+
+  await burst(sock, [MASTER_PAD]);
+  await sleep(HOLD_MS);
+  await burst(sock, [MASTER_PAD]);
+  await sleep(1200);
+
+  const master = await queryTelemetry();
+  const masterLen = master.loopers.wraplen[0];
+  if (!masterLen || masterLen <= 1) {
+    console.error('[verify-lineup] FAIL: master looper 0 has no length -- did clear-all leave it empty?');
+    process.exit(1);
+  }
+  const bpm = master.link.bpm > 1 ? master.link.bpm : 120;
+  const beatFromTempo = (SAMPLE_RATE * 60) / bpm;
+  const masterBeats = Math.round(masterLen / beatFromTempo);
+  const oneBeat = masterLen / masterBeats;
+  const cell = 0.125 * oneBeat;
+  console.log(`[verify-lineup] master wlen=${masterLen} (${masterBeats} beats, oneBeat=${oneBeat.toFixed(1)}, cell=${cell.toFixed(1)}, bpm=${bpm.toFixed(2)})`);
+
+  const rows = [];
+  for (let trial = 0; trial < TRIALS; trial++) {
+    burstHold(sock, TAKE_PADS);
+    await sleep(HOLD_ERASE_MS);
+    burstRelease(sock, TAKE_PADS);
+    await sleep(500);
+
+    burst(sock, TAKE_PADS);
+    await sleep(HOLD_MS);
+    burst(sock, TAKE_PADS);
+    await sleep(700);
+
+    const got = (await anchors(oneBeat)).filter(Boolean);
+    if (got.length < 2) {
+      console.log(`[verify-lineup] trial ${trial}: only ${got.length} loopers took content -- skipped`);
+      continue;
+    }
+    const spread = Math.max(...got.map(g => g.anchor)) - Math.min(...got.map(g => g.anchor));
+    rows.push({ trial, got, spread });
+    console.log(`[verify-lineup] trial ${trial}: wlens=${got.map(g => g.wlen).join(',')} ` +
+      `anchors mod cell=${got.map(g => wrap(g.anchor, cell).toFixed(1)).join(',')} ` +
+      `within-trial spread=${spread.toFixed(1)} samples`);
+  }
+
+  if (!rows.length) {
+    console.error('[verify-lineup] FAIL: no trial produced measurable takes');
+    process.exit(1);
+  }
+
+  const maxSpread = Math.max(...rows.map(r => r.spread));
+  const mods = rows.flatMap(r => r.got.map(g => wrap(g.anchor, cell)));
+  const modSpread = Math.max(...mods) - Math.min(...mods);
+
+  console.log(`[verify-lineup] A. takes armed in one burst share an anchor: max spread ${maxSpread.toFixed(1)} samples (tol ${WITHIN_TRIAL_TOLERANCE})`);
+  console.log(`[verify-lineup] B. every anchor sits on one fixed point of the 1/8-beat grid: ${modSpread.toFixed(1)} samples (tol ${ON_GRID_TOLERANCE}, one block)`);
+
+  const pass = maxSpread < WITHIN_TRIAL_TOLERANCE && modSpread < ON_GRID_TOLERANCE;
+  console.log(`[verify-lineup] ${pass ? 'ALL PASS' : 'SOME FAILED'}`);
+  process.exit(pass ? 0 : 1);
+}
+
+main().catch(err => {
+  console.error('[verify-lineup] error:', err.message);
+  process.exit(1);
+});
