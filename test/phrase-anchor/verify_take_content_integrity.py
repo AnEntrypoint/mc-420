@@ -36,13 +36,6 @@ def measure_tone_energy(seg, freq, sr=SR):
     return float(np.sum(band ** 2))
 
 
-def arm_sample(master_phase, fine_grid):
-    idx = np.floor(master_phase / fine_grid).astype(np.int64)
-    wrapped = np.zeros(len(master_phase), dtype=bool)
-    wrapped[1:] = idx[1:] != idx[:-1]
-    return int(np.argmax(wrapped))
-
-
 def run_multi_marker_take(master_len_samples, take_len_samples, marker_freqs):
     """
     Records a take spanning the WHOLE take_len_samples with N distinct tone
@@ -53,17 +46,15 @@ def run_multi_marker_take(master_len_samples, take_len_samples, marker_freqs):
     invariant is that every marker recorded within the raw take survives
     into playback somewhere in the loop, i.e. the snap changes WHERE content
     repeats, never drops content that was actually captured to the ring.
-    Recording starts at ARM, which is the first fine-grid crossing after the
-    pad press, not the next phrase downbeat, so markers are placed from ARM.
+    Recording starts on the pad press itself, so markers are placed from the
+    press.
     """
     dsp = harness.single_looper_dsp()
     total_extra = take_len_samples * 3 + 6000
     n = take_len_samples + total_extra + master_len_samples * 2 + 8000
 
     arm_press_sample = 4000
-    master_phase = np.arange(n, dtype=np.float64) % master_len_samples
-    fine_grid = 0.125 * (master_len_samples / 4.0)
-    arm = arm_sample(master_phase[arm_press_sample:], fine_grid) + arm_press_sample
+    arm = arm_press_sample
     finish_sample = arm + take_len_samples
 
     masterPhase = (np.arange(n, dtype=np.float64) % master_len_samples).astype(np.float32)

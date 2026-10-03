@@ -22,7 +22,7 @@ def _shared_grid_block(body):
         raise RuntimeError("dsp/loop.dsp no longer has a loopEngine with-block")
     block = "\n".join(l for l in engine.group(2).split("\n")
                       if not l.strip().startswith(("outs", "loopSum", "loopSolos")))
-    for name in ("masterPhaseWrapped", "fineGridWrapped"):
+    for name in ("masterPhaseWrapped",):
         if name not in block:
             raise RuntimeError("loopEngine no longer derives " + name)
     return block
@@ -37,7 +37,7 @@ def single_looper_dsp():
         raise RuntimeError("dsp/loop.dsp has code after the process line")
     args = proc.group(1)
     shared = _shared_grid_block(body)
-    single = "process(%s) = oneLooper(%s, masterPhaseWrapped, fineGridWrapped)\nwith {\n%s\n};\n" % (
+    single = "process(%s) = oneLooper(%s, masterPhaseWrapped)\nwith {\n%s\n};\n" % (
         args, args, shared)
     body = body[:proc.start()] + single
     assert body.count("process(") == 1

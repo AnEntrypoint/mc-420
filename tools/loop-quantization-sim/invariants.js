@@ -68,9 +68,6 @@ function checkNoPhantomDspActivity(w) {
     if (controlIdle && lp.dsp.gate > 0.5) {
       violations.push(`looper${i}: control layer thinks idle/empty but DSP gate=${lp.dsp.gate} (actively writing real audio into the ring -- phantom recording)`);
     }
-    if (controlIdle && lp.dsp.pend > 0.5 && !lp.wrapLenStaleAfterWipe) {
-      violations.push(`looper${i}: control layer thinks idle/empty but DSP pend=1 (a stale ARM is still latched, waiting to phantom-fire at the next phrase-top)`);
-    }
   }
   return violations;
 }

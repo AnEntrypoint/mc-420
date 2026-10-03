@@ -48,12 +48,11 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     """
     master_len_samples: established masterLen (0 for the very first take).
     arm_offset_samples: how far (in samples) the performer's raw press lands
-        after the base press of this case. dsp/loop.dsp's armEdge defers real
-        recording start to the next fine-grid crossing (kFineGridBeats = 1/8 of
-        a beat) and places the take at the grid node nearest the press, so
-        every offset inside one half of a fine-grid cell must land the material
-        at the same place in playback. Callers therefore keep each group of
-        offsets inside a single half-cell.
+        after the base press of this case. dsp/loop.dsp starts recording on the
+        press itself and places the take at the fine-grid node nearest that
+        press (kFineGridBeats = 1/8 of a beat), so every offset inside one half
+        of a fine-grid cell lands the material at the same master-cycle phase.
+        Callers therefore keep each group of offsets inside a single half-cell.
     take_len_samples: raw recording duration requested via rec-hold and
         finishtarget (the performer's felt phrase length before power-of-2
         snapping upstream in apc_grid.cpp -- here fed directly since this
@@ -75,7 +74,7 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     if master_len_samples > 0:
         masterPhase = (np.arange(n, dtype=np.float64) % master_len_samples).astype(np.float32)
         masterLen = harness.const(n, float(master_len_samples))
-        arm = arm_press_sample + harness.arm_sample(masterPhase[arm_press_sample:], fine_grid)
+        arm = arm_press_sample
     else:
         arm = arm_press_sample
         masterPhase = np.zeros(n, dtype=np.float32)
@@ -122,8 +121,7 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     period = onsets[1] - onsets[0]
     if period <= 0:
         return onsets
-    finish_instant_in_window = finish_sample - search_start
-    return [(o - finish_instant_in_window) % period for o in onsets]
+    return [(o + search_start) % period for o in onsets]
 
 
 def check_case(name, master_len_samples, take_len_samples, offset_groups, tol=8):
@@ -132,17 +130,17 @@ def check_case(name, master_len_samples, take_len_samples, offset_groups, tol=8)
     the raw press) across groups of different raw press timings, each group
     confined to one HALF of a fine-grid cell.
 
-    dsp/loop.dsp defers real recording start to the next fine-grid crossing
-    (kFineGridBeats) and then places the take at whichever grid node is
-    NEAREST to the raw press: presses in the first half of a cell snap back
-    to the node that opens it, presses in the second half snap forward to
-    the node that closes it. Both halves must therefore be internally
-    jitter-free -- every press in a half lands the marker at the same
-    playback sample -- and the two halves must sit exactly one grid step
-    apart. That is what keeps two performers, or two devices on the same
-    Link grid, agreeing on where a loop starts when they press slightly
-    either side of the same beat; a quantizer that only ever snapped
-    forward would strand one of them a full grid step late.
+    dsp/loop.dsp records from the raw press onward and anchors the take at
+    whichever fine-grid node is NEAREST to that press: presses in the first
+    half of a cell anchor at the node that opens it, presses in the second
+    half anchor at the node that closes it. The correction applied to the
+    material is therefore at most half a grid step, and no part of the
+    performance is dropped. Both halves must be internally jitter-free --
+    every press in a half puts the marker at the same master-cycle phase --
+    and the two halves must sit exactly one grid step apart. That is what
+    keeps two performers, or two devices on the same Link grid, agreeing on
+    where a loop starts when they press slightly either side of the same
+    beat, without either of them losing the head of their phrase.
     """
     fine_grid = harness.fine_grid_samples(master_len_samples, 4.0)
     groups = []

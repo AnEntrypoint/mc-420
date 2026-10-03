@@ -9,8 +9,8 @@ function wrapAbs(p, len) {
 
 function initLooperDsp() {
   return {
-    pend: 0, fin: 0, act: 0, widx: 0, wlen: 1, rsm: 0, coff: 0, rpos: 0, gate: 0,
-    beatScale: 1, bakedSpeed: 1, pendPhase: 0,
+    fin: 0, act: 0, widx: 0, wlen: 1, rsm: 0, coff: 0, rpos: 0, gate: 0,
+    beatScale: 1, bakedSpeed: 1,
     recPrevEdge: 0,
   };
 }
@@ -33,31 +33,17 @@ function stepSample(s, inp) {
     : Math.max(0.1, Math.min(8.0, effSpeed / manualSafe));
   const masterPhaseWrapped = masterLen >= 0.5 && masterPhase < masterPhasePrev;
 
-  const fineGrid = Math.max(1.0, kFineGridBeats * oneBeat);
-  const fineGridWrapped = Math.floor(masterPhase / fineGrid) !== Math.floor(masterPhasePrev / fineGrid);
-
   const armPulse = recN > 0.5 && s.recPrevEdge < 0.5;
-  const armPulseGrid = armPulse && masterLen >= 0.5;
-
-  const cancelPend = s.pend > 0.5 && finishReqN > 0.5 && s.act < 0.5;
-  const armEdge = masterLen < 0.5
-    ? armPulse
-    : ((s.pend > 0.5 || armPulseGrid) && fineGridWrapped);
-  const pendNext = masterLen < 0.5
-    ? 0
-    : (armEdge ? 0 : (cancelPend ? 0 : (armPulseGrid ? 1 : s.pend)));
-
-  const pendPhaseNext = armPulseGrid ? masterPhase : (armEdge ? 0.0 : s.pendPhase);
+  const armEdge = armPulse;
 
   const fineGridSamples = Math.max(1.0, kFineGridBeats * oneBeat);
-  const armWaitSamples = armPulseGrid ? 0.0 : wrapAbs(masterPhase - s.pendPhase, Math.max(1.0, masterLen));
-  const armPullbackBeats = armEdge && armWaitSamples > fineGridSamples * 0.5 ? kFineGridBeats : 0.0;
+  const cellOffset = wrapAbs(masterPhase, fineGridSamples);
   const rsmNearestNode = wrapAbs(
-    masterPhase - (armWaitSamples > fineGridSamples * 0.5 ? fineGridSamples : 0.0),
+    masterPhase + (cellOffset > fineGridSamples * 0.5 ? fineGridSamples - cellOffset : -cellOffset),
     Math.max(1.0, masterLen));
   const rsmNext = armEdge ? rsmNearestNode : s.rsm;
 
-  const finNext = armEdge ? 0 : cancelPend ? 0 : (finishReqN > 0.5 ? 1 : s.fin);
+  const finNext = armEdge ? 0 : (finishReqN > 0.5 ? 1 : s.fin);
   const recKeepAlive = recN > 0.5 || finNext > 0.5;
   const actNext = armEdge ? 1.0 : (recKeepAlive ? s.act : 0.0);
 
@@ -112,11 +98,11 @@ function stepSample(s, inp) {
       : absPos);
 
   return {
-    pend: pendNext, fin: finNext, act: actNext, widx: widxNext, wlen: wlenNext,
+    fin: finNext, act: actNext, widx: widxNext, wlen: wlenNext,
     rsm: rsmNext, coff: coffNext, rpos: rposNext, gate: gateNext,
-    beatScale: beatScaleNext, bakedSpeed: bakedSpeedNext, pendPhase: pendPhaseNext,
+    beatScale: beatScaleNext, bakedSpeed: bakedSpeedNext,
     recPrevEdge: recN > 0.5 ? 1 : 0,
-    armEdge, finishEdge, armPullbackBeats,
+    armEdge, finishEdge,
   };
 }
 

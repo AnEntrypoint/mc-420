@@ -20,14 +20,6 @@ def impulse_train(n, period):
     return x
 
 
-def arm_sample(master_phase, master_len, recorded_beats):
-    fine = 0.125 * (master_len / recorded_beats)
-    fine_idx = np.floor(master_phase / fine).astype(np.int64)
-    wrapped = np.zeros(len(master_phase), dtype=bool)
-    wrapped[1:] = fine_idx[1:] != fine_idx[:-1]
-    return int(np.argmax(wrapped))
-
-
 def peak_spacings(seg, min_separation):
     above = np.flatnonzero(np.abs(seg) > 0.3)
     if len(above) < 4:
@@ -54,8 +46,7 @@ def run_take(eff_speed):
 
     dsp = harness.single_looper_dsp()
     n_hint = int(5 * master_len / eff_speed) + 4 * master_len
-    master_phase = (np.arange(n_hint, dtype=np.float64) * eff_speed) % master_len
-    arm = arm_sample(master_phase, master_len, kMasterBeats)
+    arm = 0
     finish_sample = arm + take_real
     record_end = arm + finish_target
     n = record_end + int(2.5 * master_len / eff_speed) + 8000

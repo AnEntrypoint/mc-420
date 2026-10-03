@@ -95,7 +95,7 @@ function applyEvent(w, ev) {
 function dspFingerprint(w) {
   return w.loopers.map((lp) => {
     const widxPart = lp.finishTargetPending > 0 ? lp.dsp.widx : 'x';
-    return `${lp.dsp.pend}|${lp.dsp.fin}|${lp.dsp.act}|${lp.dsp.gate}|${widxPart}|${lp.recording}|${lp.finishTargetPending}`;
+    return `${lp.dsp.fin}|${lp.dsp.act}|${lp.dsp.gate}|${widxPart}|${lp.recording}|${lp.finishTargetPending}`;
   }).join(';');
 }
 

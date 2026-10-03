@@ -164,6 +164,17 @@ function effSpeedNow(w) {
   return w.manualSpeedMul * (linkSpeedRatio + w.linkPhaseTrim);
 }
 
+function armOriginBeatAbs(w, rsm) {
+  const nowBeat = beatAtTime(w.link.session, (w.t / SIM_SAMPLE_RATE) * 1000);
+  if (w.masterLenSamples <= 0) return nowBeat;
+  const lenNow = Math.max(1, w.masterLenSamples);
+  const oneBeatNow = lenNow / Math.max(1, w.recordedBeats);
+  let shift = (w.masterPhaseSamples - rsm) % lenNow;
+  if (shift < 0) shift += lenNow;
+  if (shift > lenNow / 2) shift -= lenNow;
+  return nowBeat - shift / oneBeatNow;
+}
+
 function snapshotWriteIdx(w, looper) {
   return w.loopers[looper].dsp.widx;
 }
@@ -545,7 +556,7 @@ function stepOneSample(w) {
     };
     const next = stepSample(lp.dsp, inp);
     lp.dsp = next;
-    if (next.armEdge) lp.armBeatAbs = beatAtTime(w.link.session, (w.t / SIM_SAMPLE_RATE) * 1000) - next.armPullbackBeats;
+    if (next.armEdge) lp.armBeatAbs = armOriginBeatAbs(w, next.rsm);
     results.push(next);
   }
   w.t += 1;

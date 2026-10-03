@@ -55,7 +55,7 @@ def run_take(master_len_samples, take_len_samples, record_marker_offset,
     in_unused = harness.const(n, 0.0)
 
     arm_press_sample = 4000
-    arm = arm_press_sample + harness.arm_sample(masterPhase[arm_press_sample:], fine_grid)
+    arm = arm_press_sample
     marker_track = marker_tone(n, arm + record_marker_offset, marker_len)
 
     rec_auto = np.zeros(n, dtype=np.float32)
@@ -97,11 +97,11 @@ def check_masterlen_jitter(name, true_master_len, jitter_samples_list, take_len_
     (a clean multiple of the "true" phrase) records the same musical gesture.
     Invariant under test: the second take's marker should land at ROUGHLY the
     SAME playback-relative position regardless of loop 1's own small timing
-    jitter. dsp/loop.dsp defers the second take's recording start to the next
-    fine-grid crossing (1/8 of a beat), which itself sits at a position set by
+    jitter. dsp/loop.dsp starts the second take on the raw press and anchors
+    it to the fine-grid node nearest that press, and that grid is sized from
     the jittered masterLen -- a few samples of masterLen jitter therefore
-    shift where that crossing falls and proportionally shift the marker's
-    recording instant. This is expected structural sensitivity to loop 1's own
+    shift where the nearest node falls and proportionally shift the marker's
+    playback instant. This is expected structural sensitivity to loop 1's own
     establish-length jitter, not a bug -- tolerance scales with
     take_len_samples with a small fixed floor.
     """
