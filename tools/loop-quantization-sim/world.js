@@ -162,7 +162,7 @@ function effSpeedNow(w) {
   if (s && s.synced && w.recordedBpm > 1.0 && s.bpm > 1.0) {
     linkSpeedRatio = s.bpm / w.recordedBpm;
   }
-  return w.manualSpeedMul * (linkSpeedRatio + w.linkPhaseTrim);
+  return w.manualSpeedMul * linkSpeedRatio;
 }
 
 function armOriginBeatAbs(w, rsm) {
@@ -474,7 +474,7 @@ function stepOneSample(w) {
   const manualPunchActive = Math.abs(w.manualSpeedMul - 1.0) > 0.3;
   if (!linkVarispeedEngaged || manualPunchActive) w.linkPhaseTrim = 0.0;
 
-  const effSpeed = w.manualSpeedMul * (linkSpeedRatio + w.linkPhaseTrim);
+  const effSpeed = w.manualSpeedMul * linkSpeedRatio;
   const masterLen = w.masterLenSamples;
   const masterJustCreated = w.prevMasterLen <= 0 && masterLen > 0;
   w.prevMasterLen = masterLen;

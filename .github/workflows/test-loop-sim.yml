@@ -65,5 +65,11 @@ jobs:
       - name: Varispeed punch stays baked in the take
         run: node tools/loop-quantization-sim/varispeed-record.js
 
+      - name: First take owns the session tempo
+        run: node tools/loop-quantization-sim/first-loop-tempo-owner.js
+
+      - name: Takes latch the tempo ratio, never the phase trim
+        run: node tools/loop-quantization-sim/two-take-rate-lock.js
+
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50
