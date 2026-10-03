@@ -87,9 +87,12 @@ public:
         float    looperWrapLen[kLoopers] = {};
         float    looperReadPos[kLoopers] = {};
         float    looperStateFlags[kLoopers] = {};
+        float    looperLatencyBias[kLoopers] = {};
         bool     looperHasContent[kLoopers] = {};
         int      clipExportState = 0;
         int      gridBeatIndex = -1;
+        float    masterLenSamples = 0.0f;
+        float    recordedBeats = 0.0f;
     };
     Telemetry snapshotTelemetry() const;
 

@@ -356,7 +356,7 @@ static void* worker(void*) {
     struct ResolvedControl { int slot; float* zone; };
     std::vector<ResolvedControl> resolvedControls;
     int resolvedControlsForCount = -1;
-    struct LooperTelemetryZones { float* rec=nullptr; float* play=nullptr; float* vol=nullptr; float* level=nullptr; float* writeidx=nullptr; float* wraplen=nullptr; float* readpos=nullptr; float* stateflags=nullptr; };
+    struct LooperTelemetryZones { float* rec=nullptr; float* play=nullptr; float* vol=nullptr; float* level=nullptr; float* writeidx=nullptr; float* wraplen=nullptr; float* readpos=nullptr; float* stateflags=nullptr; float* bias=nullptr; };
     LooperTelemetryZones looperTelemetryZones[AudioThread::Telemetry::kLoopers];
     float* looperLenZone[AudioThread::Telemetry::kLoopers] = {nullptr};
     float* mlbZone = nullptr;
@@ -402,6 +402,7 @@ static void* worker(void*) {
             snprintf(z, sizeof z, "looper%2d/wraplen", lp);      tz.wraplen  = resolveZone();
             snprintf(z, sizeof z, "looper%2d/readposdiag2", lp); tz.readpos  = resolveZone();
             snprintf(z, sizeof z, "looper%2d/stateflagsdiag", lp); tz.stateflags = resolveZone();
+            snprintf(z, sizeof z, "looper%2d/latencybias", lp);   tz.bias      = resolveZone();
         }
         for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) {
             snprintf(z, sizeof z, "looper%2d/len", lp);
@@ -730,6 +731,7 @@ static void* worker(void*) {
                     g_telem.looperWrapLen[lp]  = tz.wraplen  ? *tz.wraplen : 0.0f;
                     g_telem.looperReadPos[lp]  = tz.readpos  ? *tz.readpos : 0.0f;
                     g_telem.looperStateFlags[lp] = tz.stateflags ? *tz.stateflags : -1.0f;
+                    g_telem.looperLatencyBias[lp] = tz.bias ? *tz.bias : -1.0f;
                     if (g_params) {
                         if (hasContentSlot[lp] < 0) {
                             char z[32];
@@ -819,6 +821,8 @@ static void* worker(void*) {
                 float masterLen = masterLenVal;
                 float recordedBeatsShared = g_params ? g_params->getBySlot(recordedBeatsSlot, 0.0f) : 0.0f;
                 const bool recordedBeatsValid = recordedBeatsShared >= 1.0f;
+                g_telem.masterLenSamples = masterLen;
+                g_telem.recordedBeats = recordedBeatsShared;
                 if (!recordedBeatsValid) recordedBeatsShared = 16.0f;
                 if (!linkDrivingLength && recordedBeatsZone) *recordedBeatsZone = recordedBeatsShared;
                 double beatLenSamplesShared = masterLen > 0.0f

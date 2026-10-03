@@ -17,6 +17,11 @@ const kPollMs = 150;
 const kClearAllSettleMs = 1200;
 const kToleranceSamples = 64;
 
+function gridBeatLen(t) {
+  if (t.master_len_samples > 0 && t.recorded_beats >= 1) return t.master_len_samples / t.recorded_beats;
+  return t.groove.beat_len_samples;
+}
+
 function sendBytes(bytes) {
   return new Promise((resolve, reject) => {
     const sock = net.connect({ host, port: 9401 }, () => {
@@ -135,8 +140,10 @@ async function main() {
   let failed = 0;
   const fail = (msg) => { console.log(`[late-lineup]   FAIL: ${msg}`); failed++; };
 
-  const beatLenSamples = (60 / second.link.bpm) * kSampleRate;
+  const beatLenSamples = gridBeatLen(second);
   const cell = beatLenSamples * kFineGridBeats;
+  const linkBeatLen = (60 / second.link.bpm) * kSampleRate;
+  console.log(`[late-lineup] grid beat ${beatLenSamples.toFixed(1)} samples (master_len ${second.master_len_samples} / ${second.recorded_beats} beats), link bpm implies ${linkBeatLen.toFixed(1)}`);
   const wrapLen = Math.min(wlen0, wlen1);
   const lenRatio = wlen0 / wlen1;
   const lenOct = Math.log2(lenRatio);

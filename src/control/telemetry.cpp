@@ -57,6 +57,7 @@ void Telemetry::publish() {
     char readposes[20 * 9 + 2]; int rpp = 0; readposes[rpp++] = '[';
     char writeidxs[20 * 9 + 2]; int wip = 0; writeidxs[wip++] = '[';
     char stateflags[20 * 6 + 2]; int sfp = 0; stateflags[sfp++] = '[';
+    char biases[20 * 9 + 2]; int bp = 0; biases[bp++] = '[';
     for (int i = 0; i < AudioThread::Telemetry::kLoopers; i++) {
         if (t.looperRec[i])  recBits  |= (1u << i);
         if (t.looperPlay[i]) playBits |= (1u << i);
@@ -66,6 +67,7 @@ void Telemetry::publish() {
         rpp += snprintf(readposes + rpp, sizeof readposes - rpp, i ? ",%.0f" : "%.0f", t.looperReadPos[i]);
         wip += snprintf(writeidxs + wip, sizeof writeidxs - wip, i ? ",%.0f" : "%.0f", t.looperWriteIdx[i]);
         sfp += snprintf(stateflags + sfp, sizeof stateflags - sfp, i ? ",%.0f" : "%.0f", t.looperStateFlags[i]);
+        bp += snprintf(biases + bp, sizeof biases - bp, i ? ",%.1f" : "%.1f", t.looperLatencyBias[i]);
     }
     vols[vp++] = ']'; vols[vp] = 0;
     levels[lvp++] = ']'; levels[lvp] = 0;
@@ -73,6 +75,7 @@ void Telemetry::publish() {
     readposes[rpp++] = ']'; readposes[rpp] = 0;
     writeidxs[wip++] = ']'; writeidxs[wip] = 0;
     stateflags[sfp++] = ']'; stateflags[sfp] = 0;
+    biases[bp++] = ']'; biases[bp] = 0;
 
     char wifiRole[8] = "sta";
     FILE* rf = fopen("/run/aloop/wifi_role", "r");
@@ -83,7 +86,7 @@ void Telemetry::publish() {
         if (rn == 0) { wifiRole[0] = 's'; wifiRole[1] = 't'; wifiRole[2] = 'a'; wifiRole[3] = 0; }
     }
 
-    char json[2048];
+    char json[3072];
     int n = snprintf(json, sizeof json,
         "{\"core_busy\":[%.0f,%.0f,%.0f,%.0f],\"xruns\":%llu,"
         "\"link\":{\"synced\":%s,\"bpm\":%.1f,\"peers\":%d,\"playing\":%s,\"phase_err_beats\":%.3f},"
@@ -93,9 +96,9 @@ void Telemetry::publish() {
         "\"audio_peak\":{\"in\":%.4f,\"out\":%.4f},\"eff_speed\":%.4f,"
         "\"alsa_roundtrip_samples\":%.1f,\"latency_bias_samples\":%.1f,\"latency_trim_samples\":%.1f,"
         "\"sustain_cmd\":%.2f,\"sustain_gate\":%.2f,"
-        "\"grid_beat_index\":%d,\"master_phase_beats\":%.5f,"
+        "\"grid_beat_index\":%d,\"master_phase_beats\":%.5f,\"master_len_samples\":%.1f,\"recorded_beats\":%.3f,"
         "\"groove\":{\"shuffle\":%d,\"gate\":%d,\"beat_len_samples\":%.1f,\"gate_min\":%.3f,\"gate_max\":%.3f,\"swing_offset_samples\":%.1f,\"swing_grid_beats\":%.3f},"
-        "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s,\"stateflags\":%s}}",
+        "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s,\"stateflags\":%s,\"latencybias\":%s}}",
         t.coreBusyPct[0], t.coreBusyPct[1], t.coreBusyPct[2], t.coreBusyPct[3],
         (unsigned long long)t.xruns,
         t.linkSynced ? "true" : "false", t.bpm,
@@ -109,9 +112,10 @@ void Telemetry::publish() {
         t.alsaRoundTripSamples, t.latencyBiasSamples, t.latencyTrimSamples,
         t.sustainCmd, t.sustainGate,
         t.gridBeatIndex, t.masterPhaseBeats,
+        t.masterLenSamples, t.recordedBeats,
         t.shuffleMode, t.gateMode, t.grooveBeatLenSamples, t.grooveGateMin, t.grooveGateMax,
         t.grooveSwingOffsetSamples, t.grooveSwingGridBeats,
-        recBits, playBits, vols, levels, wraplens, readposes, writeidxs, stateflags);
+        recBits, playBits, vols, levels, wraplens, readposes, writeidxs, stateflags, biases);
 
     FILE* statusFile = fopen("/run/aloop/status.json", "w");
     if (statusFile) { fwrite(json, 1, (size_t)n, statusFile); fclose(statusFile); }
