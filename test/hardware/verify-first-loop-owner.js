@@ -10,7 +10,7 @@ if (!host) {
 const holdMs = Number(holdMsArg || '2000');
 const kSampleRate = 48000;
 const kTrimSettleMs = 6000;
-const kWatchMs = 10000;
+const kWatchMs = 20000;
 const kPollMs = 150;
 const kLockToleranceSamples = 64;
 const kRateTolerance = 5e-4;
@@ -86,24 +86,35 @@ async function settleWrapLen(looperIndex, maxMs) {
 async function watchPlayback(wrapLen, beatLenSamples, beatsPerCycle) {
   await new Promise((r) => setTimeout(r, kTrimSettleMs));
   const first = await queryTelemetry();
-  const start = Date.now();
+  const loopStart = Date.now();
   const firstRead = first.loopers.readpos[0];
   const firstMaster = first.master_phase_beats;
   let prevRead = firstRead;
   let prevMaster = firstMaster;
+  let readOffset = 0;
+  let masterOffset = 0;
   let readWraps = 0;
   let masterWraps = 0;
   let firstLock = null;
   let lockMin = Infinity;
   let lockMax = -Infinity;
-  while (Date.now() - start < kWatchMs) {
+  // Telemetry answers in ~190ms (5 Hz control loop) and that lag JITTERS by tens of
+  // milliseconds, so a rate taken from the two end points alone measures the lag, not the
+  // take -- off by up to ~1% even over 20s. Fit a slope over EVERY poll instead: the
+  // jitter averages out across ~130 samples, a real rate error does not.
+  const readSeries = [[0, 0]];
+  const masterSeries = [[0, 0]];
+  while (Date.now() - loopStart < kWatchMs) {
     const t = await queryTelemetry();
+    const at = (Date.now() - loopStart) / 1000;
     const read = t.loopers.readpos[0];
     const master = t.master_phase_beats;
-    if (read < prevRead - wrapLen * 0.5) readWraps++;
-    if (master < prevMaster - beatsPerCycle * 0.5) masterWraps++;
+    if (read < prevRead - wrapLen * 0.5) { readWraps++; readOffset += wrapLen; }
+    if (master < prevMaster - beatsPerCycle * 0.5) { masterWraps++; masterOffset += beatsPerCycle; }
     prevRead = read;
     prevMaster = master;
+    readSeries.push([at, read + readOffset - firstRead]);
+    masterSeries.push([at, (master + masterOffset - firstMaster) * beatLenSamples]);
     let lock = ((master * beatLenSamples - read) % wrapLen + wrapLen) % wrapLen;
     if (firstLock === null) firstLock = lock;
     let d = lock - firstLock;
@@ -114,19 +125,24 @@ async function watchPlayback(wrapLen, beatLenSamples, beatsPerCycle) {
     await new Promise((r) => setTimeout(r, kPollMs));
   }
   const last = await queryTelemetry();
-  const elapsedSec = (Date.now() - start) / 1000;
-  const elapsedSamples = elapsedSec * kSampleRate;
-  const readAdvance = readWraps * wrapLen + (last.loopers.readpos[0] - firstRead);
-  const masterAdvance = (masterWraps * beatsPerCycle + (last.master_phase_beats - firstMaster)) * beatLenSamples;
+  const elapsedSec = (Date.now() - loopStart) / 1000;
   return {
     elapsedSec,
     readWraps,
-    readRate: readAdvance / elapsedSamples,
-    masterRate: masterAdvance / elapsedSamples,
+    readRate: slopePerSecond(readSeries) / kSampleRate,
+    masterRate: slopePerSecond(masterSeries) / kSampleRate,
     lockSpread: lockMax - lockMin,
     finalEffSpeed: last.eff_speed,
     finalBpm: last.link.bpm,
   };
+}
+
+function slopePerSecond(series) {
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const [x, y] of series) { sx += x; sy += y; sxx += x * x; sxy += x * y; }
+  const n = series.length;
+  const denom = n * sxx - sx * sx;
+  return denom === 0 ? 0 : (n * sxy - sx * sy) / denom;
 }
 
 async function main() {
