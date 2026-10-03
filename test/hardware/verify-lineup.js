@@ -11,6 +11,7 @@ const TRIALS = trialsArg ? Number(trialsArg) : 3;
 const SAMPLE_RATE = 48000;
 const LATENCY_BIAS = 64;
 const HOLD_MS = 2000;
+const LONG_HOLD_MS = 8100;
 const HOLD_ERASE_MS = 1150;
 const WITHIN_TRIAL_TOLERANCE = 8;
 const ON_GRID_TOLERANCE = LATENCY_BIAS;
@@ -124,14 +125,15 @@ async function main() {
   console.log(`[verify-lineup] master wlen=${masterLen} (${masterBeats} beats, oneBeat=${oneBeat.toFixed(1)}, cell=${cell.toFixed(1)}, bpm=${bpm.toFixed(2)})`);
 
   const rows = [];
-  for (let trial = 0; trial < TRIALS; trial++) {
+  for (let trial = 0; trial < TRIALS + 1; trial++) {
+    const hold = trial < TRIALS ? HOLD_MS : LONG_HOLD_MS;
     burstHold(sock, TAKE_PADS);
     await sleep(HOLD_ERASE_MS);
     burstRelease(sock, TAKE_PADS);
     await sleep(500);
 
     burst(sock, TAKE_PADS);
-    await sleep(HOLD_MS);
+    await sleep(hold);
     burst(sock, TAKE_PADS);
     await sleep(700);
 
@@ -142,7 +144,7 @@ async function main() {
     }
     const spread = Math.max(...got.map(g => g.anchor)) - Math.min(...got.map(g => g.anchor));
     rows.push({ trial, got, spread });
-    console.log(`[verify-lineup] trial ${trial}: wlens=${got.map(g => g.wlen).join(',')} ` +
+    console.log(`[verify-lineup] trial ${trial} (hold ${hold}ms): wlens=${got.map(g => g.wlen).join(',')} ` +
       `anchors mod cell=${got.map(g => wrap(g.anchor, cell).toFixed(1)).join(',')} ` +
       `within-trial spread=${spread.toFixed(1)} samples`);
   }

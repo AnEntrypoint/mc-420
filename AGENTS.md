@@ -158,7 +158,7 @@ Link's multicast peer discovery (`224.76.78.75:20808`, hardcoded in the Link lib
 | Channel | `hostapd.conf` `channel=6` | SoftAP ch6 |
 | quantum | `kLinkQuantum=16.0` | `LINK_QUANTUM 16.0` |
 | Host election | lowest MAC/BSSID wins | same |
-| Transport role | EMITTER — `setIsPlaying` on every play edge | CONSUMER — never calls `setIsPlaying`; bridges to MIDI Start/Stop/Continue + all-notes-off |
+| Transport | CLOCK-ONLY — `enableStartStopSync(false)`; never calls `setIsPlaying` | CLOCK-ONLY — no transport is shared either way |
 
 Host election is MAC-ordered — never "host if scan found nothing". `src/net/autoap.sh`:
 hosts `ticker` never `aloop`; needs at least one active `network={}` block before
@@ -176,8 +176,11 @@ hosts `ticker` never `aloop`; needs at least one active `network={}` block befor
   user of `weOwnTempo` — never gate `linkSpeedRatio` on it.
 - Playback matches tempo by scaling read RATE (`linkSpeedRatio=linkBpm/recordedBpm` →
   `effSpeed`), never a position jump.
-- `enableStartStopSync(true)` pairs `isPlaying()` reads with `setIsPlaying()`; readiness
-  needs `depend(){ after local autoap; }` plus `waitForNetworkInterface()`.
+- **Link is CLOCK-ONLY: tempo+phase shared, transport never.** `enableStartStopSync(false)`, so
+  pausing locally leaves every peer playing and no peer can start/stop us. `isPlaying` is now a
+  LOCAL flag (`setLocalTransportPlaying`, driven by `ApcGrid::updateLocalTransport`) that only
+  feeds `midi_clock.cpp`'s 0xFA/0xFC — never set it from peer state.
+- Readiness needs `depend(){ after local autoap; }` plus `waitForNetworkInterface()`.
 - Residual phase error is a bounded speed trim on `effSpeed` **AND on the
   `masterPhaseSamples` advance** (`kLinkPhaseTrimPerSample=0.00005`, clamp
   `kLinkPhaseTrimMax=0.03`, suspended while `abs(g_manualSpeedMul-1.0)>0.3`).
@@ -185,22 +188,14 @@ hosts `ticker` never `aloop`; needs at least one active `network={}` block befor
 - The trim runs only while `linkVarispeedEngaged`, or it saturates into a permanent 51-cent
   detune: `eff_speed` in `/run/aloop/status.json` must read exactly `1.0000` with no loop
   recorded.
-- `setTransportPlaying(true)` anchors beat 0 via
-  `setIsPlayingAndRequestBeatAtTime(true,now,0.0,kLinkQuantum)`.
 - At 0.03 the trim needs ~8s to close a half-beat, so the first usable target after Link
   starts driving SNAPS the anchor when the circular error exceeds `kJoinSnapErrBeats=0.25`
   beats; that threshold also stops a flapping peer count from snapping (`join-late.js`).
-- Only the device that started the transport may re-anchor or stop the shared grid
-  (`m_weStartedTransport`) — otherwise every device snaps it to its own downbeat and the mesh
-  splits; an armed-but-silent device must not publish STOPPED.
 
 **Two quantums — 16 for transport, 128 for phase CAPTURE.** `kLinkQuantum=16.0` is the
 PAIRED value (transport anchor, `beatNow()`, 24-PPQN clock). `controlTick()` captures phase
 at `kLinkPhaseQuantumBeats=128.0` and publishes `quantumMicroBeats`; consumers must fold with
-`(quantumMicroBeats/1e6)`, never `16.0` — `linkTargetSamples`/`gridBeatIndex` and
-`applyRemoteTransport`. `applyRemoteTransport` must reset `m_lastRemotePhaseMicroBeats` when
-it arms `m_remoteStartPending` — a stale higher value makes every paused looper start
-mid-phrase.
+`(quantumMicroBeats/1e6)`, never `16.0` — `linkTargetSamples`/`gridBeatIndex`.
 
 The idle/creation snap (`!anyAudible || masterJustCreated || creationSnapPending`) fires
 IMMEDIATELY at creation and waits for a snapshot stamped AFTER the master was created. The

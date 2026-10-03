@@ -143,63 +143,15 @@ static double snapBeatsToPow2(double continuousBeats) {
 
 constexpr long kShiftFoldBlockLatencySamples = 64;
 
-void ApcGrid::applyRemoteTransport(ParamStore& ps, LinkBridge* link) {
-    if (!link) return;
-    LinkSnapshot ls = link->audioRead();
-    if (!ls.synced) return;
-
-    if (ls.isPlaying != m_lastSeenRemotePlaying) {
-        m_lastSeenRemotePlaying = ls.isPlaying;
-        if (ls.isPlaying == m_lastPublishedPlaying) {
-            return;
-        }
-        if (ls.isPlaying) {
-            m_remoteStartPending = true;
-            m_lastRemotePhaseMicroBeats = -1;
-        } else {
-            for (int lp = 0; lp < kLooperCount; lp++) {
-                if (!m_looperPlaying[lp]) continue;
-                setLooper(ps, lp, "play", 0.0f);
-                m_looperPlaying[lp] = false;
-            }
-            m_remoteStartPending = false;
-            m_lastPublishedPlaying = false;
-        }
-        return;
-    }
-
-    if (!m_remoteStartPending) return;
-    if (ls.quantumMicroBeats <= 0) return;
-    double remotePhaseBeats = (double)ls.beatPhaseMicroBeats / 1e6;
-    int64_t remotePhase16 = (int64_t)(std::fmod(remotePhaseBeats, 16.0) * 1e6);
-    bool wrappedPastQuantumStart = (remotePhase16 < m_lastRemotePhaseMicroBeats);
-    m_lastRemotePhaseMicroBeats = remotePhase16;
-    if (!wrappedPastQuantumStart) return;
-
-    m_remoteStartPending = false;
-    for (int lp = 0; lp < kLooperCount; lp++) {
-        if (!m_looperHasContent[lp] || m_looperPlaying[lp]) continue;
-        setLooper(ps, lp, "play", 1.0f);
-        m_looperPlaying[lp] = true;
-    }
-    m_lastPublishedPlaying = true;
-}
-
-void ApcGrid::publishTransport(LinkBridge* link) {
+void ApcGrid::updateLocalTransport(LinkBridge* link) {
     if (!link) return;
     bool anyPlaying = false;
     for (int lp = 0; lp < kLooperCount; lp++) {
         if (m_looperPlaying[lp]) { anyPlaying = true; break; }
     }
-    if (anyPlaying == m_lastPublishedPlaying) return;
-    m_lastPublishedPlaying = anyPlaying;
-    if (!anyPlaying) {
-        if (!m_weStartedTransport) return;
-        m_weStartedTransport = false;
-    } else {
-        m_weStartedTransport = true;
-    }
-    link->setTransportPlaying(anyPlaying);
+    if (anyPlaying == m_localTransportRunning) return;
+    m_localTransportRunning = anyPlaying;
+    link->setLocalTransportPlaying(anyPlaying);
 }
 
 int ApcGrid::monitorFoldSlot(ParamStore& ps) {
@@ -333,7 +285,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
         setLooper(ps, looper, "play", 1.0f);
         m_looperPlaying[looper] = true;
     }
-    publishTransport(link);
+    updateLocalTransport(link);
 }
 
 void ApcGrid::forgetLooperFromPresets(int looper) {
@@ -448,7 +400,6 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
             }
         }
     }
-    applyRemoteTransport(ps, link);
     bool shiftHeldNow = ps.getBySlot(monitorFoldSlot(ps), 0.0f) > 0.5f;
     if (shiftHeldNow) {
         for (int looper = 0; looper < kLooperCount; looper++) {
@@ -603,7 +554,7 @@ void ApcGrid::onStopImmediate(unsigned now_ms, ParamStore& ps, LinkBridge* link,
         setLooper(ps, lp, "play", 0.0f);
         m_looperPlaying[lp] = false;
     }
-    publishTransport(link);
+    updateLocalTransport(link);
 }
 void ApcGrid::onClearAll(unsigned now_ms, bool held, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
     ps.setByName("cmd/clearall", held ? 1.0f : 0.0f);
@@ -658,7 +609,7 @@ void ApcGrid::onClearAll(unsigned now_ms, bool held, ParamStore& ps, LinkBridge*
         m_resonodeEngaged = false;
         ps.setByName("fx/resonode/engaged", 0.0f);
     }
-    publishTransport(link);
+    updateLocalTransport(link);
 }
 int ApcGrid::allocateTransposeVoice(int note) {
     for (int v = 0; v < kTransposeVoices; v++)

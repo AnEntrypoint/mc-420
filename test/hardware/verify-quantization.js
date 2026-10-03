@@ -125,9 +125,14 @@ function nearCutFarExtendCandidate(effectiveSamples, masterLenSamples, recordedB
   return finalBeats * oneBeatSamples;
 }
 
+const CLEAR_ALL_NOTE = 0x5b;
+const CLEAR_ALL_SETTLE_MS = 1200;
+
 async function main() {
   console.log(`[verify-quant] target=${host}, holds=${holds.join(',')}ms`);
-  console.log('[verify-quant] WARNING: assumes a clear rig already exists -- run clear-all yourself first if unsure.');
+  await pressPad(CLEAR_ALL_NOTE);
+  await releasePad(CLEAR_ALL_NOTE);
+  await new Promise((r) => setTimeout(r, CLEAR_ALL_SETTLE_MS));
 
   const results = [];
   let masterLenSamples = null;
@@ -151,7 +156,8 @@ async function main() {
       const errSamples = Math.abs(r.wrapLenSamples - expectedCandidate);
       const errRatio = errSamples / expectedCandidate;
       r.expectedCandidate = expectedCandidate;
-      r.pass = errRatio < 0.05;   // 5% tolerance for injection-side timing jitter
+      const injectionJitterToleranceRatio = 0.05;
+      r.pass = errRatio < injectionJitterToleranceRatio;
       console.log(`[verify-quant] loop${i}: held=${r.holdMs}ms M=${masterLenSamples}samp expectedCandidate=${expectedCandidate.toFixed(0)}samp actual=${r.wrapLenSamples}samp ${r.pass ? 'PASS' : 'FAIL -- possible quantization-collapse regression'}`);
     }
     results.push(r);

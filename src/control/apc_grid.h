@@ -133,11 +133,7 @@ private:
     unsigned m_recordStartMs[kLooperCount] = {};
     bool m_looperShiftHeldDuringTake[kLooperCount] = {};
     bool m_looperPauseOthersOnFinish[kLooperCount] = {};
-    bool m_lastPublishedPlaying = false;
-bool m_weStartedTransport = false;
-    bool    m_lastSeenRemotePlaying = false;
-    bool    m_remoteStartPending    = false;
-    int64_t m_lastRemotePhaseMicroBeats = 0;
+    bool m_localTransportRunning = false;
 
     bool m_presetHeld[kPresetCount] = {};
     unsigned m_presetHoldStart[kPresetCount] = {};
@@ -209,8 +205,7 @@ bool m_weStartedTransport = false;
     void capturePreset(int p, ParamStore& ps);
     void applyPreset(int p, ParamStore& ps);
     void forgetLooperFromPresets(int looper);
-    void publishTransport(class LinkBridge* link);
-    void applyRemoteTransport(ParamStore& ps, class LinkBridge* link);
+    void updateLocalTransport(class LinkBridge* link);
 };
 
 }

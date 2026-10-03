@@ -32,7 +32,7 @@ public:
     void proposeTempo(double bpm);
     void resetTempoAuthority();
 
-    void setTransportPlaying(bool playing);
+    void setLocalTransportPlaying(bool playing);
 
     struct BeatNow {
         bool   valid     = false;

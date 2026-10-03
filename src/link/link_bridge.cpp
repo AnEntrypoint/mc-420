@@ -18,13 +18,11 @@ std::atomic<bool> g_weSetTempo{false};
 
 std::atomic<int> g_lastLoggedPeers{-1};
 std::atomic<double> g_lastLoggedTempo{-1.0};
-std::atomic<int> g_lastLoggedPlaying{-1};
+std::atomic<bool> g_localTransportRunning{false};
 std::atomic<std::size_t> g_pendingPeers{0};
 std::atomic<double> g_pendingTempo{120.0};
-std::atomic<bool> g_pendingPlaying{false};
 std::atomic<bool> g_havePendingPeers{false};
 std::atomic<bool> g_havePendingTempo{false};
-std::atomic<bool> g_havePendingPlaying{false};
 }
 
 void LinkBridge::start(double sampleRate, bool enabled) {
@@ -33,7 +31,7 @@ void LinkBridge::start(double sampleRate, bool enabled) {
 #ifdef ALOOP_HAVE_LINK
     auto* l = new ableton::Link(120.0);
     l->enable(true);
-    l->enableStartStopSync(true);
+    l->enableStartStopSync(false);
 
     l->setNumPeersCallback([](std::size_t peers) {
         g_pendingPeers.store(peers, std::memory_order_relaxed);
@@ -43,13 +41,9 @@ void LinkBridge::start(double sampleRate, bool enabled) {
         g_pendingTempo.store(bpm, std::memory_order_relaxed);
         g_havePendingTempo.store(true, std::memory_order_release);
     });
-    l->setStartStopCallback([](bool playing) {
-        g_pendingPlaying.store(playing, std::memory_order_relaxed);
-        g_havePendingPlaying.store(true, std::memory_order_release);
-    });
 
     link_ = l;
-    fprintf(stderr, "[link] Ableton Link enabled (official lib, UDP multicast, start-stop-sync on, quantum %.1f)\n",
+    fprintf(stderr, "[link] Ableton Link enabled (official lib, UDP multicast, clock-only: tempo and phase shared, transport local, quantum %.1f)\n",
             kLinkQuantum);
 #else
     fprintf(stderr, "[link] built without the Link submodule — Link inactive\n");
@@ -81,15 +75,6 @@ void LinkBridge::controlTick() {
             fprintf(stderr, "[link] session tempo now %.3f bpm\n", bpm);
         }
     }
-    if (g_havePendingPlaying.exchange(false, std::memory_order_acquire)) {
-        bool playing = g_pendingPlaying.load(std::memory_order_relaxed);
-        int playingInt = playing ? 1 : 0;
-        if (playingInt != g_lastLoggedPlaying.load(std::memory_order_relaxed)) {
-            g_lastLoggedPlaying.store(playingInt, std::memory_order_relaxed);
-            fprintf(stderr, "[link] session transport %s\n", playing ? "PLAYING" : "STOPPED");
-        }
-    }
-
     auto state = l->captureAppSessionState();
     const auto now = l->clock().micros();
     timespec capTs{};
@@ -107,7 +92,7 @@ void LinkBridge::controlTick() {
     s.beatPhaseMicroBeats = (int64_t)(phase * 1e6);
     s.quantumMicroBeats   = (int64_t)(kLinkPhaseQuantumBeats * 1e6);
     s.captureMicros       = (int64_t)capTs.tv_sec * 1000000 + capTs.tv_nsec / 1000;
-    s.isPlaying           = state.isPlaying();
+    s.isPlaying           = g_localTransportRunning.load(std::memory_order_relaxed);
     s.weOwnTempo          = g_weSetTempo.load(std::memory_order_relaxed);
     (void)beat;
     g_active.store(nxt, std::memory_order_release);
@@ -125,8 +110,8 @@ void LinkBridge::proposeTempo(double bpm) {
     auto* l = (ableton::Link*)link_;
     const bool havePeers = (l->numPeers() > 0);
     auto state = l->captureAppSessionState();
-    const bool sessionIdle = !state.isPlaying();
-    if (havePeers && !g_weSetTempo.load(std::memory_order_relaxed) && !sessionIdle) {
+    const bool weIdle = !g_localTransportRunning.load(std::memory_order_relaxed);
+    if (havePeers && !g_weSetTempo.load(std::memory_order_relaxed) && !weIdle) {
         fprintf(stderr, "[link] not proposing %.3f bpm — %u peer(s) actively playing at the session tempo\n",
                 bpm, (unsigned)l->numPeers());
         return;
@@ -152,7 +137,7 @@ LinkBridge::BeatNow LinkBridge::beatNow() const {
     auto state = l->captureAppSessionState();
     const auto now = l->clock().micros();
     b.valid     = true;
-    b.isPlaying = state.isPlaying();
+    b.isPlaying = g_localTransportRunning.load(std::memory_order_relaxed);
     b.beat      = state.beatAtTime(now, kLinkQuantum);
     b.bpm       = state.tempo();
     b.peerCount = (int)l->numPeers();
@@ -160,25 +145,11 @@ LinkBridge::BeatNow LinkBridge::beatNow() const {
     return b;
 }
 
-void LinkBridge::setTransportPlaying(bool playing) {
-#ifdef ALOOP_HAVE_LINK
-    if (!link_) return;
-    auto* l = (ableton::Link*)link_;
-    auto state = l->captureAppSessionState();
-    if (state.isPlaying() == playing) return;
-    const auto when = l->clock().micros();
-    if (playing) {
-        state.setIsPlayingAndRequestBeatAtTime(true, when, 0.0, kLinkQuantum);
-    } else {
-        state.setIsPlaying(false, when);
-    }
-    l->commitAppSessionState(state);
-    fprintf(stderr, "[link] set session transport %s%s\n",
-            playing ? "PLAYING" : "STOPPED",
-            playing ? " (beat 0 anchored to the quantum)" : "");
-#else
-    (void)playing;
-#endif
+void LinkBridge::setLocalTransportPlaying(bool playing) {
+    const bool was = g_localTransportRunning.exchange(playing, std::memory_order_relaxed);
+    if (was == playing) return;
+    fprintf(stderr, "[link] local transport %s (not shared with peers)\n",
+            playing ? "PLAYING" : "STOPPED");
 }
 
 }
