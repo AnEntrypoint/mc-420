@@ -42,9 +42,9 @@ int main(int argc, char** argv) {
         fflush(stdout);
       }
     }
-    printf("[peer] peers=%zu bpm=%.3f beat=%.4f phase=%.5f\n", link.numPeers(),
-           state.tempo(), beat, state.phaseAtTime(now, quantum));
+    printf("[peer] peers=%zu bpm=%.3f beat=%.4f phase=%.5f ms=%lld\n", link.numPeers(),
+           state.tempo(), beat, state.phaseAtTime(now, quantum), (long long)hostMs);
     fflush(stdout);
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 }

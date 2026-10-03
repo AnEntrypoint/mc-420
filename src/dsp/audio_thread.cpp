@@ -776,11 +776,15 @@ static void* worker(void*) {
                 static double prevMasterLen = 0.0;
                 bool masterJustCreated = (prevMasterLen <= 0.0f && masterLen > 0.0f);
                 prevMasterLen = masterLen;
-                if (masterJustCreated && g_link) {
-                    timespec imposeTs{};
-                    clock_gettime(CLOCK_MONOTONIC, &imposeTs);
-                    const int64_t imposeMicros = (int64_t)imposeTs.tv_sec * 1000000 + imposeTs.tv_nsec / 1000;
-                    g_link->requestPhaseImpose(0.0, imposeMicros, (double)recordedBeatsShared);
+                if (masterJustCreated) {
+                    masterPhaseSamples = 0.0;
+                    linkPhaseTrim = 0.0;
+                    if (g_link) {
+                        timespec imposeTs{};
+                        clock_gettime(CLOCK_MONOTONIC, &imposeTs);
+                        const int64_t imposeMicros = (int64_t)imposeTs.tv_sec * 1000000 + imposeTs.tv_nsec / 1000;
+                        g_link->requestPhaseImpose(0.0, imposeMicros, (double)recordedBeatsShared);
+                    }
                 }
 
                 if (masterLen > 0.0f) {
@@ -791,12 +795,12 @@ static void* worker(void*) {
                         tempoStableBlocks = bpmChanged ? 0 : (tempoStableBlocks + 1);
                         const int kTempoStableBlocksThreshold = (int)(g_cfg.sampleRate / (double)N);
 
+                        timespec nowTs{};
+                        clock_gettime(CLOCK_MONOTONIC, &nowTs);
+                        const double nowMicros = (double)nowTs.tv_sec * 1e6 + (double)nowTs.tv_nsec / 1e3;
                         bool haveLinkTarget = false;
                         double linkTargetSamples = 0.0;
                         if (recordedBeatsValid && linkSnap.phaseValid && linkSnap.quantumMicroBeats > 0 && linkSnap.captureMicros > 0) {
-                            timespec nowTs{};
-                            clock_gettime(CLOCK_MONOTONIC, &nowTs);
-                            double nowMicros = (double)nowTs.tv_sec * 1e6 + (double)nowTs.tv_nsec / 1e3;
                             double elapsedMicros = nowMicros - (double)linkSnap.captureMicros;
                             if (elapsedMicros < 0.0) elapsedMicros = 0.0;
                             if (elapsedMicros > 4e6) elapsedMicros = 4e6;
@@ -813,14 +817,17 @@ static void* worker(void*) {
                         }
 
                         const bool linkJoined = !wasLinkDriving && !masterJustCreated;
-                        double joinErrBeats = 0.0;
                         if (linkJoined && haveLinkTarget) {
                             wasLinkDriving = true;
                             double halfLenJ = (double)masterLen * 0.5;
                             double dj = std::fmod(linkTargetSamples - masterPhaseSamples + halfLenJ, (double)masterLen);
                             if (dj < 0.0) dj += (double)masterLen;
                             dj -= halfLenJ;
-                            joinErrBeats = std::fabs(dj) / beatLenSamplesShared;
+                            if (std::fabs(dj) / beatLenSamplesShared > kJoinSnapErrBeats) {
+                                g_link->requestPhaseImpose(masterPhaseSamples / beatLenSamplesShared,
+                                                           (int64_t)nowMicros,
+                                                           (double)recordedBeatsShared);
+                            }
                         }
 
                         if (masterJustCreated && haveLinkTarget)
@@ -830,8 +837,7 @@ static void* worker(void*) {
                                              linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
                         if (freshSnapshot) lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
 
-                        if (haveLinkTarget && (!anyAudible
-                                               || (linkJoined && joinErrBeats > kJoinSnapErrBeats))) {
+                        if (haveLinkTarget && !masterJustCreated && !anyAudible) {
                             masterPhaseSlope = (double)linkSpeedRatio;
                             masterPhaseSamples = linkTargetSamples;
                             linkPhaseTrim = 0.0;

@@ -63,7 +63,10 @@ void LinkBridge::stop() {
 
 void LinkBridge::controlTick() {
 #ifdef ALOOP_HAVE_LINK
-    if (!link_) return;
+    if (!link_) {
+        g_havePhaseImpose.store(false, std::memory_order_relaxed);
+        return;
+    }
 
     if (g_havePendingPeers.exchange(false, std::memory_order_acquire)) {
         int peers = (int)g_pendingPeers.load(std::memory_order_relaxed);
