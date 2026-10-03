@@ -791,7 +791,7 @@ static void* worker(void*) {
             const bool manualPunchActive = std::fabs(g_manualSpeedMul - 1.0f) > 0.3f;
             if (!linkVarispeedEngaged || manualPunchActive) linkPhaseTrim = 0.0;
             {
-                float effSpeed = g_manualSpeedMul * (linkSpeedRatio + (float)linkPhaseTrim);
+                float effSpeed = g_manualSpeedMul * linkSpeedRatio;
                 std::fill(speedBuf.begin(), speedBuf.end(), effSpeed);
                 std::fill(manualSpeedBuf.begin(), manualSpeedBuf.end(), g_manualSpeedMul);
                 g_telem.effSpeed = effSpeed;
