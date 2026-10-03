@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=aa2f524a60a77696ac469a936b8960525a88bfa2">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d0b1e0fe87060349c821ea641941b1ae20d7fbfe">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -82,7 +82,11 @@ first. A wet effect’s own engaged-only algorithmic latency (<code class="langu
 any rate taken from two endpoint samples against the host clock measures the lag, not the device: a 10 s
 watch read a perfect take 0.14% slow (-2.5 cents) once and 0.36% the next. Fit a slope over every poll of a</p>
 <blockquote>
-  <p>=20 s watch instead (a 30 s probe of that same take reads +0.008 cents).</p>
+  <p>=20 s watch instead (a 30 s probe of that same take reads +0.008 cents). The grid itself still settles for
+seconds after a take (trim converging), so skip ~6 s after FINISH before measuring: <code class="language-plaintext highlighter-rouge">watch-take.js</code> at a 3 s
+window reads +/-1.6 cents and flips PASS/FAIL on one unchanged binary, at 20 s it reads +/-0.05. Better
+still, measure SLIP: <code class="language-plaintext highlighter-rouge">readpos</code> against <code class="language-plaintext highlighter-rouge">master_phase_beats * beatLen</code> out of the SAME reply is lag-immune
+(common mode) and holds to ~5e-6 over 14 s where the host-clock rate only holds to ~1e-4.</p>
 </blockquote>
 
 <p><strong>Compiling clean proves nothing</strong> – x86_64 A/B passed while real aarch64 codegen SIGSEGV’d (<code class="language-plaintext highlighter-rouge">-mapp</code>);

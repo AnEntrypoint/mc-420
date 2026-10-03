@@ -24,7 +24,11 @@ first. A wet effect's own engaged-only algorithmic latency (`ef.transpose`, SNAC
 **Telemetry (udp/4445) answers in ~190ms from the 5 Hz control loop and that lag JITTERS by tens of ms** --
 any rate taken from two endpoint samples against the host clock measures the lag, not the device: a 10 s
 watch read a perfect take 0.14% slow (-2.5 cents) once and 0.36% the next. Fit a slope over every poll of a
->=20 s watch instead (a 30 s probe of that same take reads +0.008 cents).
+>=20 s watch instead (a 30 s probe of that same take reads +0.008 cents). The grid itself still settles for
+seconds after a take (trim converging), so skip ~6 s after FINISH before measuring: `watch-take.js` at a 3 s
+window reads +/-1.6 cents and flips PASS/FAIL on one unchanged binary, at 20 s it reads +/-0.05. Better
+still, measure SLIP: `readpos` against `master_phase_beats * beatLen` out of the SAME reply is lag-immune
+(common mode) and holds to ~5e-6 over 14 s where the host-clock rate only holds to ~1e-4.
 
 **Compiling clean proves nothing** -- x86_64 A/B passed while real aarch64 codegen SIGSEGV'd (`-mapp`);
 `tools/dsp-cli` is not a device proof. **Before accepting any `.dsp` optimization, regenerate real C++ and
