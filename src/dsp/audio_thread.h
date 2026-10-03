@@ -77,6 +77,7 @@ public:
         float    grooveGateMin = 1.0f;
         float    grooveGateMax = 1.0f;
         float    grooveSwingOffsetSamples = 0.0f;
+        float    grooveSwingGridBeats = 0.0f;
         static constexpr int kLoopers = 20;
         bool     looperRec[kLoopers]  = {};
         bool     looperPlay[kLoopers] = {};

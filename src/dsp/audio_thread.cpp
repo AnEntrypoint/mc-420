@@ -191,15 +191,17 @@ static void setFlushToZero() {
 #endif
 }
 
-struct GrooveSwing { double cellBeats; double lateRatio; };
+struct GrooveSwing { double gridBeats; double ratio; };
 
 static constexpr GrooveSwing kGrooveSwings[5] = {
-    { 0.5, 0.5    },
-    { 0.5, 0.54   },
-    { 0.5, 0.62   },
-    { 0.5, 0.71   },
-    { 1.0, 0.6667 },
+    { 0.5,  0.50 },
+    { 0.5,  0.54 },
+    { 0.5,  0.58 },
+    { 0.25, 0.58 },
+    { 0.25, 0.66 },
 };
+
+static constexpr double kGrooveSwingMaxSeconds = 0.040;
 
 static constexpr double kGrooveGatePeriodBeats[5] = { 1.0, 1.0, 0.5, 1.0, 1.0 };
 
@@ -962,9 +964,11 @@ static void* worker(void*) {
                     if (dubgateClockphaseZone) *dubgateClockphaseZone = (float)gatePhase01;
                 }
 
-                const double swingCellBeats = kGrooveSwings[shuffleModeNow].cellBeats;
-                const double swingDelaySamples = (kGrooveSwings[shuffleModeNow].lateRatio - 0.5)
-                    * 2.0 * swingCellBeats * grooveBeatLen;
+                const double swingGridBeats = kGrooveSwings[shuffleModeNow].gridBeats;
+                double swingDelaySamples = (kGrooveSwings[shuffleModeNow].ratio - 0.5)
+                    * 2.0 * swingGridBeats * grooveBeatLen;
+                const double swingDelayMaxSamples = kGrooveSwingMaxSeconds * (double)g_cfg.sampleRate;
+                if (swingDelaySamples > swingDelayMaxSamples) swingDelaySamples = swingDelayMaxSamples;
                 const double gatePeriodBeats = kGrooveGatePeriodBeats[gateModeNow];
                 const double gateRamp01 = std::min(0.25,
                                                   ((0.003 * (double)g_cfg.sampleRate) / grooveBeatLen) / gatePeriodBeats);
@@ -978,7 +982,7 @@ static void* worker(void*) {
                         float gateGain = 1.0f;
                         double beatPos = p / grooveBeatLen;
                         if (swingDelaySamples > 0.0) {
-                            double cellIndex = std::floor(beatPos / swingCellBeats);
+                            double cellIndex = std::floor(beatPos / swingGridBeats);
                             if (std::fmod(cellIndex, 2.0) != 0.0) offset = -swingDelaySamples;
                         }
                         if (gateModeNow > 0) {
@@ -1002,6 +1006,7 @@ static void* worker(void*) {
                 g_telem.grooveGateMin = gateMin;
                 g_telem.grooveGateMax = gateMax;
                 g_telem.grooveSwingOffsetSamples = (float)(swingDelaySamples < 0.0 ? -swingDelaySamples : swingDelaySamples);
+                g_telem.grooveSwingGridBeats = (float)swingGridBeats;
                 std::fill(masterLenBuf.begin(), masterLenBuf.end(), masterLen);
                 std::fill(recordedBeatsBuf.begin(), recordedBeatsBuf.end(), recordedBeatsShared);
                 if (linkDrivingLength && g_link) {

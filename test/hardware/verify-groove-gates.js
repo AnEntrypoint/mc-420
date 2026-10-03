@@ -18,12 +18,15 @@ const kBeatLenTolerance = 0.02;
 const kPhraseTolerance = 0.02;
 
 const kSwingByMode = [
-  { cellBeats: 0.5, lateRatio: 0.5 },
-  { cellBeats: 0.5, lateRatio: 0.54 },
-  { cellBeats: 0.5, lateRatio: 0.62 },
-  { cellBeats: 0.5, lateRatio: 0.71 },
-  { cellBeats: 1.0, lateRatio: 0.6667 },
+  { gridBeats: 0.5, ratio: 0.5 },
+  { gridBeats: 0.5, ratio: 0.54 },
+  { gridBeats: 0.5, ratio: 0.58 },
+  { gridBeats: 0.25, ratio: 0.58 },
+  { gridBeats: 0.25, ratio: 0.66 },
 ];
+
+const kSwingMaxSeconds = 0.040;
+const kSwingChunkMaxSeconds = 0.045;
 
 const kGateExpect = [
   { name: 'off', minLo: 0.999, minHi: 1.001, maxLo: 0.999 },
@@ -181,13 +184,18 @@ async function main() {
     const t = await queryTelemetry();
     const mode = t.groove.shuffle;
     const swing = kSwingByMode[mode];
-    const expectOffset = (swing.lateRatio - 0.5) * 2 * swing.cellBeats * t.groove.beat_len_samples;
+    const expectOffset = Math.min((swing.ratio - 0.5) * 2 * swing.gridBeats * t.groove.beat_len_samples,
+                                  kSwingMaxSeconds * kSampleRate);
     if (mode !== i + 1) {
       fail(`beat pad ${beatPads[i]} set shuffle ${mode}, expected ${i + 1}`);
+    } else if (Math.abs(t.groove.swing_grid_beats - swing.gridBeats) > 1e-6) {
+      fail(`shuffle ${mode} swings the ${swing.gridBeats}-beat grid, telemetry says ${t.groove.swing_grid_beats}`);
     } else if (Math.abs(t.groove.swing_offset_samples - expectOffset) > Math.max(1, expectOffset * 0.02)) {
       fail(`shuffle ${mode} swings ${t.groove.swing_offset_samples.toFixed(1)} samples, expected ${expectOffset.toFixed(1)}`);
+    } else if (t.groove.swing_offset_samples > kSwingChunkMaxSeconds * kSampleRate) {
+      fail(`shuffle ${mode} displaces a ${(t.groove.swing_offset_samples / kSampleRate * 1000).toFixed(1)}ms chunk -- big enough to rearrange the material`);
     } else {
-      pass(`shuffle ${mode}: ${t.groove.swing_offset_samples.toFixed(1)} samples late on the off-cell (${(expectOffset / t.groove.beat_len_samples).toFixed(3)} beats)`);
+      pass(`shuffle ${mode}: ${(swing.ratio * 100).toFixed(0)}% on the ${swing.gridBeats}-beat grid, ${t.groove.swing_offset_samples.toFixed(1)} samples (${(t.groove.swing_offset_samples / kSampleRate * 1000).toFixed(1)}ms) late on the off-cell`);
     }
     await tapPad(beatPads[i]);
     await sleep(300);
