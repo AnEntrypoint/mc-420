@@ -13,12 +13,16 @@ if (!host) {
 }
 const holdMs = Number(holdMsArg || '2000');
 const padNote = Number(noteArg || '2');
-const watchMs = Number(watchMsArg || '8000');
+const watchMs = Number(watchMsArg || '20000');
 const looper = padNote - 2;
 const kSampleRate = 48000;
 const kFineGridBeats = 0.125;
 const kClearAllSettleMs = 1200;
 const kPollMs = 100;
+const kTrimSettleSkipMs = 6000;
+const kMinPolls = 12;
+const kRateTolerance = 5e-4;
+const kSlipTolerance = 5e-5;
 void flags;
 
 function sendBytes(bytes) {
@@ -56,6 +60,14 @@ function queryTelemetry() {
 
 const wrap = (v, len) => ((v % len) + len) % len;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function slopePerSecond(series) {
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const [x, y] of series) { sx += x; sy += y; sxx += x * x; sxy += x * y; }
+  const n = series.length;
+  const denom = n * sxx - sx * sx;
+  return denom === 0 ? 0 : (n * sxy - sx * sy) / denom;
+}
 
 function deriveTempoQuantBeats(seconds, anchorBpm) {
   const anchor = anchorBpm > 1 ? anchorBpm : 120;
@@ -97,11 +109,13 @@ async function main() {
   await pressPad(padNote);
   await releasePad(padNote);
   const arm = await queryTelemetry();
-  const armDelayMs = Date.now() - armPress;
   const armPhaseBeats = arm.master_phase_beats;
   const armWriteIdx = arm.loopers.writeidx[looper];
-  const armBase = Math.max(0, armWriteIdx - (armDelayMs / 1000) * kSampleRate);
-  console.log(`[watch-take] ARM: grid beat ${armPhaseBeats.toFixed(3)}, writeidx ${armWriteIdx.toFixed(0)} after ${armDelayMs}ms -> started at ${armBase.toFixed(0)}`);
+  // ARM resets the write index, so a take always starts at 0; whether the looper was clean is a
+  // device fact read before the press, not a host-clock back-extrapolation of the reply.
+  const armBase = 0;
+  const armHadContent = ((base.loopers.play >> looper) & 1) === 1;
+  console.log(`[watch-take] ARM: grid beat ${armPhaseBeats.toFixed(3)}, writeidx ${armWriteIdx.toFixed(0)}`);
 
   const holdStart = Date.now();
   while (Date.now() - holdStart < holdMs) {
@@ -166,51 +180,64 @@ async function main() {
   let sumL = 0;
   let n = 0;
   let wraps = 0;
-  let prevRead = null;
   let firstRead = null;
   let firstMs = 0;
-  let lastRead = 0;
   let lastMs = 0;
-  let prevMaster = null;
+  let prevRead = null;
+  let prevGrid = null;
   let masterWraps = 0;
+  let readOff = 0;
+  let gridOff = 0;
+  // Telemetry answers from the 5 Hz control loop and that lag jitters, so a rate taken from the
+  // two end points alone measures the lag, not the take. Fit a slope over EVERY poll instead:
+  // the jitter averages out across the whole watch, a real rate error does not.
+  const readSeries = [];
+  const gridSeries = [];
   for (const s of samples) {
-    if (s.ms < 1500) { prevRead = s.readpos; prevMaster = s.masterPhase; continue; }
+    const grid = s.masterPhase * beatLenSamples;
+    if (s.ms < kTrimSettleSkipMs) { prevRead = s.readpos; prevGrid = grid; continue; }
     if (firstRead === null) {
       firstRead = s.readpos;
       firstMs = s.ms;
-      prevRead = s.readpos;
-    } else if (s.readpos < prevRead - wlen * 0.5) {
-      wraps++;
-    }
-    if (prevMaster !== null) {
-      if (s.masterPhase < prevMaster - beats * 0.5) masterWraps++;
-      else if (s.masterPhase > prevMaster + beats * 0.5) masterWraps--;
+    } else {
+      if (s.readpos < prevRead - wlen * 0.5) { wraps++; readOff += wlen; }
+      if (grid < prevGrid - masterLenSamples * 0.5) { masterWraps++; gridOff += masterLenSamples; }
+      else if (grid > prevGrid + masterLenSamples * 0.5) { masterWraps--; gridOff -= masterLenSamples; }
     }
     prevRead = s.readpos;
-    prevMaster = s.masterPhase;
-    lastRead = s.readpos;
+    prevGrid = grid;
     lastMs = s.ms;
-    const L = wrap((s.masterPhase + masterWraps * beats) * beatLenSamples - s.readpos, wlen);
+    readSeries.push([(s.ms - firstMs) / 1000, s.readpos + readOff - firstRead]);
+    gridSeries.push([(s.ms - firstMs) / 1000, grid + gridOff]);
+    const L = wrap(grid + masterWraps * masterLenSamples - s.readpos, wlen);
     minL = Math.min(minL, L);
     maxL = Math.max(maxL, L);
     sumL += L;
     n++;
   }
   const meanL = n ? sumL / n : 0;
+  if (n < kMinPolls) {
+    console.error(`[watch-take] FAIL: only ${n} polls left after skipping ${kTrimSettleSkipMs}ms of grid settling -- pass a watchMs above 12000`);
+    process.exit(1);
+  }
   const offFromExpected = wrap(meanL - expectedDownbeatSamples + wlen * 0.5, wlen) - wlen * 0.5;
   const elapsedSec = (lastMs - firstMs) / 1000;
-  const readAdvance = wraps * wlen + (lastRead - firstRead);
-  const readRate = readAdvance / (elapsedSec * kSampleRate);
+  const readRate = slopePerSecond(readSeries) / kSampleRate;
+  const gridRate = slopePerSecond(gridSeries) / kSampleRate;
+  // Read against grid, both out of the SAME reply: the control-loop lag is common mode and
+  // cancels, so this slip never touches the host clock at all.
+  const gridSlip = slopePerSecond(readSeries.map((p, i) => [gridSeries[i][1], p[1]]));
 
   console.log(`[watch-take] downbeat at ${(meanL / beatLenSamples).toFixed(4)} beats into the loop (spread ${(maxL - minL).toFixed(1)} samples)`);
   console.log(`[watch-take] ARM anchor expects the downbeat at ${(expectedDownbeatSamples / beatLenSamples).toFixed(4)} beats`);
   console.log(`[watch-take] phrase offset: ${offFromExpected.toFixed(1)} samples (${(offFromExpected / kSampleRate * 1000).toFixed(2)}ms, ${(offFromExpected / cellSamples).toFixed(3)} cells)`);
-  console.log(`[watch-take] read rate ${readRate.toFixed(7)} (${(1200 * Math.log2(readRate)).toFixed(3)} cents), ${wraps} wraps in ${elapsedSec.toFixed(1)}s`);
+  console.log(`[watch-take] read rate ${readRate.toFixed(7)} (${(1200 * Math.log2(readRate)).toFixed(3)} cents), ${wraps} wraps in ${elapsedSec.toFixed(1)}s over ${readSeries.length} polls`);
+  console.log(`[watch-take] grid rate ${gridRate.toFixed(7)} (${(1200 * Math.log2(gridRate)).toFixed(3)} cents), read/grid slip ${gridSlip.toFixed(7)}`);
 
   let failed = 0;
   const fail = (msg) => { console.log(`[watch-take]   FAIL: ${msg}`); failed++; };
-  if (armBase > 1000) {
-    fail(`the take started with ${armBase.toFixed(0)} samples already written -- not a clean slate`);
+  if (armHadContent) {
+    fail(`looper${looper} was still playing ${base.loopers.wraplen[looper]} samples at ARM -- not a clean slate`);
   }
   const gridRatioOct = Math.log2(wlen / masterLenSamples);
   if (Math.abs(gridRatioOct - Math.round(gridRatioOct)) > 0.02) {
@@ -229,8 +256,11 @@ async function main() {
   if (maxL - minL > cellSamples) {
     fail(`the downbeat wandered ${(maxL - minL).toFixed(1)} samples against the master grid`);
   }
-  if (Math.abs(readRate - 1.0) > 5e-4) {
+  if (Math.abs(readRate - 1.0) > kRateTolerance) {
     fail(`the loop runs at ${readRate.toFixed(7)} of natural speed -- it resamples`);
+  }
+  if (Math.abs(gridSlip - 1.0) > kSlipTolerance) {
+    fail(`the read head slips ${((gridSlip - 1.0) * wlen).toFixed(1)} samples per repeat against the master grid`);
   }
 
   console.log(`[watch-take] ${failed === 0 ? 'PASS' : `FAIL (${failed})`}`);
