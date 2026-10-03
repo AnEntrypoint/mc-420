@@ -98,10 +98,6 @@ async function watchPlayback(wrapLen, beatLenSamples, beatsPerCycle) {
   let firstLock = null;
   let lockMin = Infinity;
   let lockMax = -Infinity;
-  // Telemetry answers in ~190ms (5 Hz control loop) and that lag JITTERS by tens of
-  // milliseconds, so a rate taken from the two end points alone measures the lag, not the
-  // take -- off by up to ~1% even over 20s. Fit a slope over EVERY poll instead: the
-  // jitter averages out across ~130 samples, a real rate error does not.
   const readSeries = [[0, 0]];
   const masterSeries = [[0, 0]];
   while (Date.now() - loopStart < kWatchMs) {
