@@ -51,5 +51,11 @@ jobs:
       - name: Arm on a fine-grid boundary
         run: node tools/loop-quantization-sim/arm-boundary.js
 
+      - name: Mismatched master lengths
+        run: node tools/loop-quantization-sim/mismatched-masters.js
+
+      - name: Take recorded at a drifted tempo
+        run: node tools/loop-quantization-sim/tempo-drift-take.js
+
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50

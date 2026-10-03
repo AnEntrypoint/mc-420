@@ -1,7 +1,7 @@
 'use strict';
 
 const { initLooperDsp, stepSample, MAXLEN } = require('./looper');
-const { createLinkWorld, LINK_QUANTUM } = require('./link');
+const { createLinkWorld, LINK_QUANTUM, beatAtTime } = require('./link');
 
 const SCALE = 100;
 const SIM_SAMPLE_RATE = 48000 / SCALE;
@@ -67,6 +67,7 @@ function createLooperControl() {
     shiftHeldDuringTake: false, pauseOthersOnFinish: false,
     ps_rec: 0, ps_play: 0, ps_finishreq: 0, ps_finishtarget: 0, ps_latencybias: 0,
     ps_erase: 0,
+    armBeatAbs: null,
     dsp: initLooperDsp(),
   };
 }
@@ -79,6 +80,7 @@ function createWorld(opts) {
     looperCount,
     loopers: Array.from({ length: looperCount }, () => createLooperControl()),
     masterLenSamples: 0,
+    masterLooper: -1,
     recordedBpm: 0,
     recordedBeats: 0,
     masterPhaseSamples: 0.0,
@@ -95,6 +97,7 @@ function createWorld(opts) {
     resnapOnReconnect: true,
     joinSnapEnabled: true,
     beatsGuessEnabled: false,
+    tempoScaleInverted: false,
     deferBeatsWrite: false,
     pendingBeats: null,
     creationSnapPending: false,
@@ -191,6 +194,7 @@ function applyRecPlayCycle(w, looper) {
       let lenSamples = snapshotWriteIdx(w, looper);
       lenSamples = Math.max(1, Math.min(lenSamples, SIM_MAXLEN));
       w.masterLenSamples = lenSamples;
+      w.masterLooper = looper;
       const recordedSeconds = w.masterLenSamples / SIM_SAMPLE_RATE;
       const linkSnap = linkAudioRead(w);
       const haveExternalTempo = linkSnap.synced && linkSnap.bpm > 1.0;
@@ -225,6 +229,7 @@ function applyRecPlayCycle(w, looper) {
       const rawSamples = snapshotWriteIdx(w, looper);
       if (rawSamples <= 0) {
         lp.ps_rec = 0; lp.recording = false; lp.hasContent = false; lp.playing = false; lp.ps_play = 0;
+        lp.armBeatAbs = null;
         lp.ps_finishreq = 1;
         lp.finishReqReleaseAtT = w.t + msToSimSamples(50);
         return;
@@ -236,7 +241,7 @@ function applyRecPlayCycle(w, looper) {
         const curBpm = linkSnap.bpm;
         if (recordedBpm > 1.0 && curBpm > 1.0) tempoScale = recordedBpm / curBpm;
       }
-      const effectiveSamples = rawSamples * tempoScale;
+      const effectiveSamples = w.tempoScaleInverted ? rawSamples * tempoScale : rawSamples / tempoScale;
       const beatsPerMasterLen = Math.max(1.0, w.recordedBeats);
       const oneBeat = Math.max(1.0, w.masterLenSamples / beatsPerMasterLen);
       const takeLenBeats = effectiveSamples / oneBeat;
@@ -248,7 +253,7 @@ function applyRecPlayCycle(w, looper) {
       const finalBeats = (pastMultiple >= 1 && overshootBeats <= 1.0 + 0.0001)
         ? pastNodeBeats
         : futureNodeBeats;
-      let quantized = Math.round((finalBeats * oneBeat) / tempoScale);
+      let quantized = Math.round(w.tempoScaleInverted ? (finalBeats * oneBeat) / tempoScale : finalBeats * oneBeat);
       if (quantized < 1) quantized = 1;
       if (quantized > SIM_MAXLEN) quantized = SIM_MAXLEN;
       if (quantized > SIM_MAXLEN) quantized = SIM_MAXLEN;
@@ -326,6 +331,7 @@ function onClearAll(w, held) {
     const wasRecording = lp.recording;
     lp.held = false; lp.erased = false; lp.armedOnPress = false; lp.playing = false;
     lp.hasContent = false; lp.wrapLenStaleAfterWipe = true; lp.recording = false;
+    lp.armBeatAbs = null;
     lp.ps_play = 0; lp.ps_rec = 0;
     if (wasRecording) {
       lp.ps_finishtarget = snapshotWriteIdx(w, i);
@@ -338,6 +344,7 @@ function onClearAll(w, held) {
     lp.finishTargetPending = 0; lp.pauseOthersOnFinish = false;
   }
   w.masterLenSamples = 0;
+  w.masterLooper = -1;
   w.recordedBpm = 0;
   w.recordedBeats = 0;
   w.link.local.resetTempoAuthority();
@@ -364,6 +371,7 @@ function onHoldEraseTick(w, looper) {
   lp.pauseOthersOnFinish = false;
   lp.erased = true;
   lp.armedOnPress = false;
+  lp.armBeatAbs = null;
   lp.hasContent = false;
   lp.wrapLenStaleAfterWipe = true;
   lp.playing = false;
@@ -416,6 +424,7 @@ function pollHoldsTick(w) {
   }
   if (!anyHasContent && w.masterLenSamples !== 0) {
     w.masterLenSamples = 0;
+    w.masterLooper = -1;
     w.recordedBpm = 0;
     w.recordedBeats = 0;
     w.link.local.resetTempoAuthority();
@@ -529,6 +538,7 @@ function stepOneSample(w) {
     };
     const next = stepSample(lp.dsp, inp);
     lp.dsp = next;
+    if (next.armEdge) lp.armBeatAbs = beatAtTime(w.link.session, (w.t / SIM_SAMPLE_RATE) * 1000);
     results.push(next);
   }
   w.t += 1;
