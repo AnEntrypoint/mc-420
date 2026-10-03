@@ -534,6 +534,8 @@ static void* worker(void*) {
         }
 
         timespec lastReadTs{}; bool haveLastReadTs = false;
+        double roundTripEma = -1.0;
+        int    roundTripUpdates = 0;
         const double kExpectedPeriodMs = (double)N / g_cfg.sampleRate * 1000.0;
         while (g_running.load()) {
             timespec nowTs; clock_gettime(CLOCK_MONOTONIC, &nowTs);
@@ -557,6 +559,8 @@ static void* worker(void*) {
                 }
             }
             if (r < 0) { g_telem.xruns++; snd_pcm_recover(cap, (int)r, 1); continue; }
+            snd_pcm_sframes_t capDelayFrames = 0;
+            if (snd_pcm_delay(cap, &capDelayFrames) < 0) capDelayFrames = 0;
 
 #ifdef ALOOP_HAVE_FAUST_LOOP
             float monitorFoldVal = 0.0f;
@@ -1213,6 +1217,8 @@ static void* worker(void*) {
             g_telem.outPeak = outPeak;
 #endif
 
+            snd_pcm_sframes_t playDelayFrames = 0;
+            if (snd_pcm_delay(play, &playDelayFrames) < 0) playDelayFrames = 0;
             timespec writeStartTs; clock_gettime(CLOCK_MONOTONIC, &writeStartTs);
             snd_pcm_sframes_t w = snd_pcm_writei(play, buf.data(), N);
             timespec writeEndTs; clock_gettime(CLOCK_MONOTONIC, &writeEndTs);
@@ -1223,6 +1229,21 @@ static void* worker(void*) {
                 }
             }
             if (w < 0) { g_telem.xruns++; snd_pcm_recover(play, (int)w, 1); }
+
+            if (r > 0 && w > 0) {
+                const double roundTripNow = (double)capDelayFrames + (double)playDelayFrames + (double)N;
+                if (roundTripNow >= 0.0 && roundTripNow < 16384.0) {
+                    if (roundTripEma < 0.0) roundTripEma = roundTripNow;
+                    else roundTripEma += (roundTripNow - roundTripEma) * 0.01;
+                    g_telem.alsaRoundTripSamples = (float)roundTripEma;
+                    g_telem.latencyBiasSamples = (float)((double)N + roundTripEma + (double)g_cfg.latencyTrimSamples);
+                    if (++roundTripUpdates == 400) {
+                        fprintf(stderr, "[audio] measured round trip %.0f samples (%.2f ms) -- looper latency bias %.0f samples\n",
+                                roundTripEma, roundTripEma / (g_cfg.sampleRate > 0 ? g_cfg.sampleRate : 48000) * 1000.0,
+                                (double)g_telem.latencyBiasSamples);
+                    }
+                }
+            }
 
             if (otgReady) {
                 snd_pcm_sframes_t ow = snd_pcm_writei(otgPlay, otgBuf.data(), N);

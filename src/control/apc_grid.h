@@ -132,6 +132,7 @@ private:
     unsigned m_looperFinishPendingSinceMs[kLooperCount] = {};
     unsigned m_recordStartMs[kLooperCount] = {};
     bool m_looperShiftHeldDuringTake[kLooperCount] = {};
+    long m_latencyBiasWritten = 0;
     bool m_looperPauseOthersOnFinish[kLooperCount] = {};
     bool m_localTransportRunning = false;
 

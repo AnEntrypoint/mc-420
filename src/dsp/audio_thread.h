@@ -36,6 +36,7 @@ struct AudioConfig {
     std::string instrumentDeviceMatch = "AIR 192";
     std::string audioDevice = "hw:UAC2Gadget,0";
     std::string remoteToken = "";
+    int latencyTrimSamples = 0;
 
     bool usbRecordEnabled = true;
     std::string usbMountPoint = "/media/aloop-usb";
@@ -63,8 +64,9 @@ public:
         float    inPeak = 0.0f;
         float    outPeak = 0.0f;
         float    effSpeed = 1.0f;
-        float    sustainCmd = 0.0f;
         float    sustainGate = 0.0f;
+        float    alsaRoundTripSamples = 0.0f;
+        float    latencyBiasSamples = 0.0f;
         float    linkPhaseErrBeats = 0.0f;
         float    masterPhaseBeats = 0.0f;
         static constexpr int kLoopers = 20;

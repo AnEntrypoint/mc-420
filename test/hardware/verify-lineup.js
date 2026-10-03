@@ -9,12 +9,12 @@ if (!host) {
 }
 const TRIALS = trialsArg ? Number(trialsArg) : 3;
 const SAMPLE_RATE = 48000;
-const LATENCY_BIAS = 64;
+let latencyBias = 64;
 const HOLD_MS = 2000;
 const LONG_HOLD_MS = 8100;
 const HOLD_ERASE_MS = 1150;
 const WITHIN_TRIAL_TOLERANCE = 8;
-const ON_GRID_TOLERANCE = LATENCY_BIAS;
+const ON_GRID_TOLERANCE = 64;
 const LENGTH_TOLERANCE_BEATS = 2.5;
 
 const MASTER_PAD = 2;
@@ -76,7 +76,8 @@ function anchorOf(t, looper, oneBeat) {
   const beatScale = wlen / (beats * oneBeat);
   const masterPhase = t.master_phase_beats * oneBeat;
   const readPos = t.loopers.readpos[looper];
-  return wrap(beatScale * masterPhase - readPos + LATENCY_BIAS, wlen) / beatScale;
+  if (t.latency_bias_samples > 0) latencyBias = t.latency_bias_samples;
+  return wrap(beatScale * masterPhase - readPos + latencyBias, wlen) / beatScale;
 }
 
 async function anchors(oneBeat, samples = 4) {

@@ -180,7 +180,7 @@ function applyRecPlayCycle(w, looper) {
     lp.wrapLenStaleAfterWipe = false;
     lp.playing = true;
     lp.ps_play = 1;
-    const latencyBias = kBlockSizeSimSamples + (lp.shiftHeldDuringTake ? kBlockSizeSimSamples : 0);
+    const latencyBias = kBlockSizeSimSamples + (w.alsaRoundTripSamples || 0) + (lp.shiftHeldDuringTake ? kBlockSizeSimSamples : 0);
     lp.ps_latencybias = latencyBias;
     w.masterLenSamples = w.masterLenSamples;
     if (w.masterLenSamples === 0) {

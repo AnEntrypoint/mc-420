@@ -143,6 +143,12 @@ static double snapBeatsToPow2(double continuousBeats) {
 
 constexpr long kShiftFoldBlockLatencySamples = 64;
 
+long measuredLatencyBias(AudioThread* audio) {
+    long bias = 0;
+    if (audio) bias = (long)(audio->snapshotTelemetry().latencyBiasSamples + 0.5f);
+    return bias > 0 ? bias : kBlockSize;
+}
+
 void ApcGrid::updateLocalTransport(LinkBridge* link) {
     if (!link) return;
     bool anyPlaying = false;
@@ -166,7 +172,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
         m_looperWrapLenStaleAfterWipe[looper] = false;
         m_looperPlaying[looper] = true;
         setLooper(ps, looper, "play", 1.0f);
-        long latencyBias = kBlockSize + (m_looperShiftHeldDuringTake[looper] ? kShiftFoldBlockLatencySamples : 0);
+        long latencyBias = measuredLatencyBias(audio) + (m_looperShiftHeldDuringTake[looper] ? kShiftFoldBlockLatencySamples : 0);
         setLooper(ps, looper, "latencybias", (float)latencyBias);
         m_masterLenSamples = (long)ps.get("cmd/master_len", 0.0f);
         if (m_masterLenSamples == 0) {
@@ -368,6 +374,17 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
         char name[32];
         snprintf(name, sizeof name, "looper%d/hascontent", looper);
         ps.setByName(name, m_looperHasContent[looper] ? 1.0f : 0.0f);
+    }
+    {
+        const long bias = measuredLatencyBias(audio);
+        if (bias != m_latencyBiasWritten) {
+            m_latencyBiasWritten = bias;
+            for (int looper = 0; looper < kLooperCount; looper++) {
+                if (!m_looperHasContent[looper] || m_looperRecording[looper]) continue;
+                setLooper(ps, looper, "latencybias",
+                          (float)(bias + (m_looperShiftHeldDuringTake[looper] ? kShiftFoldBlockLatencySamples : 0)));
+            }
+        }
     }
     {
         auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};

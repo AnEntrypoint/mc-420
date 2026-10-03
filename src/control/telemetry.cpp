@@ -91,6 +91,7 @@ void Telemetry::publish() {
         "\"glitch_engaged\":%s,"
         "\"usb_recording\":%s,\"usb_rec_overruns\":%llu,"
         "\"audio_peak\":{\"in\":%.4f,\"out\":%.4f},\"eff_speed\":%.4f,"
+        "\"alsa_roundtrip_samples\":%.1f,\"latency_bias_samples\":%.1f,"
         "\"sustain_cmd\":%.2f,\"sustain_gate\":%.2f,"
         "\"grid_beat_index\":%d,\"master_phase_beats\":%.5f,"
         "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s,\"stateflags\":%s}}",
@@ -104,6 +105,7 @@ void Telemetry::publish() {
         t.glitchEngaged ? "true" : "false",
         t.usbRecording ? "true" : "false", (unsigned long long)t.usbRecOverruns,
         t.inPeak, t.outPeak, t.effSpeed,
+        t.alsaRoundTripSamples, t.latencyBiasSamples,
         t.sustainCmd, t.sustainGate,
         t.gridBeatIndex, t.masterPhaseBeats,
         recBits, playBits, vols, levels, wraplens, readposes, writeidxs, stateflags);
