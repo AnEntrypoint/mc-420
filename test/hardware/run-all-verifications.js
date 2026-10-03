@@ -22,6 +22,7 @@ async function main() {
   results.push(await run('verify-glitch-no-shift.js', [host]));
   results.push(await run('verify-quantization.js', [host]));
   results.push(await run('verify-lineup.js', [host]));
+  results.push(await run('varispeed-record.js', [host]));
   results.push(await run('bisect-1hz-stall.js', [host, bisectSeconds || '15']));
 
   console.log(`\n${'='.repeat(70)}\nSUMMARY\n${'='.repeat(70)}`);

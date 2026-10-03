@@ -404,6 +404,23 @@ re-snap 16 beats to 32. First (master-establishing) recording takes tempo/beats 
 Link tempo when present, `recorded_beats` snapped to the nearest power-of-2 in {1..128}
 (`snapBeatsToPow2`).
 
+## Varispeed punch is BAKED into the take
+
+`cmd/halfspeed`/`cmd/doublespeed` drive `g_manualSpeedMul` (0.5/1/2); `effSpeed = g_manualSpeedMul *
+(linkSpeedRatio + linkPhaseTrim)`. `dsp/loop.dsp` takes a 9th input `manualSpeed` =
+`g_manualSpeedMul` (block-constant `manualSpeedBuf`) so it can separate the punch from the Link
+ratio: `manualSafe = max(0.1, abs(manualSpeed))`, `ratioClamped = effSpeed / manualSafe`. Every beat
+length uses `ratioClamped`, never `speedClamped` (`beatLenNow`, `sNext`) — the punch must not scale
+the grid, or the C++ `finishtarget` (no manual term) stops matching the DSP's `snappedWrapLen` and a
+take doubles. Each take latches its own `v` = `manualSafe` at `finishEdge` (1.0 at `armEdge`);
+`vBaked = v != 1.0`, `speedForTake = v / manualSafe`, and the read head advances
+`speedClamped * sNext * speedForTake` = `v * ratioNow / ratioRec`. A take finished at 0.5x therefore
+plays 0.5x while held AND stays 0.5x after release — measured on hardware as 1.0x held / 2.0x
+released before the fix. A baked take no longer responds to later punches; that is the price of
+sticking, and the reason only ONE live multiplier can exist. Gates:
+`tools/loop-quantization-sim/varispeed-record.js` (legacy 1.0/2.0 vs fixed 0.5/0.5) and
+`test/hardware/varispeed-record.js`.
+
 ## LofiFx/granulator button -- SHIFT disambiguates (note 69)
 
 Both fire on PRESS: plain tap toggles `m_granulatorLatched`; SHIFT+tap toggles Resonode engage
@@ -430,7 +447,7 @@ Every FX page (Dub, Guitar, LofiFx) has two independently-latching 8-knob banks 
 
 Groove shuffle: `kBeatPadNotes={15,23,31,39}` double as shuffle buttons, `fx/shuffle/mask` (4-bit),
 block-boundary only, own `shuffleClockSamples`. `dsp/loop.dsp` varispeed has NO deadzone
-(`varispeedActive=effSpeed!=1.0` exact); `resyncCoeff` gates to `0.0` when `manualPunchActive`;
+(`varispeedActive=(effSpeed!=1.0)|vBaked` exact); `resyncCoeff` gates to `0.0` on `manualPunchActive|vBaked`;
 varispeed's instant jump and shuffle's hard clip are INTENTIONAL -- do not smooth either.
 `microrepeat.dsp` `sliceBlocks=max(1,int(beatBlocks/divSafe))*2`. CC53 formant: `((data2-64)/63.0)*1.5`,
 deadzone 60-68. Loop ring reads use Catmull-Rom cubic; taps wrap at `wrapLen`, not `MAXLEN`.

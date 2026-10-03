@@ -5,7 +5,7 @@ MAXLEN   = 48000 * 60;
 NLOOPERS = 20;
 kFineGridBeats = 0.125;
 
-oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped) = out : attachLevel
+oneLooper(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped) = out : attachLevel
 with {
     recN  = button("rec");
     playN = checkbox("play");
@@ -22,8 +22,8 @@ with {
     oneBeat = max(1.0, masterLen / beatsPerMasterLen);
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
 
-    takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev, sPrev, pendPhasePrev) =
-        (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext, sNext, pendPhaseNext)
+    takeState(pendPrev, finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev, sPrev, vPrev, pendPhasePrev) =
+        (pendNext, finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext, sNext, vNext, pendPhaseNext)
     with {
         recPrevEdge = recN : mem;
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
@@ -71,9 +71,12 @@ with {
         gridMultiple = max(1.0, ceil(finishTakeLen / anchorGridLenNow - gridPickEps));
         snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, gridMultiple * anchorGridLenNow);
         wlenNext = ba.if(finishEdge, max(1.0, snappedWrapLen), wlenPrev);
-        beatLenNow = ba.if(masterLen < 0.5, oneBeat, oneBeat / speedClamped);
+        beatLenNow = ba.if(masterLen < 0.5, oneBeat, oneBeat / ratioClamped);
         sNext = ba.if(armEdge, 1.0,
-                 ba.if(finishEdge, ba.if(masterLen < 0.5, 1.0, 1.0 / speedClamped), sPrev));
+                 ba.if(finishEdge, ba.if(masterLen < 0.5, 1.0, 1.0 / ratioClamped), sPrev));
+        vNext = ba.if(armEdge, 1.0, ba.if(finishEdge, manualSafe, vPrev));
+        vBaked = vNext != 1.0;
+        speedForTake = ba.if(vBaked, vNext / manualSafe, 1.0);
 
         wrapLenCur = max(1, wlenNext);
         cycleInc = ba.if(masterLen < 0.5, wrapLenCur, sNext * masterLen);
@@ -82,18 +85,20 @@ with {
 
         absPos = wrapAbs(sNext * (masterPhase - rsmNext) + latencyBiasN + coffNext, wrapLenCur);
         speedClamped = max(0.1, min(8.0, effSpeed));
-        varispeedActive = effSpeed != 1.0;
+        manualSafe = max(0.1, abs(manualSpeed));
+        ratioClamped = max(0.1, min(8.0, effSpeed / manualSafe));
+        varispeedActive = (effSpeed != 1.0) | vBaked;
         manualPunchActive = abs(effSpeed - 1.0) > 0.3;
-        resyncCoeff = ba.if(manualPunchActive, 0.0, 0.0005);
+        resyncCoeff = ba.if(manualPunchActive | vBaked, 0.0, 0.0005);
         wrapDelta(prev) = wrapAbs(absPos - prev + wrapLenCur * 0.5, wrapLenCur) - wrapLenCur * 0.5;
         rposNext = ba.if(armEdge | finishEdge, absPos,
                     ba.if(varispeedActive,
-                          wrapAbs(rposPrev + speedClamped * sNext + wrapDelta(rposPrev) * resyncCoeff, wrapLenCur),
+                          wrapAbs(rposPrev + speedClamped * sNext * speedForTake + wrapDelta(rposPrev) * resyncCoeff, wrapLenCur),
                           absPos));
     };
 
-    takeStateBus = (_,_,_,_,_,_,_,_,_,_,_) ~ takeState;
-    pickState(k) = takeStateBus : (par(j, 11, *(j == k)) :> _);
+    takeStateBus = (_,_,_,_,_,_,_,_,_,_,_,_) ~ takeState;
+    pickState(k) = takeStateBus : (par(j, 12, *(j == k)) :> _);
     pend = pickState(0);
     fin = pickState(1);
     act = pickState(2);
@@ -143,10 +148,10 @@ with {
     attachLevel(x) = attach(x, levelPeakFollow(x) : levelMeter) : attachWriteIdx : attachWrapLen : attachReadPos : attachStateFlags;
 };
 
-looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped) =
-    par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped)));
+looperOuts(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped) =
+    par(i, NLOOPERS, vgroup("looper%2i", oneLooper(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped)));
 
-loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) =
+loopEngine(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) =
     in, loopSum, loopSolos
 with {
     masterPhasePrev = masterPhase : mem;
@@ -157,9 +162,9 @@ with {
     fineGridShared = max(1.0, kFineGridBeats * oneBeatShared);
     fineGridWrapped = int(masterPhase / fineGridShared) != int(masterPhasePrev / fineGridShared);
 
-    outs = looperOuts(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped);
+    outs = looperOuts(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, masterPhaseWrapped, fineGridWrapped);
     loopSum = outs :> _;
     loopSolos = outs;
 };
 
-process(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = loopEngine(in, prevFiltIn, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats);
+process(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats) = loopEngine(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats);

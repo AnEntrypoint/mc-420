@@ -234,6 +234,7 @@ static void* worker(void*) {
     FaustUI fuiPost; faustPost.buildUserInterface(&fuiPost);
     std::vector<float> clearBuf((size_t)N, 0.0f);
     std::vector<float> speedBuf((size_t)N, 1.0f);
+    std::vector<float> manualSpeedBuf((size_t)N, 1.0f);
     std::vector<float> masterPhaseBuf((size_t)N, 0.0f);
     std::vector<float> masterLenBuf((size_t)N, 0.0f);
     std::vector<float> sidechainEnvBuf((size_t)N, 0.0f);
@@ -259,8 +260,8 @@ static void* worker(void*) {
     for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) looperSoloBuf[lp].assign((size_t)N, 0.0f);
     std::vector<float> cueWetBuf((size_t)N, 0.0f);
     std::vector<float> masterWetBuf((size_t)N, 0.0f);
-    float* fins[22] = {
-        fin.data(), prevFiltOut.data(), clearBuf.data(), speedBuf.data(), masterPhaseBuf.data(), masterLenBuf.data(), sidechainEnvBuf.data(),
+    float* fins[23] = {
+        fin.data(), prevFiltOut.data(), clearBuf.data(), speedBuf.data(), manualSpeedBuf.data(), masterPhaseBuf.data(), masterLenBuf.data(), sidechainEnvBuf.data(),
         recordedBeatsBuf.data(),
         freeXposeBuf.data(),
         xposeNoteBuf[0].data(), xposeGateBuf[0].data(),
@@ -740,6 +741,7 @@ static void* worker(void*) {
             {
                 float effSpeed = g_manualSpeedMul * (linkSpeedRatio + (float)linkPhaseTrim);
                 std::fill(speedBuf.begin(), speedBuf.end(), effSpeed);
+                std::fill(manualSpeedBuf.begin(), manualSpeedBuf.end(), g_manualSpeedMul);
                 g_telem.effSpeed = effSpeed;
             }
             {

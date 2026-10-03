@@ -69,6 +69,7 @@ def run_multi_marker_take(master_len_samples, take_len_samples, marker_freqs):
     masterPhase = (np.arange(n, dtype=np.float64) % master_len_samples).astype(np.float32)
     masterLen = harness.const(n, float(master_len_samples))
     effSpeed = harness.const(n, 1.0)
+    manualSpeed = harness.const(n, 1.0)
     clearAll = harness.const(n, 0.0)
     sidechainEnv = harness.const(n, 0.0)
     recordedBeats = harness.const(n, 4.0)
@@ -95,7 +96,7 @@ def run_multi_marker_take(master_len_samples, take_len_samples, marker_freqs):
     play_auto = np.zeros(n, dtype=np.float32)
     play_auto[finish_sample:] = 1.0
 
-    channels = np.stack([in_unused, input_sig, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats])
+    channels = np.stack([in_unused, input_sig, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats])
     audio, _, _ = harness.render_take(
         dsp, channels, n,
         params={"vol": 1.0, "sidechainsrc": 0.0},

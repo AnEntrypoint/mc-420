@@ -63,6 +63,7 @@ def run_take(eff_speed):
     masterPhase = ((np.arange(n, dtype=np.float64) * eff_speed) % master_len).astype(np.float32)
     masterLen = harness.const(n, float(master_len))
     effSpeed = harness.const(n, float(eff_speed))
+    manualSpeed = harness.const(n, 1.0)
     clearAll = harness.const(n, 0.0)
     sidechainEnv = harness.const(n, 0.0)
     recordedBeats = harness.const(n, kMasterBeats)
@@ -78,7 +79,7 @@ def run_take(eff_speed):
     play_auto = np.zeros(n, dtype=np.float32)
     play_auto[finish_sample:] = 1.0
 
-    channels = np.stack([in_unused, input_sig, clearAll, effSpeed, masterPhase,
+    channels = np.stack([in_unused, input_sig, clearAll, effSpeed, manualSpeed, masterPhase,
                          masterLen, sidechainEnv, recordedBeats])
     audio, _, _ = harness.render_take(
         dsp, channels, n,

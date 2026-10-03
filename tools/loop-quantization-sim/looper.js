@@ -10,7 +10,7 @@ function wrapAbs(p, len) {
 function initLooperDsp() {
   return {
     pend: 0, fin: 0, act: 0, widx: 0, wlen: 1, rsm: 0, coff: 0, rpos: 0, gate: 0,
-    beatScale: 1, pendPhase: 0,
+    beatScale: 1, bakedSpeed: 1, pendPhase: 0,
     recPrevEdge: 0,
   };
 }
@@ -19,13 +19,18 @@ function stepSample(s, inp) {
   const {
     recN, finishReqN, finishTargetN, eraseN, clearAll,
     masterPhase, masterPhasePrev, masterLen, recordedBeats,
-    effSpeed,
+    effSpeed, manualSpeed,
   } = inp;
 
   const wipe = Math.max(clearAll, eraseN);
   const beatsPerMasterLen = Math.max(1.0, recordedBeats);
   const oneBeat = Math.max(1.0, masterLen / beatsPerMasterLen);
   const speedClamped = Math.max(0.1, Math.min(8.0, effSpeed));
+  const manualSafe = Math.max(0.1, Math.abs(manualSpeed === undefined ? 1.0 : manualSpeed));
+  const legacyBake = inp.legacyBake === true;
+  const ratioClamped = legacyBake
+    ? speedClamped
+    : Math.max(0.1, Math.min(8.0, effSpeed / manualSafe));
   const masterPhaseWrapped = masterLen >= 0.5 && masterPhase < masterPhasePrev;
 
   const fineGrid = Math.max(1.0, kFineGridBeats * oneBeat);
@@ -66,7 +71,7 @@ function stepSample(s, inp) {
   const writeIdxForLatch = finNext > 0.5 ? finishTargetN : widxNext;
   const intendedTakeLen = finishTargetN > 0.5 ? finishTargetN : writeIdxForLatch;
   const finishTakeLen = Math.max(1.0, intendedTakeLen);
-  const beatLenNow = masterLen < 0.5 ? oneBeat : oneBeat / speedClamped;
+  const beatLenNow = masterLen < 0.5 ? oneBeat : oneBeat / ratioClamped;
   const takeLenBeats = finishTakeLen / beatLenNow;
   const gridPickEps = 0.01;
   let anchorGridBeats;
@@ -84,7 +89,10 @@ function stepSample(s, inp) {
   const wlenNext = finishEdge ? Math.max(1.0, snappedWrapLen) : s.wlen;
   const beatScaleNext = armEdge
     ? 1.0
-    : (finishEdge ? (masterLen < 0.5 ? 1.0 : 1.0 / speedClamped) : s.beatScale);
+    : (finishEdge ? (masterLen < 0.5 ? 1.0 : 1.0 / ratioClamped) : s.beatScale);
+  const bakedSpeedNext = armEdge ? 1.0 : (finishEdge ? manualSafe : s.bakedSpeed);
+  const bakedActive = !legacyBake && bakedSpeedNext !== 1.0;
+  const speedForTake = bakedActive ? bakedSpeedNext / manualSafe : 1.0;
 
   const wrapLenCur = Math.max(1, wlenNext);
   const cycleInc = masterLen < 0.5 ? wrapLenCur : beatScaleNext * masterLen;
@@ -93,20 +101,20 @@ function stepSample(s, inp) {
     : (masterPhaseWrapped ? wrapAbs(s.coff + cycleInc, wrapLenCur) : s.coff);
 
   const absPos = wrapAbs(beatScaleNext * (masterPhase - rsmNext) + inp.latencyBiasN + coffNext, wrapLenCur);
-  const varispeedActive = effSpeed !== 1.0;
+  const varispeedActive = effSpeed !== 1.0 || bakedActive;
   const manualPunchActive = Math.abs(effSpeed - 1.0) > 0.3;
-  const resyncCoeff = manualPunchActive ? 0.0 : inp.resyncCoeff;
+  const resyncCoeff = manualPunchActive || bakedActive ? 0.0 : inp.resyncCoeff;
   const wrapDelta = (prev) => wrapAbs(absPos - prev + wrapLenCur * 0.5, wrapLenCur) - wrapLenCur * 0.5;
   const rposNext = (armEdge || finishEdge)
     ? absPos
     : (varispeedActive
-      ? wrapAbs(s.rpos + speedClamped * beatScaleNext + wrapDelta(s.rpos) * resyncCoeff, wrapLenCur)
+      ? wrapAbs(s.rpos + speedClamped * beatScaleNext * speedForTake + wrapDelta(s.rpos) * resyncCoeff, wrapLenCur)
       : absPos);
 
   return {
     pend: pendNext, fin: finNext, act: actNext, widx: widxNext, wlen: wlenNext,
     rsm: rsmNext, coff: coffNext, rpos: rposNext, gate: gateNext,
-    beatScale: beatScaleNext, pendPhase: pendPhaseNext,
+    beatScale: beatScaleNext, bakedSpeed: bakedSpeedNext, pendPhase: pendPhaseNext,
     recPrevEdge: recN > 0.5 ? 1 : 0,
     armEdge, finishEdge, armPullbackBeats,
   };

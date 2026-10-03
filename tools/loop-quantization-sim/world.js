@@ -540,8 +540,8 @@ function stepOneSample(w) {
       eraseN: lp.ps_erase, clearAll: w.ps_clearall,
       masterPhase: w.masterPhaseSamples, masterPhasePrev, masterLen: w.masterLenSamples,
       recordedBeats: w.recordedBeats,
-      effSpeed, latencyBiasN: lp.ps_latencybias,
-      resyncCoeff: kResyncCoeffPerSample,
+      effSpeed, manualSpeed: w.manualSpeedMul, latencyBiasN: lp.ps_latencybias,
+      resyncCoeff: kResyncCoeffPerSample, legacyBake: w.legacyBakeVarispeed === true,
     };
     const next = stepSample(lp.dsp, inp);
     lp.dsp = next;

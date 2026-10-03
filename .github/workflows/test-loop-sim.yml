@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'tools/loop-quantization-sim/**'
+      - 'dsp/loop.dsp'
       - '.github/workflows/test-loop-sim.yml'
   pull_request:
     paths:
       - 'tools/loop-quantization-sim/**'
+      - 'dsp/loop.dsp'
       - '.github/workflows/test-loop-sim.yml'
   workflow_dispatch:
 
@@ -59,6 +61,9 @@ jobs:
 
       - name: Long take lands on the phrase grid
         run: node tools/loop-quantization-sim/long-take-quantize.js
+
+      - name: Varispeed punch stays baked in the take
+        run: node tools/loop-quantization-sim/varispeed-record.js
 
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50

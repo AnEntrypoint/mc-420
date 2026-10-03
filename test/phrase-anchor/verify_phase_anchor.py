@@ -84,6 +84,7 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     if master_len_samples == 0:
         seed_master_phase_at_first_finish(masterPhase, masterLen, n, finish_sample, take_len_samples)
     effSpeed = harness.const(n, 1.0)
+    manualSpeed = harness.const(n, 1.0)
     clearAll = harness.const(n, 0.0)
     sidechainEnv = harness.const(n, 0.0)
     recordedBeats = harness.const(n, 4.0)
@@ -102,7 +103,7 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     play_auto = np.zeros(n, dtype=np.float32)
     play_auto[finish_sample:] = 1.0
 
-    channels = np.stack([in_unused, marker_track, clearAll, effSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats])
+    channels = np.stack([in_unused, marker_track, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats])
     audio, _, _ = harness.render_take(
         dsp, channels, n,
         params={"vol": 1.0, "sidechainsrc": 0.0},
