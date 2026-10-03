@@ -15,6 +15,7 @@ const LONG_HOLD_MS = 8100;
 const HOLD_ERASE_MS = 1150;
 const WITHIN_TRIAL_TOLERANCE = 8;
 const ON_GRID_TOLERANCE = LATENCY_BIAS;
+const LENGTH_TOLERANCE_BEATS = 2.5;
 
 const MASTER_PAD = 2;
 const TAKE_PADS = [3, 4, 5];
@@ -171,8 +172,10 @@ async function main() {
       continue;
     }
     const spread = Math.max(...got.map(g => g.anchor)) - Math.min(...got.map(g => g.anchor));
-    rows.push({ trial, got, spread });
+    const lengthErrBeats = Math.max(...got.map(g => Math.abs(g.wlen / oneBeat - (hold / 1000) * bpm / 60)));
+    rows.push({ trial, got, spread, lengthErrBeats });
     console.log(`[verify-lineup] trial ${trial} (hold ${hold}ms, finished +${finishMs}ms): wlens=${got.map(g => g.wlen).join(',')} ` +
+      `beats=${got.map(g => (g.wlen / oneBeat).toFixed(3)).join(',')} (want ~${((hold / 1000) * bpm / 60).toFixed(3)}, off ${lengthErrBeats.toFixed(3)}) ` +
       `anchors mod cell=${got.map(g => wrap(g.anchor, cell).toFixed(1)).join(',')} ` +
       `within-trial spread=${spread.toFixed(1)} samples`);
   }
@@ -185,11 +188,14 @@ async function main() {
   const maxSpread = Math.max(...rows.map(r => r.spread));
   const mods = rows.flatMap(r => r.got.map(g => wrap(g.anchor, cell)));
   const modSpread = Math.max(...mods) - Math.min(...mods);
+  const maxLengthErr = Math.max(...rows.map(r => r.lengthErrBeats));
 
   console.log(`[verify-lineup] A. takes armed in one burst share an anchor: max spread ${maxSpread.toFixed(1)} samples (tol ${WITHIN_TRIAL_TOLERANCE})`);
   console.log(`[verify-lineup] B. every anchor sits on one fixed point of the 1/8-beat grid: ${modSpread.toFixed(1)} samples (tol ${ON_GRID_TOLERANCE}, one block)`);
+  console.log(`[verify-lineup] C. every take keeps the length it was played for: worst ${maxLengthErr.toFixed(3)} beats (tol ${LENGTH_TOLERANCE_BEATS})`);
 
-  const pass = maxSpread < WITHIN_TRIAL_TOLERANCE && modSpread < ON_GRID_TOLERANCE;
+  const pass = maxSpread < WITHIN_TRIAL_TOLERANCE && modSpread < ON_GRID_TOLERANCE
+    && maxLengthErr <= LENGTH_TOLERANCE_BEATS;
   console.log(`[verify-lineup] ${pass ? 'ALL PASS' : 'SOME FAILED'}`);
   process.exit(pass ? 0 : 1);
 }
