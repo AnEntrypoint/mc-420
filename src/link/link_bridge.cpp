@@ -15,6 +15,7 @@ namespace aloop {
 namespace {
 std::atomic<unsigned> g_active{0};
 std::atomic<bool> g_weSetTempo{false};
+std::atomic<double> g_ownedBpm{0.0};
 
 std::atomic<int> g_lastLoggedPeers{-1};
 std::atomic<double> g_lastLoggedTempo{-1.0};
@@ -23,6 +24,11 @@ std::atomic<std::size_t> g_pendingPeers{0};
 std::atomic<double> g_pendingTempo{120.0};
 std::atomic<bool> g_havePendingPeers{false};
 std::atomic<bool> g_havePendingTempo{false};
+
+std::atomic<int> g_settledPeers{-1};
+std::atomic<int> g_candidatePeers{-1};
+std::atomic<int> g_candidateTicks{0};
+constexpr int kPeerSettleTicks = 2;
 
 std::atomic<bool> g_havePhaseImpose{false};
 std::atomic<double> g_imposeBeat{0.0};
@@ -73,6 +79,21 @@ void LinkBridge::controlTick() {
         if (peers != g_lastLoggedPeers.load(std::memory_order_relaxed)) {
             g_lastLoggedPeers.store(peers, std::memory_order_relaxed);
             fprintf(stderr, "[link] peers now %d\n", peers);
+        }
+    }
+    if (g_weSetTempo.load(std::memory_order_relaxed)) {
+        auto* l = (ableton::Link*)link_;
+        const int peersNow = (int)l->numPeers();
+        const int candidate = g_candidatePeers.load(std::memory_order_relaxed);
+        const int settleTicks = (peersNow == candidate)
+            ? g_candidateTicks.load(std::memory_order_relaxed) + 1
+            : 1;
+        g_candidatePeers.store(peersNow, std::memory_order_relaxed);
+        g_candidateTicks.store(settleTicks, std::memory_order_relaxed);
+        if (settleTicks >= kPeerSettleTicks && peersNow != g_settledPeers.load(std::memory_order_relaxed)) {
+            g_settledPeers.store(peersNow, std::memory_order_relaxed);
+            const double ownedBpm = g_ownedBpm.load(std::memory_order_relaxed);
+            if (ownedBpm > 1.0) imposeTempo(ownedBpm);
         }
     }
     if (g_havePendingTempo.exchange(false, std::memory_order_acquire)) {
@@ -135,6 +156,7 @@ void LinkBridge::imposeTempo(double bpm) {
     auto state = l->captureAppSessionState();
     state.setTempo(bpm, l->clock().micros());
     l->commitAppSessionState(state);
+    g_ownedBpm.store(bpm, std::memory_order_relaxed);
     g_weSetTempo.store(true, std::memory_order_relaxed);
     publishSnapshot();
     fprintf(stderr, "[link] first loop owns the tempo: session set to %.3f bpm, %u peer(s) follow\n",
@@ -152,6 +174,7 @@ void LinkBridge::requestPhaseImpose(double beat, int64_t atMicros, double quantu
 }
 
 void LinkBridge::resetTempoAuthority() {
+    g_ownedBpm.store(0.0, std::memory_order_relaxed);
     g_weSetTempo.store(false, std::memory_order_relaxed);
 }
 
