@@ -88,6 +88,7 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     sidechainEnv = harness.const(n, 0.0)
     recordedBeats = harness.const(n, 4.0)
     in_unused = harness.const(n, 0.0)
+    foldNow = harness.const(n, 0.0)
     take_middle_marker_sample = arm + take_len_samples // 2
     marker_track = marker_tone(n, take_middle_marker_sample, marker_len)
 
@@ -102,7 +103,7 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     play_auto = np.zeros(n, dtype=np.float32)
     play_auto[finish_sample:] = 1.0
 
-    channels = np.stack([in_unused, marker_track, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats])
+    channels = np.stack([in_unused, marker_track, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, foldNow])
     audio, _, _ = harness.render_take(
         dsp, channels, n,
         params={"vol": 1.0, "sidechainsrc": 0.0},

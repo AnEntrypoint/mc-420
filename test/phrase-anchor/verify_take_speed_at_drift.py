@@ -59,6 +59,7 @@ def run_take(eff_speed):
     sidechainEnv = harness.const(n, 0.0)
     recordedBeats = harness.const(n, kMasterBeats)
     in_unused = harness.const(n, 0.0)
+    foldNow = harness.const(n, 0.0)
     input_sig = impulse_train(n, kMarkerPeriod)
 
     rec_auto = np.zeros(n, dtype=np.float32)
@@ -71,7 +72,7 @@ def run_take(eff_speed):
     play_auto[finish_sample:] = 1.0
 
     channels = np.stack([in_unused, input_sig, clearAll, effSpeed, manualSpeed, masterPhase,
-                         masterLen, sidechainEnv, recordedBeats])
+                         masterLen, sidechainEnv, recordedBeats, foldNow])
     audio, _, _ = harness.render_take(
         dsp, channels, n,
         params={"vol": 1.0, "sidechainsrc": 0.0},
