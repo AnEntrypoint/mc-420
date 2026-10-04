@@ -9,6 +9,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <algorithm>
 
 #define FAUSTFLOAT float
 struct FaustMeta { void declare(const char*, const char*) {} };
@@ -256,6 +257,360 @@ static bool parseGenSpec(const std::string& spec, std::vector<float>& out, doubl
     return true;
 }
 
+struct AmDetect {
+    size_t n;
+    bool valid;
+    int period;
+    float periodF;
+    float peakVal;
+    int peakTau;
+};
+
+static void synthAm(std::vector<float>& x, double sr, double carrierHz, double modHz,
+                    double depth, double secs, int harm) {
+    size_t n = (size_t)(secs * sr);
+    x.assign(n, 0.0f);
+    double norm = 0.0;
+    for (int h = 1; h <= harm; h++) norm += 1.0 / (double)h;
+    if (norm < 1e-9) norm = 1.0;
+    double pc = 0.0, pm = 0.0;
+    for (size_t i = 0; i < n; i++) {
+        double s = 0.0;
+        double ph = pc;
+        for (int h = 1; h <= harm; h++) { s += sin(ph) / (double)h; ph += pc; }
+        double env = 1.0 + depth * sin(pm);
+        x[i] = (float)(0.5 * env * s / norm);
+        pc += 2.0 * M_PI * carrierHz / sr;
+        pm += 2.0 * M_PI * modHz / sr;
+    }
+}
+
+struct CurveSet {
+    std::vector<double> r, nk, d, dp, r2, dp2;
+};
+
+static void curveFromWindow(const std::vector<double>& w, std::vector<double>& r,
+                            std::vector<double>& nk) {
+    const int W = SnacPeriodTracker::SNAC_WIN;
+    const int MAXP = SnacPeriodTracker::MAX_PERIOD;
+    r.assign(MAXP + 2, 0.0);
+    nk.assign(MAXP + 2, 1e-12);
+    std::vector<double> pre(W + 1, 0.0);
+    for (int i = 0; i < W; i++) pre[i + 1] = pre[i] + w[i] * w[i];
+    for (int k = 0; k <= MAXP + 1; k++) {
+        int limit = W - k;
+        if (limit <= 0) continue;
+        double s = 0.0;
+        for (int n = 0; n < limit; n++) s += w[n] * w[n + k];
+        double n = pre[limit] + (pre[W] - pre[k]);
+        if (n < 1e-12) n = 1e-12;
+        nk[k] = n;
+        r[k] = 2.0 * s / n;
+    }
+}
+
+static double g_envFloor = 0.2;
+static double g_envLScale = 1.0;
+
+static void computeCurves(const std::vector<double>& w, CurveSet& c, int prevPeriod) {
+    const int W = SnacPeriodTracker::SNAC_WIN;
+    const int MAXP = SnacPeriodTracker::MAX_PERIOD;
+    curveFromWindow(w, c.r, c.nk);
+    c.d.assign(MAXP + 2, 0.0);
+    for (int k = 0; k <= MAXP + 1; k++) c.d[k] = c.nk[k] - c.nk[k] * c.r[k];
+    c.dp.assign(MAXP + 2, 1e9);
+    double acc = 0.0;
+    for (int k = 1; k <= MAXP + 1; k++) {
+        acc += c.d[k];
+        double mean = acc / (double)k;
+        c.dp[k] = mean > 1e-12 ? c.d[k] / mean : 1e9;
+    }
+    double Lf = (prevPeriod > 0 ? (double)prevPeriod : 256.0) * g_envLScale;
+    int L = (int)(Lf + 0.5);
+    if (L < 64) L = 64;
+    if (L > 512) L = 512;
+    std::vector<double> preA(W + 1, 0.0);
+    for (int i = 0; i < W; i++) preA[i + 1] = preA[i] + fabs(w[i]);
+    double floorA = g_envFloor * preA[W] / (double)W;
+    std::vector<double> w2(W, 0.0);
+    for (int n = 0; n < W; n++) {
+        int lo = n - L / 2; if (lo < 0) lo = 0;
+        int hi = n + L / 2 + 1; if (hi > W) hi = W;
+        double e = (preA[hi] - preA[lo]) / (double)(hi - lo);
+        if (e < floorA) e = floorA;
+        w2[n] = w[n] / e;
+    }
+    std::vector<double> nk2;
+    curveFromWindow(w2, c.r2, nk2);
+    std::vector<double> d2(MAXP + 2, 0.0);
+    for (int k = 0; k <= MAXP + 1; k++) d2[k] = nk2[k] - nk2[k] * c.r2[k];
+    c.dp2.assign(MAXP + 2, 1e9);
+    double acc2 = 0.0;
+    for (int k = 1; k <= MAXP + 1; k++) {
+        acc2 += d2[k];
+        double mean2 = acc2 / (double)k;
+        c.dp2[k] = mean2 > 1e-12 ? d2[k] / mean2 : 1e9;
+    }
+}
+
+static double refinePeak(const std::vector<double>& v, int k) {
+    double a = v[k - 1], b = v[k], c = v[k + 1];
+    double den = 2.0 * b - a - c;
+    if (fabs(den) < 1e-9) return (double)k;
+    return (double)k - 0.5 * (a - c) / den;
+}
+
+static double pickMax(const std::vector<double>& v, double thresh) {
+    const int MINP = SnacPeriodTracker::MIN_PERIOD;
+    const int MAXP = SnacPeriodTracker::MAX_PERIOD;
+    double bestVal = -1e9;
+    int bestTau = -1;
+    for (int k = MINP; k < MAXP - 1; k++) {
+        if (v[k] > v[k - 1] && v[k] > v[k + 1] && v[k] > thresh) {
+            if (v[k] > bestVal) { bestVal = v[k]; bestTau = k; }
+        }
+    }
+    if (bestTau < 0) return 0.0;
+    double af = bestVal * 0.90;
+    for (int k = MINP; k < bestTau; k++) {
+        if (v[k] > v[k - 1] && v[k] > v[k + 1] && v[k] > thresh && v[k] >= af) {
+            bestTau = k;
+            break;
+        }
+    }
+    return refinePeak(v, bestTau);
+}
+
+static double pickMin(const std::vector<double>& v, double thresh) {
+    const int MINP = SnacPeriodTracker::MIN_PERIOD;
+    const int MAXP = SnacPeriodTracker::MAX_PERIOD;
+    int best = -1;
+    for (int k = MINP; k < MAXP - 1; k++) {
+        if (v[k] < v[k - 1] && v[k] < v[k + 1] && v[k] < thresh) { best = k; break; }
+    }
+    if (best < 0) {
+        double bv = 1e9;
+        for (int k = MINP; k < MAXP - 1; k++) if (v[k] < bv) { bv = v[k]; best = k; }
+    }
+    if (best < 0) return 0.0;
+    return refinePeak(v, best);
+}
+
+static double centsOf(double estPeriod, double truePeriod) {
+    if (estPeriod <= 0.0) return 0.0;
+    return 1200.0 * log2(truePeriod / estPeriod);
+}
+
+static void dumpSnacCurve(const std::vector<float>& x, size_t nEnd, int obsPeriod,
+                          int obsTau, double truePeriod, int prevPeriod) {
+    const int W = SnacPeriodTracker::SNAC_WIN;
+    const int BLOCK = SnacPeriodTracker::BLOCK;
+    const int MAXP = SnacPeriodTracker::MAX_PERIOD;
+    const int MINP = SnacPeriodTracker::MIN_PERIOD;
+    int steps = (MAXP - 1) / SnacPeriodTracker::LAGS_PER_STEP + 1;
+    long n0 = (long)nEnd - (long)steps * BLOCK;
+    long start = n0 - (W - 1);
+    if (start < 0 || n0 < 0 || n0 >= (long)x.size()) { printf("    curve: out of range\n"); return; }
+    std::vector<double> w(W);
+    for (int i = 0; i < W; i++) w[i] = x[start + i];
+    CurveSet c;
+    computeCurves(w, c, prevPeriod);
+    printf("    window=[%ld..%ld] observedPeriod=%d observedPeakTau=%d\n",
+           start, n0, obsPeriod, obsTau);
+    printf("      snac  pick=%7.2f cents=%+8.1f\n",
+           pickMax(c.r, 0.30), centsOf(pickMax(c.r, 0.30), truePeriod));
+    printf("      yin   pick=%7.2f cents=%+8.1f\n",
+           pickMin(c.dp, 0.15), centsOf(pickMin(c.dp, 0.15), truePeriod));
+    printf("      envsn pick=%7.2f cents=%+8.1f\n",
+           pickMax(c.r2, 0.30), centsOf(pickMax(c.r2, 0.30), truePeriod));
+    printf("      envyin pick=%7.2f cents=%+8.1f\n",
+           pickMin(c.dp2, 0.15), centsOf(pickMin(c.dp2, 0.15), truePeriod));
+    struct Pk { double v; int k; };
+    std::vector<Pk> pks;
+    for (int k = MINP; k < MAXP - 1; k++) {
+        if (c.r2[k] > c.r2[k - 1] && c.r2[k] > c.r2[k + 1]) pks.push_back({c.r2[k], k});
+    }
+    std::sort(pks.begin(), pks.end(), [](const Pk& a, const Pk& b) { return a.v > b.v; });
+    printf("    env-normalized top local maxima:\n");
+    for (size_t i = 0; i < pks.size() && i < 8; i++) {
+        printf("      k=%4d v=%7.4f ratio=%6.3f cents=%+8.1f\n",
+               pks[i].k, pks[i].v, (double)pks[i].k / truePeriod,
+               1200.0 * log2(truePeriod / (double)pks[i].k));
+    }
+    printf("    dp2 local minima below 0.15 (env-yin candidates):\n");
+    for (int k = MINP; k < MAXP - 1; k++) {
+        if (c.dp2[k] < c.dp2[k - 1] && c.dp2[k] < c.dp2[k + 1] && c.dp2[k] < 0.15) {
+            printf("      k=%4d dp2=%7.4f r2=%7.4f r=%7.4f ratio=%6.3f cents=%+8.1f\n",
+                   k, c.dp2[k], c.r2[k], c.r[k], (double)k / truePeriod,
+                   1200.0 * log2(truePeriod / (double)k));
+        }
+    }
+    printf("    dp local minima below 0.15 (raw-yin candidates):\n");
+    for (int k = MINP; k < MAXP - 1; k++) {
+        if (c.dp[k] < c.dp[k - 1] && c.dp[k] < c.dp[k + 1] && c.dp[k] < 0.15) {
+            printf("      k=%4d dp=%7.4f r=%7.4f ratio=%6.3f cents=%+8.1f\n",
+                   k, c.dp[k], c.r[k], (double)k / truePeriod,
+                   1200.0 * log2(truePeriod / (double)k));
+        }
+    }
+    printf("    env r2(k) coarse:\n");
+    for (int k = MINP; k < MAXP; k += 16) {
+        printf("      k=%4d r=%7.4f r2=%7.4f dp=%7.4f\n", k, c.r[k], c.r2[k], c.dp[k]);
+    }
+}
+
+static void runAmProbe(double sr, double carrier, double mod, double depth,
+                       double secs, int harm, bool trace, bool curve, bool est, bool dumpEnv) {
+    std::vector<float> x;
+    synthAm(x, sr, carrier, mod, depth, secs, harm);
+    const double truePeriod = sr / carrier;
+
+    SnacPeriodTracker trk;
+    std::vector<AmDetect> det;
+    int prevCount = -1;
+    for (size_t i = 0; i < x.size(); i++) {
+        trk.tick(x[i]);
+        if (trk.m_detectCount != prevCount) {
+            prevCount = trk.m_detectCount;
+            AmDetect d;
+            d.n = i;
+            d.valid = trk.m_periodValid;
+            d.period = trk.m_period;
+            d.periodF = trk.m_periodF;
+            d.peakVal = trk.m_dbgPeakVal;
+            d.peakTau = trk.m_dbgPeakTau;
+            det.push_back(d);
+        }
+    }
+
+    double worst = 0.0, sum = 0.0;
+    int count = 0, finalPeriod = 0;
+    size_t worstI = 0;
+    for (size_t i = 0; i < det.size(); i++) {
+        if (!det[i].valid || i < 2) continue;
+        double c = 1200.0 * log2(truePeriod / (double)det[i].period);
+        double a = fabs(c);
+        if (a > worst) { worst = a; worstI = i; }
+        sum += a;
+        count++;
+        finalPeriod = det[i].period;
+    }
+    double mean = count > 0 ? sum / (double)count : 0.0;
+    double finalCents = finalPeriod > 0
+        ? 1200.0 * log2(truePeriod / (double)finalPeriod) : 0.0;
+    double ratio = finalPeriod > 0 ? (double)finalPeriod / truePeriod : 0.0;
+
+    printf("am,%g,%g,%g,%d,%.2f,%d,%+.1f,%.1f,%.1f,%.3f\n",
+           carrier, mod, depth, harm, truePeriod, finalPeriod, finalCents,
+           worst, mean, ratio);
+
+    if (est) {
+        const int W = SnacPeriodTracker::SNAC_WIN;
+        const int BLOCK = SnacPeriodTracker::BLOCK;
+        const int MAXP = SnacPeriodTracker::MAX_PERIOD;
+        int steps = (MAXP - 1) / SnacPeriodTracker::LAGS_PER_STEP + 1;
+        long off = (long)steps * BLOCK;
+        double sw = 0, ss = 0, yw = 0, ys = 0, ew = 0, es = 0, e2w = 0, e2s = 0;
+        double worstEC = 0.0;
+        size_t worstEI = 0;
+        int n = 0;
+        for (size_t i = 0; i < det.size(); i++) {
+            if (!det[i].valid || i < 2) continue;
+            long n0 = (long)det[i].n - off;
+            long start = n0 - (W - 1);
+            if (start < 0) continue;
+            std::vector<double> w(W);
+            for (int j = 0; j < W; j++) w[j] = x[start + j];
+            CurveSet c;
+            computeCurves(w, c, det[i].period);
+            double cs = centsOf(pickMax(c.r, 0.30), truePeriod);
+            double cy = centsOf(pickMin(c.dp, 0.15), truePeriod);
+            double ce = centsOf(pickMax(c.r2, 0.30), truePeriod);
+            double c2 = centsOf(pickMin(c.dp2, 0.15), truePeriod);
+            if (fabs(cs) > sw) sw = fabs(cs);
+            if (fabs(cy) > yw) yw = fabs(cy);
+            if (fabs(ce) > ew) ew = fabs(ce);
+            if (fabs(c2) > e2w) e2w = fabs(c2);
+            if (fabs(ce) > worstEC) { worstEC = fabs(ce); worstEI = i; }
+            ss += fabs(cs); ys += fabs(cy); es += fabs(ce); e2s += fabs(c2);
+            n++;
+        }
+        double inv = n > 0 ? 1.0 / (double)n : 0.0;
+        printf("est,%g,%g,%g,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%d\n",
+               carrier, mod, depth, harm, sw, ss * inv, yw, ys * inv, ew, es * inv,
+               e2w, e2s * inv, n);
+        if (dumpEnv && worstEI < det.size()) {
+            printf("  worst env frame: t=%.4fs trackerPeriod=%d envCents=%+.1f\n",
+                   det[worstEI].n / sr, det[worstEI].period, worstEC);
+            dumpSnacCurve(x, det[worstEI].n, det[worstEI].period, 0, truePeriod,
+                          det[worstEI].period);
+        }
+    }
+
+    if (curve && worst > 0.0 && worstI < det.size()) {
+        int prev = worstI > 0 ? det[worstI - 1].period : 0;
+        printf("  worst detection: t=%.4fs period=%d peakTau=%d peakVal=%.4f cents=%+.1f\n",
+               det[worstI].n / sr, det[worstI].period, det[worstI].peakTau,
+               det[worstI].peakVal, 1200.0 * log2(truePeriod / (double)det[worstI].period));
+        dumpSnacCurve(x, det[worstI].n, det[worstI].period, det[worstI].peakTau, truePeriod, prev);
+    }
+
+    if (trace) {
+        printf("  truePeriod=%.2f  carrier=%gHz mod=%gHz depth=%g harm=%d\n",
+               truePeriod, carrier, mod, depth, harm);
+        for (size_t i = 0; i < det.size(); i++) {
+            if (det[i].valid) {
+                double c = 1200.0 * log2(truePeriod / (double)det[i].period);
+                printf("    t=%.4fs period=%4d periodF=%7.2f cents=%+8.1f ratio=%.3f peakTau=%d peakVal=%.4f\n",
+                       det[i].n / sr, det[i].period, det[i].periodF, c,
+                       (double)det[i].period / truePeriod, det[i].peakTau, det[i].peakVal);
+            } else {
+                printf("    t=%.4fs invalid (lockMiss=%d)\n", det[i].n / sr, trk.m_lockMiss);
+            }
+        }
+    }
+}
+
+static void runTrk(const char* path, const std::vector<float>& x, double sr,
+                   double trueHz, bool trace, bool dump) {
+    SnacPeriodTracker trk;
+    int prevCount = -1;
+    double worst = 0.0, sum = 0.0;
+    int count = 0, invalid = 0;
+    size_t worstI = 0;
+    int worstPeriod = 0, worstTau = -1, worstPrev = 0;
+    for (size_t i = 0; i < x.size(); i++) {
+        trk.tick(x[i]);
+        if (trk.m_detectCount == prevCount) continue;
+        prevCount = trk.m_detectCount;
+        double cents = 0.0;
+        if (trueHz > 0.0) {
+            double hz = sr / (double)trk.m_periodF;
+            cents = 1200.0 * log2(hz / trueHz);
+        }
+        if (trace) {
+            printf("trk,t=%.4fs,valid=%d,period=%7.2f,cents=%+8.1f,conf=%.3f,peakTau=%d\n",
+                   (double)i / sr, trk.m_periodValid ? 1 : 0, trk.m_periodF, cents,
+                   trk.m_confidence, trk.m_dbgPeakTau);
+        }
+        if (!trk.m_periodValid) { invalid++; continue; }
+        double a = fabs(cents);
+        if (a > worst) {
+            worst = a;
+            worstI = i;
+            worstPeriod = (int)trk.m_periodF;
+            worstTau = trk.m_dbgPeakTau;
+            worstPrev = trk.m_period;
+        }
+        sum += a;
+        count++;
+    }
+    double mean = count > 0 ? sum / (double)count : 0.0;
+    printf("trksum,%s,trueHz=%.2f,detections=%d,valid=%d,invalid=%d,worst=%.1f,mean=%.1f\n",
+           path, trueHz, count + invalid, count, invalid, worst, mean);
+    if (dump) dumpSnacCurve(x, worstI, worstPeriod, worstTau, sr / trueHz, worstPrev);
+}
+
 static void printStats(const std::vector<float>& sig, uint32_t sr) {
     float peak = 0.0f, sumSq = 0.0f;
     int zeroCrossings = 0;
@@ -284,12 +639,76 @@ int main(int argc, char** argv) {
             "  dsp_cli --gen0 <spec> [--gen1 <spec> --gen2 <spec> ...] <out.wav> [CTRL=value ...]\n"
             "      (multi-input DSPs: drive each input channel independently; --gen is an alias for --gen0)\n"
             "  dsp_cli --stats <file.wav>\n"
-            "  dsp_cli --glitch-check <file.wav> [threshold=0.25] [minGapMs=5]\n"
+            "  dsp_cli --trk <file.wav> [hz=<trueHz>] [trace=1]\n"
             "  dsp_cli --list-zones\n");
         return 1;
     }
 
     const double SR = 48000.0;
+
+    if (strcmp(argv[1], "--am-probe") == 0) {
+        double carrier = 220.0, mod = 5.0, depth = 0.9, secs = 2.5;
+        int harm = 1;
+        bool grid = false, trace = false, curve = false, est = false, dumpEnv = false;
+        for (int i = 2; i < argc; i++) {
+            std::string arg = argv[i];
+            size_t eq = arg.find('=');
+            if (eq == std::string::npos) continue;
+            std::string k = arg.substr(0, eq);
+            double v = atof(arg.substr(eq + 1).c_str());
+            if (k == "carrier") carrier = v;
+            else if (k == "mod") mod = v;
+            else if (k == "depth") depth = v;
+            else if (k == "secs") secs = v;
+            else if (k == "harm") harm = (int)v;
+            else if (k == "grid") grid = v != 0.0;
+            else if (k == "trace") trace = v != 0.0;
+            else if (k == "curve") curve = v != 0.0;
+            else if (k == "est") est = v != 0.0;
+            else if (k == "envFloor") g_envFloor = v;
+            else if (k == "envLScale") g_envLScale = v;
+            else if (k == "dumpEnv") dumpEnv = v != 0.0;
+        }
+        if (harm < 1) harm = 1;
+        if (harm > 8) harm = 8;
+        printf("carrier,mod,depth,harm,truePeriod,finalPeriod,finalCents,worstAbsCents,meanAbsCents,ratio\n");
+        if (grid) {
+            const double carriers[] = {110.0, 220.0, 440.0};
+            const double mods[] = {1.0, 4.0, 8.0, 16.0, 32.0, 64.0};
+            const double depths[] = {0.5, 0.9, 1.0};
+            const int harms[] = {1, 3};
+            for (double c : carriers)
+                for (double m : mods)
+                    for (double d : depths)
+                        for (int h : harms)
+                            runAmProbe(SR, c, m, d, secs, h, false, false, est, false);
+        } else {
+            runAmProbe(SR, carrier, mod, depth, secs, harm, trace, curve, est, dumpEnv);
+        }
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--trk") == 0) {
+        if (argc < 3) { fprintf(stderr, "error: --trk needs a file\n"); return 1; }
+        double trueHz = 0.0;
+        bool trace = false, dump = false;
+        for (int i = 3; i < argc; i++) {
+            std::string arg = argv[i];
+            size_t eq = arg.find('=');
+            if (eq == std::string::npos) continue;
+            std::string k = arg.substr(0, eq);
+            double v = atof(arg.substr(eq + 1).c_str());
+            if (k == "hz") trueHz = v;
+            else if (k == "trace") trace = v != 0.0;
+            else if (k == "dump") dump = v != 0.0;
+            else if (k == "envFloor") g_envFloor = v;
+            else if (k == "envLScale") g_envLScale = v;
+        }
+        std::vector<float> sig; uint32_t sr;
+        if (!readWavMono(argv[2], sig, sr)) return 1;
+        runTrk(argv[2], sig, (double)sr, trueHz, trace, dump);
+        return 0;
+    }
 
     if (strcmp(argv[1], "--glitch-check") == 0) {
         if (argc < 3) { fprintf(stderr, "error: --glitch-check needs a file\n"); return 1; }
