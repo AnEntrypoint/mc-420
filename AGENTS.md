@@ -18,7 +18,7 @@ Real Pi 4 `192.168.137.100`, root/aloop; a real Pi 3B+ netboots from the host. *
 
 # Boards, images, boot trees
 
-- `image/lib-boot-tree.sh` is BOARD-parameterized (`BOARD`: `pi3`/`pi4`/`pi5`/`opi-prime`, default `pi4`); only `boot_tree_fetch`/`boot_tree_config` dispatch per board; `boot_tree_apkovl` is shared. USB-audio gadget: pi4 dwc2 UAC2 only.
+- `image/lib-boot-tree.sh` is BOARD-parameterized (`BOARD`: `pi3`/`pi4`/`pi5`/`opi-prime`, default `pi4`); only `boot_tree_fetch`/`boot_tree_config` dispatch per board; `boot_tree_apkovl` is shared. USB-audio gadget: pi4 dwc2 UAC2 only. ROM order SD -> USB -> Network: a card wiped of `bootcode.bin` falls through to network.
 - `boot_tree_apkovl` MUST stamp `.default_boot_services` or `/lib/modules`, `/proc/asound`, `usb_gadget/` never appear. `aloop`'s OpenRC needs `rc_ulimit="-l unlimited -r 95"` in the service file, not `local.d`; `depend()` needs `after local autoap`.
 - Vendor alsa-lib + lilv as real `.so`s under `vendor/lib-aarch64/`; never `apk add` at boot (the stock Alpine RPi apks repo is RSA-signed and lacks `hostapd`); alsa-lib also needs `vendor/share-alsa/` or `snd_pcm_open` segfaults. `hostapd`/`dnsmasq` need `libnl-3.so.200` + `libnl-genl-3.so.200`; `dnsmasq.conf` needs `user=root`.
 - `cmdline.txt`/`extlinux.conf` APPEND stays one line (`tr '\n' ' '` + `tr -s ' '`); `core.autocrlf=true` corrupts scripts — fix via `rm` + `git checkout --`. NTFS has no exec bit: new vendored files need both `tar --mode='+x'` lists; verify via `tar -tvzf` (LAST match).
