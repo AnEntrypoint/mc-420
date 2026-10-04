@@ -1,19 +1,10 @@
-/* ------------------------------------------------------------
-author: "aloop"
-license: "GPLv3"
-name: "MultiKeyTranspose"
-Code generated with Faust 2.85.9 (https://faust.grame.fr)
-Compilation options: -lang cpp -fpga-mem-th 4 -ct 1 -cn AloopEffectDsp -es 1 -mcd 16 -mdd 1024 -mdy 33 -single -ftz 0
------------------------------------------------------------- */
-
 #ifndef  __AloopEffectDsp_H__
 #define  __AloopEffectDsp_H__
 
 #ifndef FAUSTFLOAT
 #define FAUSTFLOAT float
-#endif 
+#endif
 
-/* link with : "" */
 #include "pitch_poly_ffi.h"
 #include <algorithm>
 #include <cmath>
