@@ -69,6 +69,8 @@ public:
         float    alsaRoundTripSamples = 0.0f;
         float    latencyTrimSamples = 0.0f;
         float    latencyBiasSamples = 0.0f;
+        double   resampleFoldSum = 0.0;
+        uint64_t resampleFoldSamples = 0;
         float    linkPhaseErrBeats = 0.0f;
         float    masterPhaseBeats = 0.0f;
         int      shuffleMode = 0;
@@ -95,6 +97,7 @@ public:
         float    recordedBeats = 0.0f;
     };
     Telemetry snapshotTelemetry() const;
+    int blockSizeSamples() const;
 
     static void triggerClipExport();
     static void setLatencyTrim(int samples);

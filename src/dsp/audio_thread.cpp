@@ -130,6 +130,10 @@ aloop::UsbRecorder* g_usbRecorder = nullptr;
 aloop::ClipExporter* g_clipExporter = nullptr;
 std::atomic<bool> g_clipExportTriggerPending{false};
 
+double g_resampleFoldSum = 0.0;
+uint64_t g_resampleFoldSamples = 0;
+double g_prevBlockFoldSum = 0.0;
+
 float g_manualSpeedMul = 1.0f;
 constexpr int kTransposeVoices = 6;
 
@@ -1067,6 +1071,7 @@ static void* worker(void*) {
                 float foldTarget = (shiftHeldNow && !anyXposeVoiceGatedNow) ? 1.0f : 0.0f;
                 static float glitchFoldGain = 0.0f;
                 float glitchFoldTarget = microrepeatDivVal > 0.5f ? 1.0f : 0.0f;
+                double blockFoldSum = 0.0;
                 for (int i = 0; i < N; i++) {
                     if (foldGain < foldTarget)      { foldGain += kFoldStepPerSample; if (foldGain > foldTarget) foldGain = foldTarget; }
                     else if (foldGain > foldTarget) { foldGain -= kFoldStepPerSample; if (foldGain < foldTarget) foldGain = foldTarget; }
@@ -1074,8 +1079,14 @@ static void* worker(void*) {
                     else if (glitchFoldGain > glitchFoldTarget) { glitchFoldGain -= kFoldStepPerSample; if (glitchFoldGain < glitchFoldTarget) glitchFoldGain = glitchFoldTarget; }
                     float combinedFold = foldGain + glitchFoldGain;
                     if (combinedFold > 1.0f) combinedFold = 1.0f;
+                    blockFoldSum += (double)combinedFold;
                     fin[i] = fin[i] * (1.0f - combinedFold) + prevLoopSum[i] * combinedFold;
                 }
+                g_resampleFoldSum += g_prevBlockFoldSum;
+                g_resampleFoldSamples += (uint64_t)N;
+                g_prevBlockFoldSum = blockFoldSum;
+                g_telem.resampleFoldSum = g_resampleFoldSum;
+                g_telem.resampleFoldSamples = g_resampleFoldSamples;
                 if (monitorFoldFaustZone) *monitorFoldFaustZone = foldGain;
                 if (glitchFoldFaustZone) *glitchFoldFaustZone = glitchFoldGain;
                 {
@@ -1393,6 +1404,7 @@ void AudioThread::stop() {
 }
 
 AudioThread::Telemetry AudioThread::snapshotTelemetry() const { return g_telem; }
+int AudioThread::blockSizeSamples() const { return cfg_.blockSize; }
 Sampler* AudioThread::sampler() const { return g_sampler; }
 Lv2Host* AudioThread::homeFx() const { return g_homeFx; }
 UsbRecorder* AudioThread::usbRecorder() const { return g_usbRecorder; }

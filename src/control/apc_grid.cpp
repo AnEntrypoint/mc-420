@@ -132,7 +132,14 @@ static double pickAnchorGridBeats(double takeLenBeats) {
     return 0.125;
 }
 
-constexpr long kShiftFoldBlockLatencySamples = 64;
+long resampleLatencySamples(AudioThread* audio) {
+    long block = kBlockSize;
+    if (audio) {
+        const long configured = audio->blockSizeSamples();
+        if (configured > 0) block = configured;
+    }
+    return 2 * block;
+}
 
 int readRuntimeLatencyTrim() {
     FILE* f = fopen("/run/aloop/latency_trim", "rb");
@@ -160,6 +167,34 @@ int ApcGrid::monitorFoldSlot(ParamStore& ps) {
     return m_monitorFoldSlot;
 }
 
+void ApcGrid::armResampleFoldWindow(int looper, AudioThread* audio) {
+    m_looperFoldFraction[looper] = 0.0f;
+    if (!audio) return;
+    const AudioThread::Telemetry t = audio->snapshotTelemetry();
+    m_looperFoldSumStart[looper] = t.resampleFoldSum;
+    m_looperFoldSamplesStart[looper] = t.resampleFoldSamples;
+}
+
+float ApcGrid::takeResampleFoldFraction(int looper, AudioThread* audio) const {
+    const bool shift = m_looperShiftHeldDuringTake[looper];
+    if (!audio || m_looperFoldSamplesStart[looper] == 0) return shift ? 1.0f : 0.0f;
+    const AudioThread::Telemetry t = audio->snapshotTelemetry();
+    const long long samples = (long long)t.resampleFoldSamples
+                            - (long long)m_looperFoldSamplesStart[looper];
+    if (samples <= 0) return shift ? 1.0f : 0.0f;
+    double f = (t.resampleFoldSum - m_looperFoldSumStart[looper]) / (double)samples;
+    if (f < 0.0) f = 0.0;
+    if (f > 1.0) f = 1.0;
+    return (float)f;
+}
+
+long ApcGrid::takeLatencyBias(int looper, AudioThread* audio) const {
+    const double dry = (double)measuredLatencyBias(audio);
+    const double fold = (double)resampleLatencySamples(audio);
+    const double f = (double)m_looperFoldFraction[looper];
+    return (long)(dry * (1.0 - f) + fold * f + 0.5);
+}
+
 void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
     if (m_looperRecording[looper]) {
         if (m_looperFinishTargetPending[looper] > 0.0f) return;
@@ -167,7 +202,13 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
         m_looperWrapLenStaleAfterWipe[looper] = false;
         m_looperPlaying[looper] = true;
         setLooper(ps, looper, "play", 1.0f);
-        long latencyBias = measuredLatencyBias(audio) + (m_looperShiftHeldDuringTake[looper] ? kShiftFoldBlockLatencySamples : 0);
+        m_looperFoldFraction[looper] = takeResampleFoldFraction(looper, audio);
+        const long latencyBias = takeLatencyBias(looper, audio);
+        if (m_looperFoldFraction[looper] > 0.01f) {
+            fprintf(stderr, "[diag-latency] looper=%d resampleFold=%.3f dryBias=%ld foldBias=%ld bias=%ld\n",
+                    looper, (double)m_looperFoldFraction[looper],
+                    measuredLatencyBias(audio), resampleLatencySamples(audio), latencyBias);
+        }
         setLooper(ps, looper, "latencybias", (float)latencyBias);
         m_masterLenSamples = (long)ps.get("cmd/master_len", 0.0f);
         if (m_masterLenSamples == 0) {
@@ -268,6 +309,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
         m_looperRecording[looper] = true;
         m_recordStartMs[looper] = now_ms;
         m_looperShiftHeldDuringTake[looper] = ps.getBySlot(monitorFoldSlot(ps), 0.0f) > 0.5f;
+        armResampleFoldWindow(looper, audio);
     } else if (m_looperPlaying[looper]) {
         setLooper(ps, looper, "play", 0.0f);
         m_looperPlaying[looper] = false;
@@ -363,8 +405,7 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
             m_latencyBiasWritten = bias;
             for (int looper = 0; looper < kLooperCount; looper++) {
                 if (!m_looperHasContent[looper] || m_looperRecording[looper]) continue;
-                setLooper(ps, looper, "latencybias",
-                          (float)(bias + (m_looperShiftHeldDuringTake[looper] ? kShiftFoldBlockLatencySamples : 0)));
+                setLooper(ps, looper, "latencybias", (float)takeLatencyBias(looper, audio));
             }
         }
     }

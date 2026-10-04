@@ -139,6 +139,9 @@ private:
     unsigned m_looperFinishPendingSinceMs[kLooperCount] = {};
     unsigned m_recordStartMs[kLooperCount] = {};
     bool m_looperShiftHeldDuringTake[kLooperCount] = {};
+    double m_looperFoldSumStart[kLooperCount] = {};
+    uint64_t m_looperFoldSamplesStart[kLooperCount] = {};
+    float m_looperFoldFraction[kLooperCount] = {};
     long m_latencyBiasWritten = 0;
     bool m_looperPauseOthersOnFinish[kLooperCount] = {};
     bool m_localTransportRunning = false;
@@ -167,6 +170,9 @@ private:
     long m_masterLenSamples = 0;
     int m_monitorFoldSlot = -1;
     int monitorFoldSlot(ParamStore& ps);
+    void armResampleFoldWindow(int looper, class AudioThread* audio);
+    float takeResampleFoldFraction(int looper, class AudioThread* audio) const;
+    long takeLatencyBias(int looper, class AudioThread* audio) const;
 
     float m_fxBankValues[kFxBankCount][kFxKnobCount] = {
         {0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f},
