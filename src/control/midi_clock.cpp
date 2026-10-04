@@ -223,6 +223,10 @@ void MidiClock::run() {
             unsigned char tick = kClockTick;
             outs.write(&tick, 1);
             lastPulseIdx = pulseIdx;
+        } else if (pulseIdx < lastPulseIdx) {
+            fprintf(stderr, "[midi-clock] session phase moved back %lld pulse(s), re-anchoring on the new phase\n",
+                    (long long)(lastPulseIdx - pulseIdx));
+            lastPulseIdx = pulseIdx;
         }
 
         const int64_t deadlineMicros =

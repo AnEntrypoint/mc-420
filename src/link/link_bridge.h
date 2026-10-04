@@ -47,6 +47,15 @@ public:
     BeatNow beatNow() const;
     int64_t microsAtBeat(double beat) const;
 
+    struct BeatMark {
+        bool    valid          = false;
+        int     index          = -1;
+        double  bpm            = 120.0;
+        int64_t nowMicros      = 0;
+        int64_t nextBeatMicros = 0;
+    };
+    BeatMark beatMarkNow() const;
+
 private:
     void publishSnapshot();
 

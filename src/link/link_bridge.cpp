@@ -1,6 +1,7 @@
 #include "link_bridge.h"
 
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <ctime>
@@ -205,6 +206,25 @@ int64_t LinkBridge::microsAtBeat(double beat) const {
     (void)beat;
     return 0;
 #endif
+}
+
+LinkBridge::BeatMark LinkBridge::beatMarkNow() const {
+    BeatMark m;
+#ifdef ALOOP_HAVE_LINK
+    if (!link_) return m;
+    auto* l = (ableton::Link*)link_;
+    auto state = l->captureAppSessionState();
+    const auto now = l->clock().micros();
+    const double beat = state.beatAtTime(now, kLinkQuantum);
+    const int64_t wholeBeat = (int64_t)std::floor(beat);
+    const int64_t span = (int64_t)kLinkQuantum;
+    m.valid = true;
+    m.bpm = state.tempo();
+    m.nowMicros = (int64_t)now.count();
+    m.index = (int)(((wholeBeat % span) + span) % span);
+    m.nextBeatMicros = (int64_t)state.timeAtBeat((double)(wholeBeat + 1), kLinkQuantum).count();
+#endif
+    return m;
 }
 
 void LinkBridge::setLocalTransportPlaying(bool playing) {

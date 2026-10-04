@@ -59,33 +59,13 @@ public:
         for (int row = 0; row < kApcRows; row++) {
             for (int col = 0; col < kApcCols; col++) {
                 int note = row * kApcCols + col;
+                if (isBeatPadNote(note)) continue;
                 sendCoalesced(note, gridColor(row, col, grid, looperLevels), write);
             }
         }
-        {
-            int activeGroup = gridBeatIndex >= 0 ? (gridBeatIndex >> 2) : -1;
-            int posInGroup  = gridBeatIndex >= 0 ? (gridBeatIndex & 0x3) : 0;
-            bool havePhrase = gridBeatIndex >= 0;
-            for (int g = 0; g < 4; g++) {
-                uint8_t color;
-                if (grid.gateModHeld()) {
-                    color = (grid.gateMode() == g + 1) ? kLedRed : kLedOff;
-                } else {
-                    if (!havePhrase)             color = kLedOff;
-                    else if (g < activeGroup)    color = kLedYellow;
-                    else                         color = kLedGreen;
-                    if (havePhrase && g == posInGroup) color = kLedRed;
-                    if (grid.shuffleMode() == g + 1) {
-                        color = (color == kLedRed)    ? kLedRedBlink :
-                                (color == kLedYellow) ? kLedYellowBlink :
-                                                        kLedGreenBlink;
-                    }
-                }
-                sendCoalesced(kApcBeatPadNotes[g], color, write);
-            }
-            sendCoalesced(kApcPadGateMod, grid.gateModHeld() ? kLedYellow :
-                                          grid.gateMode() > 0 ? kLedGreen : kLedOff, write);
-        }
+        drawBeatPads(grid, gridBeatIndex, write);
+        sendCoalesced(kApcPadGateMod, grid.gateModHeld() ? kLedYellow :
+                                      grid.gateMode() > 0 ? kLedGreen : kLedOff, write);
         sendCoalesced(kApcBtnPlay, grid.shiftHeld() ? kLedYellow : kLedOff, write);
         sendCoalesced(kApcLiveLedNote,
             grid.keysMultiMode() ? kLedYellowBlink :
@@ -109,6 +89,14 @@ public:
 
     void invalidate() { cacheValid_.fill(false); }
 
+    template <typename WriteFn>
+    void refreshBeatPads(unsigned now_ms, const ApcGrid& grid, int gridBeatIndex, WriteFn&& write) {
+        if (!bootMs_) bootMs_ = now_ms ? now_ms : 1;
+        if (now_ms - bootMs_ < kBootDelayMs) return;
+        if (clipFlashReleaseAt_ != 0 && now_ms < clipFlashReleaseAt_) return;
+        drawBeatPads(grid, gridBeatIndex, write);
+    }
+
 private:
     static constexpr unsigned kBootDelayMs = 2000;
     static constexpr unsigned kRefreshMs = 33;
@@ -121,6 +109,35 @@ private:
     int lastClipExportState_ = 0;
     unsigned clipFlashReleaseAt_ = 0;
     bool clipFlashIsError_ = false;
+
+    static bool isBeatPadNote(int note) {
+        for (int g = 0; g < 4; g++) if (note == kApcBeatPadNotes[g]) return true;
+        return false;
+    }
+
+    template <typename WriteFn>
+    void drawBeatPads(const ApcGrid& grid, int gridBeatIndex, WriteFn&& write) {
+        const int activeGroup = gridBeatIndex >= 0 ? (gridBeatIndex >> 2) : -1;
+        const int posInGroup  = gridBeatIndex >= 0 ? (gridBeatIndex & 0x3) : 0;
+        const bool havePhrase = gridBeatIndex >= 0;
+        for (int g = 0; g < 4; g++) {
+            uint8_t color;
+            if (grid.gateModHeld()) {
+                color = (grid.gateMode() == g + 1) ? kLedRed : kLedOff;
+            } else {
+                if (!havePhrase)             color = kLedOff;
+                else if (g < activeGroup)    color = kLedYellow;
+                else                         color = kLedGreen;
+                if (havePhrase && g == posInGroup) color = kLedRed;
+                if (grid.shuffleMode() == g + 1) {
+                    color = (color == kLedRed)    ? kLedRedBlink :
+                            (color == kLedYellow) ? kLedYellowBlink :
+                                                    kLedGreenBlink;
+                }
+            }
+            sendCoalesced(kApcBeatPadNotes[g], color, write);
+        }
+    }
 
     template <typename WriteFn>
     void sendCoalesced(int note, uint8_t velocity, WriteFn&& write) {

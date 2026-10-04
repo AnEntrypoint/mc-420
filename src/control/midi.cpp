@@ -74,6 +74,17 @@ static std::atomic<int> g_controlSurfaceCard{-1};
 
 int controlSurfaceCard() { return g_controlSurfaceCard.load(std::memory_order_relaxed); }
 
+static bool beatClockUsable(const AudioThread::Telemetry& t) {
+    return t.linkSynced && t.bpm > 1.0f && t.masterLenSamples > 0.0f;
+}
+
+static int millisToNextBeat(const LinkBridge::BeatMark& bm, int capMs) {
+    long ms = (long)((bm.nextBeatMicros - bm.nowMicros + 999) / 1000);
+    if (ms < 1) ms = 1;
+    if (ms > capMs) ms = capMs;
+    return (int)ms;
+}
+
 void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBridge* link) {
     std::unordered_map<uint32_t, std::string> map;
     const char* mapPath = "/etc/aloop-controls.conf";
@@ -139,6 +150,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         }
     }
     bool warnedNoDevice = false;
+    constexpr int kPollTimeoutMs = 100;
     for (;;) {
     snd_rawmidi_t* in = nullptr;
     out = nullptr;
@@ -201,11 +213,29 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
     constexpr unsigned kLivenessProbeMs = 1000;
     unsigned lastLivenessProbeMs = nowMs();
     for (;;) {
+        auto beatTelem = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
+        int waitMs = kPollTimeoutMs;
+        bool beatClockLive = false;
+        if (link && beatClockUsable(beatTelem)) {
+            LinkBridge::BeatMark bm = link->beatMarkNow();
+            if (bm.valid) {
+                beatClockLive = true;
+                waitMs = millisToNextBeat(bm, kPollTimeoutMs);
+            }
+        }
+
         pfds[(size_t)kListenSlot].fd = injectListenFd;
         pfds[(size_t)kListenSlot].events = POLLIN;
         pfds[(size_t)kConnSlot].fd = injectConnFd;
         pfds[(size_t)kConnSlot].events = POLLIN;
-        int pr = poll(pfds.data(), (nfds_t)pfds.size(), 100);
+        int pr = poll(pfds.data(), (nfds_t)pfds.size(), waitMs);
+
+        int beatIndex = beatTelem.gridBeatIndex;
+        if (beatClockLive) {
+            LinkBridge::BeatMark bm = link->beatMarkNow();
+            if (bm.valid) beatIndex = bm.index;
+        }
+
         if (pr > 0 && injectListenFd >= 0 && (pfds[(size_t)kListenSlot].revents & POLLIN)) {
             int c = accept(injectListenFd, nullptr, nullptr);
             if (c >= 0) {
@@ -235,18 +265,12 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
             }
         }
         if (!gotInjectedByte) {
-            if (pr == 0) {
+            if (pr == 0 || pr < 0) {
                 unsigned n = nowMs();
                 grid.pollHolds(n, ps, link, audio);
                 auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
-                continue;
-            }
-            if (pr < 0) {
-                unsigned n = nowMs();
-                grid.pollHolds(n, ps, link, audio);
-                auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
+                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, beatIndex, audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
+                leds.refreshBeatPads(n, grid, beatIndex, ledWrite);
                 continue;
             }
             if (!realReady) continue;
@@ -261,7 +285,8 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         grid.pollHolds(now, ps, link, audio);
         {
             auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-            leds.refresh(now, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, audio ? t.gridBeatIndex : -1, audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
+            leds.refresh(now, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, beatIndex, audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
+            leds.refreshBeatPads(now, grid, beatIndex, ledWrite);
         }
 
         if (type == 0xB0 && d1 == 64) { grid.onSustainPedal(d2 >= 64, ps); continue; }
