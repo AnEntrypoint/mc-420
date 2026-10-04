@@ -133,6 +133,13 @@ std::atomic<bool> g_clipExportTriggerPending{false};
 double g_resampleFoldSum = 0.0;
 uint64_t g_resampleFoldSamples = 0;
 double g_prevBlockFoldSum = 0.0;
+double g_resampleChainSum = 0.0;
+uint64_t g_resampleChainSamples = 0;
+double g_prevBlockChainLatency = 0.0;
+
+constexpr int kPitchFfiBlockSamples = 64;
+constexpr int kPitchEngineReadOffsetSamples = 64;
+constexpr int kPitchStageLatencySamples = kPitchFfiBlockSamples + kPitchEngineReadOffsetSamples;
 
 float g_manualSpeedMul = 1.0f;
 constexpr int kTransposeVoices = 6;
@@ -1087,6 +1094,15 @@ static void* worker(void*) {
                 g_prevBlockFoldSum = blockFoldSum;
                 g_telem.resampleFoldSum = g_resampleFoldSum;
                 g_telem.resampleFoldSamples = g_resampleFoldSamples;
+                double chainLatencyNow = 0.0;
+                if (engagedZone && *engagedZone > 0.5f) {
+                    chainLatencyNow += (double)kPitchStageLatencySamples;
+                }
+                g_resampleChainSum += g_prevBlockChainLatency * (double)N;
+                g_resampleChainSamples += (uint64_t)N;
+                g_prevBlockChainLatency = chainLatencyNow;
+                g_telem.resampleChainSum = g_resampleChainSum;
+                g_telem.resampleChainSamples = g_resampleChainSamples;
                 if (monitorFoldFaustZone) *monitorFoldFaustZone = foldGain;
                 if (glitchFoldFaustZone) *glitchFoldFaustZone = glitchFoldGain;
                 {

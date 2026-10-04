@@ -169,10 +169,13 @@ int ApcGrid::monitorFoldSlot(ParamStore& ps) {
 
 void ApcGrid::armResampleFoldWindow(int looper, AudioThread* audio) {
     m_looperFoldFraction[looper] = 0.0f;
+    m_looperChainLatency[looper] = 0.0;
     if (!audio) return;
     const AudioThread::Telemetry t = audio->snapshotTelemetry();
     m_looperFoldSumStart[looper] = t.resampleFoldSum;
     m_looperFoldSamplesStart[looper] = t.resampleFoldSamples;
+    m_looperChainSumStart[looper] = t.resampleChainSum;
+    m_looperChainSamplesStart[looper] = t.resampleChainSamples;
 }
 
 float ApcGrid::takeResampleFoldFraction(int looper, AudioThread* audio) const {
@@ -188,9 +191,20 @@ float ApcGrid::takeResampleFoldFraction(int looper, AudioThread* audio) const {
     return (float)f;
 }
 
+double ApcGrid::takeResampleChainLatency(int looper, AudioThread* audio) const {
+    if (!audio || m_looperChainSamplesStart[looper] == 0) return 0.0;
+    const AudioThread::Telemetry t = audio->snapshotTelemetry();
+    const long long samples = (long long)t.resampleChainSamples
+                            - (long long)m_looperChainSamplesStart[looper];
+    if (samples <= 0) return 0.0;
+    double l = (t.resampleChainSum - m_looperChainSumStart[looper]) / (double)samples;
+    if (l < 0.0) l = 0.0;
+    return l;
+}
+
 long ApcGrid::takeLatencyBias(int looper, AudioThread* audio) const {
     const double dry = (double)measuredLatencyBias(audio);
-    const double fold = (double)resampleLatencySamples(audio);
+    const double fold = (double)resampleLatencySamples(audio) + m_looperChainLatency[looper];
     const double f = (double)m_looperFoldFraction[looper];
     return (long)(dry * (1.0 - f) + fold * f + 0.5);
 }
@@ -203,11 +217,13 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
         m_looperPlaying[looper] = true;
         setLooper(ps, looper, "play", 1.0f);
         m_looperFoldFraction[looper] = takeResampleFoldFraction(looper, audio);
+        m_looperChainLatency[looper] = takeResampleChainLatency(looper, audio);
         const long latencyBias = takeLatencyBias(looper, audio);
         if (m_looperFoldFraction[looper] > 0.01f) {
-            fprintf(stderr, "[diag-latency] looper=%d resampleFold=%.3f dryBias=%ld foldBias=%ld bias=%ld\n",
+            fprintf(stderr, "[diag-latency] looper=%d resampleFold=%.3f dryBias=%ld foldBias=%ld chain=%.1f bias=%ld\n",
                     looper, (double)m_looperFoldFraction[looper],
-                    measuredLatencyBias(audio), resampleLatencySamples(audio), latencyBias);
+                    measuredLatencyBias(audio), resampleLatencySamples(audio),
+                    m_looperChainLatency[looper], latencyBias);
         }
         setLooper(ps, looper, "latencybias", (float)latencyBias);
         m_masterLenSamples = (long)ps.get("cmd/master_len", 0.0f);

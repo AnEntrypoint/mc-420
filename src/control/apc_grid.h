@@ -142,6 +142,9 @@ private:
     double m_looperFoldSumStart[kLooperCount] = {};
     uint64_t m_looperFoldSamplesStart[kLooperCount] = {};
     float m_looperFoldFraction[kLooperCount] = {};
+    double m_looperChainSumStart[kLooperCount] = {};
+    uint64_t m_looperChainSamplesStart[kLooperCount] = {};
+    double m_looperChainLatency[kLooperCount] = {};
     long m_latencyBiasWritten = 0;
     bool m_looperPauseOthersOnFinish[kLooperCount] = {};
     bool m_localTransportRunning = false;
@@ -172,6 +175,7 @@ private:
     int monitorFoldSlot(ParamStore& ps);
     void armResampleFoldWindow(int looper, class AudioThread* audio);
     float takeResampleFoldFraction(int looper, class AudioThread* audio) const;
+    double takeResampleChainLatency(int looper, class AudioThread* audio) const;
     long takeLatencyBias(int looper, class AudioThread* audio) const;
 
     float m_fxBankValues[kFxBankCount][kFxKnobCount] = {

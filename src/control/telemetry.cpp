@@ -96,6 +96,7 @@ void Telemetry::publish() {
         "\"audio_peak\":{\"in\":%.4f,\"out\":%.4f},\"eff_speed\":%.4f,"
         "\"alsa_roundtrip_samples\":%.1f,\"latency_bias_samples\":%.1f,\"latency_trim_samples\":%.1f,"
         "\"resample_fold\":{\"sum\":%.1f,\"samples\":%llu},"
+        "\"resample_chain\":{\"sum\":%.1f,\"samples\":%llu},"
         "\"sustain_cmd\":%.2f,\"sustain_gate\":%.2f,"
         "\"grid_beat_index\":%d,\"master_phase_beats\":%.5f,\"master_len_samples\":%.1f,\"recorded_beats\":%.3f,"
         "\"groove\":{\"shuffle\":%d,\"gate\":%d,\"beat_len_samples\":%.1f,\"gate_min\":%.3f,\"gate_max\":%.3f,\"swing_offset_samples\":%.1f,\"swing_grid_beats\":%.3f},"
@@ -112,6 +113,7 @@ void Telemetry::publish() {
         t.inPeak, t.outPeak, t.effSpeed,
         t.alsaRoundTripSamples, t.latencyBiasSamples, t.latencyTrimSamples,
         t.resampleFoldSum, (unsigned long long)t.resampleFoldSamples,
+        t.resampleChainSum, (unsigned long long)t.resampleChainSamples,
         t.sustainCmd, t.sustainGate,
         t.gridBeatIndex, t.masterPhaseBeats,
         t.masterLenSamples, t.recordedBeats,

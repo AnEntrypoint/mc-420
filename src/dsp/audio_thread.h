@@ -71,6 +71,8 @@ public:
         float    latencyBiasSamples = 0.0f;
         double   resampleFoldSum = 0.0;
         uint64_t resampleFoldSamples = 0;
+        double   resampleChainSum = 0.0;
+        uint64_t resampleChainSamples = 0;
         float    linkPhaseErrBeats = 0.0f;
         float    masterPhaseBeats = 0.0f;
         int      shuffleMode = 0;
