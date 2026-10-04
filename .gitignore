@@ -43,6 +43,8 @@ dist/
 tmp/
 
 .netboot-stage/
+.deploy/
+.netboot-serve-now.*
 .netboot-serve/
 .netboot-serve-pi3/
 .netboot-serve.new.*/
