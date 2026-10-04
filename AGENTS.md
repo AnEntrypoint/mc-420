@@ -139,13 +139,15 @@ Every momentary Faust gate must be released explicitly or it sticks at 1: `loope
 
 **The first (master-establishing) take OWNS the tempo.** `master_len` stays the raw write index; `deriveTempoQuant(seconds, anchor)` picks a power-of-2 beat count {1..128} whose bpm is log-closest to `anchor` (synced Link tempo with peers, else 120) inside `anchor/2..anchor*2`. `cmd/recorded_bpm`/`cmd/recorded_beats` follow; `LinkBridge::imposeTempo()` pushes that bpm, landing `effSpeed` on 1.0000 (adopting peer tempo TRUNCATED the take). Measure the grid against `master_len_samples / recorded_beats`, the exact published basis, never the rounded `link.bpm`.
 
-## Varispeed punch: BAKED into a dry take, UNDONE out of a SHIFT resample
+## Varispeed punch: BAKED into a dry take, REPLAYED out of a SHIFT resample
 
 `cmd/halfspeed`/`cmd/doublespeed` are APC **NOTES 70/71 ch0** (never cc70/cc71) -> `g_manualSpeedMul` (0.5/1/2) -> `effSpeed`. `loop.dsp`'s 9th input is `manualSpeed`, 10th `foldNow` (raw SHIFT `freeXpose`): `manualSafe = max(0.1, abs(manualSpeed))`, `ratioClamped = clamp(effSpeed/manualSafe, 0.1, 8.0)`, `speedClamped = clamp(effSpeed, 0.1, 8.0)`. Beat lengths use `ratioClamped`, never `speedClamped` — else the C++ `finishtarget` (no manual term) stops matching `snappedWrapLen` and a take doubles.
 
 **Dry take** (`foldNext == 0`): latches `v = manualSafe` at `finishEdge` (1.0 at `armEdge`); `vBaked = v != 1.0`, `speedForTake = v / manualSafe`.
 
-**SHIFT-resample take** (`foldNext == 1`, sticky from `armEdge`): the fold tap is post-varispeed, so the punch is IN the captured audio. Such a take writes a decimated punch-rate table (`kRateDecim = 64`) at the write head (`ba.if(foldNow > 0.5, manualSafe, 1.0)`) and reads it at the read head: `speedForTake = 1 / max(0.1, rateStored)` => read rate `effSpeed / rateStored` — captured punch undone, live punch kept (440 Hz + 0.5x: 220 Hz held, 440 Hz released). `takeRateBaked = (foldNext > 0.5) & (rateStored != 1.0)` feeds `varispeedActive` and forces `resyncCoeff` to 0. **The rate write index must be `widxNext`, not `widxPrev`** — with `widxPrev` the LAST cell is overwritten with 1.0 on the sample `foldNow` drops, flickering `takeRateBaked` off and snapping `rpos` to `absPos`. Its material is neutral (the tap pattern is not replayed; the same taps reproduce it live). Gates `tools/loop-quantization-sim/varispeed-record.js` + `test/hardware/varispeed-record.js`.
+**SHIFT-resample take** (`foldNext == 1`, sticky from `armEdge`): the fold tap is post-varispeed, so the punch is IN the captured audio — that audio IS the performance; read it at the LIVE punch alone (`vNext` forced to 1.0 at `finishEdge`, so `vBaked` false, `speedForTake = 1.0`). 440 Hz punched 0.5x through the take => 220 Hz with no punch held (what was heard), 110 Hz held, 880 Hz at 2x. **Never divide the captured punch back out** (`speedForTake = 1/rateStored`): neutral 440 Hz, tap pattern discarded; its `kRateDecim = 64` table also flickered `resyncCoeff` 0/0.0005 inside one take, `rateStored` following the read position. A take captured entirely at 0.5x holds half the source and repeats it — faithful: half the loop in the same wall clock.
+
+**No host `faust`.** `npm i @grame/faustwasm` compiles a `.dsp` to wasm for a host witness: rejects `-fun`/`-nvi`/`-vec`, `compute()` needs `dsp.start()` first (else silence), shrink `MAXLEN`/`NLOOPERS` in the sim copy.
 
 ## FX pages: 3 pages x regular/shift x 8 knobs
 
