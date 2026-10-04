@@ -753,6 +753,7 @@ static void* worker(void*) {
                 if (g_telem.looperPlay[lp] || g_telem.looperRec[lp]) { anyAudible = true; break; }
             }
             bool linkDrivingLength = false;
+            const bool haveTake = g_params && g_params->getBySlot(recordedBeatsSlot, 0.0f) >= 1.0f;
             LinkSnapshot linkSnap{};
             if (g_link) {
                 linkSnap = g_link->audioRead();
@@ -762,17 +763,19 @@ static void* worker(void*) {
                 g_telem.linkPlaying = linkSnap.isPlaying;
                 if (linkSnap.synced && linkSnap.bpm > 1.0) {
                     linkDrivingLength = true;
-                    double beatsPerBar = 4.0;
-                    double samplesPerBeat = (g_cfg.sampleRate * 60.0) / linkSnap.bpm;
-                    double lenSamples = samplesPerBeat * beatsPerBar;
-                    for (int lp = 0; lp < 20; lp++) {
-                        if (looperLenZone[lp]) *looperLenZone[lp] = (float)lenSamples;
+                    if (!haveTake) {
+                        double beatsPerBar = 4.0;
+                        double samplesPerBeat = (g_cfg.sampleRate * 60.0) / linkSnap.bpm;
+                        double lenSamples = samplesPerBeat * beatsPerBar;
+                        for (int lp = 0; lp < 20; lp++) {
+                            if (looperLenZone[lp]) *looperLenZone[lp] = (float)lenSamples;
+                        }
+                        if (mlbZone) *mlbZone = (float)(lenSamples / N);
+                        if (recordedBeatsZone) *recordedBeatsZone = (float)beatsPerBar;
                     }
-                    if (mlbZone) *mlbZone = (float)(lenSamples / N);
-                    if (recordedBeatsZone) *recordedBeatsZone = (float)beatsPerBar;
                 }
             }
-            if (!linkDrivingLength && g_params) {
+            if ((!linkDrivingLength || haveTake) && g_params) {
                 if (mlbZone) *mlbZone = masterLenVal > 0.0f ? (masterLenVal / (float)N) : 0.0f;
             }
             static double linkPhaseTrim = 0.0;
@@ -826,7 +829,7 @@ static void* worker(void*) {
                 g_telem.masterLenSamples = masterLen;
                 g_telem.recordedBeats = recordedBeatsShared;
                 if (!recordedBeatsValid) recordedBeatsShared = 16.0f;
-                if (!linkDrivingLength && recordedBeatsZone) *recordedBeatsZone = recordedBeatsShared;
+                if ((!linkDrivingLength || haveTake) && recordedBeatsZone) *recordedBeatsZone = recordedBeatsShared;
                 double beatLenSamplesShared = masterLen > 0.0f
                     ? (double)masterLen / (double)recordedBeatsShared
                     : (double)g_cfg.sampleRate * 0.5;
