@@ -215,6 +215,9 @@ public:
             double adv = (double)m_scale + m_gapBias;
             m_rdA += adv;
             m_rdB += adv;
+            const double maxRd = (double)m_wr - (double)(SINC_HALF + 2);
+            if (m_rdA > maxRd) m_rdA = maxRd;
+            if (m_rdB > maxRd) m_rdB = maxRd;
             if (m_xfadeRemain > 0) m_xfadeRemain--;
             m_effContAccum += adv;
             m_effSamples++;
