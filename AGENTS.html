@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop — current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=9175ce028a16187aa3b28b453ced0dc0a717a603">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1c7255f7f1f2b5b057280761e8ddc8a5baebdea1">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -251,7 +251,7 @@
 
 <p><strong>SHIFT-resample take</strong> (<code class="language-plaintext highlighter-rouge">foldNext == 1</code>, sticky from <code class="language-plaintext highlighter-rouge">armEdge</code>): the fold tap is post-varispeed, so the punch is IN the captured audio — that audio IS the performance; read it at the LIVE punch alone (<code class="language-plaintext highlighter-rouge">vNext</code> forced to 1.0 at <code class="language-plaintext highlighter-rouge">finishEdge</code>, so <code class="language-plaintext highlighter-rouge">vBaked</code> false, <code class="language-plaintext highlighter-rouge">speedForTake = 1.0</code>). 440 Hz punched 0.5x through the take =&gt; 220 Hz with no punch held (what was heard), 110 Hz held, 880 Hz at 2x. <strong>Never divide the captured punch back out</strong> (<code class="language-plaintext highlighter-rouge">speedForTake = 1/rateStored</code>): neutral 440 Hz, tap pattern discarded; its <code class="language-plaintext highlighter-rouge">kRateDecim = 64</code> table also flickered <code class="language-plaintext highlighter-rouge">resyncCoeff</code> 0/0.0005 inside one take, <code class="language-plaintext highlighter-rouge">rateStored</code> following the read position. A take captured entirely at 0.5x holds half the source and repeats it — faithful: half the loop in the same wall clock.</p>
 
-<p><strong>No host <code class="language-plaintext highlighter-rouge">faust</code>.</strong> <code class="language-plaintext highlighter-rouge">npm i @grame/faustwasm</code> compiles a <code class="language-plaintext highlighter-rouge">.dsp</code> to wasm for a host witness: rejects <code class="language-plaintext highlighter-rouge">-fun</code>/<code class="language-plaintext highlighter-rouge">-nvi</code>/<code class="language-plaintext highlighter-rouge">-vec</code>, <code class="language-plaintext highlighter-rouge">compute()</code> needs <code class="language-plaintext highlighter-rouge">dsp.start()</code> first (else silence), shrink <code class="language-plaintext highlighter-rouge">MAXLEN</code>/<code class="language-plaintext highlighter-rouge">NLOOPERS</code> in the sim copy.</p>
+<p><strong>Host faust witness = DawDreamer</strong> (<code class="language-plaintext highlighter-rouge">test/phrase-anchor/harness.py</code>, real libfaust, real flags, full <code class="language-plaintext highlighter-rouge">MAXLEN</code>). No <code class="language-plaintext highlighter-rouge">faust</code> binary; faustwasm rejects <code class="language-plaintext highlighter-rouge">-fun</code>/<code class="language-plaintext highlighter-rouge">-nvi</code>/<code class="language-plaintext highlighter-rouge">-vec</code>, needs <code class="language-plaintext highlighter-rouge">dsp.start()</code> before <code class="language-plaintext highlighter-rouge">compute()</code>.</p>
 
 <h2 id="fx-pages-3-pages-x-regularshift-x-8-knobs">FX pages: 3 pages x regular/shift x 8 knobs</h2>
 

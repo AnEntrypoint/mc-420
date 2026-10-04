@@ -147,7 +147,7 @@ Every momentary Faust gate must be released explicitly or it sticks at 1: `loope
 
 **SHIFT-resample take** (`foldNext == 1`, sticky from `armEdge`): the fold tap is post-varispeed, so the punch is IN the captured audio — that audio IS the performance; read it at the LIVE punch alone (`vNext` forced to 1.0 at `finishEdge`, so `vBaked` false, `speedForTake = 1.0`). 440 Hz punched 0.5x through the take => 220 Hz with no punch held (what was heard), 110 Hz held, 880 Hz at 2x. **Never divide the captured punch back out** (`speedForTake = 1/rateStored`): neutral 440 Hz, tap pattern discarded; its `kRateDecim = 64` table also flickered `resyncCoeff` 0/0.0005 inside one take, `rateStored` following the read position. A take captured entirely at 0.5x holds half the source and repeats it — faithful: half the loop in the same wall clock.
 
-**No host `faust`.** `npm i @grame/faustwasm` compiles a `.dsp` to wasm for a host witness: rejects `-fun`/`-nvi`/`-vec`, `compute()` needs `dsp.start()` first (else silence), shrink `MAXLEN`/`NLOOPERS` in the sim copy.
+**Host faust witness = DawDreamer** (`test/phrase-anchor/harness.py`, real libfaust, real flags, full `MAXLEN`). No `faust` binary; faustwasm rejects `-fun`/`-nvi`/`-vec`, needs `dsp.start()` before `compute()`.
 
 ## FX pages: 3 pages x regular/shift x 8 knobs
 
