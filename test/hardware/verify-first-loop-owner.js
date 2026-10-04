@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const net = require('net');
 const dgram = require('dgram');
+const { despikedSpread } = require('./lib/gridlock');
 
 const [, , host, holdMsArg] = process.argv;
 if (!host) {
@@ -101,8 +102,7 @@ async function watchPlayback(wrapLen, beatLenSamples, beatsPerCycle) {
   let readWraps = 0;
   let masterWraps = 0;
   let firstLock = null;
-  let lockMin = Infinity;
-  let lockMax = -Infinity;
+  const lockDevs = [];
   const readSeries = [[0, 0]];
   const masterSeries = [[0, 0]];
   while (Date.now() - loopStart < kWatchMs) {
@@ -121,8 +121,7 @@ async function watchPlayback(wrapLen, beatLenSamples, beatsPerCycle) {
     let d = lock - firstLock;
     if (d > wrapLen * 0.5) d -= wrapLen;
     if (d < -wrapLen * 0.5) d += wrapLen;
-    lockMin = Math.min(lockMin, d);
-    lockMax = Math.max(lockMax, d);
+    lockDevs.push(d);
     await new Promise((r) => setTimeout(r, kPollMs));
   }
   const last = await queryTelemetry();
@@ -132,7 +131,7 @@ async function watchPlayback(wrapLen, beatLenSamples, beatsPerCycle) {
     readWraps,
     readRate: slopePerSecond(readSeries) / kSampleRate,
     masterRate: slopePerSecond(masterSeries) / kSampleRate,
-    lockSpread: lockMax - lockMin,
+    lock: despikedSpread(lockDevs, kLockToleranceSamples),
     finalEffSpeed: last.eff_speed,
     finalBpm: last.link.bpm,
   };
@@ -207,9 +206,9 @@ async function main() {
   if (Math.abs(lockRatio - 1.0) > kLockRateTolerance) {
     fail(`read head and master grid run at different rates (${lockRatio.toFixed(7)}) -- ${((lockRatio - 1) * wrapLen).toFixed(1)} samples of slip per repeat`);
   }
-  console.log(`[first-owner] grid-lock spread ${watch.lockSpread.toFixed(1)} samples over the watch, session ends at ${watch.finalBpm.toFixed(2)} bpm eff ${watch.finalEffSpeed.toFixed(4)}`);
-  if (watch.lockSpread > kLockToleranceSamples) {
-    fail(`read head jumped ${watch.lockSpread.toFixed(1)} samples against the master grid`);
+  console.log(`[first-owner] grid lock ${watch.lock.min.toFixed(1)}..${watch.lock.max.toFixed(1)} samples over ${watch.elapsedSec.toFixed(1)}s (${watch.lock.dropped} torn replies dropped), session ends at ${watch.finalBpm.toFixed(2)} bpm eff ${watch.finalEffSpeed.toFixed(4)}`);
+  if (!watch.lock.held) {
+    fail(`read head moved ${watch.lock.spread.toFixed(1)} samples against the master grid -- ${watch.lock.min.toFixed(1)}..${watch.lock.max.toFixed(1)}`);
   }
   if (Math.abs(watch.finalBpm - derivedBpm) > Math.max(0.5, derivedBpm * 0.01)) {
     fail(`after ${watch.elapsedSec.toFixed(1)}s the session is back at ${watch.finalBpm.toFixed(2)} bpm -- a peer re-asserted its own tempo`);

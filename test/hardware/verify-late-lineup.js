@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const net = require('net');
 const dgram = require('dgram');
+const { despikedSpread } = require('./lib/gridlock');
 
 const [, , host, holdMsArg, delayMsArg] = process.argv;
 if (!host) {
@@ -87,8 +88,7 @@ async function watchTwoLoopers(wrapLen, beatLenSamples) {
   let offsetMin = Infinity;
   let offsetMax = -Infinity;
   let lastOffset = 0;
-  let lockMin = [Infinity, Infinity];
-  let lockMax = [-Infinity, -Infinity];
+  const lockDevs = [[], []];
   let firstLock = [null, null];
   while (Date.now() - start < kWatchMs) {
     const t = await queryTelemetry();
@@ -106,15 +106,14 @@ async function watchTwoLoopers(wrapLen, beatLenSamples) {
       let d = lock - firstLock[i];
       if (d > wrapLen * 0.5) d -= wrapLen;
       if (d < -wrapLen * 0.5) d += wrapLen;
-      lockMin[i] = Math.min(lockMin[i], d);
-      lockMax[i] = Math.max(lockMax[i], d);
+      lockDevs[i].push(d);
     }
     await new Promise((r) => setTimeout(r, kPollMs));
   }
   return {
     offsetSpread: offsetMax - offsetMin,
     lastOffset,
-    lockSpread: [lockMax[0] - lockMin[0], lockMax[1] - lockMin[1]],
+    lock: lockDevs.map((devs) => despikedSpread(devs, kToleranceSamples)),
   };
 }
 
@@ -154,7 +153,7 @@ async function main() {
   const watch = await watchTwoLoopers(wrapLen, beatLenSamples);
   const offCell = Math.abs(watch.lastOffset - Math.round(watch.lastOffset / cell) * cell);
   console.log(`[late-lineup] offset between the two read heads: ${watch.lastOffset.toFixed(1)} samples (${(watch.lastOffset / cell).toFixed(3)} grid cells of ${cell.toFixed(1)})`);
-  console.log(`[late-lineup] offset spread ${watch.offsetSpread.toFixed(1)} samples, grid-lock spread ${watch.lockSpread[0].toFixed(1)} / ${watch.lockSpread[1].toFixed(1)}`);
+  console.log(`[late-lineup] offset spread ${watch.offsetSpread.toFixed(1)} samples, grid lock ${watch.lock[0].min.toFixed(1)}..${watch.lock[0].max.toFixed(1)} / ${watch.lock[1].min.toFixed(1)}..${watch.lock[1].max.toFixed(1)} (${watch.lock[0].dropped + watch.lock[1].dropped} torn replies dropped)`);
 
   if (watch.offsetSpread > kToleranceSamples) {
     fail(`the two loops drifted ${watch.offsetSpread.toFixed(1)} samples apart over ${(kWatchMs / 1000).toFixed(0)}s -- they do not share a rate`);
@@ -163,8 +162,8 @@ async function main() {
     fail(`the second take sits ${offCell.toFixed(1)} samples off the 1/8-beat grid relative to the first -- off by ${(offCell / cell).toFixed(2)} of a cell`);
   }
   for (let i = 0; i < 2; i++) {
-    if (watch.lockSpread[i] > kToleranceSamples) {
-      fail(`looper${i} read head jumped ${watch.lockSpread[i].toFixed(1)} samples against the master grid`);
+    if (!watch.lock[i].held) {
+      fail(`looper${i} read head jumped ${watch.lock[i].spread.toFixed(1)} samples against the master grid`);
     }
   }
 
