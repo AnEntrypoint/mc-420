@@ -53,16 +53,16 @@ if [ "$NB_LASTMODE" = "-rwxr-xr-x" ]; then
 elif [ -z "$NB_LASTMODE" ] && [ ! -f "$NBOVL/opt/aloop/aloop" ]; then
   echo "[netboot] overlay: added eth0 dhcp + networking service [no ALOOP_BIN this run, nothing to verify]"
 else
-  echo "[netboot] ERROR: aloop binary lost its +x bit during the netboot overlay repack (last entry mode: $NB_LASTMODE) — aloop service will crash-loop"
+  echo "[netboot] ERROR: aloop binary lost its +x bit during the netboot overlay repack (last entry mode: $NB_LASTMODE) — aloop service will crash-loop" >&2
 fi
 for _x in usr/sbin/hostapd usr/sbin/dnsmasq; do
   _m=$(tar -tzvf "$BOOT/aloop.apkovl.tar.gz" 2>/dev/null | grep "$_x\$" | tail -1 | cut -c1-10)
   if [ -z "$_m" ]; then
-    echo "[netboot] ERROR: $_x missing from the apkovl — the ticker AP cannot start"
+    echo "[netboot] ERROR: $_x missing from the apkovl — the ticker AP cannot start" >&2
   elif [ "$_m" = "-rwxr-xr-x" ]; then
     echo "[netboot] $_x confirmed +x in archive"
   else
-    echo "[netboot] ERROR: $_x is NOT executable in the apkovl (mode: $_m) — autoap will fail to host the AP"
+    echo "[netboot] ERROR: $_x is NOT executable in the apkovl (mode: $_m) — autoap will fail to host the AP" >&2
   fi
 done
 
@@ -82,15 +82,15 @@ if [ "${NETBOOT_DEBUG:-0}" = "1" ] && [ -f "$BOOT/cmdline.txt" ]; then
   echo "[netboot] NETBOOT_DEBUG=1: dropped 'quiet', added 'debug_init' (verbose serial init)"
 fi
 
-[ -f "$BOOT/boot/modloop-rpi" ]        || { echo "[netboot] ERROR: modloop-rpi missing from boot tree"; exit 1; }
-[ -f "$BOOT/boot/initramfs-rpi" ]      || { echo "[netboot] ERROR: initramfs-rpi missing";            exit 1; }
-[ -f "$BOOT/aloop.apkovl.tar.gz" ]     || { echo "[netboot] ERROR: apkovl missing from boot tree";    exit 1; }
-[ -f "$BOOT/bootcode.bin" ]            || { echo "[netboot] ERROR: bootcode.bin missing";              exit 1; }
+[ -f "$BOOT/boot/modloop-rpi" ]        || { echo "[netboot] ERROR: modloop-rpi missing from boot tree" >&2; exit 1; }
+[ -f "$BOOT/boot/initramfs-rpi" ]      || { echo "[netboot] ERROR: initramfs-rpi missing" >&2;            exit 1; }
+[ -f "$BOOT/aloop.apkovl.tar.gz" ]     || { echo "[netboot] ERROR: apkovl missing from boot tree" >&2;    exit 1; }
+[ -f "$BOOT/bootcode.bin" ]            || { echo "[netboot] ERROR: bootcode.bin missing" >&2;              exit 1; }
 _fw="$(board_firmware_names "$BOARD")"
 _fw_start="$(echo "$_fw" | cut -d' ' -f1)"; _fw_fixup="$(echo "$_fw" | cut -d' ' -f2)"; _fw_dtb="$(echo "$_fw" | cut -d' ' -f3)"
-[ -f "$BOOT/$_fw_start" ] || { echo "[netboot] ERROR: $_fw_start (BOARD=$BOARD firmware) missing"; exit 1; }
-[ -f "$BOOT/$_fw_fixup" ] || { echo "[netboot] ERROR: $_fw_fixup (BOARD=$BOARD firmware) missing"; exit 1; }
-[ -f "$BOOT/$_fw_dtb" ]   || { echo "[netboot] ERROR: $_fw_dtb (BOARD=$BOARD DTB) missing"; exit 1; }
+[ -f "$BOOT/$_fw_start" ] || { echo "[netboot] ERROR: $_fw_start (BOARD=$BOARD firmware) missing" >&2; exit 1; }
+[ -f "$BOOT/$_fw_fixup" ] || { echo "[netboot] ERROR: $_fw_fixup (BOARD=$BOARD firmware) missing" >&2; exit 1; }
+[ -f "$BOOT/$_fw_dtb" ]   || { echo "[netboot] ERROR: $_fw_dtb (BOARD=$BOARD DTB) missing" >&2; exit 1; }
 
 OUT_NEW="${OUT}.new.$$"
 OUT_OLD="${OUT}.old.$$"
