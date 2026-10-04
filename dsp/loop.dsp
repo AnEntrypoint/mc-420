@@ -4,8 +4,6 @@ SR       = 48000.0;
 MAXLEN   = 48000 * 60;
 NLOOPERS = 20;
 kFineGridBeats = 0.125;
-kRateDecim   = 64;
-RATELEN      = MAXLEN / kRateDecim;
 
 oneLooper(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, foldNow, masterPhaseWrapped) = out : attachLevel
 with {
@@ -73,14 +71,7 @@ with {
         foldNext = ba.if(armEdge, foldNow, ba.if(foldNow > 0.5, 1.0, foldPrev));
         vNext = ba.if(armEdge, 1.0, ba.if(finishEdge, ba.if(foldNext > 0.5, 1.0, manualSafe), vPrev));
         vBaked = vNext != 1.0;
-        rateWrPosSamples = ba.if(gateCur > 0.5, float(widxNext), float(RATELEN - 1) * float(kRateDecim));
-        rateWrIdx = int(rateWrPosSamples / float(kRateDecim));
-        rateRdIdx = int(min(float(RATELEN - 2) * float(kRateDecim), max(0.0, rposPrev)) / float(kRateDecim));
-        rateStored = rwtable(RATELEN, 1.0, rateWrIdx,
-                             ba.if(foldNow > 0.5, manualSafe, 1.0), rateRdIdx);
-        takeRateBaked = (foldNext > 0.5) & (rateStored != 1.0);
-        speedForTake = ba.if(vBaked, vNext / manualSafe,
-                       ba.if(foldNext > 0.5, 1.0 / max(0.1, rateStored), 1.0));
+        speedForTake = ba.if(vBaked, vNext / manualSafe, 1.0);
 
         wrapLenCur = max(1, wlenNext);
         cycleInc = ba.if(masterLen < 0.5, wrapLenCur, sNext * masterLen);
@@ -91,9 +82,9 @@ with {
         speedClamped = max(0.1, min(8.0, effSpeed));
         manualSafe = max(0.1, abs(manualSpeed));
         ratioClamped = max(0.1, min(8.0, effSpeed / manualSafe));
-        varispeedActive = (effSpeed != 1.0) | vBaked | takeRateBaked;
+        varispeedActive = (effSpeed != 1.0) | vBaked;
         manualPunchActive = abs(effSpeed - 1.0) > 0.3;
-        resyncCoeff = ba.if(manualPunchActive | vBaked | takeRateBaked, 0.0, 0.0005);
+        resyncCoeff = ba.if(manualPunchActive | vBaked, 0.0, 0.0005);
         wrapDelta(prev) = wrapAbs(absPos - prev + wrapLenCur * 0.5, wrapLenCur) - wrapLenCur * 0.5;
         rposNext = ba.if(armEdge | finishEdge, absPos,
                     ba.if(varispeedActive,
