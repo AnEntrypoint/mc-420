@@ -12,6 +12,11 @@ public:
     static const int BLOCK = 64;
     static constexpr float FIDELITY_THRESH_DEFAULT = 0.30f;
     static constexpr float kFirstPeakRatio = 0.90f;
+    static constexpr float kEnvFloorFrac = 0.05f;
+    static constexpr float kDiffAccept = 0.15f;
+    static constexpr float kDiffStrict = 0.05f;
+    static constexpr float kDiffFallback = 0.50f;
+    static constexpr float kDiffReject = 0.35f;
 
     SnacPeriodTracker() { reset(); }
 
@@ -28,6 +33,8 @@ public:
         m_periodF = 256.0f;
         m_periodValid = false;
         m_lockMiss = 0;
+        m_confidence = 0.0f;
+        m_detectCount = 0;
     }
 
     void setFidelityThresh(float f) {
@@ -66,6 +73,8 @@ public:
     float m_fidelityThresh = FIDELITY_THRESH_DEFAULT;
     float m_dbgPeakVal = -1.0f;
     int   m_dbgPeakTau = -1;
+    float m_confidence = 0.0f;
+    int   m_detectCount = 0;
 
 private:
     enum { SNAC_IDLE = 0, SNAC_SWEEP = 1 };
@@ -80,6 +89,7 @@ private:
     int   m_sinceDetect = 0;
     int   m_sinceBlock = 0;
     float m_r[MAX_PERIOD + 1];
+    float m_rr[MAX_PERIOD + 1];
     float m_normK[MAX_PERIOD + 1];
 
     void snacBegin() {
@@ -94,11 +104,35 @@ private:
         float energy = acc;
         m_snacEnergy = energy;
         if (energy < 0.00002f) { m_periodValid = false; m_snacPhase = SNAC_IDLE; return; }
+        flattenEnvelope();
+        acc = 0.0f;
+        for (int i = 0; i < W; i++) { m_snacPre[i] = acc; acc += m_snacWin[i] * m_snacWin[i]; }
+        m_snacPre[W] = acc;
         m_snacMaxTau = MAX_PERIOD; if (m_snacMaxTau > W - 32) m_snacMaxTau = W - 32;
-        m_r[0] = energy;
-        m_normK[0] = 2.0f * energy;
+        m_r[0] = acc;
+        m_normK[0] = 2.0f * acc;
         m_snacK = 1;
         m_snacPhase = SNAC_SWEEP;
+    }
+
+    void flattenEnvelope() {
+        const int W = SNAC_WIN;
+        int half = m_period / 4;
+        if (half < 32) half = 32;
+        if (half > 256) half = 256;
+        m_snacPre[0] = 0.0f;
+        for (int i = 0; i < W; i++) m_snacPre[i + 1] = m_snacPre[i] + fabsf(m_snacWin[i]);
+        float floorA = kEnvFloorFrac * m_snacPre[W] / (float)W;
+        if (floorA < 1e-12f) return;
+        for (int n = 0; n < W; n++) {
+            int lo = n - half;
+            if (lo < 0) lo = 0;
+            int hi = n + half;
+            if (hi > W - 1) hi = W - 1;
+            float e = (m_snacPre[hi + 1] - m_snacPre[lo]) / (float)(hi - lo + 1);
+            if (e < floorA) e = floorA;
+            m_snacWin[n] = m_snacWin[n] / e;
+        }
     }
 
     void detectPitchStep() {
@@ -118,49 +152,94 @@ private:
         if (m_snacK <= m_snacMaxTau) return;
 
         m_snacPhase = SNAC_IDLE;
+        m_detectCount++;
         int maxTau = m_snacMaxTau;
-        int k = 1;
-        while (k < maxTau && (2.0f*m_r[k]/m_normK[k]) > (2.0f*m_r[k-1]/m_normK[k-1])) k++;
-        int kScanStart = k;
-        float bestVal = -1.0f; int bestTau = -1;
-        for (k = kScanStart; k < maxTau - 1; k++) {
-            if (k < MIN_PERIOD) continue;
-            float v  = 2.0f*m_r[k]/m_normK[k];
-            float vm = 2.0f*m_r[k-1]/m_normK[k-1];
-            float vp = 2.0f*m_r[k+1]/m_normK[k+1];
-            if (v > vm && v > vp && v > m_fidelityThresh) {
-                if (v > bestVal) { bestVal = v; bestTau = k; }
-            }
-        }
-        if (bestTau >= 0) {
-            float acceptFloor = bestVal * kFirstPeakRatio;
-            for (k = kScanStart; k < bestTau; k++) {
-                if (k < MIN_PERIOD) continue;
-                float v  = 2.0f*m_r[k]/m_normK[k];
-                float vm = 2.0f*m_r[k-1]/m_normK[k-1];
-                float vp = 2.0f*m_r[k+1]/m_normK[k+1];
-                if (v > vm && v > vp && v > m_fidelityThresh && v >= acceptFloor) {
-                    bestTau = k;
-                    bestVal = v;
-                    break;
-                }
-            }
-        }
-        { float gmax=-1; int gtau=-1;
-          for (int kk=MIN_PERIOD; kk<maxTau-1; kk++){ float vv=2.0f*m_r[kk]/m_normK[kk];
-            if (vv>gmax){gmax=vv;gtau=kk;} }
+        for (int k = 0; k <= maxTau; k++) m_rr[k] = 2.0f * m_r[k] / m_normK[k];
+        { float gmax = -1.0f; int gtau = -1;
+          for (int kk = MIN_PERIOD; kk < maxTau - 1; kk++) {
+              if (m_rr[kk] > gmax) { gmax = m_rr[kk]; gtau = kk; }
+          }
           m_dbgPeakVal = gmax; m_dbgPeakTau = gtau; }
-        if (bestTau < 0) {
+        for (int k = 0; k <= maxTau; k++) m_r[k] = m_normK[k] - 2.0f * m_r[k];
+        double cum = 0.0;
+        for (int k = 1; k <= maxTau; k++) {
+            cum += (double)m_r[k];
+            double mean = cum / (double)k;
+            m_normK[k] = (float)((mean > 1e-12) ? mean : 1e-12);
+        }
+        for (int k = 1; k <= maxTau; k++) m_r[k] = m_r[k] / m_normK[k];
+        float rPeak = 0.0f;
+        for (int k = MIN_PERIOD; k < maxTau - 1; k++) {
+            if (m_r[k] < m_r[k - 1] && m_r[k] < m_r[k + 1] && m_r[k] < kDiffAccept && m_rr[k] > rPeak)
+                rPeak = m_rr[k];
+        }
+        float rFloor = rPeak * kFirstPeakRatio;
+        int bestTau = -1;
+        float bestVal = 1e9f;
+        for (int k = MIN_PERIOD; k < maxTau - 1; k++) {
+            if (m_r[k] < m_r[k - 1] && m_r[k] < m_r[k + 1] && m_r[k] < kDiffAccept && m_rr[k] >= rFloor) {
+                bestTau = k;
+                bestVal = m_r[k];
+                break;
+            }
+        }
+        bool fromDiff = bestTau >= 0;
+        float q = bestVal;
+        float qThresh = 1.0f - m_fidelityThresh;
+        if (qThresh > kDiffReject) qThresh = kDiffReject;
+        if (!fromDiff) {
+            float gmin = 1e9f;
+            int gtau = -1;
+            for (int k = MIN_PERIOD; k < maxTau - 1; k++) {
+                if (m_r[k] < gmin) { gmin = m_r[k]; gtau = k; }
+            }
+            if (gtau >= 0 && gmin < kDiffStrict) {
+                bestTau = gtau;
+                q = gmin;
+                fromDiff = true;
+            } else {
+                float peakBest = -1.0f;
+                for (int k = MIN_PERIOD; k < maxTau - 1; k++) {
+                    if (m_rr[k] > m_rr[k - 1] && m_rr[k] > m_rr[k + 1] && m_rr[k] > m_fidelityThresh && m_rr[k] > peakBest) {
+                        peakBest = m_rr[k];
+                        bestTau = k;
+                    }
+                }
+                if (bestTau >= 0) {
+                    float peakFloor = peakBest * kFirstPeakRatio;
+                    for (int k = MIN_PERIOD; k < bestTau; k++) {
+                        if (m_rr[k] > m_rr[k - 1] && m_rr[k] > m_rr[k + 1] && m_rr[k] > m_fidelityThresh && m_rr[k] >= peakFloor) {
+                            peakBest = m_rr[k];
+                            bestTau = k;
+                            break;
+                        }
+                    }
+                }
+                if (bestTau >= 0 && m_r[bestTau] > kDiffFallback) bestTau = -1;
+                q = 1.0f - peakBest;
+                qThresh = 1.0f - m_fidelityThresh;
+            }
+        }
+        if (bestTau < 0 || q > qThresh) {
             if (++m_lockMiss >= 3) m_periodValid = false;
             return;
         }
         m_lockMiss = 0;
-        float a = 2.0f*m_r[bestTau-1]/m_normK[bestTau-1];
-        float b = 2.0f*m_r[bestTau]  /m_normK[bestTau];
-        float c = 2.0f*m_r[bestTau+1]/m_normK[bestTau+1];
+        m_confidence = 1.0f - q;
+        if (m_confidence < 0.0f) m_confidence = 0.0f;
+        const float* ref = fromDiff ? m_r : m_rr;
+        float a = ref[bestTau - 1];
+        float b = ref[bestTau];
+        float c = ref[bestTau + 1];
         float refined = (float)bestTau;
-        float denom = 2.0f*b - a - c;
-        if (fabsf(denom) > 1e-9f) refined += (a - c) / denom;
+        float denom = 2.0f * b - a - c;
+        if (fabsf(denom) > 1e-9f) {
+            float delta = (c - a) / (2.0f * denom);
+            if (!fromDiff) delta = -delta;
+            if (delta > 1.0f) delta = 1.0f;
+            if (delta < -1.0f) delta = -1.0f;
+            refined += delta;
+        }
         int np = (int)(refined + 0.5f);
         if (np < MIN_PERIOD) np = MIN_PERIOD;
         if (np > MAX_PERIOD) np = MAX_PERIOD;
