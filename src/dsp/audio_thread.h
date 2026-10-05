@@ -97,6 +97,11 @@ public:
         int      gridBeatIndex = -1;
         float    masterLenSamples = 0.0f;
         float    recordedBeats = 0.0f;
+        bool     beatMarkValid = false;
+        double   beatMarkBeat = 0.0;
+        int      beatMarkIndex = -1;
+        double   beatMarkMsToNext = 0.0;
+        double   beatMarkLateMs = 0.0;
     };
     Telemetry snapshotTelemetry() const;
     int blockSizeSamples() const;

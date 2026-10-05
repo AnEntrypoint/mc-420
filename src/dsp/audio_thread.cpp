@@ -1425,7 +1425,18 @@ void AudioThread::stop() {
     pthread_join(g_worker, nullptr);
 }
 
-AudioThread::Telemetry AudioThread::snapshotTelemetry() const { return g_telem; }
+AudioThread::Telemetry AudioThread::snapshotTelemetry() const {
+    Telemetry t = g_telem;
+    if (g_link) {
+        const LinkBridge::BeatMark bm = g_link->beatMarkNow();
+        t.beatMarkValid    = bm.valid;
+        t.beatMarkBeat     = bm.beat;
+        t.beatMarkIndex    = bm.index;
+        t.beatMarkMsToNext = bm.valid ? (double)(bm.nextBeatMicros - bm.nowMicros) / 1000.0 : 0.0;
+        t.beatMarkLateMs   = bm.valid ? (double)(bm.nowMicros - bm.curBeatMicros) / 1000.0 : 0.0;
+    }
+    return t;
+}
 int AudioThread::blockSizeSamples() const { return cfg_.blockSize; }
 Sampler* AudioThread::sampler() const { return g_sampler; }
 Lv2Host* AudioThread::homeFx() const { return g_homeFx; }

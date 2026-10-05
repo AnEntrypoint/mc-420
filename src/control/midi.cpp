@@ -3,6 +3,7 @@
 #include <atomic>
 #include "apc_grid.h"
 #include "apc_leds.h"
+#include "telemetry.h"
 #include "../dsp/audio_thread.h"
 #include "../dsp/sampler/sampler.h"
 #include "../link/link_bridge.h"
@@ -212,6 +213,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
     bool haveProbeStatPath = probeStatPath[0] != '\0';
     constexpr unsigned kLivenessProbeMs = 1000;
     unsigned lastLivenessProbeMs = nowMs();
+    int lastPadBeatIndex = -1;
     for (;;) {
         auto beatTelem = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
         int waitMs = kPollTimeoutMs;
@@ -233,7 +235,13 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         int beatIndex = beatTelem.gridBeatIndex;
         if (beatClockLive) {
             LinkBridge::BeatMark bm = link->beatMarkNow();
-            if (bm.valid) beatIndex = bm.index;
+            if (bm.valid) {
+                beatIndex = bm.index;
+                if (bm.index != lastPadBeatIndex) {
+                    lastPadBeatIndex = bm.index;
+                    publishBeatPadMark(bm.index, bm.nowMicros - bm.curBeatMicros, bm.bpm);
+                }
+            }
         }
 
         if (pr > 0 && injectListenFd >= 0 && (pfds[(size_t)kListenSlot].revents & POLLIN)) {

@@ -51,7 +51,9 @@ public:
         bool    valid          = false;
         int     index          = -1;
         double  bpm            = 120.0;
+        double  beat           = 0.0;
         int64_t nowMicros      = 0;
+        int64_t curBeatMicros  = 0;
         int64_t nextBeatMicros = 0;
     };
     BeatMark beatMarkNow() const;

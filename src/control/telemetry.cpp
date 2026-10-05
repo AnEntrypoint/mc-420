@@ -7,10 +7,12 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <atomic>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
+#include <ctime>
 
 namespace aloop {
 
@@ -18,10 +20,41 @@ namespace {
 int g_sock = -1;
 int g_port = 4445;
 
+int64_t monoMs() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+std::atomic<int>      g_padIndex{-1};
+std::atomic<int64_t>  g_padLateUs{0};
+std::atomic<int64_t>  g_padBpmMilli{0};
+std::atomic<int64_t>  g_padAtMonoMs{0};
+std::atomic<uint64_t> g_padSeq{0};
+
 void ensureStatusDirExists() {
     if (mkdir("/run/aloop", 0755) != 0 && errno != EEXIST)
         fprintf(stderr, "[telem] warning: could not create /run/aloop (%s)\n", strerror(errno));
 }
+}
+
+void publishBeatPadMark(int index, int64_t lateMicros, double bpm) {
+    g_padIndex.store(index, std::memory_order_relaxed);
+    g_padLateUs.store(lateMicros, std::memory_order_relaxed);
+    g_padBpmMilli.store((int64_t)(bpm * 1000.0), std::memory_order_relaxed);
+    g_padAtMonoMs.store(monoMs(), std::memory_order_release);
+    g_padSeq.fetch_add(1, std::memory_order_release);
+}
+
+BeatPadMark beatPadMark() {
+    BeatPadMark m;
+    m.seq        = g_padSeq.load(std::memory_order_acquire);
+    m.index      = g_padIndex.load(std::memory_order_relaxed);
+    m.lateMicros = g_padLateUs.load(std::memory_order_relaxed);
+    m.bpm        = (double)g_padBpmMilli.load(std::memory_order_relaxed) / 1000.0;
+    const int64_t at = g_padAtMonoMs.load(std::memory_order_acquire);
+    m.ageMs      = at ? monoMs() - at : -1;
+    return m;
 }
 
 void Telemetry::start(int udpPort, const AudioThread* audio) {
@@ -49,6 +82,7 @@ void Telemetry::publish() {
 
     AudioThread::Telemetry t{};
     if (audio_) t = audio_->snapshotTelemetry();
+    const BeatPadMark padMark = beatPadMark();
 
     uint32_t recBits = 0, playBits = 0;
     char vols[20 * 5 + 2]; int vp = 0; vols[vp++] = '[';
@@ -99,6 +133,8 @@ void Telemetry::publish() {
         "\"resample_chain\":{\"sum\":%.1f,\"samples\":%llu},"
         "\"sustain_cmd\":%.2f,\"sustain_gate\":%.2f,"
         "\"grid_beat_index\":%d,\"master_phase_beats\":%.5f,\"master_len_samples\":%.1f,\"recorded_beats\":%.3f,"
+        "\"beat_mark\":{\"valid\":%s,\"beat\":%.5f,\"index\":%d,\"ms_to_next\":%.1f,\"late_ms\":%.3f},"
+        "\"beat_pad_mark\":{\"seq\":%llu,\"index\":%d,\"late_ms\":%.3f,\"age_ms\":%lld,\"bpm\":%.3f},"
         "\"groove\":{\"shuffle\":%d,\"gate\":%d,\"beat_len_samples\":%.1f,\"gate_min\":%.3f,\"gate_max\":%.3f,\"swing_offset_samples\":%.1f,\"swing_grid_beats\":%.3f},"
         "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s,\"stateflags\":%s,\"latencybias\":%s}}",
         t.coreBusyPct[0], t.coreBusyPct[1], t.coreBusyPct[2], t.coreBusyPct[3],
@@ -117,6 +153,10 @@ void Telemetry::publish() {
         t.sustainCmd, t.sustainGate,
         t.gridBeatIndex, t.masterPhaseBeats,
         t.masterLenSamples, t.recordedBeats,
+        t.beatMarkValid ? "true" : "false", t.beatMarkBeat, t.beatMarkIndex,
+        t.beatMarkMsToNext, t.beatMarkLateMs,
+        (unsigned long long)padMark.seq, padMark.index,
+        (double)padMark.lateMicros / 1000.0, (long long)padMark.ageMs, padMark.bpm,
         t.shuffleMode, t.gateMode, t.grooveBeatLenSamples, t.grooveGateMin, t.grooveGateMax,
         t.grooveSwingOffsetSamples, t.grooveSwingGridBeats,
         recBits, playBits, vols, levels, wraplens, readposes, writeidxs, stateflags, biases);

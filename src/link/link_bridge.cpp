@@ -220,8 +220,10 @@ LinkBridge::BeatMark LinkBridge::beatMarkNow() const {
     const int64_t span = (int64_t)kLinkQuantum;
     m.valid = true;
     m.bpm = state.tempo();
+    m.beat = beat;
     m.nowMicros = (int64_t)now.count();
     m.index = (int)(((wholeBeat % span) + span) % span);
+    m.curBeatMicros = (int64_t)state.timeAtBeat((double)wholeBeat, kLinkQuantum).count();
     m.nextBeatMicros = (int64_t)state.timeAtBeat((double)(wholeBeat + 1), kLinkQuantum).count();
 #endif
     return m;
