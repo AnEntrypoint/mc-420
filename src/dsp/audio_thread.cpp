@@ -140,6 +140,8 @@ double g_prevBlockChainLatency = 0.0;
 constexpr int kPitchFfiBlockSamples = 64;
 constexpr int kPitchEngineReadOffsetSamples = 64;
 constexpr int kPitchStageLatencySamples = kPitchFfiBlockSamples + kPitchEngineReadOffsetSamples;
+constexpr int kPitchShiftLatencySamples = 128;
+constexpr float kPitchShiftSemisFloor = 0.01f;
 
 float g_manualSpeedMul = 1.0f;
 constexpr int kTransposeVoices = 6;
@@ -1097,6 +1099,10 @@ static void* worker(void*) {
                 double chainLatencyNow = 0.0;
                 if (engagedZone && *engagedZone > 0.5f) {
                     chainLatencyNow += (double)kPitchStageLatencySamples;
+                    float semisNow = semisZone ? *semisZone : 0.0f;
+                    if (semisNow > kPitchShiftSemisFloor || semisNow < -kPitchShiftSemisFloor) {
+                        chainLatencyNow += (double)kPitchShiftLatencySamples;
+                    }
                 }
                 g_resampleChainSum += g_prevBlockChainLatency * (double)N;
                 g_resampleChainSamples += (uint64_t)N;
