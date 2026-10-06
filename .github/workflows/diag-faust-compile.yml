@@ -211,6 +211,10 @@ jobs:
               '                ba.if(demoteNow, coarseFreq * 0.5, coarseFreq)));\n'
               '    refinedNow = refineFreq(xh, w, selectedFreq);\n')
 
+          PROC_START = src.index('process(sig) = holdLastGood(')
+          files['g1_probeonly'] = (src[:PROC_START]
+              + 'process(x) = detectedFreq(x) : (_, !) : max(minTrackHz) : min(maxTrackHz);\n')
+
           DEMOTE_TEST = ('    demoteNow = (freqH >= minTrackHz) & (pH >= corrThresh)'
                          ' & (pH > pCoarse + subharmDominanceMargin);\n')
           DOM3 = ('    dominant3 = reachable3 & (raw3 >= corrThresh)'
@@ -219,24 +223,32 @@ jobs:
                   ' & (raw2 > pBase + subharmDominanceMargin) & (notDemoted > 0.5);\n')
           ISPEAK = ('    isPeak(cLo, cMid, cHi) = (cMid >= corrThresh) & (cMid >= cLo) & (cMid >= cHi);\n')
 
-          def as_float_bool(text):
-              out = text
-              for frag in (DEMOTE_TEST, DOM3, DOM2):
-                  assert frag in out, frag
-                  body = frag.strip().rstrip(';')
-                  lhs = body.split('=', 1)[0].strip()
-                  terms = [t.strip().strip('()') for t in body.split('=', 1)[1].split('&')]
-                  joined = ' * '.join('float(%s)' % t for t in terms)
-                  out = out.replace(frag, '    %s = %s;\n' % (lhs, joined))
-              return out
+          def float_bool(frag):
+              body = frag.strip().rstrip(';')
+              lhs = body.split('=', 1)[0].strip()
+              terms = [t.strip().strip('()') for t in body.split('=', 1)[1].split('&')]
+              return frag, '    %s = %s;\n' % (
+                  lhs, ' * '.join('float(%s)' % t for t in terms))
 
-          files['h1_demotebool'] = src.replace(DEMOTE_TEST, as_float_bool(DEMOTE_TEST))
-          files['h2_decidebool'] = as_float_bool(src)
+          DEMOTE_FRAG, DEMOTE_FLOAT = float_bool(DEMOTE_TEST)
+          DOM3_FRAG, DOM3_FLOAT = float_bool(DOM3)
+          DOM2_FRAG, DOM2_FLOAT = float_bool(DOM2)
+          for frag in (DEMOTE_FRAG, DOM3_FRAG, DOM2_FRAG):
+              assert src.count(frag) == 1, frag
+
+          files['h1_demotebool'] = src.replace(DEMOTE_FRAG, DEMOTE_FLOAT)
+          files['h2_decidebool'] = (src
+              .replace(DEMOTE_FRAG, DEMOTE_FLOAT)
+              .replace(DOM3_FRAG, DOM3_FLOAT)
+              .replace(DOM2_FRAG, DOM2_FLOAT))
           files['h3_pickbool'] = src.replace(
               ISPEAK,
               '    isPeak(cLo, cMid, cHi) = float(cMid >= corrThresh) * float(cMid >= cLo)'
               ' * float(cMid >= cHi);\n')
-          files['h4_allbool'] = as_float_bool(files['h3_pickbool'])
+          files['h4_allbool'] = (files['h3_pickbool']
+              .replace(DEMOTE_FRAG, DEMOTE_FLOAT)
+              .replace(DOM3_FRAG, DOM3_FLOAT)
+              .replace(DOM2_FRAG, DOM2_FLOAT))
 
           for name, text in files.items():
               io.open('variants/%s.dsp' % name, 'w', encoding='utf-8', newline='\n').write(text)
@@ -254,7 +266,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [f1_refmux, h1_demotebool, h2_decidebool, h3_pickbool, h4_allbool]
+        variant: [f1_refmux, g1_probeonly, h1_demotebool, h2_decidebool, h3_pickbool, h4_allbool]
     steps:
       - name: Install Faust
         timeout-minutes: 8
