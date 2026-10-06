@@ -1,0 +1,56 @@
+name: build-audio-injector
+
+on:
+  push:
+    paths:
+      - 'test/hardware/audio-injector.c'
+      - '.github/workflows/build-audio-injector.yml'
+  pull_request:
+    paths:
+      - 'test/hardware/audio-injector.c'
+      - '.github/workflows/build-audio-injector.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audio-injector-aarch64-musl:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build musl-static aarch64 ALSA writer in an Alpine aarch64 container
+        timeout-minutes: 25
+        run: |
+          docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w alpine:3.20 sh -c '
+            set -ex
+            timeout 300 apk add --no-cache build-base alsa-lib-dev file
+            gcc --version | head -1
+            ls -l /usr/lib/libasound.a || echo "no static libasound"
+            if gcc -O2 -std=c11 -Wall -Wextra -static -o audio-injector test/hardware/audio-injector.c -lasound; then
+              echo "LINK=static"
+            else
+              echo "static link failed, falling back to dynamic"
+              gcc -O2 -std=c11 -Wall -Wextra -o audio-injector test/hardware/audio-injector.c -lasound
+              echo "LINK=dynamic"
+            fi
+            file audio-injector
+            ls -la audio-injector
+          '
+
+      - name: Report linkage
+        run: |
+          docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w alpine:3.20 sh -c '
+            file audio-injector
+            ldd audio-injector 2>&1 || true
+          '
+
+      - name: Upload audio-injector
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-injector-aarch64-musl
+          path: audio-injector
+          retention-days: 3
