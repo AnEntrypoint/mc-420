@@ -8,6 +8,7 @@
 static const int DUBFX_POLY_VOICES = 6;
 static const int DUBFX_POLY_BS = 16;
 static const float DUBFX_POLY_SR = 48000.0f;
+static constexpr float DUBFX_POLY_CONF_GATE = 0.85f;
 
 struct DubfxPolyVoice {
     EngineSoladSnac eng;
@@ -24,6 +25,10 @@ struct DubfxPolyVoice {
 static SnacPeriodTracker& dubfx_poly_shared_snac() {
     static SnacPeriodTracker shared;
     return shared;
+}
+
+static inline bool dubfx_poly_confident() {
+    return dubfx_poly_shared_snac().confidence() >= DUBFX_POLY_CONF_GATE;
 }
 
 static DubfxPolyVoice& dubfx_poly_voice(int idx) {
@@ -44,7 +49,7 @@ static DubfxPolyVoice& dubfx_poly_voice(int idx) {
 static inline void dubfx_poly_apply(DubfxPolyVoice& v, float scale, float formantDepth, float engaged) {
     if (scale != v.lastScale) { v.eng.setPitchScale(scale); v.lastScale = scale; }
     const SnacPeriodTracker& snac = dubfx_poly_shared_snac();
-    if (snac.m_periodValid && snac.m_periodF > 0.0f && scale > 0.0f)
+    if (snac.m_periodValid && snac.m_periodF > 0.0f && scale > 0.0f && dubfx_poly_confident())
         v.formant.setOutputPeriodSamples(snac.m_periodF / scale);
     if (formantDepth != v.lastFormant) {
         v.lastFormant = formantDepth;
@@ -93,9 +98,9 @@ extern "C" inline float dubfx_pitch_tick_poly(float x, float voiceIdx, float sca
     return y;
 }
 
-extern "C" inline float dubfx_pitch_confidence_poly(float voiceIdx) {
-    DubfxPolyVoice& v = dubfx_poly_voice((int)(voiceIdx + 0.5f));
-    return v.eng.periodOk() ? 1.0f : 0.0f;
+extern "C" inline float dubfx_pitch_confidence_poly(float voiceIdx, float engaged) {
+    dubfx_poly_voice((int)(voiceIdx + 0.5f));
+    return engaged >= 0.5f ? dubfx_poly_shared_snac().confidence() : 0.0f;
 }
 
 #endif
