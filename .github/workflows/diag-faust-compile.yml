@@ -1,0 +1,98 @@
+name: diag-faust-compile
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  time-variants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Faust + Python DawDreamer deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y faust
+          faust --version
+          pip install --upgrade pip
+          pip install dawdreamer numpy
+
+      - name: Build DSP variants
+        run: |
+          mkdir -p variants
+          git show ccf698d:effects/pitchtracker-src/pitchtracker_ac.dsp > variants/1_baseline.dsp
+          cp effects/pitchtracker-src/pitchtracker_ac.dsp variants/2_current.dsp
+          python3 - <<'PY'
+          import io
+          src = io.open('effects/pitchtracker-src/pitchtracker_ac.dsp', encoding='utf-8').read()
+
+          damper = 'demoteDuty = demoteNow : *(1.0-demotePole) : + ~ *(demotePole);'
+          assert src.count(damper) == 1
+          io.open('variants/3_nodamper.dsp', 'w', encoding='utf-8').write(
+              src.replace(damper, 'demoteDuty = demoteNow;'))
+
+          demote = 'demoteNow = demoteTest(xh, coarseFreq);'
+          assert src.count(demote) == 1
+          io.open('variants/4_nodemote.dsp', 'w', encoding='utf-8').write(
+              src.replace(demote, 'demoteNow = 0.0;'))
+
+          io.open('variants/5_allpeak.dsp', 'w', encoding='utf-8').write(
+              src.replace('corrRawAt', 'corrPeakAt'))
+          PY
+          ls -la variants
+
+      - name: Time each variant compile
+        run: |
+          python3 - <<'PY'
+          import glob
+          import io
+          import os
+          import signal
+          import time
+
+          import dawdreamer as dd
+
+          CAP = 900
+
+
+          class Timeout(Exception):
+              pass
+
+
+          def alarm(signum, frame):
+              raise Timeout()
+
+
+          signal.signal(signal.SIGALRM, alarm)
+
+          for path in sorted(glob.glob('variants/*.dsp')):
+              name = os.path.basename(path)
+              src = io.open(path, encoding='utf-8').read()
+              eng = dd.RenderEngine(48000, 64)
+              fp = eng.make_faust_processor(name.replace('.', '_'))
+              fp.compile_flags = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
+              fp.set_dsp_string(src)
+              t0 = time.time()
+              signal.alarm(CAP)
+              try:
+                  ok = fp.compile()
+                  dt = time.time() - t0
+                  print(f"{name}: ok={ok} seconds={dt:.1f}", flush=True)
+              except Timeout:
+                  print(f"{name}: TIMEOUT >{CAP}s", flush=True)
+              except Exception as e:
+                  print(f"{name}: ERROR {str(e)[:200]}", flush=True)
+              finally:
+                  signal.alarm(0)
+          PY
