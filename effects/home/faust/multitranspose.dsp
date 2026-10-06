@@ -6,6 +6,7 @@ declare description "Polyphonic pitch-lock: each held voice's shift is derived f
 import("stdfaust.lib");
 
 pitchPoly = component("pitch_poly.dsp");
+polyConfidence = ffunction(float dubfx_pitch_confidence_poly(float, float), "pitch_poly_ffi.h", "");
 
 NVOICES = 6;
 
@@ -69,6 +70,8 @@ engageReleaseHoldS = 0.06;
 lockDelayMs = 80.0;
 lockDelaySamples = lockDelayMs * 0.001 * ma.SR;
 
+confidenceGate = 0.85;
+
 voiceOut(voiceIdx, sig, freqDet, trustedTracker, formant, targetNote, gate) = wet, shiftAmount, heldDetNote
 with {
     attackEdge = gate > (gate : mem);
@@ -80,11 +83,13 @@ with {
     lastConvergedNoteRaw = lastConvergedNoteStep ~ _;
     lastConvergedNote = ba.if(ba.time == 0, targetNote, lastConvergedNoteRaw);
     smoothPole = ba.tau2pole(0.008);
+    confNow = voiceIdx, engaged : polyConfidence;
+    confOk = confNow >= confidenceGate;
     trackingAllowed = trustedTracker > 0.5;
     everTrustedStep(prev) = max(prev, trackingAllowed);
     everTrusted = everTrustedStep ~ _;
     smoothedDetNoteStep(prev) = ba.if(attackEdge, lastConvergedNote,
-                                  ba.if(trackingAllowed,
+                                  ba.if(trackingAllowed & confOk,
                                     prev * smoothPole + rawDetNote * (1.0 - smoothPole),
                                     prev));
     smoothedDetNote = smoothedDetNoteStep ~ _;

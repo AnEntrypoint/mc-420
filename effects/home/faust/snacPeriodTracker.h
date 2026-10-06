@@ -17,6 +17,10 @@ public:
     static constexpr float kDiffStrict = 0.05f;
     static constexpr float kDiffFallback = 0.50f;
     static constexpr float kDiffReject = 0.35f;
+    static constexpr float kContGate = 0.50f;
+    static const int CONT_MIN_WIN = 256;
+    static const int CONT_MAX_WIN = SNAC_WIN;
+    static const int CONT_WIN_PAD = 128;
 
     SnacPeriodTracker() { reset(); }
 
@@ -34,6 +38,7 @@ public:
         m_periodValid = false;
         m_lockMiss = 0;
         m_confidence = 0.0f;
+        m_continuity = 0.0f;
         m_detectCount = 0;
     }
 
@@ -58,13 +63,16 @@ public:
 
     void tick(float x) {
         write(x);
-        if (m_sinceBlock == 0) stepSchedule(BLOCK);
+        if (m_sinceBlock == 0) { stepSchedule(BLOCK); updateContinuity(); }
         if (++m_sinceBlock >= BLOCK) m_sinceBlock = 0;
     }
 
     bool  periodValid() const { return m_periodValid; }
     int   period()      const { return m_period; }
     float periodF()     const { return m_periodF; }
+    float continuity()  const { return m_continuity; }
+    float rawConfidence() const { return m_confidence; }
+    float confidence()  const { return m_continuity >= kContGate ? m_confidence : 0.0f; }
 
     int   m_period = 256;
     float m_periodF = 256.0f;
@@ -74,6 +82,7 @@ public:
     float m_dbgPeakVal = -1.0f;
     int   m_dbgPeakTau = -1;
     float m_confidence = 0.0f;
+    float m_continuity = 0.0f;
     int   m_detectCount = 0;
 
 private:
@@ -103,7 +112,12 @@ private:
         m_snacPre[W] = acc;
         float energy = acc;
         m_snacEnergy = energy;
-        if (energy < 0.00002f) { m_periodValid = false; m_snacPhase = SNAC_IDLE; return; }
+        if (energy < 0.00002f) {
+            m_periodValid = false;
+            m_confidence = 0.0f;
+            m_snacPhase = SNAC_IDLE;
+            return;
+        }
         flattenEnvelope();
         acc = 0.0f;
         for (int i = 0; i < W; i++) { m_snacPre[i] = acc; acc += m_snacWin[i] * m_snacWin[i]; }
@@ -113,6 +127,45 @@ private:
         m_normK[0] = 2.0f * acc;
         m_snacK = 1;
         m_snacPhase = SNAC_SWEEP;
+    }
+
+    void updateContinuity() {
+        const int W = SNAC_WIN;
+        if (!m_periodValid || m_periodF <= 0.0f) { m_continuity = 0.0f; return; }
+        int lag = (int)(m_periodF + 0.5f);
+        if (lag < MIN_PERIOD) lag = MIN_PERIOD;
+        int win = 2 * lag + CONT_WIN_PAD;
+        if (win < CONT_MIN_WIN) win = CONT_MIN_WIN;
+        if (win > CONT_MAX_WIN) win = CONT_MAX_WIN;
+        if (lag >= win) { m_continuity = 0.0f; return; }
+        int len = win - lag;
+        int span = lag / 32;
+        if (span < 4) span = 4;
+        if (span > 16) span = 16;
+        int lo = lag - span;
+        if (lo < 8) lo = 8;
+        int hi = lag + span;
+        if (hi >= win) hi = win - 1;
+        if (lo > hi) { m_continuity = 0.0f; return; }
+        float best = -2.0f;
+        for (int L = lo; L <= hi; L++) {
+            float num = 0.0f;
+            float e1 = 0.0f;
+            float e2 = 0.0f;
+            for (int n = 0; n < len; n++) {
+                int base = m_snacWr - win + n + 2 * W;
+                float a = m_snacBuf[base % W];
+                float b = m_snacBuf[(base + L) % W];
+                num += a * b;
+                e1 += a * a;
+                e2 += b * b;
+            }
+            float den = e1 + e2;
+            if (den < 1e-9f) continue;
+            float r = 2.0f * num / den;
+            if (r > best) best = r;
+        }
+        m_continuity = best;
     }
 
     void flattenEnvelope() {
@@ -221,6 +274,7 @@ private:
             }
         }
         if (bestTau < 0 || q > qThresh) {
+            m_confidence = 0.0f;
             if (++m_lockMiss >= 3) m_periodValid = false;
             return;
         }
