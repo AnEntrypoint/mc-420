@@ -1,0 +1,22 @@
+name: diag-timbre-trace
+
+on:
+  workflow_dispatch:
+
+jobs:
+  trace:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Faust
+        timeout-minutes: 8
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y faust build-essential python3-numpy
+
+      - name: Trace the tracker internals under a timbre shift
+        timeout-minutes: 30
+        run: |
+          python3 test/pitch-tracker-transient/diag_timbre_probe.py

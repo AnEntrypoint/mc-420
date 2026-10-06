@@ -466,7 +466,7 @@ def diag_timbre(freq_hz, dur=3.4, raw=False):
     r_coarse = corr_raw_at(x, coarse)
     r_h = corr_raw_at(x, freq_h)
     demote = (freq_h >= MIN_TRACK_HZ) & (p_h >= CORR_THRESH) & (p_h > p_coarse + SUBHARM_MARGIN)
-    promoted, _ = subharmonic_promote(x, coarse, raw=raw)
+    promoted = subharmonic_promote(x, coarse, raw=raw)[0]
     refined = refine_freq(x, promoted)
     print(f"timbre diag f0={freq_hz}Hz raw={raw}")
     for t in (2.2, 2.4, 2.6, 2.8, 3.0, 3.2):
