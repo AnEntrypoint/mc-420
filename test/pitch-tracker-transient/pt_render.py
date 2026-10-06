@@ -12,7 +12,7 @@ ARCH_PATH = REPO_ROOT / "tools" / "pitchtracker-render" / "pt_arch.cpp"
 HARNESS_PATH = REPO_ROOT / "tools" / "pitchtracker-render" / "pt_render.cpp"
 CACHE_ROOT = REPO_ROOT / "build" / "pt-render"
 
-COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-nvi", "-ct", "0"]
+COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-nvi", "-ct", "0", "-t", "600"]
 
 MissingPrerequisite = SystemExit(2)
 
