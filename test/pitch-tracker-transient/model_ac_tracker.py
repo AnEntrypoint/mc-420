@@ -165,6 +165,59 @@ def refine_freq(x, coarse):
     return SR / np.maximum(1.0, refined_lag)
 
 
+def peak_at_lag(x, lag):
+    l0 = np.clip(np.asarray(lag), 2 + PEAK_SPREAD, 3199 - PEAK_SPREAD).astype(int)
+    pool = {}
+    for L in np.unique(l0):
+        pool[L] = (corr_at_lag_var(x, int(L) - PEAK_SPREAD),
+                   corr_at_lag_var(x, int(L)),
+                   corr_at_lag_var(x, int(L) + PEAK_SPREAD))
+    c_lo = np.array([pool[L][0][i] for i, L in enumerate(l0)])
+    c_mid = np.array([pool[L][1][i] for i, L in enumerate(l0)])
+    c_hi = np.array([pool[L][2][i] for i, L in enumerate(l0)])
+    denom = c_lo - 2.0 * c_mid + c_hi
+    safe = np.where(denom > -1e-9, -1e-9, denom)
+    vertex = c_mid - (c_lo - c_hi) ** 2 / (8.0 * safe)
+    return np.clip(vertex, -1.0, PEAK_CEIL)
+
+
+def raw_at_lag(x, lag):
+    l0 = np.clip(np.asarray(lag), 1, 3200).astype(int)
+    pool = {int(L): corr_at_lag_var(x, int(L)) for L in np.unique(l0)}
+    return np.array([pool[int(L)][i] for i, L in enumerate(l0)])
+
+
+def refine_at_lag(x, lag):
+    l0 = np.clip(np.asarray(lag), 2 + REFINE_SPREAD, 3199 - REFINE_SPREAD).astype(int)
+    pool = {}
+    for L in np.unique(l0):
+        pool[L] = (corr_at_lag_var(x, int(L) - REFINE_SPREAD),
+                   corr_at_lag_var(x, int(L)),
+                   corr_at_lag_var(x, int(L) + REFINE_SPREAD))
+    c_lo = np.array([pool[L][0][i] for i, L in enumerate(l0)])
+    c_mid = np.array([pool[L][1][i] for i, L in enumerate(l0)])
+    c_hi = np.array([pool[L][2][i] for i, L in enumerate(l0)])
+    denom = c_lo - 2.0 * c_mid + c_hi
+    safe = np.where(np.abs(denom) < 1e-6, 1e-6, denom)
+    delta = np.clip(0.5 * (c_lo - c_hi) / safe, -1.0, 1.0)
+    delta2 = np.where(np.abs(denom) < 1e-6, 0.0, delta)
+    return SR / np.maximum(1.0, l0.astype(float) + delta2 * REFINE_SPREAD)
+
+
+def derive_lags(coarse, mode):
+    trunc = np.array([int(SR / f) for f in np.atleast_1d(coarse).ravel()])
+    if mode == "shared2":
+        base_r = np.array([int(SR / f + 0.5) for f in np.atleast_1d(coarse).ravel()])
+        return trunc, trunc * 2, (trunc / 2).astype(int), (trunc / 3).astype(int), \
+            base_r, base_r * 2, (base_r / 2).astype(int), (base_r / 3).astype(int)
+    if mode == "shared3":
+        base_r = np.array([int(SR / f + 0.5) for f in np.atleast_1d(coarse).ravel()])
+        return base_r, base_r * 2, (base_r / 2).astype(int), (base_r / 3).astype(int), \
+            base_r, base_r * 2, (base_r / 2).astype(int), (base_r / 3).astype(int)
+    return trunc, trunc * 2, (trunc / 2).astype(int), (trunc / 3).astype(int), \
+        trunc, trunc * 2, (trunc / 2).astype(int), (trunc / 3).astype(int)
+
+
 def corr_raw_at(x, freq):
     freq = np.asarray(freq, dtype=float)
     flat = np.atleast_1d(freq).ravel()
@@ -235,6 +288,24 @@ def subharmonic_promote(x, coarse, raw=False):
         p_base = np.where(demote, r_h, r_coarse)
         HOLD_SIGNALS["fired"] = fired
         HOLD_SIGNALS["duty"] = duty
+    elif raw in ("shared1", "shared2", "shared3"):
+        lag_c, lag_h, lag_2, lag_3, lag_rc, lag_rh, lag_r2, lag_r3 = derive_lags(coarse, raw)
+        p_coarse = peak_at_lag(x, lag_c)
+        p_h = peak_at_lag(x, lag_h)
+        r_h = raw_at_lag(x, lag_rh)
+        r_coarse = raw_at_lag(x, lag_rc)
+        r2 = raw_at_lag(x, lag_r2)
+        r3 = raw_at_lag(x, lag_r3)
+        fired = (coarse * 0.5 >= MIN_TRACK_HZ) & (p_h >= CORR_THRESH) & (p_h > p_coarse + SUBHARM_MARGIN)
+        duty = one_pole(fired.astype(float), np.exp(-1.0 / (DEMOTE_TAU * SR)))
+        demote_flag = fired
+        base = coarse
+        p_base = np.where(fired, r_h, r_coarse)
+        p2 = r2
+        p3 = r3
+        HOLD_SIGNALS["fired"] = fired
+        HOLD_SIGNALS["duty"] = duty
+        HOLD_SIGNALS["lags"] = (lag_h, lag_c, lag_2, lag_3)
     elif raw == "evtau":
         r_coarse = corr_raw_at(x, coarse)
         freq_h = coarse * 0.5
@@ -279,9 +350,11 @@ def subharmonic_promote(x, coarse, raw=False):
         p_base = np.where(demote, p_h, p_coarse)
     f2 = base * 2.0
     f3 = base * 3.0
+    shared = raw in ("shared1", "shared2", "shared3")
     use_raw = raw is True or raw in ("mixed", "latch", "smooth", "asym", "hold", "evtau")
-    p2 = corr_raw_at(x, f2) if use_raw else corr_peak_at(x, f2)
-    p3 = corr_raw_at(x, f3) if use_raw else corr_peak_at(x, f3)
+    if not shared:
+        p2 = corr_raw_at(x, f2) if use_raw else corr_peak_at(x, f2)
+        p3 = corr_raw_at(x, f3) if use_raw else corr_peak_at(x, f3)
     dom3 = (f3 <= MAX_TRACK_HZ) & (p3 >= CORR_THRESH) & (p3 > p_base + SUBHARM_MARGIN) & (p3 >= p2)
     dom2 = (f2 <= MAX_TRACK_HZ) & (p2 >= CORR_THRESH) & (p2 > p_base + SUBHARM_MARGIN)
     if EXCLUSIVE and demote_flag is not None:
@@ -309,6 +382,14 @@ def detected_freq(x, raw=False):
     xh = highpass1(x, 20.0)
     coarse = pick_fundamental(xh, len(x))
     corrected, confidence, ratio = subharmonic_promote(xh, coarse, raw=raw)
+    if raw in ("shared1", "shared2", "shared3"):
+        lag_h, lag_c, lag_2, lag_3 = HOLD_SIGNALS["lags"]
+        fired = HOLD_SIGNALS["fired"]
+        lag_sel = np.where(ratio == 3.0, lag_3,
+                           np.where(ratio == 2.0, lag_2, np.where(fired, lag_h, lag_c)))
+        refined = refine_at_lag(xh, lag_sel)
+        refined = hold_damped(refined, fired, HOLD_SIGNALS["duty"], RELEASE_FRAC)
+        return np.clip(refined, MIN_TRACK_HZ, MAX_TRACK_HZ), confidence >= CORR_THRESH
     if raw == "rc":
         refined = refine_freq(xh, coarse) * ratio
     else:
@@ -413,7 +494,10 @@ def main():
     raw = True if "raw" in sys.argv else ("mixed" if "mixed" in sys.argv else ("smooth" if "smooth" in sys.argv else ("latch" if "latch" in sys.argv else ("asym" if "asym" in sys.argv else ("evtau" if "evtau" in sys.argv else "hold")))))
     if "rc" in sys.argv:
         raw = "rc"
-    if raw in ("asym", "hold", "evtau", "rc"):
+    for shared_mode in ("shared1", "shared2", "shared3"):
+        if shared_mode in sys.argv:
+            raw = shared_mode
+    if raw in ("asym", "hold", "evtau", "rc", "shared1", "shared2", "shared3"):
         EXCLUSIVE = True
         DEMOTE_TAU = 0.2
         RELEASE_FRAC = 0.5
