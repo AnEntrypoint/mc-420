@@ -3,31 +3,14 @@ name: diag-faust-compile
 on:
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  time-variants:
+  build-variants:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install Faust + Python DawDreamer deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y faust
-          faust --version
-          pip install --upgrade pip
-          pip install dawdreamer numpy
-
       - name: Build DSP variants
         run: |
           mkdir -p variants
@@ -38,32 +21,84 @@ jobs:
           src = io.open('effects/pitchtracker-src/pitchtracker_ac.dsp', encoding='utf-8').read()
 
           damper = 'demoteDuty = demoteNow : *(1.0-demotePole) : + ~ *(demotePole);'
+          hold = '''    takeNew = (demoteNow > 0.5) | (demoteDuty <= 0.5);
+              holdStep(prev) = ba.if(takeNew, refinedNow, prev);
+              heldFreq = holdStep ~ _;'''
           assert src.count(damper) == 1
-          io.open('variants/3_nodamper.dsp', 'w', encoding='utf-8').write(
-              src.replace(damper, 'demoteDuty = demoteNow;'))
+          assert src.count('takeNew = (demoteNow > 0.5)') == 1
+          nodamper = src.replace(damper, 'demoteDuty = demoteNow;')
+          lines = nodamper.split('\n')
+          out = []
+          skip = False
+          for ln in lines:
+              if 'takeNew = (demoteNow > 0.5)' in ln:
+                  skip = True
+                  out.append('    heldFreq = refinedNow;')
+                  continue
+              if skip:
+                  if 'heldFreq = holdStep ~ _;' in ln:
+                      skip = False
+                  continue
+              out.append(ln)
+          nodamper = '\n'.join(out)
+          assert 'holdStep' not in nodamper, 'holdStep survived'
+          assert 'demoteDuty : ' not in nodamper
+          io.open('variants/3_nodamper.dsp', 'w', encoding='utf-8').write(nodamper)
 
           demote = 'demoteNow = demoteTest(xh, coarseFreq);'
           assert src.count(demote) == 1
           io.open('variants/4_nodemote.dsp', 'w', encoding='utf-8').write(
-              src.replace(demote, 'demoteNow = 0.0;'))
+              nodamper.replace(demote, 'demoteNow = 0.0;'))
 
           io.open('variants/5_allpeak.dsp', 'w', encoding='utf-8').write(
               src.replace('corrRawAt', 'corrPeakAt'))
           PY
           ls -la variants
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsp-variants
+          path: variants/*.dsp
 
-      - name: Time each variant compile
+  time-variant:
+    needs: build-variants
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [1_baseline, 3_nodamper, 4_nodemote, 5_allpeak, 2_current]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-dawdreamer-${{ runner.os }}-312-faustdiag
+
+      - name: Install Faust + Python DawDreamer deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y faust
+          pip install --upgrade pip
+          pip install dawdreamer numpy
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dsp-variants
+          path: variants
+
+      - name: Compile ${{ matrix.variant }}
         run: |
           python3 - <<'PY'
-          import glob
-          import io
-          import os
-          import signal
-          import time
-
+          import io, os, signal, time
           import dawdreamer as dd
 
-          CAP = 900
+          name = os.environ['VARIANT']
+          CAP = 480
 
 
           class Timeout(Exception):
@@ -75,24 +110,22 @@ jobs:
 
 
           signal.signal(signal.SIGALRM, alarm)
-
-          for path in sorted(glob.glob('variants/*.dsp')):
-              name = os.path.basename(path)
-              src = io.open(path, encoding='utf-8').read()
-              eng = dd.RenderEngine(48000, 64)
-              fp = eng.make_faust_processor(name.replace('.', '_'))
-              fp.compile_flags = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
-              fp.set_dsp_string(src)
-              t0 = time.time()
-              signal.alarm(CAP)
-              try:
-                  ok = fp.compile()
-                  dt = time.time() - t0
-                  print(f"{name}: ok={ok} seconds={dt:.1f}", flush=True)
-              except Timeout:
-                  print(f"{name}: TIMEOUT >{CAP}s", flush=True)
-              except Exception as e:
-                  print(f"{name}: ERROR {str(e)[:200]}", flush=True)
-              finally:
-                  signal.alarm(0)
+          src = io.open(f'variants/{name}.dsp', encoding='utf-8').read()
+          eng = dd.RenderEngine(48000, 64)
+          fp = eng.make_faust_processor(name)
+          fp.compile_flags = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
+          fp.set_dsp_string(src)
+          t0 = time.time()
+          signal.alarm(CAP)
+          try:
+              ok = fp.compile()
+              print(f"RESULT {name}: ok={ok} seconds={time.time()-t0:.1f}", flush=True)
+          except Timeout:
+              print(f"RESULT {name}: TIMEOUT >{CAP}s", flush=True)
+          except Exception as e:
+              print(f"RESULT {name}: ERROR {str(e)[:200]}", flush=True)
+          finally:
+              signal.alarm(0)
           PY
+        env:
+          VARIANT: ${{ matrix.variant }}
