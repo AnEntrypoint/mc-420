@@ -27,25 +27,27 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w alpine:3.20 sh -c '
             set -ex
-            timeout 300 apk add --no-cache build-base alsa-lib-dev file
+            timeout 400 apk add --no-cache build-base tar bzip2 file wget
             gcc --version | head -1
-            ls -l /usr/lib/libasound.a || echo "no static libasound"
-            if gcc -O2 -std=c11 -Wall -Wextra -static -o audio-injector test/hardware/audio-injector.c -lasound; then
-              echo "LINK=static"
-            else
-              echo "static link failed, falling back to dynamic"
-              gcc -O2 -std=c11 -Wall -Wextra -o audio-injector test/hardware/audio-injector.c -lasound
-              echo "LINK=dynamic"
-            fi
-            file audio-injector
-            ls -la audio-injector
-          '
-
-      - name: Report linkage
-        run: |
-          docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w alpine:3.20 sh -c '
+            for v in 1.2.12 1.2.11; do
+              if wget -q "https://www.alsa-project.org/files/pub/lib/alsa-lib-$v.tar.bz2"; then
+                echo "ALSA_LIB_VERSION=$v"
+                break
+              fi
+            done
+            tar xjf alsa-lib-*.tar.bz2
+            cd alsa-lib-*
+            ./configure --prefix=/usr/local --enable-static --disable-shared --disable-python
+            make -j"$(nproc)"
+            make install
+            cd /w
+            ls -l /usr/local/lib/libasound.a
+            gcc -O2 -std=c11 -Wall -Wextra -I/usr/local/include -static \
+              -o audio-injector test/hardware/audio-injector.c \
+              /usr/local/lib/libasound.a -lm -ldl -lpthread
             file audio-injector
             ldd audio-injector 2>&1 || true
+            ls -la audio-injector
           '
 
       - name: Upload audio-injector

@@ -65,8 +65,8 @@ int main(int argc, char **argv) {
   const char *conf = "/tmp/audio-injector-alsa.conf";
   unsigned int rate = 48000;
   unsigned int channels = 2;
-  unsigned int period = 256;
-  unsigned int buffer = 2048;
+  snd_pcm_uframes_t period = 256;
+  snd_pcm_uframes_t buffer = 2048;
   unsigned int chunkFrames = 0;
   double secs = 0.0;
   double gain = 1.0;
@@ -88,8 +88,8 @@ int main(int argc, char **argv) {
     else if (strcmp(a, "--conf") == 0) conf = v;
     else if (strcmp(a, "--rate") == 0) rate = (unsigned int)strtoul(v, NULL, 10);
     else if (strcmp(a, "--channels") == 0) channels = (unsigned int)strtoul(v, NULL, 10);
-    else if (strcmp(a, "--period") == 0) period = (unsigned int)strtoul(v, NULL, 10);
-    else if (strcmp(a, "--buffer") == 0) buffer = (unsigned int)strtoul(v, NULL, 10);
+    else if (strcmp(a, "--period") == 0) period = (snd_pcm_uframes_t)strtoull(v, NULL, 10);
+    else if (strcmp(a, "--buffer") == 0) buffer = (snd_pcm_uframes_t)strtoull(v, NULL, 10);
     else if (strcmp(a, "--chunk-frames") == 0) chunkFrames = (unsigned int)strtoul(v, NULL, 10);
     else if (strcmp(a, "--secs") == 0) secs = strtod(v, NULL);
     else if (strcmp(a, "--gain") == 0) gain = strtod(v, NULL);
@@ -117,34 +117,45 @@ int main(int argc, char **argv) {
   }
 
   snd_pcm_hw_params_t *hw = NULL;
-  snd_pcm_hw_params_alloca(&hw);
+  err = snd_pcm_hw_params_malloc(&hw);
+  if (err < 0) {
+    fprintf(stderr, "hw_params_malloc failed: %s\n", snd_strerror(err));
+    snd_pcm_hw_params_free(hw);
+    snd_pcm_close(pcm);
+    return 1;
+  }
   err = snd_pcm_hw_params_any(pcm, hw);
   if (err < 0) {
     fprintf(stderr, "hw_params_any failed: %s\n", snd_strerror(err));
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
   err = snd_pcm_hw_params_set_access(pcm, hw, SND_PCM_ACCESS_RW_INTERLEAVED);
   if (err < 0) {
     fprintf(stderr, "set_access failed: %s\n", snd_strerror(err));
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
   err = snd_pcm_hw_params_set_format(pcm, hw, SND_PCM_FORMAT_S32_LE);
   if (err < 0) {
     fprintf(stderr, "set_format S32_LE failed: %s\n", snd_strerror(err));
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
   err = snd_pcm_hw_params_set_channels(pcm, hw, channels);
   if (err < 0) {
     fprintf(stderr, "set_channels %u failed: %s\n", channels, snd_strerror(err));
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
   err = snd_pcm_hw_params_set_rate(pcm, hw, rate, 0);
   if (err < 0) {
     fprintf(stderr, "set_rate %u failed: %s\n", rate, snd_strerror(err));
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
@@ -152,18 +163,21 @@ int main(int argc, char **argv) {
   err = snd_pcm_hw_params_set_buffer_size_near(pcm, hw, &buffer);
   if (err < 0) {
     fprintf(stderr, "set_buffer_size %u failed: %s\n", buffer, snd_strerror(err));
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
   err = snd_pcm_hw_params_set_period_size_near(pcm, hw, &period, NULL);
   if (err < 0) {
     fprintf(stderr, "set_period_size %u failed: %s\n", period, snd_strerror(err));
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
   err = snd_pcm_hw_params(pcm, hw);
   if (err < 0) {
     fprintf(stderr, "hw_params failed: %s\n", snd_strerror(err));
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
@@ -179,14 +193,22 @@ int main(int argc, char **argv) {
   fflush(stdout);
 
   snd_pcm_sw_params_t *sw = NULL;
-  snd_pcm_sw_params_alloca(&sw);
+  err = snd_pcm_sw_params_malloc(&sw);
+  if (err < 0) {
+    fprintf(stderr, "sw_params_malloc failed: %s\n", snd_strerror(err));
+    snd_pcm_hw_params_free(hw);
+    snd_pcm_close(pcm);
+    return 1;
+  }
   snd_pcm_sw_params_current(pcm, sw);
   snd_pcm_sw_params_set_start_threshold(pcm, sw, gotPeriod);
   snd_pcm_sw_params_set_avail_min(pcm, sw, gotPeriod);
   snd_pcm_sw_params(pcm, sw);
+  snd_pcm_sw_params_free(sw);
 
   if (!file) {
     printf("[injector] probe only, no --file given\n");
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 0;
   }
@@ -194,11 +216,13 @@ int main(int argc, char **argv) {
   FILE *f = fopen(file, "rb");
   if (!f) {
     fprintf(stderr, "cannot open %s\n", file);
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
   if (fseek(f, 0, SEEK_END) != 0) {
     fclose(f);
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
@@ -207,6 +231,7 @@ int main(int argc, char **argv) {
   if (fileBytes <= 0) {
     fprintf(stderr, "empty file %s\n", file);
     fclose(f);
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
@@ -215,6 +240,7 @@ int main(int argc, char **argv) {
   if (srcFrames == 0) {
     fprintf(stderr, "file too short for %u channels\n", channels);
     fclose(f);
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
@@ -222,6 +248,7 @@ int main(int argc, char **argv) {
   if (!src) {
     fprintf(stderr, "out of memory\n");
     fclose(f);
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
@@ -230,6 +257,7 @@ int main(int argc, char **argv) {
   if (got < frameBytes) {
     fprintf(stderr, "short read %zu bytes\n", got);
     free(src);
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
@@ -239,6 +267,7 @@ int main(int argc, char **argv) {
   if (!scratch) {
     fprintf(stderr, "out of memory\n");
     free(src);
+    snd_pcm_hw_params_free(hw);
     snd_pcm_close(pcm);
     return 1;
   }
