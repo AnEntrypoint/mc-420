@@ -2,17 +2,15 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import dawdreamer as daw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from dsp_cli_engine import render as render_inputs
 from pitch_measure import measure_freq
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DSP_PATH = REPO_ROOT / "effects" / "home" / "faust" / "multitranspose.dsp"
 
 SAMPLE_RATE = 48000
-BLOCK_SIZE = 64
-COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
 ROOT_NOTE = 60.0
 TRACKER_SETTLE_LEAD_IN_MS = 400.0
@@ -22,15 +20,6 @@ LOW_FREQ_RATIO_MIN = 0.55
 
 def midi_to_hz(m):
     return 440.0 * (2.0 ** ((m - 69.0) / 12.0))
-
-
-def compile_processor(engine, dsp_text, name):
-    faust = engine.make_faust_processor(name)
-    faust.set_dsp_string(dsp_text)
-    faust.compile_flags = COMPILE_FLAGS
-    if not faust.compile():
-        raise RuntimeError("faust compile failed")
-    return faust
 
 
 def vocal_like_tone(n, freq_hz, amp=0.5):
@@ -45,12 +34,12 @@ def vocal_like_tone(n, freq_hz, amp=0.5):
     return amp * out * env
 
 
-def make_inputs(n, dry, formant, target_note, gate):
+def make_inputs(n, dry, formant, target_note, gate, freq_hz):
     zero = np.zeros(n)
     ones = np.ones(n)
     return np.stack(
         [
-            dry, zero, zero, formant * ones, zero,
+            dry, zero, zero, formant * ones, np.full(n, freq_hz),
             target_note * ones, gate,
             zero, zero, zero, zero, zero, zero, zero, zero, zero, zero,
         ],
@@ -58,22 +47,16 @@ def make_inputs(n, dry, formant, target_note, gate):
     )
 
 
-def render(dsp_text, freq_hz, semitone_shift, formant, dur=None):
+def render(freq_hz, semitone_shift, formant, dur=None):
     if dur is None:
         dur = TRACKER_SETTLE_LEAD_IN_MS / 1000 + 0.4
-    engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
     n = int(dur * SAMPLE_RATE)
     dry = vocal_like_tone(n, freq_hz)
     gate_start = int(TRACKER_SETTLE_LEAD_IN_MS / 1000 * SAMPLE_RATE)
     gate = np.zeros(n)
     gate[gate_start:] = 1.0
     target_note = ROOT_NOTE + semitone_shift
-    inputs = make_inputs(n, dry, formant, target_note, gate)
-    faust = compile_processor(engine, dsp_text, "multitranspose")
-    playback = engine.make_playback_processor("in", inputs)
-    engine.load_graph([(playback, []), (faust, ["in"])])
-    engine.render(dur)
-    return engine.get_audio()[0], gate_start
+    return render_inputs(make_inputs(n, dry, formant, target_note, gate, freq_hz)), gate_start
 
 
 def cents_error(measured_hz, target_hz):
@@ -90,10 +73,10 @@ def low_freq_energy_ratio(sig, sr, cutoff_hz):
     return low / total
 
 
-def check_downward_lock(text, source_hz, semitone_shift, formant):
+def check_downward_lock(source_hz, semitone_shift, formant):
     target_note = ROOT_NOTE + semitone_shift
     expected_hz = midi_to_hz(target_note)
-    audio, gate_start = render(text, source_hz, semitone_shift, formant)
+    audio, gate_start = render(source_hz, semitone_shift, formant)
 
     win = max(512, int(3.0 * SAMPLE_RATE / expected_hz))
     tail = audio[-win * 3:]
@@ -110,8 +93,6 @@ def main():
     print("Voice-as-hard-dance-bass diagnostic: lock a vocal-like harmonic input down")
     print("1-3 octaves, sweep formant, report lock accuracy (against the absolute target")
     print("key pitch) and bass-register spectral dominance.")
-    text = DSP_PATH.read_text()
-
     cases = [
         (220.0, -12.0, 0.0),
         (220.0, -24.0, 0.0),
@@ -122,7 +103,7 @@ def main():
     ]
     ok_count = 0
     for source_hz, semitone_shift, formant in cases:
-        expected_hz, steady_c, ratio, finite, peak = check_downward_lock(text, source_hz, semitone_shift, formant)
+        expected_hz, steady_c, ratio, finite, peak = check_downward_lock(source_hz, semitone_shift, formant)
         ok = (abs(steady_c) < DIAGNOSTIC_STEADY_CENTS_LIMIT and ratio >= LOW_FREQ_RATIO_MIN
               and finite and peak < 2.0)
         ok_count += 1 if ok else 0

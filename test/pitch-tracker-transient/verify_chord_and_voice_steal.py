@@ -2,17 +2,15 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import dawdreamer as daw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from dsp_cli_engine import render
 from pitch_measure import measure_freq
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DSP_PATH = REPO_ROOT / "effects" / "home" / "faust" / "multitranspose.dsp"
 
 SAMPLE_RATE = 48000
-BLOCK_SIZE = 64
-COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
 ROOT_NOTE = 60.0
 CHORD_CENTS_LIMIT = 40.0
@@ -27,15 +25,6 @@ PERFECT_FIFTH_SEMITONES = 7.0
 
 def midi_to_hz(m):
     return 440.0 * (2.0 ** ((m - 69.0) / 12.0))
-
-
-def compile_processor(engine, dsp_text, name):
-    faust = engine.make_faust_processor(name)
-    faust.set_dsp_string(dsp_text)
-    faust.compile_flags = COMPILE_FLAGS
-    if not faust.compile():
-        raise RuntimeError("faust compile failed")
-    return faust
 
 
 def sine(n, freq_hz, amp=0.35):
@@ -53,28 +42,19 @@ def cents_error(measured_hz, target_hz):
     return 1200.0 * np.log2(measured_hz / target_hz)
 
 
-def run(text, inputs, dur):
-    engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
-    playback = engine.make_playback_processor("in", inputs)
-    faust = compile_processor(engine, text, "multitranspose")
-    engine.load_graph([(playback, []), (faust, ["in"])])
-    engine.render(dur)
-    return engine.get_audio()[0]
-
-
-def check_disabled_silent(text):
+def check_disabled_silent():
     dur = 0.3
     n = int(dur * SAMPLE_RATE)
     dry = sine(n, 220.0)
     inputs = np.zeros((INPUT_CHANNEL_COUNT, n), dtype=np.float64)
     inputs[0] = dry
-    audio = run(text, inputs, dur)
+    audio = render(inputs)
     peak = float(np.max(np.abs(audio)))
     print(f"  disabled-state peak amplitude: {peak:.2e}")
     return peak < SILENT_LIMIT
 
 
-def check_chord(text):
+def check_chord():
     dur = 0.6
     n = int(dur * SAMPLE_RATE)
     dry = sine(n, 220.0)
@@ -88,14 +68,14 @@ def check_chord(text):
     silent_loop_sum = np.zeros(n)
     silent_free = np.zeros(n)
     silent_formant = np.zeros(n)
-    silent_ext_freq_det = np.zeros(n)
-    inputs_rows = [dry, silent_loop_sum, silent_free, silent_formant, silent_ext_freq_det]
+    ext_freq_det = np.full(n, 220.0)
+    inputs_rows = [dry, silent_loop_sum, silent_free, silent_formant, ext_freq_det]
     for note in target_notes:
         inputs_rows += [np.full(n, note), gate]
     for _ in range(VOICE_COUNT - len(target_notes)):
         inputs_rows += [zero, zero]
     inputs = np.stack(inputs_rows, axis=0)
-    audio = run(text, inputs, dur)
+    audio = render(inputs)
 
     seg = audio[gate_start + int(0.15 * SAMPLE_RATE): gate_start + int(0.45 * SAMPLE_RATE)]
     spectrum = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
@@ -132,7 +112,7 @@ def check_chord(text):
     return worst < CHORD_CENTS_LIMIT
 
 
-def check_voice_steal(text):
+def check_voice_steal():
     dur = 0.5
     n = int(dur * SAMPLE_RATE)
     dry = sine(n, 220.0, amp=0.4)
@@ -142,11 +122,11 @@ def check_voice_steal(text):
     steal_sample = int(0.3 * SAMPLE_RATE)
     note[steal_sample:] = ROOT_NOTE + 12.0
     zero = np.zeros(n)
-    inputs_rows = [dry, zero, zero, zero, zero, note, gate]
+    inputs_rows = [dry, zero, zero, zero, np.full(n, 220.0), note, gate]
     for _ in range(VOICE_COUNT - 1):
         inputs_rows += [zero, zero]
     inputs = np.stack(inputs_rows, axis=0)
-    audio = run(text, inputs, dur)
+    audio = render(inputs)
 
     deriv = np.abs(np.diff(audio))
     steal_window = deriv[max(0, steal_sample - 8): steal_sample + 400]
@@ -163,20 +143,19 @@ def check_voice_steal(text):
 def main():
     print("multitranspose.dsp chord correctness + voice-steal click-safety regression check")
     print(f"DSP: {DSP_PATH}")
-    text = DSP_PATH.read_text()
 
     failures = []
 
     print("\n-- disabled state must be exactly silent --")
-    if not check_disabled_silent(text):
+    if not check_disabled_silent():
         failures.append("disabled state was not silent")
 
     print("\n-- a held 3-note chord (unison / major 3rd / 5th) must land each voice accurately --")
-    if not check_chord(text):
+    if not check_chord():
         failures.append(f"chord accuracy exceeded {CHORD_CENTS_LIMIT:.0f}c on at least one voice")
 
     print("\n-- voice steal (continuous gate, note changes) must not click or produce non-finite output --")
-    if not check_voice_steal(text):
+    if not check_voice_steal():
         failures.append("voice steal produced an excessive click or non-finite output")
 
     print()

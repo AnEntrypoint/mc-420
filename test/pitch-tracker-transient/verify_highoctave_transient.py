@@ -2,17 +2,15 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import dawdreamer as daw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from dsp_cli_engine import render as render_inputs
 from pitch_measure import measure_freq
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DSP_PATH = REPO_ROOT / "effects" / "home" / "faust" / "multitranspose.dsp"
 
 SAMPLE_RATE = 48000
-BLOCK_SIZE = 64
-COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
 ROOT_NOTE = 60.0
 LEAD_IN_MS = 400.0
@@ -26,15 +24,6 @@ INTERNAL_TRACKER_DIAGNOSTIC_CENTS_LIMIT = 300.0
 
 def midi_to_hz(m):
     return 440.0 * (2.0 ** ((m - 69.0) / 12.0))
-
-
-def compile_processor(engine, dsp_text, name):
-    faust = engine.make_faust_processor(name)
-    faust.set_dsp_string(dsp_text)
-    faust.compile_flags = COMPILE_FLAGS
-    if not faust.compile():
-        raise RuntimeError("faust compile failed")
-    return faust
 
 
 def sine_with_lead_in(n, freq_hz, gate_start_samp, amp=0.5):
@@ -62,17 +51,12 @@ def make_inputs(n, dry, target_note, gate_start_samp, freq_hz, ext_freq_det):
     )
 
 
-def render(dsp_text, freq_hz, target_note, dur, ext_freq_det):
-    engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
+def render(freq_hz, target_note, dur, ext_freq_det):
     n = int(dur * SAMPLE_RATE)
     gate_start_samp = int(LEAD_IN_MS / 1000 * SAMPLE_RATE)
     dry = sine_with_lead_in(n, freq_hz, gate_start_samp)
     inputs = make_inputs(n, dry, target_note, gate_start_samp, freq_hz, ext_freq_det)
-    playback = engine.make_playback_processor("in", inputs)
-    faust = compile_processor(engine, dsp_text, "multitranspose")
-    engine.load_graph([(playback, []), (faust, ["in"])])
-    engine.render(dur)
-    return engine.get_audio()[0], gate_start_samp
+    return render_inputs(inputs), gate_start_samp
 
 
 def cents_error(measured_hz, target_hz):
@@ -81,17 +65,17 @@ def cents_error(measured_hz, target_hz):
     return 1200.0 * np.log2(measured_hz / target_hz)
 
 
-def check_interval_onset(text, freq_hz, semitone_shift, ext_freq_det):
+def check_interval_onset(freq_hz, semitone_shift, ext_freq_det):
     target_note = ROOT_NOTE + semitone_shift
     dur = LEAD_IN_MS / 1000 + 0.4
-    audio, gate_start_samp = render(text, freq_hz, target_note, dur, ext_freq_det)
+    audio, gate_start_samp = render(freq_hz, target_note, dur, ext_freq_det)
     expected_hz = midi_to_hz(target_note)
 
     row = {}
     worst_onset = 0.0
     worst_steady = 0.0
     for tms in (10, 20, 30, 50, 75, 100, 150, 250):
-        win = max(256, int(3.0 * SAMPLE_RATE / min(freq_hz, expected_hz)))
+        win = max(512, int(6.0 * SAMPLE_RATE / min(freq_hz, expected_hz)))
         start = gate_start_samp + int(tms / 1000 * SAMPLE_RATE)
         seg = audio[start:start + win]
         f = measure_freq(seg, SAMPLE_RATE, min_hz=max(20.0, expected_hz * 0.5), max_hz=expected_hz * 2.0)
@@ -131,7 +115,6 @@ def main():
     print("a real, disclosed, unresolved limitation of that specific tracker for note selection.")
     print(f"Reported only, gate at {INTERNAL_TRACKER_DIAGNOSTIC_CENTS_LIMIT:.0f}c is informational.")
 
-    text = DSP_PATH.read_text()
     failures = []
     cases = [
         (82.0, 0.0), (110.0, 12.0), (130.8, -12.0), (164.8, 7.0), (196.0, -5.0),
@@ -146,7 +129,7 @@ def main():
         extreme_shift_case = abs(real_shift_semitones) >= EXTREME_SHIFT_SEMITONES_THRESHOLD
         onset_limit = EXTREME_SHIFT_ONSET_CENTS_LIMIT if extreme_shift_case else ONSET_WORST_CENTS_LIMIT
         steady_limit = EXTREME_SHIFT_STEADY_CENTS_LIMIT if extreme_shift_case else STEADY_STATE_CENTS_LIMIT
-        worst_onset, worst_steady = check_interval_onset(text, freq_hz, semitone_shift, ext_freq_det=True)
+        worst_onset, worst_steady = check_interval_onset(freq_hz, semitone_shift, ext_freq_det=True)
         onset_ok = worst_onset < onset_limit
         steady_ok = worst_steady < steady_limit
         print(f"    -> worst_onset(10-50ms)={worst_onset:.1f}c ({'OK' if onset_ok else 'FAIL'} vs {onset_limit:.0f}c), "
@@ -158,7 +141,7 @@ def main():
 
     print("\n-- diagnostic: internal zero-crossing tracker fallback only (never gates CI) --")
     for freq_hz, semitone_shift in cases:
-        worst_onset, worst_steady = check_interval_onset(text, freq_hz, semitone_shift, ext_freq_det=False)
+        worst_onset, worst_steady = check_interval_onset(freq_hz, semitone_shift, ext_freq_det=False)
         flag = "OK" if max(worst_onset, worst_steady) < INTERNAL_TRACKER_DIAGNOSTIC_CENTS_LIMIT else "NOTABLE"
         print(f"    -> worst_onset(10-50ms)={worst_onset:.1f}c, worst_steady(>=150ms)={worst_steady:.1f}c ({flag}, informational only)")
 

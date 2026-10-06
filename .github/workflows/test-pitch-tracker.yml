@@ -6,6 +6,8 @@ on:
       - 'effects/home/faust/multitranspose.dsp'
       - 'effects/pitchtracker-src/**'
       - 'test/pitch-tracker-transient/**'
+      - 'tools/dsp-cli/dsp_cli.cpp'
+      - 'tools/dsp-cli/dsp_generated.cpp'
       - '.github/workflows/test-pitch-tracker.yml'
   workflow_dispatch:
 
@@ -14,7 +16,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  highoctave-transient:
+  multitranspose-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install numpy
+        run: pip install numpy
+
+      - name: Build dsp_cli from the committed Faust codegen
+        run: |
+          g++ --version | head -1
+          g++ -O2 -std=c++17 -I tools/dsp-cli -I effects/home/faust \
+            -o dsp_cli tools/dsp-cli/dsp_cli.cpp -lm
+          ./dsp_cli --list-zones
+
+      - name: Run interval-harmonizer onset accuracy check
+        run: python3 test/pitch-tracker-transient/verify_highoctave_transient.py
+
+      - name: Run plosive/mid-sustain-burst regression check
+        run: python3 test/pitch-tracker-transient/verify_plosive_transient.py
+
+      - name: Run chord correctness + voice-steal click-safety check
+        run: python3 test/pitch-tracker-transient/verify_chord_and_voice_steal.py
+
+      - name: Run formant vocal-morph control check
+        run: python3 test/pitch-tracker-transient/verify_formant_morph.py
+
+      - name: Run voice-as-bass diagnostic (non-blocking)
+        run: python3 test/pitch-tracker-transient/verify_voice_as_bass.py
+
+  pitchtracker-faust-jit:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -36,21 +73,6 @@ jobs:
           sudo apt-get install -y faust
           pip install --upgrade pip
           pip install dawdreamer numpy
-
-      - name: Run interval-harmonizer onset accuracy check
-        run: python3 test/pitch-tracker-transient/verify_highoctave_transient.py
-
-      - name: Run plosive/mid-sustain-burst regression check
-        run: python3 test/pitch-tracker-transient/verify_plosive_transient.py
-
-      - name: Run chord correctness + voice-steal click-safety check
-        run: python3 test/pitch-tracker-transient/verify_chord_and_voice_steal.py
-
-      - name: Run formant vocal-morph control check
-        run: python3 test/pitch-tracker-transient/verify_formant_morph.py
-
-      - name: Run voice-as-bass diagnostic (non-blocking)
-        run: python3 test/pitch-tracker-transient/verify_voice_as_bass.py
 
       - name: Run pitchtracker_ac.dsp steady-state accuracy check
         run: python3 test/pitch-tracker-transient/verify_ac_tracker_steadystate_bias.py
