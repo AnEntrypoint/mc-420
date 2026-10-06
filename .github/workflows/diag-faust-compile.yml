@@ -67,6 +67,36 @@ jobs:
               block.replace('    num = smoo(x * d);\n', '    num = x * d;\n')
                    .replace('    den = max(1e-9, smoo(x*x));\n', '    den = max(1e-9, x*x);\n'))
 
+          files['c1_demoteonly'] = files['b2_norefine'].replace(
+              PROMOTE_CALL, '    promotion = 1.0, 0.9, 0.0, 0.0;\n')
+
+          files['c2_promoteonly'] = files['b2_norefine'].replace(
+              DEMOTE_CALL, '    demoteNow = 0.0;\n')
+
+          files['c3_ref1only'] = src.replace(
+              REFINE_CALLS, '    refinedNow = refineFreq(xh, w, coarseFreq);\n')
+
+          files['d1_allmux2'] = src.replace('ba.if(', 'mux2(') + \
+              '\nmux2(c, a, b) = a*c + b*(1.0-c);\n'
+
+          files['d2_decidemux2'] = (src
+              .replace('    pBase = ba.if(demoteNow, rawH, raw1);',
+                       '    pBase = mux2(demoteNow, rawH, raw1);')
+              .replace('    promotedRatio = ba.if(dominant3, 3.0, ba.if(dominant2, 2.0, ba.if(demoteNow, 0.5, 1.0)));',
+                       '    promotedRatio = mux2(dominant3, 3.0, mux2(dominant2, 2.0, mux2(demoteNow, 0.5, 1.0)));')
+              .replace('    promotedConfidence = ba.if(dominant3, raw3, ba.if(dominant2, raw2, pBase));',
+                       '    promotedConfidence = mux2(dominant3, raw3, mux2(dominant2, raw2, pBase));')
+              .replace('    refinedNow = ba.if(dominant3, refined3,\n'
+                       '               ba.if(dominant2, refined2,\n'
+                       '               ba.if(demoteNow, refinedH, refined1)));',
+                       '    refinedNow = mux2(dominant3, refined3,\n'
+                       '               mux2(dominant2, refined2,\n'
+                       '               mux2(demoteNow, refinedH, refined1)));')
+              + '\nmux2(c, a, b) = a*c + b*(1.0-c);\n')
+          for probe in ('mux2(demoteNow, rawH, raw1)', 'mux2(dominant3, refined3,',
+                        'mux2(dominant3, 3.0,'):
+              assert probe in files['d2_decidemux2'], probe
+
           for name, text in files.items():
               io.open('variants/%s.dsp' % name, 'w', encoding='utf-8', newline='\n').write(text)
           PY
@@ -83,7 +113,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [b0_cur, b1_nohold, b2_norefine, b3_onlyrefine, b5_notaps, b7_fixlag, b8_nosmoo]
+        variant: [c1_demoteonly, c2_promoteonly, c3_ref1only, d1_allmux2, d2_decidemux2]
     steps:
       - name: Install Faust
         timeout-minutes: 8

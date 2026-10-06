@@ -63,7 +63,10 @@ A fourth rule is about where that damper lives, and is the easiest one to break 
 the **already-refined** frequency (`holdStep` in `detectedFreq`), never `subharmonicPromote`'s own
 `baseFreq`. `baseFreq` drives `corrRawAt`'s and `refineFreq`'s delay-line indices, and a recursive
 signal reaching an `@` is a real Faust compile-time cliff -- the in-promote form pushed a step that
-normally takes seconds past 13 minutes before it was killed. No signal that reaches a delay index may
+measures 3.5-7 min on baseline past 20 minutes before it was killed. So is calling the demote test
+from two sites: `demoteTest` runs once in `detectedFreq` and its result is passed into
+`subharmonicPromote`, because a second call site duplicates every `corrPeakAt` pair (~19 variable-delay
+instances against a baseline of ~12) and holds the step at 20 min on its own. No signal that reaches a delay index may
 carry state.
 
 ## `model_ac_tracker.py`

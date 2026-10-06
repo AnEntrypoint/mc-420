@@ -2,27 +2,25 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import dawdreamer as daw
+
+import pt_render
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DSP_PATH = REPO_ROOT / "effects" / "pitchtracker-src" / "pitchtracker_ac.dsp"
 
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 64
-COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
 MAX_STEADY_CENTS = 30.0
 
 GATED_FREQS = (82.0, 110.0, 130.8, 164.8, 196.0, 220.0, 246.9, 440.0, 880.0, 1318.5, 1046.5)
 
 
-def compile_processor(engine, dsp_text, name):
-    faust = engine.make_faust_processor(name)
-    faust.set_dsp_string(dsp_text)
-    faust.compile_flags = COMPILE_FLAGS
-    if not faust.compile():
-        raise RuntimeError("faust compile failed")
-    return faust
+def render_raw_detected_freq(dsp_text, freq_hz, dur=1.0):
+    idx = dsp_text.index("process(sig)")
+    probe_dsp = dsp_text[:idx] + "process(x) = detectedFreq(x) : (_,!) : max(minTrackHz) : min(maxTrackHz);\n"
+    dry = harmonic_tone(int(dur * SAMPLE_RATE), freq_hz)
+    return pt_render.render(probe_dsp, dry, sr=SAMPLE_RATE, block=BLOCK_SIZE)[0]
 
 
 def harmonic_tone(n, freq_hz, sr=SAMPLE_RATE, n_harmonics=6, amp=0.7, attack=200):
@@ -35,19 +33,6 @@ def harmonic_tone(n, freq_hz, sr=SAMPLE_RATE, n_harmonics=6, amp=0.7, attack=200
     ramp = np.linspace(0.0, 1.0, min(attack, n))
     env[: len(ramp)] = ramp
     return sig * env
-
-
-def render_raw_detected_freq(dsp_text, freq_hz, dur=1.0):
-    idx = dsp_text.index("process(sig)")
-    probe_dsp = dsp_text[:idx] + "process(x) = detectedFreq(x) : (_,!) : max(minTrackHz) : min(maxTrackHz);\n"
-    engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
-    n = int(dur * SAMPLE_RATE)
-    dry = harmonic_tone(n, freq_hz)
-    playback = engine.make_playback_processor("in", dry.reshape(1, -1))
-    faust = compile_processor(engine, probe_dsp, "ac_tracker")
-    engine.load_graph([(playback, []), (faust, ["in"])])
-    engine.render(dur)
-    return engine.get_audio()[0]
 
 
 def steady_state_cents(y, freq_hz, t_start=0.15, t_end=1.0):

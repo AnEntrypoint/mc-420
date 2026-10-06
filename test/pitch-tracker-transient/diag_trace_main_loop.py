@@ -1,9 +1,9 @@
 import numpy as np
-import dawdreamer as daw
+
+import pt_render
 
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 64
-COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
 BASELINE_DSP = """
 import("stdfaust.lib");
@@ -59,15 +59,6 @@ process(x) = x : trackPitchHz(trackerHarmonics, trackerTau);
 """
 
 
-def compile_processor(engine, dsp_text, name):
-    faust = engine.make_faust_processor(name)
-    faust.set_dsp_string(dsp_text)
-    faust.compile_flags = COMPILE_FLAGS
-    if not faust.compile():
-        raise RuntimeError("faust compile failed")
-    return faust
-
-
 def sine_transient(n, freq_hz, attack_samples=64, amp=0.9):
     t = np.arange(n) / SAMPLE_RATE
     tone = amp * np.sin(2 * np.pi * freq_hz * t)
@@ -78,15 +69,9 @@ def sine_transient(n, freq_hz, attack_samples=64, amp=0.9):
 
 
 def render(dsp_text, name, freq_hz, dur=0.15):
-    engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
     n = int(dur * SAMPLE_RATE)
     dry = sine_transient(n, freq_hz)
-    inputs = dry.reshape(1, -1)
-    playback = engine.make_playback_processor("in", inputs)
-    faust = compile_processor(engine, dsp_text, name)
-    engine.load_graph([(playback, []), (faust, ["in"])])
-    engine.render(dur)
-    return engine.get_audio()[0]
+    return pt_render.render(dsp_text, dry, sr=SAMPLE_RATE, block=BLOCK_SIZE)[0]
 
 
 def summarize(y, freq_hz, label):

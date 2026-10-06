@@ -2,28 +2,19 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import dawdreamer as daw
+
+import pt_render
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DSP_PATH = REPO_ROOT / "effects" / "pitchtracker-src" / "pitchtracker_ac.dsp"
 
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 64
-COMPILE_FLAGS = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
 
 MAX_CENTS = 100.0
 
 WINDOW_S = 0.2
 SETTLE_S = 0.10
-
-
-def compile_processor(engine, dsp_text, name):
-    faust = engine.make_faust_processor(name)
-    faust.set_dsp_string(dsp_text)
-    faust.compile_flags = COMPILE_FLAGS
-    if not faust.compile():
-        raise RuntimeError("faust compile failed")
-    return faust
 
 
 def timbre_shift_tone(n, f0_hz, f0_start=1.0, f0_end=0.05, h2_start=0.3, h2_end=1.0,
@@ -41,12 +32,7 @@ def timbre_shift_tone(n, f0_hz, f0_start=1.0, f0_end=0.05, h2_start=0.3, h2_end=
 
 
 def render_detected(dsp_text, sig, dur):
-    engine = daw.RenderEngine(SAMPLE_RATE, BLOCK_SIZE)
-    playback = engine.make_playback_processor("in", sig.reshape(1, -1))
-    faust = compile_processor(engine, dsp_text, "ac_tracker")
-    engine.load_graph([(playback, []), (faust, ["in"])])
-    engine.render(dur)
-    return engine.get_audio()[0]
+    return pt_render.render(dsp_text, sig, sr=SAMPLE_RATE, block=BLOCK_SIZE)[0]
 
 
 def window_means(y, f0_hz):

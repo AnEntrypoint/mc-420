@@ -51,7 +51,7 @@ jobs:
       - name: Run voice-as-bass diagnostic (non-blocking)
         run: python3 test/pitch-tracker-transient/verify_voice_as_bass.py
 
-  pitchtracker-faust-jit:
+  pitchtracker-native:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -61,18 +61,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Cache pip wheels (dawdreamer is a large libfaust-bearing wheel)
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: pip-dawdreamer-${{ runner.os }}-312-${{ hashFiles('.github/workflows/test-pitch-tracker.yml') }}
-
-      - name: Install Faust + Python DawDreamer deps
+      - name: Install faust + numpy
         run: |
           sudo apt-get update
           sudo apt-get install -y faust
-          pip install --upgrade pip
-          pip install dawdreamer numpy
+          pip install numpy
 
       - name: Run pitchtracker_ac.dsp steady-state accuracy check
         run: python3 test/pitch-tracker-transient/verify_ac_tracker_steadystate_bias.py

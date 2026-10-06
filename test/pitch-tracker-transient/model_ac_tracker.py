@@ -18,6 +18,7 @@ RELEASE_FRAC = 0.35
 EXCLUSIVE = False
 
 HOLD_SIGNALS = {}
+DEMOTE_CORR_TAU = 0.05
 REFINE_SPREAD = 16
 
 CANDIDATES = (
@@ -78,6 +79,35 @@ def corr_peak_at(x, freq):
         pool[L] = (corr_at_lag_var(x, int(L) - PEAK_SPREAD),
                    corr_at_lag_var(x, int(L)),
                    corr_at_lag_var(x, int(L) + PEAK_SPREAD))
+    c_lo = np.array([pool[L][0][i] for i, L in enumerate(l0)])
+    c_mid = np.array([pool[L][1][i] for i, L in enumerate(l0)])
+    c_hi = np.array([pool[L][2][i] for i, L in enumerate(l0)])
+    denom = c_lo - 2.0 * c_mid + c_hi
+    safe = np.where(denom > -1e-9, -1e-9, denom)
+    vertex = c_mid - (c_lo - c_hi) ** 2 / (8.0 * safe)
+    return np.clip(vertex, -1.0, PEAK_CEIL).reshape(np.shape(freq))
+
+
+def corr_at_lag_var_t(x, lag, tau=0.01):
+    lag = int(min(3200, max(1, lag)))
+    d = np.zeros(len(x))
+    if lag < len(x):
+        d[lag:] = x[: len(x) - lag]
+    pole = np.exp(-1.0 / (tau * SR))
+    num = one_pole(x * d, pole)
+    den = np.maximum(1e-9, one_pole(x * x, pole))
+    return num / den
+
+
+def corr_peak_at_t(x, freq, tau=0.01):
+    freq = np.asarray(freq, dtype=float)
+    l0 = np.array([int(min(3199 - PEAK_SPREAD, max(2 + PEAK_SPREAD, int(SR / f))))
+                   for f in np.atleast_1d(freq).ravel()])
+    pool = {}
+    for L in np.unique(l0):
+        pool[L] = (corr_at_lag_var_t(x, int(L) - PEAK_SPREAD, tau),
+                   corr_at_lag_var_t(x, int(L), tau),
+                   corr_at_lag_var_t(x, int(L) + PEAK_SPREAD, tau))
     c_lo = np.array([pool[L][0][i] for i, L in enumerate(l0)])
     c_mid = np.array([pool[L][1][i] for i, L in enumerate(l0)])
     c_hi = np.array([pool[L][2][i] for i, L in enumerate(l0)])
@@ -191,7 +221,7 @@ def subharmonic_promote(x, coarse, raw=False):
             latched[i] = prev
         base = np.where(latched > 0.5, freq_h, coarse)
         p_base = np.where(latched > 0.5, r_h, r_coarse)
-    elif raw == "hold":
+    elif raw in ("hold", "rc"):
         r_coarse = corr_raw_at(x, coarse)
         freq_h = coarse * 0.5
         p_coarse = corr_peak_at(x, coarse)
@@ -205,6 +235,27 @@ def subharmonic_promote(x, coarse, raw=False):
         p_base = np.where(demote, r_h, r_coarse)
         HOLD_SIGNALS["fired"] = fired
         HOLD_SIGNALS["duty"] = duty
+    elif raw == "evtau":
+        r_coarse = corr_raw_at(x, coarse)
+        freq_h = coarse * 0.5
+        p_coarse = corr_peak_at_t(x, coarse, DEMOTE_CORR_TAU)
+        p_h = corr_peak_at_t(x, freq_h, DEMOTE_CORR_TAU)
+        r_h = corr_raw_at(x, freq_h)
+        demote = (freq_h >= MIN_TRACK_HZ) & (p_h >= CORR_THRESH) & (p_h > p_coarse + SUBHARM_MARGIN)
+        demote_flag = demote
+        base = np.where(demote, freq_h, coarse)
+        p_base = np.where(demote, r_h, r_coarse)
+    elif raw == "fixed":
+        p_coarse = corr_peak_at(x, coarse)
+        freq_h = coarse * 0.5
+        r_h = corr_raw_at(x, freq_h)
+        r_coarse = corr_raw_at(x, coarse)
+        demote = (freq_h >= MIN_TRACK_HZ) & (r_h >= CORR_THRESH) & (r_h > p_coarse + SUBHARM_MARGIN)
+        demote_flag = demote
+        base = coarse
+        p_base = r_coarse
+        HOLD_SIGNALS["fired"] = demote
+        HOLD_SIGNALS["duty"] = one_pole(demote.astype(float), np.exp(-1.0 / (DEMOTE_TAU * SR)))
     elif raw == "mixed":
         r_coarse = corr_raw_at(x, coarse)
         freq_h = coarse * 0.5
@@ -228,7 +279,7 @@ def subharmonic_promote(x, coarse, raw=False):
         p_base = np.where(demote, p_h, p_coarse)
     f2 = base * 2.0
     f3 = base * 3.0
-    use_raw = raw is True or raw in ("mixed", "latch", "smooth", "asym", "hold")
+    use_raw = raw is True or raw in ("mixed", "latch", "smooth", "asym", "hold", "evtau")
     p2 = corr_raw_at(x, f2) if use_raw else corr_peak_at(x, f2)
     p3 = corr_raw_at(x, f3) if use_raw else corr_peak_at(x, f3)
     dom3 = (f3 <= MAX_TRACK_HZ) & (p3 >= CORR_THRESH) & (p3 > p_base + SUBHARM_MARGIN) & (p3 >= p2)
@@ -238,7 +289,10 @@ def subharmonic_promote(x, coarse, raw=False):
         dom2 = dom2 & ~demote_flag
     promoted = np.where(dom3, f3, np.where(dom2, f2, base))
     confidence = np.where(dom3, p3, np.where(dom2, p2, p_base))
-    return promoted, confidence
+    demoted = demote_flag if demote_flag is not None else np.zeros(len(base), dtype=bool)
+    rbase = np.where(demoted, 0.5, 1.0)
+    ratio = np.where(dom3, 3.0 * rbase, np.where(dom2, 2.0 * rbase, rbase))
+    return promoted, confidence, ratio
 
 
 def hold_damped(refined, fired, duty, rel):
@@ -254,9 +308,12 @@ def hold_damped(refined, fired, duty, rel):
 def detected_freq(x, raw=False):
     xh = highpass1(x, 20.0)
     coarse = pick_fundamental(xh, len(x))
-    corrected, confidence = subharmonic_promote(xh, coarse, raw=raw)
-    refined = refine_freq(xh, corrected)
-    if raw == "hold":
+    corrected, confidence, ratio = subharmonic_promote(xh, coarse, raw=raw)
+    if raw == "rc":
+        refined = refine_freq(xh, coarse) * ratio
+    else:
+        refined = refine_freq(xh, corrected)
+    if raw in ("hold", "rc"):
         refined = hold_damped(refined, HOLD_SIGNALS["fired"], HOLD_SIGNALS["duty"], RELEASE_FRAC)
     return np.clip(refined, MIN_TRACK_HZ, MAX_TRACK_HZ), confidence >= CORR_THRESH
 
@@ -308,7 +365,7 @@ def diag(freq_hz, dur=1.0, raw=False):
     freq_h = coarse * 0.5
     p_h = corr_peak_at(x, freq_h)
     demote = (freq_h >= MIN_TRACK_HZ) & (p_h >= CORR_THRESH) & (p_h > p_coarse + SUBHARM_MARGIN)
-    promoted, conf = subharmonic_promote(x, coarse, raw=raw)
+    promoted, conf = subharmonic_promote(x, coarse, raw=raw)[:2]
     refined = refine_freq(x, promoted)
     print(f"diag {freq_hz}Hz")
     for t in (0.2, 0.5, 0.9):
@@ -339,7 +396,7 @@ def diag_timbre(freq_hz, dur=3.4, raw=False):
 
 
 def main():
-    global PEAK_CEIL, SUBHARM_MARGIN, DEMOTE_TAU, RELEASE_FRAC, EXCLUSIVE
+    global PEAK_CEIL, SUBHARM_MARGIN, DEMOTE_TAU, RELEASE_FRAC, EXCLUSIVE, DEMOTE_CORR_TAU
     for arg in sys.argv[1:]:
         if arg.startswith("ceil="):
             PEAK_CEIL = float(arg[5:])
@@ -349,10 +406,14 @@ def main():
             DEMOTE_TAU = float(arg[5:])
         elif arg.startswith("rel="):
             RELEASE_FRAC = float(arg[4:])
+        elif arg.startswith("ectau="):
+            DEMOTE_CORR_TAU = float(arg[6:])
         elif arg == "excl":
             EXCLUSIVE = True
-    raw = True if "raw" in sys.argv else ("mixed" if "mixed" in sys.argv else ("smooth" if "smooth" in sys.argv else ("latch" if "latch" in sys.argv else ("asym" if "asym" in sys.argv else "hold"))))
-    if raw in ("asym", "hold"):
+    raw = True if "raw" in sys.argv else ("mixed" if "mixed" in sys.argv else ("smooth" if "smooth" in sys.argv else ("latch" if "latch" in sys.argv else ("asym" if "asym" in sys.argv else ("evtau" if "evtau" in sys.argv else "hold")))))
+    if "rc" in sys.argv:
+        raw = "rc"
+    if raw in ("asym", "hold", "evtau", "rc"):
         EXCLUSIVE = True
         DEMOTE_TAU = 0.2
         RELEASE_FRAC = 0.5
