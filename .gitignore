@@ -82,3 +82,5 @@ test-audio-corpus/*.json
 .sdcard-backup/
 
 *-tmp.js
+.netboot-serve-session.*
+.netboot-serve-pid.txt
