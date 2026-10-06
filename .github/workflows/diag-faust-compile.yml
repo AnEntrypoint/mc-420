@@ -4,6 +4,20 @@ on:
   workflow_dispatch:
 
 jobs:
+  probe-runner:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - name: Does a 150s command survive a step with timeout-minutes 15
+        timeout-minutes: 15
+        run: |
+          set +e
+          start=$(date +%s)
+          sleep 150
+          rc=$?
+          end=$(date +%s)
+          echo "PROBE sleep150 rc=$rc elapsed=$((end-start))s"
+
   build-variants:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -15,61 +29,44 @@ jobs:
         run: |
           set -e
           mkdir -p variants
-          git show ccf698d:effects/pitchtracker-src/pitchtracker_ac.dsp > variants/1_baseline.dsp
+          git show 1bf8bfdd:effects/pitchtracker-src/pitchtracker_ac.dsp > variants/0_predemote.dsp
+          cp effects/pitchtracker-src/pitchtracker_ac.dsp variants/1_current.dsp
           python3 - <<'PY'
           import io
 
-          src = io.open('effects/pitchtracker-src/pitchtracker_ac.dsp', encoding='utf-8').read()
+          pred = io.open('variants/0_predemote.dsp', encoding='utf-8').read()
 
-          DAMPER = '    demoteDuty = demoteNow : *(1.0-demotePole) : + ~ *(demotePole);\n'
-          HOLD = ('    takeNew = (demoteNow > 0.5) | (demoteDuty <= 0.5);\n'
-                  '    holdStep(prev) = ba.if(takeNew, refinedNow, prev);\n'
-                  '    heldFreq = holdStep ~ _;\n')
-          HOLD_REPL = '    heldFreq = refinedNow;\n'
-          DEMOTE_CALL = '    demoteNow = demoteTest(xh, coarseFreq);\n'
-          DEMOTE_CALL_REPL = '    demoteNow = 0.0;\n'
-          PROMO = ('    promotion = subharmonicPromote(xh, coarseFreq, demoteNow);\n'
-                   '    corrected = promotion : (_, !);\n'
-                   '    finalConfidence = promotion : (!, _);\n')
-          PROMO_REPL = ('    corrected = ba.if(demoteNow, coarseFreq * 0.5, coarseFreq);\n'
-                        '    finalConfidence = 1.0;\n')
-          DEMOTE_PEAK = ('    pCoarse = corrPeakAt(x, coarseFreq);\n'
-                         '    freqH = coarseFreq * 0.5;\n'
-                         '    pH = corrPeakAt(x, freqH);\n')
-          DEMOTE_RAW = ('    pCoarse = corrRawAt(x, coarseFreq);\n'
-                        '    freqH = coarseFreq * 0.5;\n'
-                        '    pH = corrRawAt(x, freqH);\n')
+          PROC_HEAD = 'process(sig) = holdLastGood(rawFreq, ready, confident)\n'
+          TAIL = ('    rawFreq = rawFreqUnclamped : max(minTrackHz) : min(maxTrackHz);\n'
+                  '    ready = energyReady(sig);\n')
+          assert pred.count(PROC_HEAD) == 1
+          assert pred.count(TAIL) == 1
+
+          LAGSIG = ('    probeLag(k) = int(ma.SR / max(60.0, min(1500.0, rawFreq))) + k;\n')
 
 
-          def req(text, needle, n, tag):
-              got = text.count(needle)
-              assert got == n, '%s: count=%d want=%d' % (tag, got, n)
+          def inject(body):
+              out = pred.replace(PROC_HEAD,
+                                 'process(sig) = holdLastGood(rawFreq, ready, confident) + 1e-9*probeSum\n')
+              out = out.replace(TAIL, TAIL + LAGSIG + '    probeSum = ' + body + ';\n')
+              return out
 
 
-          req(src, DAMPER, 1, 'damper')
-          req(src, HOLD, 1, 'hold')
-          req(src, DEMOTE_CALL, 1, 'demote call')
-          req(src, PROMO, 1, 'promo')
-          req(src, DEMOTE_PEAK, 1, 'peak')
+          files = {}
+          for n in (8, 32, 148):
+              files['fix%d' % n] = inject('sum(i, %d, corrAtLagTau(sig, 40 + i*37, 0.01))' % n)
+          for n in (1, 4):
+              files['var%d' % n] = inject('sum(i, %d, corrAtLagVar(sig, probeLag(i*7)))' % n)
+          files['rw4'] = pred.replace(
+              PROC_HEAD,
+              'process(sig) = holdLastGood(rawFreq, ready, confident) + 1e-9*probeSum\n').replace(
+              TAIL,
+              TAIL + '    probeW = ((+(1) ~ _) % 4096);\n' + LAGSIG +
+              '    probeSum = sum(i, 4, rwtable(4096, 0.0, probeW, sig,'
+              ' (probeW - probeLag(i*7)) % 4096));\n')
 
-          nodamper = src.replace(DAMPER, '').replace(HOLD, HOLD_REPL)
-          assert 'holdStep(' not in nodamper
-          assert 'holdStep ~' not in nodamper
-          nopromo = src.replace(PROMO, PROMO_REPL)
-
-          files = {
-              '2_current': src,
-              '3_nodamper': nodamper,
-              '4_nodemote': nodamper.replace(DEMOTE_CALL, DEMOTE_CALL_REPL),
-              '5_demoteonly': nopromo,
-              '6_demoteraw': src.replace(DEMOTE_PEAK, DEMOTE_RAW),
-              '7_allpeak': src.replace('corrRawAt', 'corrPeakAt'),
-              '8_refineonly': nopromo.replace(DAMPER, '').replace(HOLD, HOLD_REPL)
-                                      .replace(DEMOTE_CALL, DEMOTE_CALL_REPL),
-          }
           for name, text in files.items():
-              io.open('variants/%s.dsp' % name, 'w', encoding='utf-8',
-                      newline='\n').write(text)
+              io.open('variants/%s.dsp' % name, 'w', encoding='utf-8', newline='\n').write(text)
           PY
           ls -la variants
       - uses: actions/upload-artifact@v4
@@ -77,101 +74,37 @@ jobs:
           name: dsp-variants
           path: variants/*.dsp
 
-  time-variant:
+  time-faust:
     needs: build-variants
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        variant: [1_baseline, 8_refineonly, 4_nodemote, 6_demoteraw, 5_demoteonly,
-                  3_nodamper, 2_current, 7_allpeak]
+        variant: [0_predemote, fix8, fix32, fix148, var1, var4, rw4, 1_current]
     steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: pip-dawdreamer-${{ runner.os }}-312-faustdiag
-
-      - name: Install Faust + Python DawDreamer deps
+      - name: Install Faust
+        timeout-minutes: 8
         run: |
           sudo apt-get update
-          sudo apt-get install -y faust
-          pip install --upgrade pip
-          pip install dawdreamer numpy
+          sudo apt-get install -y faust lv2-dev pkg-config build-essential libboost-dev
 
       - uses: actions/download-artifact@v4
         with:
           name: dsp-variants
           path: variants
 
-      - name: Compile ${{ matrix.variant }}
+      - name: Codegen ${{ matrix.variant }}
+        timeout-minutes: 15
         run: |
-          python3 - <<'PY'
-          import io
-          import os
-          import signal
-          import time
-
-          name = os.environ['VARIANT']
-          CAP = 1500.0
-
-
-          def rss_mb(pid):
-              try:
-                  with io.open('/proc/%d/status' % pid, encoding='utf-8') as fh:
-                      for line in fh:
-                          if line.startswith('VmRSS:'):
-                              return int(line.split()[1]) / 1024.0
-              except (IOError, OSError):
-                  return 0.0
-              return 0.0
-
-
-          src = io.open('variants/%s.dsp' % name, encoding='utf-8').read()
-          t0 = time.time()
-          pid = os.fork()
-          if pid == 0:
-              try:
-                  import dawdreamer as dd
-                  eng = dd.RenderEngine(48000, 64)
-                  fp = eng.make_faust_processor(name)
-                  fp.compile_flags = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
-                  fp.set_dsp_string(src)
-                  ok = fp.compile()
-                  msg = 'ok=%s seconds=%.1f' % (ok, time.time() - t0)
-              except BaseException as exc:
-                  msg = 'ERROR %s' % str(exc)[:200]
-              with io.open('child.txt', 'w', encoding='utf-8') as fh:
-                  fh.write(msg)
-              os._exit(0)
-
-          peak = 0.0
-          status = None
-          while True:
-              wpid, st = os.waitpid(pid, os.WNOHANG)
-              peak = max(peak, rss_mb(pid))
-              if wpid == pid:
-                  status = st
-                  break
-              if time.time() - t0 > CAP:
-                  os.kill(pid, signal.SIGKILL)
-                  os.waitpid(pid, 0)
-                  status = 'CAP'
-                  break
-              time.sleep(1.0)
-
-          elapsed = time.time() - t0
-          msg = ''
-          try:
-              msg = io.open('child.txt', encoding='utf-8').read()
-          except (IOError, OSError):
-              msg = 'NO RESULT FILE (killed)'
-          print('RESULT %s: %s wall=%.1fs peakRSS=%.0fMB status=%s'
-                % (name, msg, elapsed, peak, status), flush=True)
-          PY
-        env:
-          VARIANT: ${{ matrix.variant }}
+          set +e
+          V=${{ matrix.variant }}
+          FAUSTLIB=$(dirname "$(ls -f /usr/share/faust/lv2ui.cpp /usr/local/share/faust/lv2ui.cpp 2>/dev/null | tail -1)")
+          start=$(date +%s%N)
+          faust -i -a "$FAUSTLIB/lv2.cpp" -vec -fun -dfs -vs 32 -nvi -ct 0 -cn probe \
+            "variants/$V.dsp" -o /tmp/probe.cpp
+          rc=$?
+          end=$(date +%s%N)
+          secs=$(awk "BEGIN{printf \"%.1f\", ($end-$start)/1000000000}")
+          size=$(stat -c %s /tmp/probe.cpp 2>/dev/null || echo 0)
+          echo "RESULT $V: rc=$rc seconds=$secs cppBytes=$size"
