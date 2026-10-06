@@ -8,6 +8,8 @@
 .gm/*.db-*
 .gm/last-dispatch-ts
 .gm/last-instruction-ts
+.gm/.last-scan-deps-result.json
+.gm/.last-scan-deps-ts
 .gm/next-step.md
 .gm/turn-state.json
 .gm/residual-check-fired
