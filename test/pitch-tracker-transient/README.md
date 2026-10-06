@@ -59,6 +59,13 @@ candidate IS the original pick and at 110Hz the raw estimates ripple +-0.019 aga
 110Hz that ripple is 4-8x the evidence it carries, so an instantaneous comparison flickers between
 octaves many times per 200ms window.
 
+A fourth rule is about where that damper lives, and is the easiest one to break by accident: it holds
+the **already-refined** frequency (`holdStep` in `detectedFreq`), never `subharmonicPromote`'s own
+`baseFreq`. `baseFreq` drives `corrRawAt`'s and `refineFreq`'s delay-line indices, and a recursive
+signal reaching an `@` is a real Faust compile-time cliff -- the in-promote form pushed a step that
+normally takes seconds past 13 minutes before it was killed. No signal that reaches a delay index may
+carry state.
+
 ## `model_ac_tracker.py`
 
 A pure-numpy model of the whole `pitchtracker_ac.dsp` chain -- the 37-candidate grid, the peak and

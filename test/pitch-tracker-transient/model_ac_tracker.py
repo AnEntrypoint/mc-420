@@ -16,6 +16,8 @@ PEAK_CEIL = 1.0
 DEMOTE_TAU = 0.03
 RELEASE_FRAC = 0.35
 EXCLUSIVE = False
+
+HOLD_SIGNALS = {}
 REFINE_SPREAD = 16
 
 CANDIDATES = (
@@ -189,6 +191,20 @@ def subharmonic_promote(x, coarse, raw=False):
             latched[i] = prev
         base = np.where(latched > 0.5, freq_h, coarse)
         p_base = np.where(latched > 0.5, r_h, r_coarse)
+    elif raw == "hold":
+        r_coarse = corr_raw_at(x, coarse)
+        freq_h = coarse * 0.5
+        p_coarse = corr_peak_at(x, coarse)
+        p_h = corr_peak_at(x, freq_h)
+        r_h = corr_raw_at(x, freq_h)
+        fired = (freq_h >= MIN_TRACK_HZ) & (p_h >= CORR_THRESH) & (p_h > p_coarse + SUBHARM_MARGIN)
+        duty = one_pole(fired.astype(float), np.exp(-1.0 / (DEMOTE_TAU * SR)))
+        demote = fired
+        demote_flag = demote
+        base = np.where(demote, freq_h, coarse)
+        p_base = np.where(demote, r_h, r_coarse)
+        HOLD_SIGNALS["fired"] = fired
+        HOLD_SIGNALS["duty"] = duty
     elif raw == "mixed":
         r_coarse = corr_raw_at(x, coarse)
         freq_h = coarse * 0.5
@@ -212,7 +228,7 @@ def subharmonic_promote(x, coarse, raw=False):
         p_base = np.where(demote, p_h, p_coarse)
     f2 = base * 2.0
     f3 = base * 3.0
-    use_raw = raw is True or raw in ("mixed", "latch", "smooth", "asym")
+    use_raw = raw is True or raw in ("mixed", "latch", "smooth", "asym", "hold")
     p2 = corr_raw_at(x, f2) if use_raw else corr_peak_at(x, f2)
     p3 = corr_raw_at(x, f3) if use_raw else corr_peak_at(x, f3)
     dom3 = (f3 <= MAX_TRACK_HZ) & (p3 >= CORR_THRESH) & (p3 > p_base + SUBHARM_MARGIN) & (p3 >= p2)
@@ -225,11 +241,23 @@ def subharmonic_promote(x, coarse, raw=False):
     return promoted, confidence
 
 
+def hold_damped(refined, fired, duty, rel):
+    out = np.empty_like(refined)
+    prev = 0.0
+    for i in range(len(refined)):
+        if fired[i] or duty[i] <= rel:
+            prev = refined[i]
+        out[i] = prev
+    return out
+
+
 def detected_freq(x, raw=False):
     xh = highpass1(x, 20.0)
     coarse = pick_fundamental(xh, len(x))
     corrected, confidence = subharmonic_promote(xh, coarse, raw=raw)
     refined = refine_freq(xh, corrected)
+    if raw == "hold":
+        refined = hold_damped(refined, HOLD_SIGNALS["fired"], HOLD_SIGNALS["duty"], RELEASE_FRAC)
     return np.clip(refined, MIN_TRACK_HZ, MAX_TRACK_HZ), confidence >= CORR_THRESH
 
 
@@ -323,8 +351,8 @@ def main():
             RELEASE_FRAC = float(arg[4:])
         elif arg == "excl":
             EXCLUSIVE = True
-    raw = True if "raw" in sys.argv else ("mixed" if "mixed" in sys.argv else ("smooth" if "smooth" in sys.argv else ("latch" if "latch" in sys.argv else "asym")))
-    if raw == "asym":
+    raw = True if "raw" in sys.argv else ("mixed" if "mixed" in sys.argv else ("smooth" if "smooth" in sys.argv else ("latch" if "latch" in sys.argv else ("asym" if "asym" in sys.argv else "hold"))))
+    if raw in ("asym", "hold"):
         EXCLUSIVE = True
         DEMOTE_TAU = 0.2
         RELEASE_FRAC = 0.5
