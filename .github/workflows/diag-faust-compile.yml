@@ -4,20 +4,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  probe-runner:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 15
-    steps:
-      - name: Does a 150s command survive a step with timeout-minutes 15
-        timeout-minutes: 15
-        run: |
-          set +e
-          start=$(date +%s)
-          sleep 150
-          rc=$?
-          end=$(date +%s)
-          echo "PROBE sleep150 rc=$rc elapsed=$((end-start))s"
-
   build-variants:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -30,7 +16,6 @@ jobs:
           set -e
           mkdir -p variants
           git show 1bf8bfdd:effects/pitchtracker-src/pitchtracker_ac.dsp > variants/0_predemote.dsp
-          cp effects/pitchtracker-src/pitchtracker_ac.dsp variants/1_current.dsp
           python3 - <<'PY'
           import io
 
@@ -42,33 +27,37 @@ jobs:
           assert pred.count(PROC_HEAD) == 1
           assert pred.count(TAIL) == 1
 
-          LAGSIG = ('    probeLag(k) = int(ma.SR / max(60.0, min(1500.0, rawFreq))) + k;\n')
+          LAGSIG = '    probeLag(k) = int(ma.SR / max(60.0, min(1500.0, rawFreq))) + k;\n'
+          LAGF = '    probeLagF(k) = ma.SR / max(60.0, min(1500.0, rawFreq)) + k;\n'
+          WINT = ('    probeStep(prev) = int(prev + 1) % 4096;\n'
+                  '    probeW = probeStep ~ _;\n')
+          WFLT = '    probeW = ((+(1) ~ _) % 4096);\n'
 
-
-          def inject(body):
+          def inject(defs, body):
               out = pred.replace(PROC_HEAD,
                                  'process(sig) = holdLastGood(rawFreq, ready, confident) + 1e-9*probeSum\n')
-              out = out.replace(TAIL, TAIL + LAGSIG + '    probeSum = ' + body + ';\n')
-              return out
+              return out.replace(TAIL, TAIL + defs + '    probeSum = ' + body + ';\n')
 
+          def rwt(n, wname):
+              return ('sum(i, %d, rwtable(4096, 0.0, %s, sig,'
+                      ' (%s + 4096 - probeLag(i*7)) %% 4096))' % (n, wname, wname))
 
           files = {}
-          for n in (8, 32, 148):
-              files['fix%d' % n] = inject('sum(i, %d, corrAtLagTau(sig, 40 + i*37, 0.01))' % n)
-          for n in (1, 4):
-              files['var%d' % n] = inject('sum(i, %d, corrAtLagVar(sig, probeLag(i*7)))' % n)
-          files['rw4'] = pred.replace(
-              PROC_HEAD,
-              'process(sig) = holdLastGood(rawFreq, ready, confident) + 1e-9*probeSum\n').replace(
-              TAIL,
-              TAIL + '    probeW = ((+(1) ~ _) % 4096);\n' + LAGSIG +
-              '    probeSum = sum(i, 4, rwtable(4096, 0.0, probeW, sig,'
-              ' (probeW - probeLag(i*7)) % 4096));\n')
+          files['1_wint_only'] = inject(WINT, 'probeW')
+          files['2_wflt_only'] = inject(WFLT, 'probeW')
+          files['3_rw1_int'] = inject(WINT + LAGSIG, rwt(1, 'probeW'))
+          files['4_rw4_int'] = inject(WINT + LAGSIG, rwt(4, 'probeW'))
+          files['5_rw8_int'] = inject(WINT + LAGSIG, rwt(8, 'probeW'))
+          files['6_rw13_int'] = inject(WINT + LAGSIG, rwt(13, 'probeW'))
+          files['7_rw4_flt'] = inject(WFLT + LAGSIG, rwt(4, 'probeW'))
+          files['8_rw13_flt'] = inject(WFLT + LAGSIG, rwt(13, 'probeW'))
+          files['9_fd1'] = inject(LAGF, 'sum(i, 1, de.fdelay(3201, probeLagF(i*7), sig))')
+          files['a_fd13'] = inject(LAGF, 'sum(i, 13, de.fdelay(3201, probeLagF(i*7), sig))')
 
           for name, text in files.items():
               io.open('variants/%s.dsp' % name, 'w', encoding='utf-8', newline='\n').write(text)
           PY
-          ls -la variants
+          ls variants
       - uses: actions/upload-artifact@v4
         with:
           name: dsp-variants
@@ -81,7 +70,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [0_predemote, fix8, fix32, fix148, var1, var4, rw4, 1_current]
+        variant: [0_predemote, 1_wint_only, 2_wflt_only, 3_rw1_int, 4_rw4_int, 5_rw8_int,
+                  6_rw13_int, 7_rw4_flt, 8_rw13_flt, 9_fd1, a_fd13]
     steps:
       - name: Install Faust
         timeout-minutes: 8
