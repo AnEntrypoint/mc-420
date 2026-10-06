@@ -61,13 +61,17 @@ octaves many times per 200ms window.
 
 A fourth rule is about where that damper lives, and is the easiest one to break by accident: it holds
 the **already-refined** frequency (`holdStep` in `detectedFreq`), never `subharmonicPromote`'s own
-`baseFreq`. `baseFreq` drives `corrRawAt`'s and `refineFreq`'s delay-line indices, and a recursive
-signal reaching an `@` is a real Faust compile-time cliff -- the in-promote form pushed a step that
-measures 3.5-7 min on baseline past 20 minutes before it was killed. So is calling the demote test
-from two sites: `demoteTest` runs once in `detectedFreq` and its result is passed into
-`subharmonicPromote`, because a second call site duplicates every `corrPeakAt` pair (~19 variable-delay
-instances against a baseline of ~12) and holds the step at 20 min on its own. No signal that reaches a delay index may
-carry state.
+`baseFreq`. `baseFreq` drives `corrRawAt`'s and `refineFreq`'s delay-line indices, and a signal
+reaching an index feeds straight into the one Faust cost that is not linear in the source: the
+shipped file needs 213.1s of codegen and ~0.9GB RSS on `ubuntu-24.04-arm`, past faust's own default
+120s `-t` alarm (hence `-t 600` in `build-lv2.yml`, which is what makes the difference between
+`rc=142` and `rc=0`). Every tap index in the shipped file is a function of `coarseFreq` alone, and
+that is measurably worth keeping: muxing the selected frequency and calling `refineFreq` once
+instead of four times is value-identical and cut 12 taps to 3, yet still blew the alarm, while a
+variant whose whole process line is the bare `detectedFreq` probe compiled in 100-105s. No flag is
+responsible -- all seven shipped flag sets time out identically, no flags included. The same cost is
+why `demoteTest` runs once in `detectedFreq` and its result is passed into `subharmonicPromote`
+rather than being called from both sites: a second call duplicates every `corrPeakAt` pair.
 
 ## `model_ac_tracker.py`
 
