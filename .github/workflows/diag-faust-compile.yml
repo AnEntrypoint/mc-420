@@ -9,50 +9,40 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Build DSP variants
         run: |
           set -e
           mkdir -p variants
-          git show 1bf8bfdd:effects/pitchtracker-src/pitchtracker_ac.dsp > variants/0_predemote.dsp
           python3 - <<'PY'
           import io
 
-          pred = io.open('variants/0_predemote.dsp', encoding='utf-8').read()
+          src = io.open('effects/pitchtracker-src/pitchtracker_ac.dsp', encoding='utf-8').read()
 
-          PROC_HEAD = 'process(sig) = holdLastGood(rawFreq, ready, confident)\n'
-          TAIL = ('    rawFreq = rawFreqUnclamped : max(minTrackHz) : min(maxTrackHz);\n'
-                  '    ready = energyReady(sig);\n')
-          assert pred.count(PROC_HEAD) == 1
-          assert pred.count(TAIL) == 1
+          COARSE = '    coarseFreq = pickFundamental(xh);\n'
+          assert src.count(COARSE) == 1
 
-          LAGSIG = '    probeLag(k) = int(ma.SR / max(60.0, min(1500.0, rawFreq))) + k;\n'
-          LAGF = '    probeLagF(k) = ma.SR / max(60.0, min(1500.0, rawFreq)) + k;\n'
-          WINT = ('    probeStep(prev) = int(prev + 1) % 4096;\n'
-                  '    probeW = probeStep ~ _;\n')
-          WFLT = '    probeW = ((+(1) ~ _) % 4096);\n'
-
-          def inject(defs, body):
-              out = pred.replace(PROC_HEAD,
-                                 'process(sig) = holdLastGood(rawFreq, ready, confident) + 1e-9*probeSum\n')
-              return out.replace(TAIL, TAIL + defs + '    probeSum = ' + body + ';\n')
-
-          def rwt(n, wname):
-              return ('sum(i, %d, rwtable(4096, 0.0, %s, sig,'
-                      ' (%s + 4096 - probeLag(i*7)) %% 4096))' % (n, wname, wname))
+          REFINE = '    L0 = int(ma.SR / coarseFreq) : max(2 + refineSpreadK) : min(3199 - refineSpreadK);\n'
+          PEAK = '    L0 = int(ma.SR / freqHz) : max(2 + peakSpreadK) : min(3199 - peakSpreadK);\n'
+          RAW = 'corrRawAt(x, w, freqHz) = corrAtLagVar(x, w, int(ma.SR / freqHz + 0.5));\n'
+          assert src.count(REFINE) == 1
+          assert src.count(PEAK) == 1
+          assert src.count(RAW) == 1
 
           files = {}
-          files['1_wint_only'] = inject(WINT, 'probeW')
-          files['2_wflt_only'] = inject(WFLT, 'probeW')
-          files['3_rw1_int'] = inject(WINT + LAGSIG, rwt(1, 'probeW'))
-          files['4_rw4_int'] = inject(WINT + LAGSIG, rwt(4, 'probeW'))
-          files['5_rw8_int'] = inject(WINT + LAGSIG, rwt(8, 'probeW'))
-          files['6_rw13_int'] = inject(WINT + LAGSIG, rwt(13, 'probeW'))
-          files['7_rw4_flt'] = inject(WFLT + LAGSIG, rwt(4, 'probeW'))
-          files['8_rw13_flt'] = inject(WFLT + LAGSIG, rwt(13, 'probeW'))
-          files['9_fd1'] = inject(LAGF, 'sum(i, 1, de.fdelay(3201, probeLagF(i*7), sig))')
-          files['a_fd13'] = inject(LAGF, 'sum(i, 13, de.fdelay(3201, probeLagF(i*7), sig))')
+          files['m0_cur'] = src
+
+          files['m1_fnmem'] = (src
+              .replace(REFINE, '    L0 = lagSafe(coarseFreq) : max(2 + refineSpreadK) : min(3199 - refineSpreadK);\n')
+              .replace(PEAK, '    L0 = lagSafe(freqHz) : max(2 + peakSpreadK) : min(3199 - peakSpreadK);\n')
+              .replace(RAW, 'corrRawAt(x, w, freqHz) = corrAtLagVar(x, w, int(ma.SR / lagSafeDiv(freqHz) + 0.5));\n')
+              + '\nlagSafe(f) = int(ma.SR / ((f : mem) : max(minTrackHz)));\n'
+              + 'lagSafeDiv(f) = (f : mem) : max(minTrackHz);\n')
+
+          files['m2_sharedmem'] = src.replace(
+              COARSE, '    coarseFreq = pickFundamental(xh) : mem : max(minTrackHz);\n')
+
+          files['m3_sharedmem_nowrite'] = src.replace(
+              COARSE, '    coarseFreq = pickFundamental(xh) : mem;\n')
 
           for name, text in files.items():
               io.open('variants/%s.dsp' % name, 'w', encoding='utf-8', newline='\n').write(text)
@@ -70,8 +60,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [0_predemote, 1_wint_only, 2_wflt_only, 3_rw1_int, 4_rw4_int, 5_rw8_int,
-                  6_rw13_int, 7_rw4_flt, 8_rw13_flt, 9_fd1, a_fd13]
+        variant: [m0_cur, m1_fnmem, m2_sharedmem, m3_sharedmem_nowrite]
     steps:
       - name: Install Faust
         timeout-minutes: 8
