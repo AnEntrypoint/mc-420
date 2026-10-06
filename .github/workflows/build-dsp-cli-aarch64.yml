@@ -1,0 +1,88 @@
+name: build-dsp-cli-aarch64
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/dsp-cli/dsp_cli.cpp'
+      - 'effects/home/faust/soladSnacOctaver.h'
+      - 'effects/home/faust/snacPeriodTracker.h'
+      - 'effects/home/faust/grainFormant.h'
+      - '.github/workflows/build-dsp-cli-aarch64.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dsp-cli-aarch64-musl:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate the Faust C++ that dsp_cli embeds
+        run: |
+          set -ex
+          sudo apt-get update
+          sudo apt-get install -y faust
+          faust --version
+          mkdir -p build/gen
+          faust -lang cpp -cn AloopEffectDsp -I dsp -I effects/home/faust \
+            -vec -fun -dfs -vs 32 -nvi -ct 0 \
+            effects/home/faust/multitranspose.dsp -o build/gen/dsp_generated.cpp
+          wc -l build/gen/dsp_generated.cpp
+
+      - name: Build musl-static aarch64 dsp_cli in an Alpine aarch64 container
+        timeout-minutes: 25
+        run: |
+          docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w alpine:3.20 sh -c '
+            set -ex
+            timeout 400 apk add --no-cache build-base linux-headers
+            g++ --version | head -1
+            g++ -O2 -std=c++17 -static -I build/gen -I effects/home/faust \
+              -o dsp_cli tools/dsp-cli/dsp_cli.cpp -lm
+            file dsp_cli
+            ldd dsp_cli 2>&1 || true
+            ls -la dsp_cli
+          '
+
+      - name: Measure the upward-shift glitch matrix on this aarch64 runner
+        run: |
+          ./dsp_cli --solad freq=220 semis=12 secs=1 bs=64
+          mkdir -p build/clips
+          python3 - <<'PY'
+          import wave
+          names = ['vocal_female_vibrato', 'piano_mid_C4', 'marimba_mid_C5B5']
+          N = 48000 * 6
+          for n in names:
+              with wave.open('test-audio-corpus/instruments/%s.wav' % n, 'rb') as r:
+                  rate = r.getframerate()
+                  chan = r.getnchannels()
+                  data = r.readframes(N * chan)[:N * 2]
+              with wave.open('build/clips/%s.wav' % n, 'wb') as w:
+                  w.setnchannels(1)
+                  w.setsampwidth(2)
+                  w.setframerate(rate)
+                  w.writeframesraw(data)
+              print('clip', n, rate, chan, len(data))
+          PY
+          echo "=== aarch64 glitch matrix (6s clips, threshold=0.25 minGapMs=5) ==="
+          for nr in 0.20 0.21; do
+            for f in vocal_female_vibrato piano_mid_C4 marimba_mid_C5B5; do
+              row="normrms=$nr $f"
+              for s in 0 12 24; do
+                ./dsp_cli --solad in=build/clips/$f.wav out=build/clips/o.wav semis=$s normrms=$nr
+                g=$(./dsp_cli --glitch-check build/clips/o.wav threshold=0.25 minGapMs=5 | grep glitches= | cut -d= -f2)
+                row="$row +$s=$g"
+              done
+              echo "$row"
+            done
+          done
+
+      - name: Upload dsp_cli
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsp-cli-aarch64-musl
+          path: dsp_cli
+          retention-days: 7
