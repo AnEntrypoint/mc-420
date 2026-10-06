@@ -12,9 +12,9 @@ jobs:
       matrix:
         name:
           - shipped
+          - confirm_p075
+          - confirm_p150
           - schmitt_t002_h80_l20
-          - schmitt_t005_h80_l20
-          - schmitt_t002_h70_l30
     steps:
       - uses: actions/checkout@v4
 

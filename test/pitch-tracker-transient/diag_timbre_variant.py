@@ -19,6 +19,16 @@ PROMOTE_LINE = "    promotion = subharmonicPromote(xh, w, coarseFreq, demoteNow)
 REFINED_DEMOTE = "               ba.if(demoteNow, refinedH, refined1)));\n"
 TAKE_NEW = "    takeNew = (demoteNow > 0.5) | (demoteDuty <= 0.5);\n"
 
+CONFIRM_CONSTS = "confirmPeriods = %s;\nconfirmFloorSamples = 128.0;\noctaveSemitone = 0.06;\n"
+CONFIRM_TAKE = ("    candDelta = abs(refinedNow - heldFreq);\n"
+                "    candFar = candDelta > max(0.5, octaveSemitone * heldFreq);\n"
+                "    confirmSamples = max(confirmFloorSamples, "
+                "confirmPeriods * ma.SR / max(60.0, heldFreq));\n"
+                "    countFar(prev) = min(confirmSamples, prev + 1.0);\n"
+                "    farRun = ba.if(candFar, countFar, 0.0) ~ _;\n"
+                "    takeNew = ((1.0 - candFar) | (farRun >= confirmSamples)) & "
+                "((demoteNow > 0.5) | (demoteDuty <= 0.5));\n")
+
 
 def schmitt(text, tau, hi, lo):
     src = text.replace(DEMOTE_POLE_LINE, DEMOTE_POLE_LINE
@@ -35,6 +45,11 @@ def schmitt(text, tau, hi, lo):
     return src
 
 
+def confirm(text, periods):
+    return (text.replace(DEMOTE_POLE_LINE, DEMOTE_POLE_LINE + CONFIRM_CONSTS % periods)
+                .replace(TAKE_NEW, CONFIRM_TAKE))
+
+
 def variant_dsp(name):
     src = DSP_PATH.read_text(encoding="utf-8")
     for line in (DEMOTE_POLE_LINE, DUTY_LINE, PROMOTE_LINE, REFINED_DEMOTE, TAKE_NEW):
@@ -42,6 +57,12 @@ def variant_dsp(name):
             raise RuntimeError("anchor not found once: %r (%d)" % (line, src.count(line)))
     if name == "shipped":
         return src
+    if name.startswith("confirm"):
+        periods = "0.75"
+        for p in name.split("_")[1:]:
+            if p.startswith("p"):
+                periods = p[1:]
+        return confirm(src, periods)
     if name.startswith("schmitt"):
         parts = name.split("_")
         tau, hi, lo = "0.02", "0.8", "0.2"

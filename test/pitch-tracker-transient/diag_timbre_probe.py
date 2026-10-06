@@ -15,18 +15,49 @@ FREQS = (110.0, 220.0, 440.0)
 
 DETECTED_HEAD = "detectedFreq(x) = heldFreq, confident\nwith {"
 DETECTED_PROBE = ("detectedFreq(x) = heldFreq, confident, coarseFreq, demoteNow, demoteDuty, "
-                  "refined1, refinedH\nwith {")
+                  "refined1, refinedH, pCoarse, pH, raw1, raw2\nwith {")
 
-PROCESS_PROBE = """process(sig) = out, coarseFreq, demoteNow, demoteDuty, refined1, refinedH, confident, ready
+DEMOTE_HEAD = "demoteTest(x, w, coarseFreq) = demoteNow\nwith {"
+DEMOTE_PROBE = "demoteTest(x, w, coarseFreq) = demoteNow, pCoarse, pH\nwith {"
+
+PROMOTE_HEAD = ("subharmonicPromote(x, w, coarseFreq, demoteNow) = promotedRatio, "
+                "promotedConfidence, dominant3, dominant2\nwith {")
+PROMOTE_PROBE = ("subharmonicPromote(x, w, coarseFreq, demoteNow) = promotedRatio, "
+                 "promotedConfidence, dominant3, dominant2, raw1, raw2\nwith {")
+
+DEMOTE_CALL = "    demoteNow = demoteTest(xh, w, coarseFreq);\n"
+DEMOTE_CALL_PROBE = ("    demoteOut = demoteTest(xh, w, coarseFreq);\n"
+                     "    demoteNow = demoteOut : (_, !, !);\n"
+                     "    pCoarse = demoteOut : (!, _, !);\n"
+                     "    pH = demoteOut : (!, !, _);\n")
+
+PROMOTE_CALL = "    promotion = subharmonicPromote(xh, w, coarseFreq, demoteNow);\n"
+PROMOTE_CALL_PROBE = (PROMOTE_CALL
+                      + "    raw1 = promotion : (!, !, !, !, _, !);\n"
+                      + "    raw2 = promotion : (!, !, !, !, !, _);\n")
+
+ROUTES = [
+    ("    dominant3 = promotion : (!, !, _, !);\n", "    dominant3 = promotion : (!, !, _, !, !, !);\n"),
+    ("    dominant2 = promotion : (!, !, !, _);\n", "    dominant2 = promotion : (!, !, !, _, !, !);\n"),
+    ("    finalConfidence = promotion : (!, _, !, !);\n",
+     "    finalConfidence = promotion : (!, _, !, !, !, !);\n"),
+]
+
+PROCESS_PROBE = """process(sig) = out, coarseFreq, demoteNow, demoteDuty, refined1, refinedH,
+                 pCoarse, pH, raw1, raw2, confident, ready
 with {
     detected = detectedFreq(sig);
-    rawFreqUnclamped = detected : (_, !, !, !, !, !, !);
-    confident = detected : (!, _, !, !, !, !, !);
-    coarseFreq = detected : (!, !, _, !, !, !, !);
-    demoteNow = detected : (!, !, !, _, !, !, !);
-    demoteDuty = detected : (!, !, !, !, _, !, !);
-    refined1 = detected : (!, !, !, !, !, _, !);
-    refinedH = detected : (!, !, !, !, !, !, _);
+    rawFreqUnclamped = detected : (_, !, !, !, !, !, !, !, !, !, !);
+    confident = detected : (!, _, !, !, !, !, !, !, !, !, !);
+    coarseFreq = detected : (!, !, _, !, !, !, !, !, !, !, !);
+    demoteNow = detected : (!, !, !, _, !, !, !, !, !, !, !);
+    demoteDuty = detected : (!, !, !, !, _, !, !, !, !, !, !);
+    refined1 = detected : (!, !, !, !, !, _, !, !, !, !, !);
+    refinedH = detected : (!, !, !, !, !, !, _, !, !, !, !);
+    pCoarse = detected : (!, !, !, !, !, !, !, _, !, !, !);
+    pH = detected : (!, !, !, !, !, !, !, !, _, !, !);
+    raw1 = detected : (!, !, !, !, !, !, !, !, !, _, !);
+    raw2 = detected : (!, !, !, !, !, !, !, !, !, !, _);
     rawFreq = rawFreqUnclamped : max(minTrackHz) : min(maxTrackHz);
     ready = energyReady(sig);
     out = holdLastGood(rawFreq, ready, confident);
@@ -36,9 +67,19 @@ with {
 
 def probe_dsp():
     src = DSP_PATH.read_text(encoding="utf-8")
-    if src.count(DETECTED_HEAD) != 1:
-        raise RuntimeError("detectedFreq head not found once: %d" % src.count(DETECTED_HEAD))
-    src = src.replace(DETECTED_HEAD, DETECTED_PROBE)
+    for head in (DETECTED_HEAD, DEMOTE_HEAD, PROMOTE_HEAD, DEMOTE_CALL, PROMOTE_CALL):
+        if src.count(head) != 1:
+            raise RuntimeError("anchor not found once: %r (%d)" % (head, src.count(head)))
+    for old, _new in ROUTES:
+        if src.count(old) != 1:
+            raise RuntimeError("route not found once: %r (%d)" % (old, src.count(old)))
+    src = (src.replace(DETECTED_HEAD, DETECTED_PROBE)
+              .replace(DEMOTE_HEAD, DEMOTE_PROBE)
+              .replace(PROMOTE_HEAD, PROMOTE_PROBE)
+              .replace(DEMOTE_CALL, DEMOTE_CALL_PROBE)
+              .replace(PROMOTE_CALL, PROMOTE_CALL_PROBE))
+    for old, new in ROUTES:
+        src = src.replace(old, new)
     cut = src.index("process(sig) = holdLastGood(")
     return src[:cut] + PROCESS_PROBE
 
@@ -60,24 +101,26 @@ def timbre_shift_tone(n, f0_hz, f0_start=1.0, f0_end=0.05, h2_start=0.3, h2_end=
 def main():
     seg = int(SEGMENT_S * SAMPLE_RATE)
     sig = np.concatenate([timbre_shift_tone(seg, f) for f in FREQS]).astype(np.float32)
-    dsp_text = probe_dsp()
-    print("timbre shift internals trace (probe process line, 8 outputs)")
+    print("timbre shift correlation trace (probe process line, 12 outputs)")
     print(f"DSP: {DSP_PATH}")
-    outs = pt_render.render(dsp_text, sig, sr=SAMPLE_RATE, block=BLOCK_SIZE)
-    (out, coarse, demote, duty, refined1, refinedH, confident, ready) = outs
+    outs = pt_render.render(probe_dsp(), sig, sr=SAMPLE_RATE, block=BLOCK_SIZE)
+    (out, coarse, demote, duty, refined1, refinedH,
+     pCoarse, pH, raw1, raw2, confident, ready) = outs
 
     win = int(0.02 * SAMPLE_RATE)
     for k, f0 in enumerate(FREQS):
         base = k * seg
         print(f"f0={f0}Hz")
-        for start in range(int(1.8 * SAMPLE_RATE), int(3.2 * SAMPLE_RATE), win):
+        for start in range(int(2.0 * SAMPLE_RATE), int(2.8 * SAMPLE_RATE), win):
             i, j = base + start, base + start + win
             print(f"  t={(start + win / 2) / SAMPLE_RATE:4.2f}s "
-                  f"out=[{out[i:j].min():6.1f},{out[i:j].max():6.1f}] mean={out[i:j].mean():7.2f} "
+                  f"out=[{out[i:j].min():6.1f},{out[i:j].max():6.1f}] "
                   f"coarse=[{coarse[i:j].min():6.1f},{coarse[i:j].max():6.1f}] "
                   f"demote={demote[i:j].mean():.2f} duty={duty[i:j].mean():.3f} "
-                  f"r1={refined1[i:j].mean():7.2f} rH={refinedH[i:j].mean():7.2f} "
-                  f"conf={confident[i:j].mean():.2f}")
+                  f"pCoarse=[{pCoarse[i:j].min():+.4f},{pCoarse[i:j].max():+.4f}] "
+                  f"pH=[{pH[i:j].min():+.4f},{pH[i:j].max():+.4f}] "
+                  f"raw1=[{raw1[i:j].min():+.4f},{raw1[i:j].max():+.4f}] "
+                  f"raw2=[{raw2[i:j].min():+.4f},{raw2[i:j].max():+.4f}]")
         gate_win = int(0.2 * SAMPLE_RATE)
         cells = []
         s = int(0.10 * SAMPLE_RATE)
