@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import harness  # noqa: E402
+import harness
 
 SR = harness.SAMPLE_RATE
 
