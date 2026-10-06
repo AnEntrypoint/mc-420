@@ -1,0 +1,50 @@
+name: diag-faust-flags
+
+on:
+  workflow_dispatch:
+
+jobs:
+  time-faust:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: base
+            flags: "-vec -fun -dfs -vs 32 -nvi -ct 0"
+          - name: nodfs
+            flags: "-vec -fun -vs 32 -nvi -ct 0"
+          - name: nofun
+            flags: "-vec -dfs -vs 32 -nvi -ct 0"
+          - name: novec
+            flags: "-fun -dfs -nvi -ct 0"
+          - name: vs8
+            flags: "-vec -fun -dfs -vs 8 -nvi -ct 0"
+          - name: nonvi
+            flags: "-vec -fun -dfs -vs 32 -ct 0"
+          - name: noflags
+            flags: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Faust
+        timeout-minutes: 8
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y faust lv2-dev pkg-config build-essential libboost-dev
+
+      - name: Codegen ${{ matrix.name }}
+        timeout-minutes: 15
+        run: |
+          set +e
+          FAUSTLIB=$(dirname "$(ls -f /usr/share/faust/lv2ui.cpp /usr/local/share/faust/lv2ui.cpp 2>/dev/null | tail -1)")
+          FLAGS="${{ matrix.flags }}"
+          start=$(date +%s%N)
+          faust -i -a "$FAUSTLIB/lv2.cpp" $FLAGS -cn probe \
+            effects/pitchtracker-src/pitchtracker_ac.dsp -o /tmp/probe.cpp
+          rc=$?
+          end=$(date +%s%N)
+          secs=$(awk "BEGIN{printf \"%.1f\", ($end-$start)/1000000000}")
+          size=$(stat -c %s /tmp/probe.cpp 2>/dev/null || echo 0)
+          echo "RESULT ${{ matrix.name }} [$FLAGS]: rc=$rc seconds=$secs cppBytes=$size"
