@@ -19,10 +19,8 @@ jobs:
           src = io.open('effects/pitchtracker-src/pitchtracker_ac.dsp', encoding='utf-8').read()
 
           LAGCLAMP = '    lagClamped = lagSig : max(1) : min(delayMaxLag);\n'
-          TAP = ('    d = rwtable(delayTableSize, 0.0, w, x,'
-                 ' (w + delayTableSize - lagClamped) % delayTableSize);\n')
-          NUM = '    num = smoo(x * d);\n'
-          DEN = '    den = max(1e-9, smoo(x*x));\n'
+          TAPBODY = ('    d = rwtable(delayTableSize, 0.0, w, x,'
+                     ' (w + delayTableSize - lagClamped) % delayTableSize);\n')
           TAKENEW = '    takeNew = (demoteNow > 0.5) | (demoteDuty <= 0.5);\n'
           REFINE_CALLS = ('    refinedH = refineFreq(xh, w, coarseFreq * 0.5);\n'
                           '    refined1 = refineFreq(xh, w, coarseFreq);\n'
@@ -34,8 +32,17 @@ jobs:
           DEMOTE_CALL = '    demoteNow = demoteTest(xh, w, coarseFreq);\n'
           PROMOTE_CALL = '    promotion = subharmonicPromote(xh, w, coarseFreq, demoteNow);\n'
 
-          for frag in (LAGCLAMP, TAP, NUM, DEN, TAKENEW, REFINE_CALLS, DEMOTE_CALL, PROMOTE_CALL):
+          for frag in (TAKENEW, REFINE_CALLS, DEMOTE_CALL, PROMOTE_CALL):
               assert src.count(frag) == 1, frag
+
+          start = src.index('corrAtLagVar(x, w, lagSig)')
+          end = src.index('\n};\n', start) + len('\n};\n')
+          block = src[start:end]
+          assert LAGCLAMP in block and TAPBODY in block and 'num = smoo(x * d);' in block
+
+          def retap(new_block):
+              assert new_block != block
+              return src[:start] + new_block + src[end:]
 
           files = {}
           files['b0_cur'] = src
@@ -52,12 +59,13 @@ jobs:
               .replace(DEMOTE_CALL, '    demoteNow = 0.0;\n')
               .replace(PROMOTE_CALL, '    promotion = 1.0, 0.9, 0.0, 0.0;\n'))
 
-          files['b5_notaps'] = src.replace(TAP, '    d = 0.5;\n')
+          files['b5_notaps'] = retap(block.replace(TAPBODY, '    d = 0.5;\n'))
 
-          files['b7_fixlag'] = src.replace(LAGCLAMP, '    lagClamped = 100;\n')
+          files['b7_fixlag'] = retap(block.replace(LAGCLAMP, '    lagClamped = 100;\n'))
 
-          files['b8_nosmoo'] = src.replace(NUM, '    num = x * d;\n').replace(
-              DEN, '    den = max(1e-9, x*x);\n')
+          files['b8_nosmoo'] = retap(
+              block.replace('    num = smoo(x * d);\n', '    num = x * d;\n')
+                   .replace('    den = max(1e-9, smoo(x*x));\n', '    den = max(1e-9, x*x);\n'))
 
           for name, text in files.items():
               io.open('variants/%s.dsp' % name, 'w', encoding='utf-8', newline='\n').write(text)
