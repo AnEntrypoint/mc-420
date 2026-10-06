@@ -77,6 +77,10 @@ jobs:
       - name: Run pitchtracker_ac.dsp steady-state accuracy check
         run: python3 test/pitch-tracker-transient/verify_ac_tracker_steadystate_bias.py
 
+      - name: Measure octave stability under a timbre shift (non-blocking until gated)
+        continue-on-error: true
+        run: python3 test/pitch-tracker-transient/verify_ac_tracker_timbre_shift.py
+
       - name: Diagnose isolated floor-estimator convergence (no main lowpass loop)
         run: python3 test/pitch-tracker-transient/diag_isolate_floor.py
 
