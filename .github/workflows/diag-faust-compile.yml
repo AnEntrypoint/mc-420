@@ -250,6 +250,36 @@ jobs:
               .replace(DOM3_FRAG, DOM3_FLOAT)
               .replace(DOM2_FRAG, DOM2_FLOAT))
 
+          def reprocess(text):
+              return src[:PROC_START] + text
+
+          files['p2_noclamp'] = reprocess('process(x) = detectedFreq(x) : (_, !);\n')
+
+          files['p4_readygate'] = reprocess(
+              'process(x) = ba.if(energyReady(x),'
+              ' detectedFreq(x) : (_, !) : max(minTrackHz) : min(maxTrackHz), 0.0);\n')
+
+          files['p5_noenergy'] = src.replace(
+              '    ready = energyReady(sig);',
+              '    ready = rawFreqUnclamped >= minTrackHz;')
+
+          files['p6_holdnofalling'] = src.replace(
+              '    heldStep(prev) = ba.if(accept, freqHz, ba.if(fallingEdge > 0.5, 0.0, prev));',
+              '    heldStep(prev) = ba.if(accept, freqHz, prev);')
+
+          files['p8_trivconf'] = src.replace(
+              '    confident = detected : (!, _);',
+              '    confident = rawFreqUnclamped > minTrackHz;')
+
+          files['p9_holdarith'] = src.replace(
+              '    heldStep(prev) = ba.if(accept, freqHz, ba.if(fallingEdge > 0.5, 0.0, prev));',
+              '    heldStep(prev) = freqHz*accept + (1.0 - accept) * (prev * (1.0 - fallingEdge));')
+
+          for frag in ('    ready = energyReady(sig);\n',
+                       '    heldStep(prev) = ba.if(accept, freqHz, ba.if(fallingEdge > 0.5, 0.0, prev));\n',
+                       '    confident = detected : (!, _);\n'):
+              assert src.count(frag) == 1, frag
+
           for name, text in files.items():
               io.open('variants/%s.dsp' % name, 'w', encoding='utf-8', newline='\n').write(text)
           PY
@@ -266,7 +296,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [f1_refmux, g1_probeonly, h1_demotebool, h2_decidebool, h3_pickbool, h4_allbool]
+        variant: [p2_noclamp, p4_readygate, p5_noenergy, p6_holdnofalling, p8_trivconf, p9_holdarith]
     steps:
       - name: Install Faust
         timeout-minutes: 8
@@ -287,9 +317,17 @@ jobs:
           FAUSTLIB=$(dirname "$(ls -f /usr/share/faust/lv2ui.cpp /usr/local/share/faust/lv2ui.cpp 2>/dev/null | tail -1)")
           start=$(date +%s%N)
           faust -i -a "$FAUSTLIB/lv2.cpp" -vec -fun -dfs -vs 32 -nvi -ct 0 -cn probe \
-            "variants/$V.dsp" -o /tmp/probe.cpp
+            "variants/$V.dsp" -o /tmp/probe.cpp &
+          pid=$!
+          peak=0
+          while kill -0 $pid 2>/dev/null; do
+            rss=$(awk '/VmRSS/{print $2}' /proc/$pid/status 2>/dev/null || echo 0)
+            [ "${rss:-0}" -gt "$peak" ] && peak=${rss:-0}
+            sleep 5
+          done
+          wait $pid
           rc=$?
           end=$(date +%s%N)
           secs=$(awk "BEGIN{printf \"%.1f\", ($end-$start)/1000000000}")
           size=$(stat -c %s /tmp/probe.cpp 2>/dev/null || echo 0)
-          echo "RESULT $V: rc=$rc seconds=$secs cppBytes=$size"
+          echo "RESULT $V: rc=$rc seconds=$secs cppBytes=$size peakRssKb=$peak"
