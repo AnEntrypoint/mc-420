@@ -93,9 +93,116 @@ jobs:
                        '               mux2(dominant2, refined2,\n'
                        '               mux2(demoteNow, refinedH, refined1)));')
               + '\nmux2(c, a, b) = a*c + b*(1.0-c);\n')
-          for probe in ('mux2(demoteNow, rawH, raw1)', 'mux2(dominant3, refined3,',
-                        'mux2(dominant3, 3.0,'):
-              assert probe in files['d2_decidemux2'], probe
+          span_start = src.index('refineFreq(x, w, coarseFreq)')
+          span_end = src.index('onsetHoldMs = 35.0;')
+
+          def span(lag_lines, raw_args, refine_args):
+              return (
+                  'refineFreq(x, w, lagL0) = refinedFreq\n'
+                  'with {\n'
+                  '    L0 = lagL0 : max(2 + refineSpreadK) : min(3199 - refineSpreadK);\n'
+                  '    cLo  = corrAtLagVar(x, w, L0 - refineSpreadK);\n'
+                  '    cMid = corrAtLagVar(x, w, L0);\n'
+                  '    cHi  = corrAtLagVar(x, w, L0 + refineSpreadK);\n'
+                  '    denom = cLo - 2.0*cMid + cHi;\n'
+                  '    safeDenom = ba.if(abs(denom) < 1e-6, 1e-6, denom);\n'
+                  '    delta = 0.5 * (cLo - cHi) / safeDenom : max(-1.0) : min(1.0);\n'
+                  '    delta2 = ba.if(abs(denom) < 1e-6, 0.0, delta);\n'
+                  '    refinedLag = float(L0) + delta2 * refineSpreadK;\n'
+                  '    refinedFreq = ma.SR / max(1.0, refinedLag);\n'
+                  '};\n'
+                  '\n'
+                  'peakSpreadK = 1;\n'
+                  '\n'
+                  'corrPeakAt(x, w, lagL0) = vertex\n'
+                  'with {\n'
+                  '    L0 = lagL0 : max(2 + peakSpreadK) : min(3199 - peakSpreadK);\n'
+                  '    cLo  = corrAtLagVar(x, w, L0 - peakSpreadK);\n'
+                  '    cMid = corrAtLagVar(x, w, L0);\n'
+                  '    cHi  = corrAtLagVar(x, w, L0 + peakSpreadK);\n'
+                  '    denom = cLo - 2.0*cMid + cHi;\n'
+                  '    safeDenom = ba.if(denom > -1e-9, -1e-9, denom);\n'
+                  '    vertex = (cMid - (cLo - cHi)*(cLo - cHi) / (8.0 * safeDenom)) : max(-1.0) : min(1.0);\n'
+                  '};\n'
+                  '\n'
+                  'subharmDominanceMargin = 0.004;\n'
+                  '\n'
+                  'demoteTau = 0.2;\n'
+                  'demotePole = ba.tau2pole(demoteTau);\n'
+                  '\n'
+                  'corrRawAt(x, w, lagSig) = corrAtLagVar(x, w, lagSig);\n'
+                  '\n'
+                  'demoteTest(x, w, lagC, lagH, freqH) = demoteNow\n'
+                  'with {\n'
+                  '    pCoarse = corrPeakAt(x, w, lagC);\n'
+                  '    pH = corrPeakAt(x, w, lagH);\n'
+                  '    demoteNow = (freqH >= minTrackHz) & (pH >= corrThresh)'
+                  ' & (pH > pCoarse + subharmDominanceMargin);\n'
+                  '};\n'
+                  '\n'
+                  'subharmonicPromote(x, w, lagRH, lagR1, lagR2, lagR3, freq2, freq3, demoteNow) ='
+                  ' promotedRatio, promotedConfidence, dominant3, dominant2\n'
+                  'with {\n'
+                  '    rawH = corrRawAt(x, w, lagRH);\n'
+                  '    raw1 = corrRawAt(x, w, lagR1);\n'
+                  '    raw2 = corrRawAt(x, w, lagR2);\n'
+                  '    raw3 = corrRawAt(x, w, lagR3);\n'
+                  '    pBase = ba.if(demoteNow, rawH, raw1);\n'
+                  '    reachable2 = freq2 <= maxTrackHz;\n'
+                  '    reachable3 = freq3 <= maxTrackHz;\n'
+                  '    notDemoted = 1.0 - demoteNow;\n'
+                  '    dominant3 = reachable3 & (raw3 >= corrThresh)'
+                  ' & (raw3 > pBase + subharmDominanceMargin) & (raw3 >= raw2) & (notDemoted > 0.5);\n'
+                  '    dominant2 = reachable2 & (raw2 >= corrThresh)'
+                  ' & (raw2 > pBase + subharmDominanceMargin) & (notDemoted > 0.5);\n'
+                  '    promotedRatio = ba.if(dominant3, 3.0, ba.if(dominant2, 2.0, ba.if(demoteNow, 0.5, 1.0)));\n'
+                  '    promotedConfidence = ba.if(dominant3, raw3, ba.if(dominant2, raw2, pBase));\n'
+                  '};\n'
+                  '\n'
+                  'detectedFreq(x) = heldFreq, confident\n'
+                  'with {\n'
+                  '    xh = xHp(x);\n'
+                  '    w = tableStep ~ _;\n'
+                  '    coarseFreq = pickFundamental(xh);\n'
+                  + lag_lines +
+                  '    demoteNow = demoteTest(xh, w, lagC, lagH, coarseFreq * 0.5);\n'
+                  '    demoteDuty = demoteNow : *(1.0-demotePole) : + ~ *(demotePole);\n'
+                  '    promotion = subharmonicPromote(xh, w, %s, coarseFreq * 2.0, coarseFreq * 3.0,'
+                  ' demoteNow);\n' % raw_args +
+                  '    dominant3 = promotion : (!, !, _, !);\n'
+                  '    dominant2 = promotion : (!, !, !, _);\n'
+                  '    finalConfidence = promotion : (!, _, !, !);\n'
+                  '    refinedH = refineFreq(xh, w, %s);\n'
+                  '    refined1 = refineFreq(xh, w, %s);\n'
+                  '    refined2 = refineFreq(xh, w, %s);\n'
+                  '    refined3 = refineFreq(xh, w, %s);\n' % refine_args +
+                  '    refinedNow = ba.if(dominant3, refined3,\n'
+                  '               ba.if(dominant2, refined2,\n'
+                  '               ba.if(demoteNow, refinedH, refined1)));\n'
+                  '    takeNew = (demoteNow > 0.5) | (demoteDuty <= 0.5);\n'
+                  '    holdStep(prev) = ba.if(takeNew, refinedNow, prev);\n'
+                  '    heldFreq = holdStep ~ _;\n'
+                  '    confident = finalConfidence >= corrThresh;\n'
+                  '};\n'
+                  '\n')
+
+          def rebuild(lag_lines, raw_args, refine_args):
+              return src[:span_start] + span(lag_lines, raw_args, refine_args) + src[span_end:]
+
+          LAG_ONE = ('    lagC = int(ma.SR / coarseFreq);\n'
+                     '    lagH = lagC * 2;\n'
+                     '    lag2 = int(float(lagC) * 0.5);\n'
+                     '    lag3 = int(float(lagC) / 3.0);\n')
+          files['e1_onelag'] = rebuild(LAG_ONE, 'lagH, lagC, lag2, lag3',
+                                       ('lagH', 'lagC', 'lag2', 'lag3'))
+
+          LAG_TWO = (LAG_ONE +
+                     '    lagR = int(ma.SR / coarseFreq + 0.5);\n'
+                     '    lagRH = lagR * 2;\n'
+                     '    lagR2 = int(float(lagR) * 0.5);\n'
+                     '    lagR3 = int(float(lagR) / 3.0);\n')
+          files['e3_roundall'] = rebuild(LAG_TWO, 'lagRH, lagR, lagR2, lagR3',
+                                         ('lagRH', 'lagR', 'lagR2', 'lagR3'))
 
           for name, text in files.items():
               io.open('variants/%s.dsp' % name, 'w', encoding='utf-8', newline='\n').write(text)
@@ -113,7 +220,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [c1_demoteonly, c2_promoteonly, c3_ref1only, d1_allmux2, d2_decidemux2]
+        variant: [e1_onelag, e2_twolag, e3_roundall]
     steps:
       - name: Install Faust
         timeout-minutes: 8
