@@ -5,6 +5,8 @@ on:
   push:
     paths:
       - 'tools/dsp-cli/dsp_cli.cpp'
+      - 'tools/dsp-cli/dsp_generated.cpp'
+      - 'effects/home/faust/multitranspose.dsp'
       - 'effects/home/faust/soladSnacOctaver.h'
       - 'effects/home/faust/snacPeriodTracker.h'
       - 'effects/home/faust/grainFormant.h'
@@ -21,18 +23,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate the Faust C++ that dsp_cli embeds
-        run: |
-          set -ex
-          sudo apt-get update
-          sudo apt-get install -y faust
-          faust --version
-          mkdir -p build/gen
-          faust -lang cpp -cn AloopEffectDsp -I dsp -I effects/home/faust \
-            -vec -fun -dfs -vs 32 -nvi -ct 0 \
-            effects/home/faust/multitranspose.dsp -o build/gen/dsp_generated.cpp
-          wc -l build/gen/dsp_generated.cpp
-
       - name: Build musl-static aarch64 dsp_cli in an Alpine aarch64 container
         timeout-minutes: 25
         run: |
@@ -40,7 +30,7 @@ jobs:
             set -ex
             timeout 400 apk add --no-cache build-base linux-headers
             g++ --version | head -1
-            g++ -O2 -std=c++17 -static -I build/gen -I effects/home/faust \
+            g++ -O2 -std=c++17 -static -I tools/dsp-cli -I effects/home/faust \
               -o dsp_cli tools/dsp-cli/dsp_cli.cpp -lm
             file dsp_cli
             ldd dsp_cli 2>&1 || true

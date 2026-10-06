@@ -153,6 +153,15 @@ file exposes.
 Just re-run `build.bat` with the same arguments — it's a ~1-2 second
 recompile (faust codegen + MSVC), no CMake/JUCE/CI involved.
 
+`dsp_generated.cpp` is COMMITTED, not gitignored: `build-dsp-cli-aarch64.yml`
+compiles it directly instead of running faust in CI, which pins the aarch64
+build to the host's Faust 2.85.9 rather than whatever `apt-get install faust`
+happens to ship (2.70.3 on `ubuntu-24.04-arm`). That cuts the other way too --
+a `multitranspose.dsp` change is only really shipped once the regenerated
+`dsp_generated.cpp` is committed alongside it, because CI will otherwise keep
+building the stale file indefinitely and nothing will complain. Regenerate with
+the host compiler at `C:\Faust\bin\faust.exe` and commit both files together.
+
 ## What this can't do
 
 - No real-time/live audio input (it's file-in/file-out or generator-in/
