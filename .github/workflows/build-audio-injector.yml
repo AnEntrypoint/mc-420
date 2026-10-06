@@ -27,7 +27,7 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w alpine:3.20 sh -c '
             set -ex
-            timeout 400 apk add --no-cache build-base tar bzip2 file wget
+            timeout 400 apk add --no-cache build-base tar bzip2 file wget linux-headers
             gcc --version | head -1
             for v in 1.2.12 1.2.11; do
               if wget -q "https://www.alsa-project.org/files/pub/lib/alsa-lib-$v.tar.bz2"; then
