@@ -30,6 +30,9 @@ public:
         m_lastGoodPeriodF = 256.0f;
         m_haveGoodPeriod = false;
         m_spliceCooldown = 0;
+        m_clampCount = 0;
+        m_gapMin = 1 << 30;
+        m_gapMax = -1;
         m_warmup = SNAC_WIN;
         m_envSlow = 0.0f;
         m_envFast = 0.0f;
@@ -153,6 +156,8 @@ public:
             }
             double targetLag = upshiftTargetLag();
             double gap = (double)m_wr - rdActive;
+            if (gap < (double)m_gapMin) m_gapMin = (int)gap;
+            if (gap > (double)m_gapMax) m_gapMax = (int)gap;
             double driftFromTarget = gap - targetLag;
             if (m_spliceCooldown > 0) m_spliceCooldown--;
             if (m_haveGoodPeriod) {
@@ -216,8 +221,8 @@ public:
             m_rdA += adv;
             m_rdB += adv;
             const double maxRd = (double)m_wr - (double)(SINC_HALF + 2);
-            if (m_rdA > maxRd) m_rdA = maxRd;
-            if (m_rdB > maxRd) m_rdB = maxRd;
+            if (m_rdA > maxRd) { m_rdA = maxRd; m_clampCount++; }
+            if (m_rdB > maxRd) { m_rdB = maxRd; m_clampCount++; }
             if (m_xfadeRemain > 0) m_xfadeRemain--;
             m_effContAccum += adv;
             m_effSamples++;
@@ -277,6 +282,8 @@ private:
     double   m_rdA = 0.0;
     double   m_rdB = 0.0;
     double   m_gapBias = 0.0;
+    int      m_gapMin = 1 << 30;
+    int      m_gapMax = -1;
     bool     m_useA = true;
     int      m_xfadeRemain = 0;
     int      m_xfadeLen = 0;
@@ -285,11 +292,15 @@ private:
     float    m_lastGoodPeriodF = 256.0f;
     bool     m_haveGoodPeriod = false;
     unsigned m_emergencyCount = 0;
+    unsigned m_clampCount = 0;
     int      m_spliceCooldown = 0;
 public:
     unsigned m_spliceCount = 0;
     int      gapNow() const { return (int)((double)m_wr - (m_useA ? m_rdA : m_rdB)); }
     unsigned emergencyCount() const { return m_emergencyCount; }
+    unsigned clampCount() const { return m_clampCount; }
+    int      gapMinSeen() const { return m_gapMin; }
+    int      gapMaxSeen() const { return m_gapMax; }
     float    dbgPeakVal() const { return m_snac->m_dbgPeakVal; }
     int      dbgPeakTau() const { return m_snac->m_dbgPeakTau; }
     double   m_effContAccum = 0.0;

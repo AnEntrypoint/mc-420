@@ -62,6 +62,7 @@ struct FaustUI {
 #define dsp FaustDspBase
 struct FaustDspBase { virtual ~FaustDspBase() {} };
 #include "dsp_generated.cpp"
+#include "soladSnacOctaver.h"
 #undef dsp
 
 #pragma pack(push, 1)
@@ -630,6 +631,279 @@ static void printStats(const std::vector<float>& sig, uint32_t sr) {
     printf("peak=%.4f  rms=%.4f  zeroCrossings=%d  approxFreq=%.1fHz\n", peak, rms, zeroCrossings, approxHz);
 }
 
+struct PitchResult {
+    double hz = 0.0;
+    double ncc = 0.0;
+    int lag = 0;
+};
+
+static PitchResult nccPitch(const std::vector<float>& sig, uint32_t sr, size_t from, size_t to,
+                            double minHz, double maxHz) {
+    PitchResult r;
+    if (to <= from || to > sig.size()) return r;
+    size_t n = to - from;
+    std::vector<double> x(n);
+    double mean = 0.0;
+    for (size_t i = 0; i < n; i++) mean += sig[from + i];
+    mean /= (double)n;
+    for (size_t i = 0; i < n; i++) x[i] = (double)sig[from + i] - mean;
+    std::vector<double> pre(n + 1, 0.0);
+    for (size_t i = 0; i < n; i++) pre[i + 1] = pre[i] + x[i] * x[i];
+    if (pre[n] < 1e-12) return r;
+    int minLag = (int)((double)sr / maxHz);
+    int maxLag = (int)((double)sr / minHz + 0.5);
+    if (minLag < 2) minLag = 2;
+    if (maxLag > (int)(n / 2)) maxLag = (int)(n / 2);
+    if (maxLag <= minLag + 2) return r;
+    std::vector<double> ncc(maxLag + 2, 0.0);
+    double gmax = -1e9;
+    for (int lag = minLag; lag <= maxLag; lag++) {
+        size_t lim = n - (size_t)lag;
+        double s = 0.0;
+        for (size_t i = 0; i < lim; i++) s += x[i] * x[i + lag];
+        double e1 = pre[lim];
+        double e2 = pre[n] - pre[(size_t)lag];
+        double den = sqrt(e1 * e2);
+        double v = den > 1e-18 ? s / den : 0.0;
+        ncc[lag] = v;
+        if (v > gmax) gmax = v;
+    }
+    double thresh = 0.85 * gmax;
+    int best = -1;
+    for (int lag = minLag + 1; lag < maxLag; lag++) {
+        if (ncc[lag] >= ncc[lag - 1] && ncc[lag] >= ncc[lag + 1] && ncc[lag] >= thresh) {
+            best = lag;
+            break;
+        }
+    }
+    if (best < 0) {
+        best = minLag;
+        for (int lag = minLag; lag <= maxLag; lag++) if (ncc[lag] > ncc[best]) best = lag;
+    }
+    double refined = (double)best;
+    double den2 = ncc[best - 1] - 2.0 * ncc[best] + ncc[best + 1];
+    if (fabs(den2) > 1e-12) {
+        double delta = 0.5 * (ncc[best - 1] - ncc[best + 1]) / den2;
+        if (delta > 1.0) delta = 1.0;
+        if (delta < -1.0) delta = -1.0;
+        refined += delta;
+    }
+    r.lag = best;
+    r.ncc = ncc[best];
+    r.hz = refined > 0.0 ? (double)sr / refined : 0.0;
+    return r;
+}
+
+static double centsBetween(double measuredHz, double expectedHz) {
+    if (measuredHz <= 0.0 || expectedHz <= 0.0) return 0.0;
+    return 1200.0 * log(measuredHz / expectedHz) / log(2.0);
+}
+
+static void reportPitch(const char* tag, const char* path, const std::vector<float>& sig,
+                        uint32_t sr, double expectedHz, double fromSec, double toSec,
+                        double minHz, double maxHz, int maxCandidates) {
+    size_t a = (size_t)(fromSec * (double)sr);
+    size_t b = (size_t)(toSec * (double)sr);
+    if (b > sig.size()) b = sig.size();
+    if (a >= b) { printf("%s,%s,empty-window\n", tag, path); return; }
+    if (minHz <= 0.0) minHz = expectedHz > 0.0 ? expectedHz * 0.35 : 40.0;
+    if (maxHz <= 0.0) maxHz = expectedHz > 0.0 ? expectedHz * 3.0 : 4000.0;
+    if (maxHz > (double)sr * 0.45) maxHz = (double)sr * 0.45;
+    PitchResult p = nccPitch(sig, sr, a, b, minHz, maxHz);
+    printf("%s,%s,expect=%.2f,measured=%.2f,cents=%+.1f,ncc=%.4f,lag=%d,window=%.3f..%.3f,band=%.0f..%.0f\n",
+           tag, path, expectedHz, p.hz, centsBetween(p.hz, expectedHz), p.ncc, p.lag,
+           fromSec, toSec, minHz, maxHz);
+    if (maxCandidates <= 0) return;
+    size_t n = b - a;
+    std::vector<double> x(n);
+    double mean = 0.0;
+    for (size_t i = 0; i < n; i++) mean += sig[a + i];
+    mean /= (double)n;
+    for (size_t i = 0; i < n; i++) x[i] = (double)sig[a + i] - mean;
+    std::vector<double> pre(n + 1, 0.0);
+    for (size_t i = 0; i < n; i++) pre[i + 1] = pre[i] + x[i] * x[i];
+    int minLag = (int)((double)sr / maxHz);
+    int maxLag = (int)((double)sr / minHz + 0.5);
+    if (minLag < 2) minLag = 2;
+    if (maxLag > (int)(n / 2)) maxLag = (int)(n / 2);
+    struct Cand { int lag; double v; };
+    std::vector<Cand> cands;
+    for (int lag = minLag + 1; lag < maxLag; lag++) {
+        size_t lim = n - (size_t)lag;
+        double s = 0.0;
+        for (size_t i = 0; i < lim; i++) s += x[i] * x[i + lag];
+        double e1 = pre[lim];
+        double e2 = pre[n] - pre[(size_t)lag];
+        double den = sqrt(e1 * e2);
+        double v = den > 1e-18 ? s / den : 0.0;
+        if (v > 0.30) {
+            size_t lm1 = (size_t)(lag - 1), lp1 = (size_t)(lag + 1);
+            double vm = 0.0, vp = 0.0;
+            {
+                double s2 = 0.0;
+                for (size_t i = 0; i + lm1 < n; i++) s2 += x[i] * x[i + lm1];
+                double d2 = sqrt(pre[n - lm1] * (pre[n] - pre[lm1]));
+                vm = d2 > 1e-18 ? s2 / d2 : 0.0;
+            }
+            {
+                double s2 = 0.0;
+                for (size_t i = 0; i + lp1 < n; i++) s2 += x[i] * x[i + lp1];
+                double d2 = sqrt(pre[n - lp1] * (pre[n] - pre[lp1]));
+                vp = d2 > 1e-18 ? s2 / d2 : 0.0;
+            }
+            if (v >= vm && v >= vp) cands.push_back({lag, v});
+        }
+    }
+    std::sort(cands.begin(), cands.end(), [](const Cand& p1, const Cand& p2) { return p1.v > p2.v; });
+    int shown = 0;
+    for (const Cand& c : cands) {
+        if (shown++ >= maxCandidates) break;
+        double hz = (double)sr / (double)c.lag;
+        printf("    cand lag=%4d hz=%8.2f ncc=%.4f ratioToExpect=%.4f cents=%+8.1f\n",
+               c.lag, hz, c.v, expectedHz > 0.0 ? hz / expectedHz : 0.0,
+               centsBetween(hz, expectedHz));
+    }
+}
+
+static bool writeWav16(const char* path, const std::vector<float>& s, uint32_t sr) {
+    FILE* f = fopen(path, "wb");
+    if (!f) return false;
+    uint32_t n = (uint32_t)s.size();
+    uint32_t dataBytes = n * 2;
+    auto u32 = [f](uint32_t v) { fwrite(&v, 4, 1, f); };
+    auto u16 = [f](uint16_t v) { fwrite(&v, 2, 1, f); };
+    fwrite("RIFF", 1, 4, f); u32(36 + dataBytes); fwrite("WAVE", 1, 4, f);
+    fwrite("fmt ", 1, 4, f); u32(16); u16(1); u16(1); u32(sr);
+    u32(sr * 2); u16(2); u16(16);
+    fwrite("data", 1, 4, f); u32(dataBytes);
+    for (uint32_t i = 0; i < n; i++) {
+        double v = (double)s[i];
+        if (v > 1.0) v = 1.0;
+        if (v < -1.0) v = -1.0;
+        int16_t q = (int16_t)(v * 32767.0);
+        fwrite(&q, 2, 1, f);
+    }
+    fclose(f);
+    return true;
+}
+
+static void runSolad(double sr, double freq, double semis, double secs, int harm,
+                     int blockSize, double formant, double traceFrom, double traceTo,
+                     int gapDump, const char* wavIn, double lpHz, int nearWin,
+                     const char* wavOut, double normRms) {
+    size_t n = (size_t)(secs * sr);
+    std::vector<float> in(n), out(n);
+    if (wavIn) {
+        uint32_t wavSr = 0;
+        if (!readWavMono(wavIn, in, wavSr)) return;
+        if (wavSr != (uint32_t)sr) {
+            fprintf(stderr, "warning: %s is %uHz, engine runs at %.0fHz\n", wavIn, wavSr, sr);
+        }
+        n = in.size();
+    } else {
+    double norm = 0.0;
+    for (int h = 1; h <= harm; h++) norm += 1.0 / (double)h;
+    if (norm < 1e-9) norm = 1.0;
+    for (size_t i = 0; i < n; i++) {
+        double s = 0.0;
+        for (int h = 1; h <= harm; h++) s += sin(2.0 * M_PI * freq * (double)h * (double)i / sr) / (double)h;
+        in[i] = (float)(0.5 * s / norm);
+    }
+    }
+    if (lpHz > 0.0 && lpHz < sr * 0.5) {
+        double a = exp(-2.0 * M_PI * lpHz / sr);
+        double b = 1.0 - a;
+        for (int pass = 0; pass < 4; pass++) {
+            double z = 0.0;
+            for (size_t i = 0; i < n; i++) { z += b * ((double)in[i] - z); in[i] = (float)z; }
+            z = 0.0;
+            for (size_t i = n; i-- > 0;) { z += b * ((double)in[i] - z); in[i] = (float)z; }
+        }
+    }
+    EngineSoladSnac eng;
+    eng.setPitchScale((float)pow(2.0, semis / 12.0));
+    eng.setFormantDepth((float)formant);
+    eng.reengage();
+    out.assign(n, 0.0f);
+    size_t pos = 0;
+    size_t traceA = (size_t)(traceFrom * sr);
+    size_t traceB = (size_t)(traceTo * sr);
+    if (traceB > n) traceB = n;
+    std::vector<double> gapTrace;
+    std::vector<size_t> spliceAt;
+    unsigned prevSpliceCount = 0;
+    while (pos < n) {
+        int m = (int)std::min((size_t)blockSize, n - pos);
+        eng.processBlock(in.data() + pos, out.data() + pos, m);
+        if (eng.m_spliceCount != prevSpliceCount) {
+            prevSpliceCount = eng.m_spliceCount;
+            spliceAt.push_back(pos);
+        }
+        if (pos >= traceA && pos < traceB) gapTrace.push_back((double)eng.gapNow());
+        pos += (size_t)m;
+    }
+    double expectedHz = freq * pow(2.0, semis / 12.0);
+    PitchResult p = nccPitch(out, (uint32_t)sr, (size_t)(0.30 * sr), n,
+                             expectedHz * 0.35, expectedHz * 3.0);
+    double peakStep = 0.0;
+    size_t stepHits = 0, stepNearSplice = 0;
+    size_t stepStart = (size_t)(0.30 * sr);
+    size_t nearIdx = 0;
+    for (size_t i = stepStart + 1; i < n; i++) {
+        double d = fabs((double)out[i] - (double)out[i - 1]);
+        if (d > 0.15) {
+            stepHits++;
+            while (nearIdx < spliceAt.size() && spliceAt[nearIdx] + (size_t)(nearWin > 0 ? nearWin : 0) < i) nearIdx++;
+            bool near = false;
+            for (size_t k = nearIdx; k < spliceAt.size(); k++) {
+                if (spliceAt[k] > i) break;
+                if (i - spliceAt[k] <= (size_t)(nearWin > 0 ? nearWin : 0)) { near = true; break; }
+            }
+            if (near) stepNearSplice++;
+        }
+        if (d > peakStep) peakStep = d;
+    }
+    double sq = 0.0;
+    size_t sqN = 0;
+    for (size_t i = stepStart; i < n; i++) { sq += (double)out[i] * (double)out[i]; sqN++; }
+    double rms = sqN > 0 ? sqrt(sq / (double)sqN) : 0.0;
+    if (wavOut) {
+        std::vector<float> w = out;
+        if (normRms > 0.0 && rms > 1e-9) {
+            double g = normRms / rms;
+            for (size_t i = 0; i < w.size(); i++) w[i] = (float)((double)w[i] * g);
+        }
+        writeWav16(wavOut, w, (uint32_t)sr);
+    }
+    double gapMin = 1e9, gapMax = -1e9, gapSum = 0.0;
+    for (double g : gapTrace) {
+        if (g < gapMin) gapMin = g;
+        if (g > gapMax) gapMax = g;
+        gapSum += g;
+    }
+    double gapMean = gapTrace.empty() ? 0.0 : gapSum / (double)gapTrace.size();
+    float effRate = eng.effRateNow();
+    if (gapDump > 0) {
+        int shown = 0;
+        for (double g : gapTrace) {
+            if (shown >= gapDump) break;
+            printf("gap,%d,%.2f\n", shown, g);
+            shown++;
+        }
+    }
+    printf("solad,freq=%.2f,semis=%+.2f,scale=%.4f,expect=%.2f,measured=%.2f,cents=%+.1f,"
+           "achievedSemis=%+.2f,splices=%u,emergency=%u,clamped=%u,effRate=%.4f,"
+           "gapMin=%d,gapMean=%.1f,gapMax=%d,stepHits=%zu,stepNear=%zu,peakStep=%.4f,rms=%.4f,"
+           "stepPerK=%zu\n",
+           freq, semis, pow(2.0, semis / 12.0), expectedHz, p.hz,
+           centsBetween(p.hz, expectedHz),
+           p.hz > 0.0 ? 12.0 * log(freq > 0.0 ? p.hz / freq : 0.0) / log(2.0) : 0.0,
+           eng.m_spliceCount, eng.emergencyCount(), eng.clampCount(), effRate,
+           eng.gapMinSeen(), gapMean, eng.gapMaxSeen(),
+           stepHits, stepNearSplice, peakStep, rms,
+           (size_t)(stepHits * 1000 / (sqN > 0 ? sqN : 1)));
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         fprintf(stderr,
@@ -749,6 +1023,77 @@ int main(int argc, char** argv) {
         std::vector<float> sig; uint32_t sr;
         if (!readWavMono(argv[2], sig, sr)) return 1;
         printStats(sig, sr);
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--pitch") == 0) {
+        if (argc < 3) { fprintf(stderr, "error: --pitch needs a file\n"); return 1; }
+        double hz = 0.0, minHz = 0.0, maxHz = 0.0, from = 0.40, to = 1.40;
+        int maxCandidates = 0;
+        for (int i = 3; i < argc; i++) {
+            std::string arg = argv[i];
+            size_t eq = arg.find('=');
+            if (eq == std::string::npos) continue;
+            std::string k = arg.substr(0, eq);
+            double v = atof(arg.substr(eq + 1).c_str());
+            if (k == "hz") hz = v;
+            else if (k == "minhz") minHz = v;
+            else if (k == "maxhz") maxHz = v;
+            else if (k == "from") from = v;
+            else if (k == "to") to = v;
+            else if (k == "candidates") maxCandidates = (int)v;
+        }
+        std::vector<float> sig; uint32_t sr;
+        if (!readWavMono(argv[2], sig, sr)) return 1;
+        reportPitch("pitch", argv[2], sig, sr, hz, from, to, minHz, maxHz, maxCandidates);
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--solad") == 0) {
+        double freq = 220.0, semis = 0.0, secs = 2.0, formant = 0.0;
+        double traceFrom = 0.0, traceTo = 1.0e9;
+        int harm = 3, blockSize = 64, gapDump = 0;
+        const char* wavIn = nullptr;
+        const char* wavOut = nullptr;
+        bool sweep = false;
+        double sweepLo = -24.0, sweepHi = 24.0, sweepStep = 1.0;
+        double lpHz = 0.0, normRms = 0.0;
+        int nearWin = 64;
+        std::string wavPath, wavOutPath;
+        for (int i = 2; i < argc; i++) {
+            std::string arg = argv[i];
+            size_t eq = arg.find('=');
+            if (eq == std::string::npos) continue;
+            std::string k = arg.substr(0, eq);
+            double v = atof(arg.substr(eq + 1).c_str());
+            if (k == "freq") freq = v;
+            else if (k == "semis") semis = v;
+            else if (k == "secs") secs = v;
+            else if (k == "harm") harm = (int)v;
+            else if (k == "bs") blockSize = (int)v;
+            else if (k == "formant") formant = v;
+            else if (k == "tracefrom") traceFrom = v;
+            else if (k == "traceto") traceTo = v;
+            else if (k == "sweep") sweep = v != 0.0;
+            else if (k == "sweeplo") sweepLo = v;
+            else if (k == "sweephi") sweepHi = v;
+            else if (k == "sweepstep") sweepStep = v;
+            else if (k == "gapdump") gapDump = (int)v;
+            else if (k == "in") { wavPath = arg.substr(eq + 1); wavIn = wavPath.c_str(); }
+            else if (k == "out") { wavOutPath = arg.substr(eq + 1); wavOut = wavOutPath.c_str(); }
+            else if (k == "normrms") normRms = v;
+            else if (k == "lp") lpHz = v;
+            else if (k == "nearwin") nearWin = (int)v;
+        }
+        if (harm < 1) harm = 1;
+        if (harm > 8) harm = 8;
+        if (blockSize < 1) blockSize = 1;
+        if (sweep) {
+            for (double s = sweepLo; s <= sweepHi + 1e-9; s += sweepStep)
+                runSolad(SR, freq, s, secs, harm, blockSize, formant, traceFrom, traceTo, gapDump, wavIn, lpHz, nearWin, wavOut, normRms);
+        } else {
+            runSolad(SR, freq, semis, secs, harm, blockSize, formant, traceFrom, traceTo, gapDump, wavIn, lpHz, nearWin, wavOut, normRms);
+        }
         return 0;
     }
 
