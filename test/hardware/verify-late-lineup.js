@@ -8,8 +8,12 @@ if (!host) {
   console.error('usage: node verify-late-lineup.js <host> [holdMs] [delayMs]');
   process.exit(2);
 }
-const holdMs = Number(holdMsArg || '2000');
+const holdMsRaw = Number(holdMsArg || '900');
+const kHoldEraseMs = 1000;
+const holdMs = holdMsRaw >= kHoldEraseMs ? 900 : holdMsRaw;
 const delayMs = Number(delayMsArg || '45000');
+if (holdMs !== holdMsRaw)
+  console.error(`[late-lineup] hold ${holdMsRaw}ms >= kHoldEraseMs ${kHoldEraseMs}ms would erase instead of finish; using ${holdMs}ms`);
 const kSampleRate = 48000;
 const kFineGridBeats = 0.125;
 const kTrimSettleMs = 4000;
