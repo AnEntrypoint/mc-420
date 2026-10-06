@@ -18,31 +18,46 @@ jobs:
 
           src = io.open('effects/pitchtracker-src/pitchtracker_ac.dsp', encoding='utf-8').read()
 
-          COARSE = '    coarseFreq = pickFundamental(xh);\n'
-          assert src.count(COARSE) == 1
+          LAGCLAMP = '    lagClamped = lagSig : max(1) : min(delayMaxLag);\n'
+          TAP = ('    d = rwtable(delayTableSize, 0.0, w, x,'
+                 ' (w + delayTableSize - lagClamped) % delayTableSize);\n')
+          NUM = '    num = smoo(x * d);\n'
+          DEN = '    den = max(1e-9, smoo(x*x));\n'
+          TAKENEW = '    takeNew = (demoteNow > 0.5) | (demoteDuty <= 0.5);\n'
+          REFINE_CALLS = ('    refinedH = refineFreq(xh, w, coarseFreq * 0.5);\n'
+                          '    refined1 = refineFreq(xh, w, coarseFreq);\n'
+                          '    refined2 = refineFreq(xh, w, coarseFreq * 2.0);\n'
+                          '    refined3 = refineFreq(xh, w, coarseFreq * 3.0);\n'
+                          '    refinedNow = ba.if(dominant3, refined3,\n'
+                          '               ba.if(dominant2, refined2,\n'
+                          '               ba.if(demoteNow, refinedH, refined1)));\n')
+          DEMOTE_CALL = '    demoteNow = demoteTest(xh, w, coarseFreq);\n'
+          PROMOTE_CALL = '    promotion = subharmonicPromote(xh, w, coarseFreq, demoteNow);\n'
 
-          REFINE = '    L0 = int(ma.SR / coarseFreq) : max(2 + refineSpreadK) : min(3199 - refineSpreadK);\n'
-          PEAK = '    L0 = int(ma.SR / freqHz) : max(2 + peakSpreadK) : min(3199 - peakSpreadK);\n'
-          RAW = 'corrRawAt(x, w, freqHz) = corrAtLagVar(x, w, int(ma.SR / freqHz + 0.5));\n'
-          assert src.count(REFINE) == 1
-          assert src.count(PEAK) == 1
-          assert src.count(RAW) == 1
+          for frag in (LAGCLAMP, TAP, NUM, DEN, TAKENEW, REFINE_CALLS, DEMOTE_CALL, PROMOTE_CALL):
+              assert src.count(frag) == 1, frag
 
           files = {}
-          files['m0_cur'] = src
+          files['b0_cur'] = src
 
-          files['m1_fnmem'] = (src
-              .replace(REFINE, '    L0 = lagSafe(coarseFreq) : max(2 + refineSpreadK) : min(3199 - refineSpreadK);\n')
-              .replace(PEAK, '    L0 = lagSafe(freqHz) : max(2 + peakSpreadK) : min(3199 - peakSpreadK);\n')
-              .replace(RAW, 'corrRawAt(x, w, freqHz) = corrAtLagVar(x, w, int(ma.SR / lagSafeDiv(freqHz) + 0.5));\n')
-              + '\nlagSafe(f) = int(ma.SR / ((f : mem) : max(minTrackHz)));\n'
-              + 'lagSafeDiv(f) = (f : mem) : max(minTrackHz);\n')
+          files['b1_nohold'] = src.replace(TAKENEW, '    takeNew = 1.0;\n')
 
-          files['m2_sharedmem'] = src.replace(
-              COARSE, '    coarseFreq = pickFundamental(xh) : mem : max(minTrackHz);\n')
+          files['b2_norefine'] = src.replace(
+              REFINE_CALLS,
+              '    refinedNow = ba.if(dominant3, coarseFreq * 3.0,\n'
+              '               ba.if(dominant2, coarseFreq * 2.0,\n'
+              '               ba.if(demoteNow, coarseFreq * 0.5, coarseFreq)));\n')
 
-          files['m3_sharedmem_nowrite'] = src.replace(
-              COARSE, '    coarseFreq = pickFundamental(xh) : mem;\n')
+          files['b3_onlyrefine'] = (src
+              .replace(DEMOTE_CALL, '    demoteNow = 0.0;\n')
+              .replace(PROMOTE_CALL, '    promotion = 1.0, 0.9, 0.0, 0.0;\n'))
+
+          files['b5_notaps'] = src.replace(TAP, '    d = 0.5;\n')
+
+          files['b7_fixlag'] = src.replace(LAGCLAMP, '    lagClamped = 100;\n')
+
+          files['b8_nosmoo'] = src.replace(NUM, '    num = x * d;\n').replace(
+              DEN, '    den = max(1e-9, x*x);\n')
 
           for name, text in files.items():
               io.open('variants/%s.dsp' % name, 'w', encoding='utf-8', newline='\n').write(text)
@@ -60,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [m0_cur, m1_fnmem, m2_sharedmem, m3_sharedmem_nowrite]
+        variant: [b0_cur, b1_nohold, b2_norefine, b3_onlyrefine, b5_notaps, b7_fixlag, b8_nosmoo]
     steps:
       - name: Install Faust
         timeout-minutes: 8
