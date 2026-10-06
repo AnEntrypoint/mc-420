@@ -44,6 +44,10 @@ tmp/
 
 .netboot-stage/
 .deploy/
+.deploy-before/
+.deploy-before-ci/
+.deploy-check/
+.witness/
 .netboot-serve-now.*
 .netboot-serve/
 .netboot-serve-pi3/
