@@ -13,45 +13,63 @@ jobs:
           fetch-depth: 0
       - name: Build DSP variants
         run: |
+          set -e
           mkdir -p variants
           git show ccf698d:effects/pitchtracker-src/pitchtracker_ac.dsp > variants/1_baseline.dsp
-          cp effects/pitchtracker-src/pitchtracker_ac.dsp variants/2_current.dsp
           python3 - <<'PY'
           import io
+
           src = io.open('effects/pitchtracker-src/pitchtracker_ac.dsp', encoding='utf-8').read()
 
-          damper = 'demoteDuty = demoteNow : *(1.0-demotePole) : + ~ *(demotePole);'
-          hold = '''    takeNew = (demoteNow > 0.5) | (demoteDuty <= 0.5);
-              holdStep(prev) = ba.if(takeNew, refinedNow, prev);
-              heldFreq = holdStep ~ _;'''
-          assert src.count(damper) == 1
-          assert src.count('takeNew = (demoteNow > 0.5)') == 1
-          nodamper = src.replace(damper, 'demoteDuty = demoteNow;')
-          lines = nodamper.split('\n')
-          out = []
-          skip = False
-          for ln in lines:
-              if 'takeNew = (demoteNow > 0.5)' in ln:
-                  skip = True
-                  out.append('    heldFreq = refinedNow;')
-                  continue
-              if skip:
-                  if 'heldFreq = holdStep ~ _;' in ln:
-                      skip = False
-                  continue
-              out.append(ln)
-          nodamper = '\n'.join(out)
-          assert 'holdStep' not in nodamper, 'holdStep survived'
-          assert 'demoteDuty : ' not in nodamper
-          io.open('variants/3_nodamper.dsp', 'w', encoding='utf-8').write(nodamper)
+          DAMPER = '    demoteDuty = demoteNow : *(1.0-demotePole) : + ~ *(demotePole);\n'
+          HOLD = ('    takeNew = (demoteNow > 0.5) | (demoteDuty <= 0.5);\n'
+                  '    holdStep(prev) = ba.if(takeNew, refinedNow, prev);\n'
+                  '    heldFreq = holdStep ~ _;\n')
+          HOLD_REPL = '    heldFreq = refinedNow;\n'
+          DEMOTE_CALL = '    demoteNow = demoteTest(xh, coarseFreq);\n'
+          DEMOTE_CALL_REPL = '    demoteNow = 0.0;\n'
+          PROMO = ('    promotion = subharmonicPromote(xh, coarseFreq, demoteNow);\n'
+                   '    corrected = promotion : (_, !);\n'
+                   '    finalConfidence = promotion : (!, _);\n')
+          PROMO_REPL = ('    corrected = ba.if(demoteNow, coarseFreq * 0.5, coarseFreq);\n'
+                        '    finalConfidence = 1.0;\n')
+          DEMOTE_PEAK = ('    pCoarse = corrPeakAt(x, coarseFreq);\n'
+                         '    freqH = coarseFreq * 0.5;\n'
+                         '    pH = corrPeakAt(x, freqH);\n')
+          DEMOTE_RAW = ('    pCoarse = corrRawAt(x, coarseFreq);\n'
+                        '    freqH = coarseFreq * 0.5;\n'
+                        '    pH = corrRawAt(x, freqH);\n')
 
-          demote = 'demoteNow = demoteTest(xh, coarseFreq);'
-          assert src.count(demote) == 1
-          io.open('variants/4_nodemote.dsp', 'w', encoding='utf-8').write(
-              nodamper.replace(demote, 'demoteNow = 0.0;'))
 
-          io.open('variants/5_allpeak.dsp', 'w', encoding='utf-8').write(
-              src.replace('corrRawAt', 'corrPeakAt'))
+          def req(text, needle, n, tag):
+              got = text.count(needle)
+              assert got == n, '%s: count=%d want=%d' % (tag, got, n)
+
+
+          req(src, DAMPER, 1, 'damper')
+          req(src, HOLD, 1, 'hold')
+          req(src, DEMOTE_CALL, 1, 'demote call')
+          req(src, PROMO, 1, 'promo')
+          req(src, DEMOTE_PEAK, 1, 'peak')
+
+          nodamper = src.replace(DAMPER, '').replace(HOLD, HOLD_REPL)
+          assert 'holdStep(' not in nodamper
+          assert 'holdStep ~' not in nodamper
+          nopromo = src.replace(PROMO, PROMO_REPL)
+
+          files = {
+              '2_current': src,
+              '3_nodamper': nodamper,
+              '4_nodemote': nodamper.replace(DEMOTE_CALL, DEMOTE_CALL_REPL),
+              '5_demoteonly': nopromo,
+              '6_demoteraw': src.replace(DEMOTE_PEAK, DEMOTE_RAW),
+              '7_allpeak': src.replace('corrRawAt', 'corrPeakAt'),
+              '8_refineonly': nopromo.replace(DAMPER, '').replace(HOLD, HOLD_REPL)
+                                      .replace(DEMOTE_CALL, DEMOTE_CALL_REPL),
+          }
+          for name, text in files.items():
+              io.open('variants/%s.dsp' % name, 'w', encoding='utf-8',
+                      newline='\n').write(text)
           PY
           ls -la variants
       - uses: actions/upload-artifact@v4
@@ -62,14 +80,13 @@ jobs:
   time-variant:
     needs: build-variants
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        variant: [1_baseline, 3_nodamper, 4_nodemote, 5_allpeak, 2_current]
+        variant: [1_baseline, 8_refineonly, 4_nodemote, 6_demoteraw, 5_demoteonly,
+                  3_nodamper, 2_current, 7_allpeak]
     steps:
-      - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -94,38 +111,67 @@ jobs:
       - name: Compile ${{ matrix.variant }}
         run: |
           python3 - <<'PY'
-          import io, os, signal, time
-          import dawdreamer as dd
+          import io
+          import os
+          import signal
+          import time
 
           name = os.environ['VARIANT']
-          CAP = 480
+          CAP = 1500.0
 
 
-          class Timeout(Exception):
-              pass
+          def rss_mb(pid):
+              try:
+                  with io.open('/proc/%d/status' % pid, encoding='utf-8') as fh:
+                      for line in fh:
+                          if line.startswith('VmRSS:'):
+                              return int(line.split()[1]) / 1024.0
+              except (IOError, OSError):
+                  return 0.0
+              return 0.0
 
 
-          def alarm(signum, frame):
-              raise Timeout()
-
-
-          signal.signal(signal.SIGALRM, alarm)
-          src = io.open(f'variants/{name}.dsp', encoding='utf-8').read()
-          eng = dd.RenderEngine(48000, 64)
-          fp = eng.make_faust_processor(name)
-          fp.compile_flags = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
-          fp.set_dsp_string(src)
+          src = io.open('variants/%s.dsp' % name, encoding='utf-8').read()
           t0 = time.time()
-          signal.alarm(CAP)
+          pid = os.fork()
+          if pid == 0:
+              try:
+                  import dawdreamer as dd
+                  eng = dd.RenderEngine(48000, 64)
+                  fp = eng.make_faust_processor(name)
+                  fp.compile_flags = ["-vec", "-fun", "-dfs", "-vs", "32", "-ct", "0"]
+                  fp.set_dsp_string(src)
+                  ok = fp.compile()
+                  msg = 'ok=%s seconds=%.1f' % (ok, time.time() - t0)
+              except BaseException as exc:
+                  msg = 'ERROR %s' % str(exc)[:200]
+              with io.open('child.txt', 'w', encoding='utf-8') as fh:
+                  fh.write(msg)
+              os._exit(0)
+
+          peak = 0.0
+          status = None
+          while True:
+              wpid, st = os.waitpid(pid, os.WNOHANG)
+              peak = max(peak, rss_mb(pid))
+              if wpid == pid:
+                  status = st
+                  break
+              if time.time() - t0 > CAP:
+                  os.kill(pid, signal.SIGKILL)
+                  os.waitpid(pid, 0)
+                  status = 'CAP'
+                  break
+              time.sleep(1.0)
+
+          elapsed = time.time() - t0
+          msg = ''
           try:
-              ok = fp.compile()
-              print(f"RESULT {name}: ok={ok} seconds={time.time()-t0:.1f}", flush=True)
-          except Timeout:
-              print(f"RESULT {name}: TIMEOUT >{CAP}s", flush=True)
-          except Exception as e:
-              print(f"RESULT {name}: ERROR {str(e)[:200]}", flush=True)
-          finally:
-              signal.alarm(0)
+              msg = io.open('child.txt', encoding='utf-8').read()
+          except (IOError, OSError):
+              msg = 'NO RESULT FILE (killed)'
+          print('RESULT %s: %s wall=%.1fs peakRSS=%.0fMB status=%s'
+                % (name, msg, elapsed, peak, status), flush=True)
           PY
         env:
           VARIANT: ${{ matrix.variant }}
