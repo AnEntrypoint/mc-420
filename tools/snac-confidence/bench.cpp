@@ -38,6 +38,6 @@ int main() {
         double cyc = std::chrono::duration<double, std::nano>(t1 - t0).count() / (double)x.size();
         if (cyc < best) best = cyc;
     }
-    printf("cycles per sample: %.1f (sink %.1f)\n", best, sink);
+    printf("ns per sample: %.2f (sink %.1f)\n", best, sink);
     return 0;
 }
