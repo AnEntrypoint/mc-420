@@ -19,13 +19,10 @@ PROMOTE_LINE = "    promotion = subharmonicPromote(xh, w, coarseFreq, demoteNow)
 REFINED_DEMOTE = "               ba.if(demoteNow, refinedH, refined1)));\n"
 TAKE_NEW = "    takeNew = (demoteNow > 0.5) | (demoteDuty <= 0.5);\n"
 
-CONFIRM_CONSTS = ("confirmPeriods = %s;\nconfirmFloorSamples = %s;\n"
-                  "octaveSemitone = 0.06;\n")
+CONFIRM_CONSTS = "confirmSamples = %s;\noctaveSemitone = 0.06;\n"
 CONFIRM_TAKE = ("    candPrev = refinedNow : mem;\n"
                 "    candMove = abs(refinedNow - candPrev) > max(0.5, octaveSemitone * candPrev);\n"
                 "    candStill = 1.0 - candMove;\n"
-                "    confirmSamples = max(confirmFloorSamples, "
-                "confirmPeriods * ma.SR / max(60.0, refinedNow));\n"
                 "    countStable(prev) = min(confirmSamples, prev + 1.0);\n"
                 "    stableRun = ba.if(candStill, countStable, 0.0) ~ _;\n"
                 "    takeNew = (stableRun >= confirmSamples) & "
@@ -47,8 +44,8 @@ def schmitt(text, tau, hi, lo):
     return src
 
 
-def confirm(text, periods, floor):
-    return (text.replace(DEMOTE_POLE_LINE, DEMOTE_POLE_LINE + CONFIRM_CONSTS % (periods, floor))
+def confirm(text, floor):
+    return (text.replace(DEMOTE_POLE_LINE, DEMOTE_POLE_LINE + CONFIRM_CONSTS % floor)
                 .replace(TAKE_NEW, CONFIRM_TAKE))
 
 
@@ -60,13 +57,11 @@ def variant_dsp(name):
     if name == "shipped":
         return src
     if name.startswith("stable"):
-        periods, floor = "1.5", "512.0"
+        floor = "512.0"
         for p in name.split("_")[1:]:
-            if p.startswith("p"):
-                periods = p[1:]
-            elif p.startswith("f"):
+            if p.startswith("f"):
                 floor = p[1:]
-        return confirm(src, periods, floor)
+        return confirm(src, floor)
     if name.startswith("schmitt"):
         parts = name.split("_")
         tau, hi, lo = "0.02", "0.8", "0.2"
