@@ -1,0 +1,10 @@
+{
+ "mutables_pending_count": 0,
+ "statuses": {
+  "resolved": 15,
+  "witnessed": 49,
+  "void": 1
+ },
+ "phase": "JTBD",
+ "ts": "2026-10-09T18:18:37.372Z"
+}
