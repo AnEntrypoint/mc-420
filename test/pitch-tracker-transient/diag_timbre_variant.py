@@ -20,8 +20,8 @@ REFINED_DEMOTE = "               ba.if(demoteNow, refinedH, refined1)));\n"
 TAKE_NEW = "    takeNew = (demoteNow > 0.5) | (demoteDuty <= 0.5);\n"
 
 CONFIRM_CONSTS = "confirmSamples = %s;\noctaveSemitone = 0.06;\n"
-CONFIRM_TAKE = ("    candPrev = refinedNow : mem;\n"
-                "    candMove = abs(refinedNow - candPrev) > max(0.5, octaveSemitone * candPrev);\n"
+CONFIRM_TAKE = ("    candPrev = SOURCE : mem;\n"
+                "    candMove = abs(SOURCE - candPrev) > max(0.5, octaveSemitone * candPrev);\n"
                 "    candStill = 1.0 - candMove;\n"
                 "    countStable(prev) = min(confirmSamples, prev + 1.0);\n"
                 "    stableRun = ba.if(candStill, countStable, 0.0) ~ _;\n"
@@ -44,9 +44,9 @@ def schmitt(text, tau, hi, lo):
     return src
 
 
-def confirm(text, floor):
+def confirm(text, floor, source):
     return (text.replace(DEMOTE_POLE_LINE, DEMOTE_POLE_LINE + CONFIRM_CONSTS % floor)
-                .replace(TAKE_NEW, CONFIRM_TAKE))
+                .replace(TAKE_NEW, CONFIRM_TAKE.replace("SOURCE", source)))
 
 
 def variant_dsp(name):
@@ -61,7 +61,13 @@ def variant_dsp(name):
         for p in name.split("_")[1:]:
             if p.startswith("f"):
                 floor = p[1:]
-        return confirm(src, floor)
+        return confirm(src, floor, "refinedNow")
+    if name.startswith("coarse"):
+        floor = "512.0"
+        for p in name.split("_")[1:]:
+            if p.startswith("f"):
+                floor = p[1:]
+        return confirm(src, floor, "coarseFreq")
     if name.startswith("schmitt"):
         parts = name.split("_")
         tau, hi, lo = "0.02", "0.8", "0.2"
