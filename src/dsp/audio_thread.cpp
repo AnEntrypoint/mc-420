@@ -269,6 +269,17 @@ static float grooveGateGain(int mode, double phase01, double ramp01) {
     }
 }
 
+static bool diagGapAllow() {
+    static timespec lastTs{};
+    static bool haveLast = false;
+    timespec nowTs; clock_gettime(CLOCK_MONOTONIC, &nowTs);
+    if (!haveLast) { lastTs = nowTs; haveLast = true; return true; }
+    double dt = (double)(nowTs.tv_sec - lastTs.tv_sec) + (double)(nowTs.tv_nsec - lastTs.tv_nsec) / 1e9;
+    if (dt < 1.0) return false;
+    lastTs = nowTs;
+    return true;
+}
+
 static void* worker(void*) {
     setRealtimeSelf(g_cfg.homeFxCore, g_cfg.rtPriority);
     setFlushToZero();
@@ -590,7 +601,7 @@ static void* worker(void*) {
             timespec nowTs; clock_gettime(CLOCK_MONOTONIC, &nowTs);
             if (haveLastReadTs) {
                 double gapMs = (nowTs.tv_sec - lastReadTs.tv_sec) * 1000.0 + (nowTs.tv_nsec - lastReadTs.tv_nsec) / 1e6;
-                if (gapMs > kExpectedPeriodMs * 1.5) {
+                if (gapMs > kExpectedPeriodMs * 1.5 && diagGapAllow()) {
                     fprintf(stderr, "[diag-gap] t=%ld.%03ld readi gap=%.3fms (expected ~%.3fms)\n",
                             (long)nowTs.tv_sec, nowTs.tv_nsec / 1000000, gapMs, kExpectedPeriodMs);
                 }
@@ -602,7 +613,7 @@ static void* worker(void*) {
             timespec readEndTs; clock_gettime(CLOCK_MONOTONIC, &readEndTs);
             {
                 double readMs = (readEndTs.tv_sec - readStartTs.tv_sec) * 1000.0 + (readEndTs.tv_nsec - readStartTs.tv_nsec) / 1e6;
-                if (readMs > kExpectedPeriodMs * 1.5) {
+                if (readMs > kExpectedPeriodMs * 1.5 && diagGapAllow()) {
                     fprintf(stderr, "[diag-gap] t=%ld.%03ld readi ITSELF took=%.3fms (expected ~%.3fms)\n",
                             (long)readEndTs.tv_sec, readEndTs.tv_nsec / 1000000, readMs, kExpectedPeriodMs);
                 }
@@ -721,6 +732,7 @@ static void* worker(void*) {
                     if (engagedZone) *engagedZone = 1.0f;
                 } else {
                     if (semisZone) *semisZone = staticSemis;
+                    if (engagedZone) *engagedZone = 0.0f;
                 }
                 if (divZone) *divZone = microrepeatDivVal;
             }
@@ -1322,7 +1334,7 @@ static void* worker(void*) {
             timespec writeEndTs; clock_gettime(CLOCK_MONOTONIC, &writeEndTs);
             {
                 double writeMs = (writeEndTs.tv_sec - writeStartTs.tv_sec) * 1000.0 + (writeEndTs.tv_nsec - writeStartTs.tv_nsec) / 1e6;
-                if (writeMs > kExpectedPeriodMs * 1.5) {
+                if (writeMs > kExpectedPeriodMs * 1.5 && diagGapAllow()) {
                     fprintf(stderr, "[diag-gap] writei ITSELF took=%.3fms (expected ~%.3fms)\n", writeMs, kExpectedPeriodMs);
                 }
             }
