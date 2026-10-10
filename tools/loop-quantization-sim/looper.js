@@ -1,7 +1,6 @@
 'use strict';
 
 const MAXLEN = 48000 * 60;
-const kFineGridBeats = 0.125;
 
 function wrapAbs(p, len) {
   return p - Math.floor(p / len) * len;
@@ -36,12 +35,7 @@ function stepSample(s, inp) {
   const armPulse = recN > 0.5 && s.recPrevEdge < 0.5;
   const armEdge = armPulse;
 
-  const fineGridSamples = Math.max(1.0, kFineGridBeats * oneBeat);
-  const cellOffset = wrapAbs(masterPhase, fineGridSamples);
-  const rsmNearestNode = wrapAbs(
-    masterPhase + (cellOffset > fineGridSamples * 0.5 ? fineGridSamples - cellOffset : -cellOffset),
-    Math.max(1.0, masterLen));
-  const rsmNext = armEdge ? rsmNearestNode : s.rsm;
+  const rsmNext = armEdge ? masterPhase : s.rsm;
 
   const finNext = armEdge ? 0 : (finishReqN > 0.5 ? 1 : s.fin);
   const recKeepAlive = recN > 0.5 || finNext > 0.5;
@@ -107,5 +101,5 @@ function stepSample(s, inp) {
 }
 
 module.exports = {
-  initLooperDsp, stepSample, wrapAbs, MAXLEN, kFineGridBeats,
+  initLooperDsp, stepSample, wrapAbs, MAXLEN,
 };

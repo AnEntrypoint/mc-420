@@ -16,7 +16,8 @@ const padNote = Number(noteArg || '2');
 const watchMs = Number(watchMsArg || '20000');
 const looper = padNote - 2;
 const kSampleRate = 48000;
-const kFineGridBeats = 0.125;
+const kAnchorToleranceSamples = 64;
+const kWanderMaxBeats = 0.125;
 const kClearAllSettleMs = 1200;
 const kPollMs = 100;
 const kTrimSettleSkipMs = 6000;
@@ -87,12 +88,6 @@ function deriveTempoQuantBeats(seconds, anchorBpm) {
   return best;
 }
 
-function nearestNodeSamples(masterPhaseSamples, masterLenSamples, cell) {
-  const cellOffset = wrap(masterPhaseSamples, cell);
-  const shift = cellOffset > cell * 0.5 ? cell - cellOffset : -cellOffset;
-  return wrap(masterPhaseSamples + shift, Math.max(1, masterLenSamples));
-}
-
 async function main() {
   console.log(`[watch-take] target=${host} looper${looper} hold=${holdMs}ms watch=${watchMs}ms${keep ? ' (keeping existing content)' : ''}`);
   if (!keep) {
@@ -143,6 +138,7 @@ async function main() {
       eff: t.eff_speed,
       bpm: t.link.bpm,
       bias: t.latency_bias_samples,
+      looperBias: t.loopers.latencybias[looper],
       masterWlen: t.loopers.wraplen[0],
     });
     await sleep(kPollMs);
@@ -153,24 +149,24 @@ async function main() {
     process.exit(1);
   }
   const last = samples[samples.length - 1];
-  const bias = last.bias;
+  const bias = last.looperBias > 0 ? last.looperBias : last.bias;
   const looper0Playing = ((base.loopers.play >> 0) & 1) === 1;
   const masterLenSamples = (looper === 0 || !looper0Playing) ? wlen : last.masterWlen;
   const anchorBpm = 120;
   const beats = deriveTempoQuantBeats(masterLenSamples / kSampleRate, anchorBpm);
   const beatLenSamples = masterLenSamples / beats;
-  const cellSamples = beatLenSamples * kFineGridBeats;
   const lengthVsTake = wlen / takeSamples;
 
   console.log(`[watch-take] wraplen ${wlen.toFixed(0)} samples (${(wlen / kSampleRate * 1000).toFixed(0)}ms) vs take ${takeSamples.toFixed(0)} -> ${lengthVsTake.toFixed(4)}x`);
-  console.log(`[watch-take] master ${masterLenSamples.toFixed(0)} samples = ${beats} beats -> beat ${beatLenSamples.toFixed(1)} samples, grid cell ${cellSamples.toFixed(1)}`);
+  console.log(`[watch-take] master ${masterLenSamples.toFixed(0)} samples = ${beats} beats -> beat ${beatLenSamples.toFixed(1)} samples`);
   console.log(`[watch-take] after the take: ${last.bpm.toFixed(2)} bpm eff ${last.eff.toFixed(4)}`);
 
   const gridExisted = base.loopers.play !== 0;
-  const armPhaseSamples = armPhaseBeats * beatLenSamples - armWriteIdx * arm.eff_speed;
+  const armPhaseSamples = arm.master_len_samples > 0
+    ? wrap(armPhaseBeats * beatLenSamples - armWriteIdx * arm.eff_speed, masterLenSamples)
+    : 0;
   console.log(`[watch-take] ARM phase ${armPhaseBeats.toFixed(3)} beats -> ${(armPhaseSamples / beatLenSamples).toFixed(3)} at the arm edge (${(armWriteIdx / kSampleRate * 1000).toFixed(0)}ms of take already written)`);
-  const rsmExpected = nearestNodeSamples(armPhaseSamples, masterLenSamples, cellSamples);
-  const expectedDownbeatSamples = wrap(rsmExpected - bias, wlen);
+  const expectedDownbeatSamples = wrap(armPhaseSamples - bias, wlen);
 
   let minL = Infinity;
   let maxL = -Infinity;
@@ -224,7 +220,7 @@ async function main() {
 
   console.log(`[watch-take] downbeat at ${(meanL / beatLenSamples).toFixed(4)} beats into the loop (spread ${(maxL - minL).toFixed(1)} samples)`);
   console.log(`[watch-take] ARM anchor expects the downbeat at ${(expectedDownbeatSamples / beatLenSamples).toFixed(4)} beats`);
-  console.log(`[watch-take] phrase offset: ${offFromExpected.toFixed(1)} samples (${(offFromExpected / kSampleRate * 1000).toFixed(2)}ms, ${(offFromExpected / cellSamples).toFixed(3)} cells)`);
+  console.log(`[watch-take] phrase offset: ${offFromExpected.toFixed(1)} samples (${(offFromExpected / kSampleRate * 1000).toFixed(2)}ms, ${(offFromExpected / beatLenSamples).toFixed(4)} beats)`);
   console.log(`[watch-take] read rate ${readRate.toFixed(7)} (${(1200 * Math.log2(readRate)).toFixed(3)} cents), ${wraps} wraps in ${elapsedSec.toFixed(1)}s over ${readSeries.length} polls`);
   console.log(`[watch-take] grid rate ${gridRate.toFixed(7)} (${(1200 * Math.log2(gridRate)).toFixed(3)} cents), read/grid slip ${gridSlip.toFixed(7)}`);
 
@@ -241,13 +237,13 @@ async function main() {
     fail(`the take came back ${lengthVsTake.toFixed(4)}x the length it recorded`);
   }
   if (gridExisted) {
-    if (Math.abs(offFromExpected / cellSamples) > 0.5) {
-      fail(`the loop downbeat sits ${(offFromExpected / cellSamples).toFixed(2)} grid cells from the ARM anchor`);
+    if (Math.abs(offFromExpected) > kAnchorToleranceSamples) {
+      fail(`the loop downbeat sits ${offFromExpected.toFixed(1)} samples from the master phase it was armed at`);
     }
   } else {
     console.log('[watch-take]   note: no grid at ARM (first take) -- the take defines the grid, anchor unchecked');
   }
-  if (maxL - minL > cellSamples) {
+  if (maxL - minL > beatLenSamples * kWanderMaxBeats) {
     fail(`the downbeat wandered ${(maxL - minL).toFixed(1)} samples against the master grid`);
   }
   if (Math.abs(readRate - 1.0) > kRateTolerance) {

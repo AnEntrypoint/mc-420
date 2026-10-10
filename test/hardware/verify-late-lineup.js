@@ -15,12 +15,19 @@ const delayMs = Number(delayMsArg || '45000');
 if (holdMs !== holdMsRaw)
   console.error(`[late-lineup] hold ${holdMsRaw}ms >= kHoldEraseMs ${kHoldEraseMs}ms would erase instead of finish; using ${holdMs}ms`);
 const kSampleRate = 48000;
-const kFineGridBeats = 0.125;
 const kTrimSettleMs = 4000;
 const kWatchMs = 12000;
 const kPollMs = 150;
 const kClearAllSettleMs = 1200;
 const kToleranceSamples = 16;
+
+const wrap = (v, len) => ((v % len) + len) % len;
+const center = (v, len) => wrap(v + len * 0.5, len) - len * 0.5;
+
+function armPhaseSamples(arm, looperIndex, beatLenSamples) {
+  if (!(arm.master_len_samples > 0)) return 0;
+  return wrap(arm.master_phase_beats * beatLenSamples - arm.loopers.writeidx[looperIndex] * arm.eff_speed, arm.master_len_samples);
+}
 
 function gridBeatLen(t) {
   if (t.master_len_samples > 0 && t.recorded_beats >= 1) return t.master_len_samples / t.recorded_beats;
@@ -81,9 +88,11 @@ async function settleWrapLen(looperIndex, maxMs) {
 async function recordTake(note, holdMs) {
   await pressPad(note);
   await releasePad(note);
+  const arm = await queryTelemetry();
   await new Promise((r) => setTimeout(r, holdMs));
   await pressPad(note);
   await releasePad(note);
+  return arm;
 }
 
 async function watchTwoLoopers(wrapLen, beatLenSamples) {
@@ -92,12 +101,18 @@ async function watchTwoLoopers(wrapLen, beatLenSamples) {
   let offsetMin = Infinity;
   let offsetMax = -Infinity;
   let lastOffset = 0;
+  let bias0 = 0;
+  let bias1 = 0;
   const lockDevs = [[], []];
   let firstLock = [null, null];
   while (Date.now() - start < kWatchMs) {
     const t = await queryTelemetry();
     const r0 = t.loopers.readpos[0];
     const r1 = t.loopers.readpos[1];
+    const b0 = t.loopers.latencybias[0];
+    const b1 = t.loopers.latencybias[1];
+    bias0 = b0 > 0 ? b0 : t.latency_bias_samples;
+    bias1 = b1 > 0 ? b1 : t.latency_bias_samples;
     const masterSamples = t.master_phase_beats * beatLenSamples;
     let offset = ((r0 - r1) % wrapLen + wrapLen) % wrapLen;
     if (offset > wrapLen * 0.5) offset -= wrapLen;
@@ -117,6 +132,7 @@ async function watchTwoLoopers(wrapLen, beatLenSamples) {
   return {
     offsetSpread: offsetMax - offsetMin,
     lastOffset,
+    bias: [bias0, bias1],
     lock: lockDevs.map((devs) => despikedSpread(devs, kToleranceSamples)),
   };
 }
@@ -127,7 +143,7 @@ async function main() {
   await releasePad(0x5b);
   await new Promise((r) => setTimeout(r, kClearAllSettleMs));
 
-  await recordTake(2, holdMs);
+  const armFirst = await recordTake(2, holdMs);
   const first = await settleWrapLen(0, 8000);
   const wlen0 = first.loopers.wraplen[0];
   console.log(`[late-lineup] looper0 (first take): ${wlen0} samples, session ${first.link.bpm.toFixed(2)} bpm, eff ${first.eff_speed.toFixed(4)}`);
@@ -135,7 +151,7 @@ async function main() {
   console.log(`[late-lineup] waiting ${delayMs}ms with the mesh running...`);
   await new Promise((r) => setTimeout(r, delayMs));
 
-  await recordTake(3, holdMs);
+  const armSecond = await recordTake(3, holdMs);
   const second = await settleWrapLen(1, 8000);
   const wlen1 = second.loopers.wraplen[1];
   console.log(`[late-lineup] looper1 (takes ${(delayMs / 1000).toFixed(0)}s later): ${wlen1} samples, session ${second.link.bpm.toFixed(2)} bpm, eff ${second.eff_speed.toFixed(4)}`);
@@ -143,8 +159,13 @@ async function main() {
   let failed = 0;
   const fail = (msg) => { console.log(`[late-lineup]   FAIL: ${msg}`); failed++; };
 
+  if (!(wlen0 > 0) || !(wlen1 > 0)) {
+    fail(`a take never landed -- looper0 ${wlen0} samples, looper1 ${wlen1} samples`);
+    console.log(`[late-lineup] FAIL (${failed})`);
+    process.exit(1);
+  }
+
   const beatLenSamples = gridBeatLen(second);
-  const cell = beatLenSamples * kFineGridBeats;
   const linkBeatLen = (60 / second.link.bpm) * kSampleRate;
   console.log(`[late-lineup] grid beat ${beatLenSamples.toFixed(1)} samples (master_len ${second.master_len_samples} / ${second.recorded_beats} beats), link bpm implies ${linkBeatLen.toFixed(1)}`);
   const wrapLen = Math.min(wlen0, wlen1);
@@ -155,15 +176,19 @@ async function main() {
   }
 
   const watch = await watchTwoLoopers(wrapLen, beatLenSamples);
-  const offCell = Math.abs(watch.lastOffset - Math.round(watch.lastOffset / cell) * cell);
-  console.log(`[late-lineup] offset between the two read heads: ${watch.lastOffset.toFixed(1)} samples (${(watch.lastOffset / cell).toFixed(3)} grid cells of ${cell.toFixed(1)})`);
+  const armPhase = [armPhaseSamples(armFirst, 0, beatLenSamples), armPhaseSamples(armSecond, 1, beatLenSamples)];
+  const downbeat = [wrap(armPhase[0] - watch.bias[0], wrapLen), wrap(armPhase[1] - watch.bias[1], wrapLen)];
+  const expectedOffset = center(downbeat[1] - downbeat[0], wrapLen);
+  const offArm = Math.abs(center(watch.lastOffset - expectedOffset, wrapLen));
+  console.log(`[late-lineup] arm phases: looper0 ${armPhase[0].toFixed(1)} (${(armPhase[0] / beatLenSamples).toFixed(3)} beats), looper1 ${armPhase[1].toFixed(1)} (${(armPhase[1] / beatLenSamples).toFixed(3)} beats), bias ${watch.bias[0].toFixed(1)}/${watch.bias[1].toFixed(1)}`);
+  console.log(`[late-lineup] offset between the two read heads: ${watch.lastOffset.toFixed(1)} samples, expected ${expectedOffset.toFixed(1)} from the two arm phases`);
   console.log(`[late-lineup] offset spread ${watch.offsetSpread.toFixed(1)} samples, grid lock ${watch.lock[0].min.toFixed(1)}..${watch.lock[0].max.toFixed(1)} / ${watch.lock[1].min.toFixed(1)}..${watch.lock[1].max.toFixed(1)} (${watch.lock[0].dropped + watch.lock[1].dropped} torn replies dropped)`);
 
   if (watch.offsetSpread > kToleranceSamples) {
     fail(`the two loops drifted ${watch.offsetSpread.toFixed(1)} samples apart over ${(kWatchMs / 1000).toFixed(0)}s -- they do not share a rate`);
   }
-  if (offCell > kToleranceSamples) {
-    fail(`the second take sits ${offCell.toFixed(1)} samples off the 1/8-beat grid relative to the first -- off by ${(offCell / cell).toFixed(2)} of a cell`);
+  if (offArm > kToleranceSamples) {
+    fail(`the two read heads sit ${offArm.toFixed(1)} samples from where their own arm phases put them (measured ${watch.lastOffset.toFixed(1)}, expected ${expectedOffset.toFixed(1)})`);
   }
   for (let i = 0; i < 2; i++) {
     if (!watch.lock[i].held) {
