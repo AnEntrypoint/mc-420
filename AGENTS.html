@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop - current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=83edfd821b801b405cb9eb5a2af694344e303750">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=eae7cb98f25ac91955cf7202cb3ed1a035e771e2">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -107,6 +107,8 @@
 <p>aloop (Pi 4) + <code class="language-plaintext highlighter-rouge">../esp-idf-link</code> form ONE ad-hoc single-AP mesh for Link multicast peer discovery (<code class="language-plaintext highlighter-rouge">224.76.78.75:20808</code>); change BOTH sides or mesh splits. Invariants (aloop / esp-idf-link):SSID <code class="language-plaintext highlighter-rouge">ssid=ticker</code> / <code class="language-plaintext highlighter-rouge">wifi_start_link_ap("ticker")</code>; open auth <code class="language-plaintext highlighter-rouge">key_mgmt=NONE</code> / <code class="language-plaintext highlighter-rouge">wifi_connect_sta("ticker", "")</code>; AP/DHCP <code class="language-plaintext highlighter-rouge">192.168.4.1/24</code> + dnsmasq <code class="language-plaintext highlighter-rouge">.2-.20</code> / <code class="language-plaintext highlighter-rouge">esp_netif_set_ip_info</code> same; channel <code class="language-plaintext highlighter-rouge">channel=6</code> / SoftAP ch6; quantum <code class="language-plaintext highlighter-rouge">kLinkQuantum=16.0</code> / <code class="language-plaintext highlighter-rouge">LINK_QUANTUM 16.0</code>; host election lowest MAC/BSSID wins; transport CLOCK-ONLY, <code class="language-plaintext highlighter-rouge">enableStartStopSync(false)</code>, never <code class="language-plaintext highlighter-rouge">setIsPlaying</code>.</p>
 
 <p><code class="language-plaintext highlighter-rouge">src/net/autoap.sh</code> hosts <code class="language-plaintext highlighter-rouge">ticker</code> never <code class="language-plaintext highlighter-rouge">aloop</code>, needs &gt;=1 active <code class="language-plaintext highlighter-rouge">network={}</code> block before <code class="language-plaintext highlighter-rouge">start_ap()</code> does anything.</p>
+
+<p>brcmfmac: <code class="language-plaintext highlighter-rouge">iw dev wlan0 scan</code> while hostapd beacons knocks wlan0 off AP mode (channel flaps to 5 GHz chanspecs, <code class="language-plaintext highlighter-rouge">brcmf_escan_timeout</code>); hostapd stays alive with NO BSS, so no peer can ever associate. <code class="language-plaintext highlighter-rouge">iw dev wlan0 info</code> <code class="language-plaintext highlighter-rouge">type AP</code> is the ONLY truth: <code class="language-plaintext highlighter-rouge">/run/aloop/wifi_role</code> still says <code class="language-plaintext highlighter-rouge">ap</code> with the BSS down. <code class="language-plaintext highlighter-rouge">autoap.sh</code> AP branch watchdogs <code class="language-plaintext highlighter-rouge">ap_up()</code> every tick and gates <code class="language-plaintext highlighter-rouge">scan_mesh_bssid</code> behind <code class="language-plaintext highlighter-rouge">AP_SCAN_IDLE=90</code> s of client-less idle.</p>
 
 <h2 id="ableton-link-checklist">Ableton Link checklist</h2>
 
