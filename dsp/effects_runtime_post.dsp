@@ -61,5 +61,5 @@ with {
 
     filtOut = mainOut + loopSumIn*loopDirectGate + loopHarmonyWet;
     recordTap = mainOut + loopHarmonyWet;
-    inputFxOut = masterWet + loopHarmonyWet;
+    inputFxOut = (masterWet : dubGateLfoStage) + loopHarmonyWet;
 };

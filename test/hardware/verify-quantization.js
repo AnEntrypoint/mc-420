@@ -114,15 +114,19 @@ function deriveTempoQuantBeats(recordedSeconds, anchorBpm) {
   return best;
 }
 
+const ANCHOR_MIDPOINT_FRAC = 0.4142135623730951;
+
 function nearCutFarExtendCandidate(effectiveSamples, masterLenSamples, recordedBeats) {
   const oneBeatSamples = Math.max(1, masterLenSamples / Math.max(1, recordedBeats));
   const takeLenBeats = effectiveSamples / oneBeatSamples;
-  const anchorGridBeats = pickAnchorGridBeats(takeLenBeats);
+  let anchorGridBeats = pickAnchorGridBeats(takeLenBeats);
+  const phraseBeats = Math.max(1, recordedBeats);
+  if (anchorGridBeats > phraseBeats) anchorGridBeats = phraseBeats;
   const pastMultiple = Math.floor(takeLenBeats / anchorGridBeats + 0.0001);
   const pastNodeBeats = pastMultiple * anchorGridBeats;
   const futureNodeBeats = pastNodeBeats + anchorGridBeats;
   const overshootBeats = takeLenBeats - pastNodeBeats;
-  const cutToleranceBeats = anchorGridBeats * 0.5;
+  const cutToleranceBeats = anchorGridBeats * ANCHOR_MIDPOINT_FRAC;
   const finalBeats = (pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001) ? pastNodeBeats : futureNodeBeats;
   return finalBeats * oneBeatSamples;
 }

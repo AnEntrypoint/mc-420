@@ -3,6 +3,7 @@
 const { initLooperDsp, stepSample, MAXLEN } = require('./looper');
 const { createLinkWorld, LINK_QUANTUM, beatAtTime } = require('./link');
 
+const ANCHOR_MIDPOINT_FRAC = 0.4142135623730951;
 const SCALE = 100;
 const SIM_SAMPLE_RATE = 48000 / SCALE;
 const SIM_MAXLEN = Math.round(MAXLEN / SCALE);
@@ -270,7 +271,7 @@ function applyRecPlayCycle(w, looper) {
       const pastNodeBeats = pastMultiple * anchorGridBeats;
       const futureNodeBeats = pastNodeBeats + anchorGridBeats;
       const overshootBeats = takeLenBeats - pastNodeBeats;
-      const cutToleranceBeats = legacy ? 1.0 : anchorGridBeats * 0.5;
+      const cutToleranceBeats = legacy ? 1.0 : anchorGridBeats * ANCHOR_MIDPOINT_FRAC;
       const finalBeats = (pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001)
         ? pastNodeBeats
         : futureNodeBeats;

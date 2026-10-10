@@ -132,6 +132,8 @@ static double pickAnchorGridBeats(double takeLenBeats) {
     return 0.125;
 }
 
+static constexpr double kAnchorMidpointFrac = 0.4142135623730951;
+
 long resampleLatencySamples(AudioThread* audio) {
     long block = kBlockSize;
     if (audio) {
@@ -302,7 +304,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             double pastNodeBeats = pastMultiple * anchorGridBeats;
             double futureNodeBeats = pastNodeBeats + anchorGridBeats;
             double overshootBeats = takeLenBeats - pastNodeBeats;
-            double cutToleranceBeats = anchorGridBeats * 0.5;
+            double cutToleranceBeats = anchorGridBeats * kAnchorMidpointFrac;
             double finalBeats = (pastMultiple >= 1.0 && overshootBeats <= cutToleranceBeats + 0.0001)
                 ? pastNodeBeats
                 : futureNodeBeats;
