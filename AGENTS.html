@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop - current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8fc73ffe1181fd80b987968ec392a46ad1ef7501">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=b4af8fe4975f6906a2ca266dca00860668e10dbe">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -155,7 +155,15 @@
 
 <h2 id="content-phase-anchor">Content phase-anchor</h2>
 
-<p>ARM records from press, anchored at NEAREST fine-grid node: <code class="language-plaintext highlighter-rouge">kFineGridBeats=0.125</code>, at <code class="language-plaintext highlighter-rouge">armEdge</code> <code class="language-plaintext highlighter-rouge">rsmNext = rsmNearestNode</code> (circular correction &lt;= half cell). Per-loop beat scale <code class="language-plaintext highlighter-rouge">s</code>: <code class="language-plaintext highlighter-rouge">1/ratioClamped</code> at <code class="language-plaintext highlighter-rouge">finishEdge</code>, <code class="language-plaintext highlighter-rouge">1.0</code> at <code class="language-plaintext highlighter-rouge">armEdge</code>; read-head rate <code class="language-plaintext highlighter-rouge">s*masterPhaseSlope</code>, so take drifts off grid IFF <code class="language-plaintext highlighter-rouge">s != 1</code>.</p>
+<table>
+  <tbody>
+    <tr>
+      <td>ARM records from press, anchored at RAW master phase: at <code class="language-plaintext highlighter-rouge">armEdge</code> <code class="language-plaintext highlighter-rouge">rsmNext = masterPhase</code> (write index restarts at 0 the same instant, so read head tracks write head exactly). Snapping to the nearest 1/8-beat node (<code class="language-plaintext highlighter-rouge">kFineGridBeats=0.125</code>, <code class="language-plaintext highlighter-rouge">rsmNearestNode</code>) displaced every finished take by <code class="language-plaintext highlighter-rouge">P0 - node</code>,</td>
+      <td>.</td>
+      <td>&lt;= half cell (~63 ms at 120 bpm): the artist-reported “resamples dont line up”. Witness on device (<code class="language-plaintext highlighter-rouge">readpos</code> vs <code class="language-plaintext highlighter-rouge">master_phase_beats*beatLen</code> from the SAME reply, despiked, <code class="language-plaintext highlighter-rouge">test/hardware/verify-arm-lineup.js</code>, which measures both hypotheses and satisfies <code class="language-plaintext highlighter-rouge">errGrid - errMaterial == arm - node</code> exactly): BEFORE max 1242.7 smp / 25.89 ms, mean 783.3 / 16.32 ms; AFTER max 3.4 / 0.07 ms, mean 2.7 / 0.06 ms (tol 16); under device stall AFTER max 29.1 / 0.61 ms, mean 18.3 / 0.38 ms, i.e. at/below that run’s own 40-130 smp downbeat spread. Per-loop beat scale <code class="language-plaintext highlighter-rouge">s</code>: <code class="language-plaintext highlighter-rouge">1/ratioClamped</code> at <code class="language-plaintext highlighter-rouge">finishEdge</code>, <code class="language-plaintext highlighter-rouge">1.0</code> at <code class="language-plaintext highlighter-rouge">armEdge</code>; read-head rate <code class="language-plaintext highlighter-rouge">s*masterPhaseSlope</code>, so take drifts off grid IFF <code class="language-plaintext highlighter-rouge">s != 1</code>.</td>
+    </tr>
+  </tbody>
+</table>
 
 <p>FINISH length near-cut/far-extend (<code class="language-plaintext highlighter-rouge">pickAnchorGridBeats</code>: 16/8/4/2/1/0.5/0.25/0.125), CAPPED at 1 phrase: <code class="language-plaintext highlighter-rouge">min(pickAnchorGridBeats(takeLenBeats), max(1, cmd/recorded_beats))</code>. Overshoot within <code class="language-plaintext highlighter-rouge">cutTolerance = anchor*kAnchorMidpointFrac</code> (<code class="language-plaintext highlighter-rouge">kAnchorMidpointFrac = sqrt(2)-1 = 0.4142135623730951</code>) cuts now, else extends to next tier (candidate nodes log-equidistant at <code class="language-plaintext highlighter-rouge">sqrt(2)*anchor</code>, so 0.5 cut a tier too low): witness before fix takeBeats 5.9894-&gt;4, 5.8407-&gt;4, 1.4449-&gt;1; after fix 5.9290-&gt;8, 5.7804-&gt;8, 1.4233-&gt;2, 2.9710-&gt;4, 3.9841-&gt;4, 1.9921-&gt;2 (all nearest). Bounds 64 .. <code class="language-plaintext highlighter-rouge">kMaxLoopSamples</code> 48000*60. <code class="language-plaintext highlighter-rouge">snappedWrapLen = ceil(finishTakeLen/anchorGridLenNow) * anchorGridLenNow</code>, <code class="language-plaintext highlighter-rouge">anchorGridLenNow = max(1.0, min(anchorGridBeats*beatLenNow, masterLen))</code>. <code class="language-plaintext highlighter-rouge">cmd/master_len</code> fallback must run whenever Link not length driver: nested inside <code class="language-plaintext highlighter-rouge">if (g_link)</code> it never ran with NULL Link.</p>
 
