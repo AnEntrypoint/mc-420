@@ -165,7 +165,7 @@ async function main() {
 
   const wrapLen = t.loopers.wraplen[0];
   const wrapLenSeconds = wrapLen / kSampleRate;
-  const beats = deriveTempoQuantBeats(wrapLenSeconds, preBpm);
+  const beats = deriveTempoQuantBeats(wrapLenSeconds, 120);
   const derivedBpm = (60 * beats) / wrapLenSeconds;
   const postBpm = t.link.bpm;
   const effSpeed = t.eff_speed;

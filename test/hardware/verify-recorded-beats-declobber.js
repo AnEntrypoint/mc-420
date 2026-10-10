@@ -10,6 +10,7 @@ if (!host) {
 
 const kSampleRate = 48000;
 const kTargetBeats = Number(beatsArg || '8');
+const kFirstTakeAnchorBpm = 120;
 const kPressMs = 150;
 const kClearAllSettleMs = 2500;
 const kWatchMs = 22000;
@@ -138,21 +139,21 @@ async function main() {
   await new Promise((r) => setTimeout(r, kClearAllSettleMs));
 
   let pre = await queryTelemetry();
-  let anchorBpm = pre.link.bpm > 1 ? pre.link.bpm : 0;
-  if (anchorBpm < 1) {
-    for (let i = 0; i < 20 && anchorBpm < 1; i++) {
+  let linkBpm = pre.link.bpm > 1 ? pre.link.bpm : 0;
+  if (linkBpm < 1) {
+    for (let i = 0; i < 20 && linkBpm < 1; i++) {
       await new Promise((r) => setTimeout(r, 300));
       pre = await queryTelemetry();
-      anchorBpm = pre.link.bpm > 1 ? pre.link.bpm : 0;
+      linkBpm = pre.link.bpm > 1 ? pre.link.bpm : 0;
     }
   }
-  console.log(`[declobber] pre-take: peers=${pre.link.peers} synced=${!!pre.link.synced} bpm=${anchorBpm.toFixed(3)} recorded_beats=${pre.recorded_beats} master_len=${pre.master_len_samples}`);
+  console.log(`[declobber] pre-take: peers=${pre.link.peers} synced=${!!pre.link.synced} bpm=${linkBpm.toFixed(3)} recorded_beats=${pre.recorded_beats} master_len=${pre.master_len_samples}`);
   if (!pre.link.synced || pre.link.peers < 1) {
     console.log('[declobber]   NOTE: no Link peer -- the pin this test looks for never armed');
   }
 
-  const holdMs = holdMsOverride > 0 ? holdMsOverride : Math.round((60000 * kTargetBeats) / (anchorBpm > 1 ? anchorBpm : 120));
-  console.log(`[declobber] holding pad 2 for ${holdMs}ms = ${kTargetBeats} beats at ${anchorBpm.toFixed(3)} bpm`);
+  const holdMs = holdMsOverride > 0 ? holdMsOverride : Math.round((60000 * kTargetBeats) / kFirstTakeAnchorBpm);
+  console.log(`[declobber] holding pad 2 for ${holdMs}ms = ${kTargetBeats} beats at ${kFirstTakeAnchorBpm} bpm`);
 
   await tapPad(2);
   await new Promise((r) => setTimeout(r, holdMs));
@@ -162,7 +163,7 @@ async function main() {
   const masterLen = t.master_len_samples;
   const recordedBeats = t.recorded_beats;
   const takeSeconds = masterLen / kSampleRate;
-  const expectedBeats = deriveTempoQuantBeats(takeSeconds, anchorBpm);
+  const expectedBeats = deriveTempoQuantBeats(takeSeconds, kFirstTakeAnchorBpm);
   const publishedBeatLen = t.groove ? t.groove.beat_len_samples : 0;
   const basisBeatLen = masterLen / recordedBeats;
   const pinnedBeatLen = masterLen / 4;
@@ -172,7 +173,7 @@ async function main() {
   console.log(`[declobber] take: master_len_samples=${masterLen} (${(takeSeconds * 1000).toFixed(0)}ms) wraplen[0]=${t.loopers.wraplen[0]} eff_speed=${t.eff_speed.toFixed(4)}`);
   console.log(`[declobber] published: recorded_beats=${recordedBeats} groove.beat_len_samples=${publishedBeatLen.toFixed(2)}`);
   console.log(`[declobber] basis: master_len/recorded_beats = ${masterLen}/${recordedBeats} = ${basisBeatLen.toFixed(2)} samples/beat`);
-  console.log(`[declobber] expected beats from deriveTempoQuant(${takeSeconds.toFixed(4)}s, anchor ${anchorBpm.toFixed(3)}) = ${expectedBeats}`);
+  console.log(`[declobber] expected beats from deriveTempoQuant(${takeSeconds.toFixed(4)}s, anchor ${kFirstTakeAnchorBpm.toFixed(3)}) = ${expectedBeats}`);
   console.log(`[declobber] if pinned to 4: beat_len would be ${pinnedBeatLen.toFixed(2)} samples/beat (${(pinnedBeatLen - basisBeatLen).toFixed(2)} off), MLB would be ${(pinnedMlbBeats * sessionBeatLen / 64).toFixed(2)} blocks vs ${(masterLen / 64).toFixed(2)}`);
 
   let failed = 0;

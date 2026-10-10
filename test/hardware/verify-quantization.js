@@ -138,14 +138,8 @@ async function main() {
   const results = [];
   let masterLenSamples = null;
   let recordedBeats = null;
-  let tempoAnchorBpm = 120;
-  try {
-    const pre = await queryTelemetry();
-    if (pre.link && pre.link.synced && pre.link.bpm > 1) tempoAnchorBpm = pre.link.bpm;
-  } catch (e) {
-    tempoAnchorBpm = 120;
-  }
-  console.log(`[verify-quant] tempo anchor=${tempoAnchorBpm.toFixed(1)} bpm (synced Link tempo when peers are present)`);
+  const tempoAnchorBpm = 120;
+  console.log(`[verify-quant] tempo anchor=${tempoAnchorBpm.toFixed(1)} bpm (first take owns tempo)`);
   for (let i = 0; i < holds.length; i++) {
     const r = await recordLooper(i, holds[i]);
     if (i === 0) {

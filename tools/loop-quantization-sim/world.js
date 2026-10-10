@@ -217,8 +217,7 @@ function applyRecPlayCycle(w, looper) {
         solvedBpm = linkSnap.bpm;
         solvedBeats = snapBeatsToPow2((recordedSeconds * linkSnap.bpm) / 60.0);
       } else {
-        const solved = deriveTempoQuant(recordedSeconds,
-          (linkSnap.synced && linkSnap.bpm > 1.0) ? linkSnap.bpm : 120.0);
+        const solved = deriveTempoQuant(recordedSeconds, 120.0);
         solvedBpm = solved.bpm;
         solvedBeats = solved.beats;
       }

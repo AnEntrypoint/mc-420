@@ -249,12 +249,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             if (lenSamples > kMaxLoopSamples) lenSamples = kMaxLoopSamples;
             m_masterLenSamples = lenSamples;
             double recordedSeconds = (double)m_masterLenSamples / (double)kSampleRate;
-            double tempoAnchorBpm = 120.0;
-            if (link) {
-                LinkSnapshot tempoSnap = link->audioRead();
-                if (tempoSnap.synced && tempoSnap.bpm > 1.0) tempoAnchorBpm = tempoSnap.bpm;
-            }
-            TempoSolveResult solved = deriveTempoQuant(recordedSeconds, tempoAnchorBpm);
+            TempoSolveResult solved = deriveTempoQuant(recordedSeconds, 120.0);
             ps.setByName("cmd/recorded_bpm", (float)solved.bpm);
             ps.setByName("cmd/recorded_beats", (float)solved.beats);
             ps.setByName("cmd/master_len", (float)m_masterLenSamples);

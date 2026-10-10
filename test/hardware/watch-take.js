@@ -157,7 +157,7 @@ async function main() {
   const bias = last.bias;
   const looper0Playing = ((base.loopers.play >> 0) & 1) === 1;
   const masterLenSamples = (looper === 0 || !looper0Playing) ? wlen : last.masterWlen;
-  const anchorBpm = base.link.peers > 0 ? base.link.bpm : 120;
+  const anchorBpm = 120;
   const beats = deriveTempoQuantBeats(masterLenSamples / kSampleRate, anchorBpm);
   const beatLenSamples = masterLenSamples / beats;
   const cellSamples = beatLenSamples * kFineGridBeats;
