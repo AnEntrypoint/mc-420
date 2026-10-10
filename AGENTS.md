@@ -22,6 +22,7 @@ Real Pi 4 `192.168.137.100`, root/aloop; Pi 3B+ netboots from host. aloop is BEH
 - Verification gates:in `run-all-verifications.js` exit 2 = missing prerequisite:skipped, not failed.
 
 Debugging: `core_busy` undercounts (only `compute()`, not blocking `readi()` cycle):cross-check `/proc/<tid>/stat` utime+stime vs `/proc/uptime`, `mpstat` per-CPU. Telemetry CANNOT see zone pins: `g_telem.recordedBeats` reads ParamStore (`audio_thread.cpp:843`) while pins write Faust ZONE POINTERS; buggy and fixed binaries publish identical `recorded_beats=8`.
+Never leave a `fprintf` on the per-block audio path: `[diag-pitchguard]` ran ~500 lines/s and grew `/var/log/aloop.log` to 475 MB on the 1.9 G tmpfs root; the rate tracks live audio, so silence reads +0 lines and hides it.
 
 # Device, image and boot
 
@@ -48,6 +49,7 @@ aloop (Pi 4) + `../esp-idf-link` form ONE ad-hoc single-AP mesh for Link multica
 `src/net/autoap.sh` hosts `ticker` never `aloop`, needs >=1 active `network={}` block before `start_ap()` does anything.
 
 brcmfmac: `iw dev wlan0 scan` while hostapd beacons knocks wlan0 off AP mode (channel flaps to 5 GHz chanspecs, `brcmf_escan_timeout`); hostapd stays alive with NO BSS, so no peer can ever associate. `iw dev wlan0 info` `type AP` is the ONLY truth: `/run/aloop/wifi_role` still says `ap` with the BSS down. `autoap.sh` AP branch watchdogs `ap_up()` every tick and gates `scan_mesh_bssid` behind `AP_SCAN_IDLE=90` s of client-less idle.
+Link multicast needs a ROUTE, not just a group join: with no `224.0.0.0/4 dev wlan0`, `ip route get 224.76.78.75` is "Network unreachable" while `/proc/net/igmp` still shows the membership on wlan0. `autoap.sh` installs it in `start_ap()`/`join_sta()` and re-adds it every tick because it does not survive an interface flap. Witnessed `peers=1 synced=true` the instant a station attached. A station reassociating (`iw station dump` `rx bytes` resets to ~1k) does NOT re-acquire: peer count stays 0, so the far side has to keep announcing after reconnect.
 
 ## Ableton Link checklist
 
