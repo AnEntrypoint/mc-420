@@ -90,3 +90,7 @@ test-audio-corpus/*.json
 *-tmp.js
 .netboot-serve-session.*
 .netboot-serve-pid.txt
+.gm/crawl-profiles/
+.gm/memories/
+.wfgy/
+.netboot-serve.err
