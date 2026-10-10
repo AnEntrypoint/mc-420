@@ -128,6 +128,10 @@ aloop::Sampler* g_sampler = nullptr;
 aloop::Lv2Host* g_homeFx = nullptr;
 aloop::UsbRecorder* g_usbRecorder = nullptr;
 aloop::ClipExporter* g_clipExporter = nullptr;
+std::unique_ptr<aloop::Sampler> g_samplerOwner;
+std::unique_ptr<aloop::Lv2Host> g_homeFxOwner;
+std::unique_ptr<aloop::UsbRecorder> g_usbRecorderOwner;
+std::unique_ptr<aloop::ClipExporter> g_clipExporterOwner;
 std::atomic<bool> g_clipExportTriggerPending{false};
 
 double g_resampleFoldSum = 0.0;
@@ -454,15 +458,16 @@ static void* worker(void*) {
 #endif
 
 #ifdef ALOOP_HAVE_FAUST_LOOP
-    auto samplerPtr = std::make_unique<Sampler>();
-    g_sampler = samplerPtr.get();
+    g_samplerOwner = std::make_unique<Sampler>();
+    g_sampler = g_samplerOwner.get();
     std::vector<int32_t> samplerBuf((size_t)N, 0);
 #endif
 
-    Lv2Host homeFx;
+    g_homeFxOwner = std::make_unique<Lv2Host>();
+    Lv2Host& homeFx = *g_homeFxOwner;
     homeFx.loadDir(g_cfg.homeDir, g_cfg.userFxCore);
     homeFx.connect(N, ch);
-    g_homeFx = &homeFx;
+    g_homeFx = g_homeFxOwner.get();
     Lv2Host::ControlHandle gatePhaseHandle = homeFx.resolveControl("fx2/GATEPHASE");
 
     Lv2Host userFx;
@@ -485,11 +490,11 @@ static void* worker(void*) {
     delayVerbFxMaster.loadDir(g_cfg.delayVerbDir, g_cfg.homeFxCore);
     delayVerbFxMaster.connect(N, ch);
 
-    UsbRecorder usbRecorder(g_cfg.usbMountPoint, g_cfg.sampleRate, g_cfg.usbChunkMinutes, g_cfg.usbChunkCount);
-    if (g_cfg.usbRecordEnabled) g_usbRecorder = &usbRecorder;
+    g_usbRecorderOwner = std::make_unique<UsbRecorder>(g_cfg.usbMountPoint, g_cfg.sampleRate, g_cfg.usbChunkMinutes, g_cfg.usbChunkCount);
+    if (g_cfg.usbRecordEnabled) g_usbRecorder = g_usbRecorderOwner.get();
 
-    ClipExporter clipExporter(g_cfg.usbMountPoint, g_cfg.sampleRate);
-    g_clipExporter = &clipExporter;
+    g_clipExporterOwner = std::make_unique<ClipExporter>(g_cfg.usbMountPoint, g_cfg.sampleRate);
+    g_clipExporter = g_clipExporterOwner.get();
 
 #ifdef ALOOP_HAVE_ALSA
     snd_pcm_t *cap = nullptr, *play = nullptr;

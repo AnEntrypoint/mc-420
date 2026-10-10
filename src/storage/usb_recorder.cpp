@@ -58,7 +58,7 @@ UsbRecorder::UsbRecorder(std::string mountPoint, int sampleRate, int chunkMinute
 }
 
 UsbRecorder::~UsbRecorder() {
-    if (m_recording.load(std::memory_order_relaxed)) endRecording();
+    if (m_recording.load(std::memory_order_relaxed)) endRecording("shutdown");
     delete[] m_ring;
 }
 
@@ -176,26 +176,33 @@ bool UsbRecorder::beginRecording() {
     return true;
 }
 
-void UsbRecorder::endRecording() {
+void UsbRecorder::endRecording(const char* reason) {
     finalizeChunk();
-    fprintf(stderr, "[usb-rec] recording stopped (drive unmounted or write failed)\n");
+    fprintf(stderr, "[usb-rec] recording stopped (%s)\n", reason);
 }
 
 bool UsbRecorder::drainToFile() {
+    if (m_fd < 0) return false;
     uint64_t w = m_writeCount.load(std::memory_order_acquire);
     uint64_t r = m_readCount.load(std::memory_order_relaxed);
+    if (w - r > m_ringCapacity) {
+        r = w - m_ringCapacity;
+        m_readCount.store(r, std::memory_order_release);
+        m_overruns.fetch_add(1, std::memory_order_relaxed);
+    }
     uint64_t avail = w - r;
     while (avail > 0) {
+        if (m_chunkSamplesWritten > m_chunkMaxSamples) m_chunkSamplesWritten = m_chunkMaxSamples;
         uint64_t chunkRemaining = m_chunkMaxSamples - m_chunkSamplesWritten;
         uint64_t take = std::min(avail, chunkRemaining);
         uint64_t start = r % m_ringCapacity;
         uint64_t firstPiece = std::min(take, m_ringCapacity - start);
         ssize_t w1 = write(m_fd, &m_ring[(size_t)start], (size_t)firstPiece * sizeof(int16_t));
-        if (w1 < 0) { m_readCount.store(r, std::memory_order_release); return false; }
+        if (w1 < 0 || (size_t)w1 != (size_t)firstPiece * sizeof(int16_t)) { m_readCount.store(r, std::memory_order_release); return false; }
         uint64_t secondPiece = take - firstPiece;
         if (secondPiece > 0) {
             ssize_t w2 = write(m_fd, &m_ring[0], (size_t)secondPiece * sizeof(int16_t));
-            if (w2 < 0) { m_readCount.store(r + firstPiece, std::memory_order_release); return false; }
+            if (w2 < 0 || (size_t)w2 != (size_t)secondPiece * sizeof(int16_t)) { m_readCount.store(r + firstPiece, std::memory_order_release); return false; }
         }
         r += take;
         avail -= take;
@@ -217,13 +224,13 @@ void UsbRecorder::poll() {
     if (mounted && !wasRecording) {
         if (beginRecording()) m_recording.store(true, std::memory_order_relaxed);
     } else if (!mounted && wasRecording) {
-        endRecording();
+        endRecording("drive unmounted");
         m_recording.store(false, std::memory_order_relaxed);
         m_readCount.store(m_writeCount.load(std::memory_order_acquire), std::memory_order_release);
     }
     if (m_recording.load(std::memory_order_relaxed)) {
         if (!drainToFile()) {
-            endRecording();
+            endRecording("write failed");
             m_recording.store(false, std::memory_order_relaxed);
             m_readCount.store(m_writeCount.load(std::memory_order_acquire), std::memory_order_release);
         }

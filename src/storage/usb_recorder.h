@@ -26,7 +26,7 @@ private:
     bool isMounted() const;
     int effectiveChunkCount() const;
     bool beginRecording();
-    void endRecording();
+    void endRecording(const char* reason);
     bool openChunk(int index);
     void finalizeChunk();
     bool drainToFile();
