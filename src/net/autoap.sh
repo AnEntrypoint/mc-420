@@ -53,6 +53,7 @@ join_sta() {
     while [ "$waited" -lt "$ASSOC_WAIT" ]; do
         if sta_associated; then
             if udhcpc -i "$IFACE" -n -q >/dev/null 2>&1 || has_ip; then
+                add_mesh_route
                 write_role_state sta
                 return 0
             fi
@@ -82,6 +83,7 @@ start_ap() {
         write_role_state none
         return 1
     fi
+    add_mesh_route
     write_role_state ap
     if ! dnsmasq -C "$CONF_DIR/dnsmasq.conf"; then
         log "dnsmasq failed to start -- peers can associate but will get no lease"
@@ -93,6 +95,10 @@ stop_ap() {
     pkill hostapd 2>/dev/null || true
     ip addr flush dev "$IFACE" 2>/dev/null || true
     write_role_state none
+}
+
+add_mesh_route() {
+    ip route replace 224.0.0.0/4 dev "$IFACE" 2>/dev/null || true
 }
 
 ap_has_clients() {
@@ -153,6 +159,7 @@ retries=0
 idle=0
 while true; do
     sleep "$SCAN_INTERVAL"
+    ip route get 224.76.78.75 >/dev/null 2>&1 || add_mesh_route
     case "$state" in
         STA)
             if sta_associated && has_ip; then
