@@ -10,6 +10,10 @@ CHAIN="faust faust_bp faust_clean full full_bp"
 
 mkdir -p "$OUTDIR"
 
+if [ ! -f test-audio-corpus/instruments/piano_mid_C4.wav ]; then
+  python3 tools/chain-render/make_corpus.py test-audio-corpus/instruments
+fi
+
 for c in $CORPUS; do
   IN="test-audio-corpus/instruments/$c.wav"
   for m in $PLAIN; do

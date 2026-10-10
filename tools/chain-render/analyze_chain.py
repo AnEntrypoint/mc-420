@@ -236,12 +236,14 @@ def analyze(in_path, out_path, label, skip_s=0.25, maxd=4096, nperseg=16384):
         top = np.argsort(pr[sel])[::-1][:8]
         fs_sel = fr[sel]
         ps_sel = pr[sel]
+        peak_ref = float(ps_sel[top[0]])
         peaks = []
         for i in top:
+            p = float(ps_sel[i])
             c = cents_from_harmonic(float(fs_sel[i]), f0)
             peaks.append({
                 "hz": round(float(fs_sel[i]), 1),
-                "db_rel_res_peak": round(db(float(ps_sel[i]) / float(ps_sel[top[0]])), 1),
+                "db_rel_res_peak": -999.0 if peak_ref <= 0 else round(db(p / peak_ref), 1),
                 "cents_from_harmonic": None if c is None else round(c, 1),
             })
         res["res_top_peaks"] = peaks
