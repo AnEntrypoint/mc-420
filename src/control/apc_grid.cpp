@@ -102,11 +102,10 @@ struct TempoSolveResult {
 static TempoSolveResult deriveTempoQuant(double seconds, double anchorBpm = 120.0) {
     const double anchor = (anchorBpm > 1.0) ? anchorBpm : 120.0;
     if (seconds <= 0.0) return {120.0, 16.0};
-    static const double kCandidates[] = {1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0};
     TempoSolveResult best = {120.0, 16.0};
     double bestScore = 1e18;
     bool bestInWindow = false;
-    for (double beats : kCandidates) {
+    for (double beats = 1.0; beats <= 128.0; beats += 1.0) {
         double bpm = 60.0 * beats / seconds;
         bool inWindow = (bpm >= anchor * 0.5 && bpm <= anchor * 2.0);
         double score = std::fabs(std::log2(bpm / anchor));

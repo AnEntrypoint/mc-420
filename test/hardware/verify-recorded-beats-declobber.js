@@ -60,9 +60,8 @@ function queryTelemetry() {
 
 function deriveTempoQuantBeats(recordedSeconds, anchorBpm) {
   const anchor = (anchorBpm > 1) ? anchorBpm : 120;
-  const candidates = [1, 2, 4, 8, 16, 32, 64, 128];
   let best = 16, bestScore = Infinity, bestInWindow = false;
-  for (const beats of candidates) {
+  for (let beats = 1; beats <= 128; beats += 1) {
     const bpm = (60 * beats) / recordedSeconds;
     const inWindow = bpm >= anchor * 0.5 && bpm <= anchor * 2;
     const score = Math.abs(Math.log2(bpm / anchor));

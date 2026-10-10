@@ -28,11 +28,10 @@ function looperGroupSegment(index) {
 
 function deriveTempoQuant(seconds) {
   if (seconds <= 0) return { bpm: 120.0, beats: 16.0 };
-  const candidates = [1, 2, 4, 8, 16, 32, 64, 128];
   let best = { bpm: 120.0, beats: 16.0 };
   let bestDist = Infinity;
   let bestInWindow = false;
-  for (const beats of candidates) {
+  for (let beats = 1; beats <= 128; beats += 1) {
     const bpm = (60.0 * beats) / seconds;
     const inWindow = bpm >= 80.0 && bpm <= 160.0;
     const dist = Math.abs(bpm - 120.0);

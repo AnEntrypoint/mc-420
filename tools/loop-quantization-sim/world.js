@@ -23,7 +23,7 @@ function deriveTempoQuant(seconds, anchorBpm) {
   let best = { bpm: 120.0, beats: 16.0 };
   let bestScore = 1e18;
   let bestInWindow = false;
-  for (const beats of kCandidates) {
+  for (let beats = 1; beats <= 128; beats += 1) {
     const bpm = (60.0 * beats) / seconds;
     const inWindow = bpm >= anchor * 0.5 && bpm <= anchor * 2.0;
     const score = Math.abs(Math.log2(bpm / anchor));
