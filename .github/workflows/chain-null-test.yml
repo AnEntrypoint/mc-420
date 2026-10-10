@@ -1,0 +1,49 @@
+name: chain-null-test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/chain-render/**'
+      - '.github/workflows/chain-null-test.yml'
+      - 'dsp/**'
+      - 'effects/home/faust/**'
+
+permissions:
+  contents: read
+
+jobs:
+  null-test:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install faust and numpy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y faust python3-numpy
+
+      - name: faust version
+        run: faust --version
+
+      - name: generate faust cpp
+        run: sh tools/chain-render/gen.sh
+
+      - name: build chain_render
+        run: g++ -O2 -std=c++17 -I tools/chain-render -I build/chain-render -I effects/home/faust -I dsp -o build/chain-render/chain_render tools/chain-render/chain_render.cpp
+
+      - name: dump neutral control zones
+        run: build/chain-render/chain_render in=test-audio-corpus/instruments/piano_mid_C4.wav out=/tmp/zone-dump.wav mode=full dump=1
+
+      - name: render corpus
+        run: sh tools/chain-render/run.sh
+
+      - name: analyze null residuals
+        run: sh tools/chain-render/report.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chain-null-wavs
+          path: out/chain-render
