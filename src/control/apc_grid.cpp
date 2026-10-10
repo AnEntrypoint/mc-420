@@ -299,7 +299,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             double pastNodeBeats = pastMultiple * anchorGridBeats;
             double futureNodeBeats = pastNodeBeats + anchorGridBeats;
             double overshootBeats = takeLenBeats - pastNodeBeats;
-            double cutToleranceBeats = std::max(1.0, std::min(anchorGridBeats * 0.5, takeLenBeats * 0.125));
+            double cutToleranceBeats = anchorGridBeats * 0.5;
             double finalBeats = (pastMultiple >= 1.0 && overshootBeats <= cutToleranceBeats + 0.0001)
                 ? pastNodeBeats
                 : futureNodeBeats;

@@ -1067,9 +1067,9 @@ static void* worker(void*) {
                 if (a > inPeak) inPeak = a;
             }
             g_telem.inPeak = inPeak;
-            for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = (int32_t)(fin[i] * 32768.0f);
+            for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = 0;
             g_sampler->renderInto(samplerBuf.data(), N);
-            for (int i = 0; i < N; i++) fin[i] = (float)samplerBuf[(size_t)i] / 32768.0f;
+            for (int i = 0; i < N; i++) fin[i] += (float)samplerBuf[(size_t)i] / 32768.0f;
             if (g_params) {
                 static float foldGain = 0.0f;
                 bool anyXposeVoiceGatedNow = false;
@@ -1264,7 +1264,13 @@ static void* worker(void*) {
             }
             faustPre.compute(N, fins, preOuts);
             if (g_telem.gateMode > 0) {
-                for (int i = 0; i < N; i++) loopSumPreBuf[(size_t)i] *= grooveGateBuf[(size_t)i];
+                for (int i = 0; i < N; i++) {
+                    float grooveGate = grooveGateBuf[(size_t)i];
+                    loopSumPreBuf[(size_t)i] *= grooveGate;
+                    loopHarmonyWetBuf[(size_t)i] *= grooveGate;
+                    preFilterOutBuf[(size_t)i] *= grooveGate;
+                    masterGatedBuf[(size_t)i] *= grooveGate;
+                }
             }
             {
                 static float lastLoggedShift = -999.0f;

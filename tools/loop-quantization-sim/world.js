@@ -270,9 +270,7 @@ function applyRecPlayCycle(w, looper) {
       const pastNodeBeats = pastMultiple * anchorGridBeats;
       const futureNodeBeats = pastNodeBeats + anchorGridBeats;
       const overshootBeats = takeLenBeats - pastNodeBeats;
-      const cutToleranceBeats = legacy
-        ? 1.0
-        : Math.max(1.0, Math.min(anchorGridBeats * 0.5, takeLenBeats * 0.125));
+      const cutToleranceBeats = legacy ? 1.0 : anchorGridBeats * 0.5;
       const finalBeats = (pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001)
         ? pastNodeBeats
         : futureNodeBeats;
