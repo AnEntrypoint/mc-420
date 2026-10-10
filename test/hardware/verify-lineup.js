@@ -14,7 +14,7 @@ const HOLD_MS = 2000;
 const LONG_HOLD_MS = 8100;
 const HOLD_ERASE_MS = 1150;
 const WITHIN_TRIAL_TOLERANCE = 8;
-const ON_GRID_TOLERANCE = 64;
+const ON_ARM_TOLERANCE = 64;
 const LENGTH_TOLERANCE_BEATS = 2.5;
 
 const MASTER_PAD = 2;
@@ -24,6 +24,8 @@ const CLEAR_ALL_NOTE = 0x5b;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const wrap = (x, p) => ((x % p) + p) % p;
+const center = (x, p) => wrap(x + p * 0.5, p) - p * 0.5;
+let masterLenNow = 0;
 
 function openInject() {
   return new Promise((resolve, reject) => {
@@ -82,14 +84,30 @@ function anchorOf(t, looper, oneBeat) {
 
 async function anchors(oneBeat, samples = 4) {
   const acc = new Map();
+  const lin = new Map();
+  const biasOf = new Map();
   const wlenOf = new Map();
+  let prevGrid = null;
+  let gridOff = 0;
   for (let k = 0; k < samples; k++) {
     const t = await queryTelemetry();
+    const grid = t.master_phase_beats * oneBeat;
+    if (prevGrid !== null) {
+      if (grid < prevGrid - masterLenNow * 0.5) gridOff += masterLenNow;
+      else if (grid > prevGrid + masterLenNow * 0.5) gridOff -= masterLenNow;
+    }
+    prevGrid = grid;
     for (const i of LOOPERS) {
       const a = anchorOf(t, i, oneBeat);
       if (a === null) continue;
-      if (!acc.has(i)) { acc.set(i, []); wlenOf.set(i, t.loopers.wraplen[i]); }
+      if (!acc.has(i)) {
+        acc.set(i, []);
+        lin.set(i, []);
+        wlenOf.set(i, t.loopers.wraplen[i]);
+        biasOf.set(i, t.loopers.latencybias[i] > 0 ? t.loopers.latencybias[i] : t.latency_bias_samples);
+      }
       acc.get(i).push(a);
+      lin.get(i).push(wrap(grid + gridOff - t.loopers.readpos[i], wlenOf.get(i)));
     }
     await sleep(120);
   }
@@ -97,7 +115,8 @@ async function anchors(oneBeat, samples = 4) {
   for (const i of LOOPERS) {
     const vals = acc.get(i);
     if (!vals || vals.length < 2) { out.push(null); continue; }
-    out.push({ i, anchor: circularMean(vals, wlenOf.get(i)), wlen: wlenOf.get(i) });
+    const wlen = wlenOf.get(i);
+    out.push({ i, anchor: circularMean(vals, wlen), wlen, bias: biasOf.get(i), lineup: circularMean(lin.get(i), wlen) });
   }
   return out;
 }
@@ -145,6 +164,7 @@ async function main() {
   const masterBeats = Math.round(masterLen / beatFromTempo);
   const oneBeat = masterLen / masterBeats;
   const cell = 0.125 * oneBeat;
+  masterLenNow = masterLen;
   console.log(`[verify-lineup] master wlen=${masterLen} (${masterBeats} beats, oneBeat=${oneBeat.toFixed(1)}, cell=${cell.toFixed(1)}, bpm=${bpm.toFixed(2)})`);
 
   const rows = [];
@@ -156,6 +176,9 @@ async function main() {
     await sleep(500);
 
     burst(sock, TAKE_PADS);
+    const armTele = await queryTelemetry();
+    const armPhase = LOOPERS.map(i => wrap(armTele.master_phase_beats * oneBeat
+      - armTele.loopers.writeidx[i] * armTele.eff_speed, masterLen));
     await sleep(hold);
     const beforeFinish = await queryTelemetry();
     burst(sock, TAKE_PADS);
@@ -167,17 +190,19 @@ async function main() {
     }
     const finishMs = Date.now() - startedAt;
 
-    const got = (await anchors(oneBeat)).filter(Boolean);
+    const got = (await anchors(oneBeat, 12)).filter(Boolean);
     if (got.length < 2) {
       console.log(`[verify-lineup] trial ${trial}: only ${got.length} loopers took content -- skipped`);
       continue;
     }
     const spread = Math.max(...got.map(g => g.anchor)) - Math.min(...got.map(g => g.anchor));
     const lengthErrBeats = Math.max(...got.map(g => Math.abs(g.wlen / oneBeat - (hold / 1000) * bpm / 60)));
-    rows.push({ trial, got, spread, lengthErrBeats });
+    const offArm = got.map(g => Math.abs(center(g.lineup - wrap(armPhase[LOOPERS.indexOf(g.i)] - g.bias, g.wlen), g.wlen)));
+    rows.push({ trial, got, spread, lengthErrBeats, armPhase, offArm });
     console.log(`[verify-lineup] trial ${trial} (hold ${hold}ms, finished +${finishMs}ms): wlens=${got.map(g => g.wlen).join(',')} ` +
       `beats=${got.map(g => (g.wlen / oneBeat).toFixed(3)).join(',')} (want ~${((hold / 1000) * bpm / 60).toFixed(3)}, off ${lengthErrBeats.toFixed(3)}) ` +
       `anchors mod cell=${got.map(g => wrap(g.anchor, cell).toFixed(1)).join(',')} ` +
+      `off arm=${offArm.map(v => v.toFixed(1)).join(',')} ` +
       `within-trial spread=${spread.toFixed(1)} samples`);
   }
 
@@ -187,15 +212,14 @@ async function main() {
   }
 
   const maxSpread = Math.max(...rows.map(r => r.spread));
-  const mods = rows.flatMap(r => r.got.map(g => wrap(g.anchor, cell)));
-  const modSpread = Math.max(...mods) - Math.min(...mods);
+  const maxOffArm = Math.max(...rows.flatMap(r => r.offArm));
   const maxLengthErr = Math.max(...rows.map(r => r.lengthErrBeats));
 
   console.log(`[verify-lineup] A. takes armed in one burst share an anchor: max spread ${maxSpread.toFixed(1)} samples (tol ${WITHIN_TRIAL_TOLERANCE})`);
-  console.log(`[verify-lineup] B. every anchor sits on one fixed point of the 1/8-beat grid: ${modSpread.toFixed(1)} samples (tol ${ON_GRID_TOLERANCE}, one block)`);
+  console.log(`[verify-lineup] B. every take plays back at the master phase it was armed at: worst ${maxOffArm.toFixed(1)} samples (tol ${ON_ARM_TOLERANCE}, one block)`);
   console.log(`[verify-lineup] C. every take keeps the length it was played for: worst ${maxLengthErr.toFixed(3)} beats (tol ${LENGTH_TOLERANCE_BEATS})`);
 
-  const pass = maxSpread < WITHIN_TRIAL_TOLERANCE && modSpread < ON_GRID_TOLERANCE
+  const pass = maxSpread < WITHIN_TRIAL_TOLERANCE && maxOffArm < ON_ARM_TOLERANCE
     && maxLengthErr <= LENGTH_TOLERANCE_BEATS;
   console.log(`[verify-lineup] ${pass ? 'ALL PASS' : 'SOME FAILED'}`);
   process.exit(pass ? 0 : 1);

@@ -3,7 +3,6 @@ import("stdfaust.lib");
 SR       = 48000.0;
 MAXLEN   = 48000 * 60;
 NLOOPERS = 20;
-kFineGridBeats = 0.125;
 
 oneLooper(in, prevFiltIn, clearAll, effSpeed, manualSpeed, masterPhase, masterLen, sidechainEnv, recordedBeats, foldNow, masterPhaseWrapped) = out : attachLevel
 with {
@@ -29,13 +28,7 @@ with {
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
         armEdge = armPulse;
 
-        fineGridSamples = max(1.0, kFineGridBeats * oneBeat);
-        cellOffset = wrapAbs(masterPhase, fineGridSamples);
-        rsmNearestNode = wrapAbs(masterPhase + ba.if(cellOffset > fineGridSamples * 0.5,
-                                                     fineGridSamples - cellOffset,
-                                                     -cellOffset),
-                                 max(1.0, masterLen));
-        rsmNext = ba.if(armEdge, rsmNearestNode, rsmPrev);
+        rsmNext = ba.if(armEdge, masterPhase, rsmPrev);
 
         finNext = ba.if(armEdge, 0, ba.if(finishReqN > 0.5, 1, finPrev));
         recKeepAlive = (recN > 0.5) | finNext;
