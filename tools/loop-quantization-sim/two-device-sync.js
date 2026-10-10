@@ -30,6 +30,17 @@ function beatPhase(w) {
   return (w.masterPhaseSamples / w.masterLenSamples) * beats;
 }
 
+function beatGcd(a, b) {
+  let x = Math.max(1, Math.round(a));
+  let y = Math.max(1, Math.round(b));
+  while (y > 0) {
+    const t = y;
+    y = x % y;
+    x = t;
+  }
+  return Math.max(1, x);
+}
+
 function circularGap(a, b, period) {
   let d = (a - b) % period;
   if (d < 0) d += period;
@@ -55,7 +66,7 @@ function runPair(opts) {
   onPadPress(b, 0); onPadRelease(b, 0);
   advancePair(a, b, msToSimSamples(500));
 
-  const period = Math.max(1, Math.min(a.recordedBeats, b.recordedBeats));
+  const period = beatGcd(a.recordedBeats, b.recordedBeats);
   let worst = 0;
   let samples = 0;
   for (let k = 0; k < 40; k++) {
@@ -66,7 +77,7 @@ function runPair(opts) {
     worst = Math.max(worst, circularGap(pa, pb, period));
     samples += msToSimSamples(100);
   }
-  return { worst, samples, beatsA: a.recordedBeats, beatsB: b.recordedBeats };
+  return { worst, samples, period, beatsA: a.recordedBeats, beatsB: b.recordedBeats };
 }
 
 function main() {
@@ -80,7 +91,7 @@ function main() {
     const legacyBad = !(legacy.worst < 0.25);
     const fixedGood = fixed.worst < 0.05;
 
-    console.log(`hold ${holdMs}ms  beats=${fixed.beatsA}/${fixed.beatsB}`);
+    console.log(`hold ${holdMs}ms  beats=${fixed.beatsA}/${fixed.beatsB}  shared grid=${fixed.period} beats`);
     console.log(`  legacy (trim not applied to anchor): worst gap = ${legacy.worst.toFixed(3)} beats`);
     console.log(`  fixed  (trim + idle/creation snap):  worst gap = ${fixed.worst.toFixed(3)} beats`);
 
@@ -101,7 +112,7 @@ function main() {
     const legacy = runPair({ holdMs: holdA, holdMsB: holdB, staggerMs: stagger, phaseLock: false });
     const fixed = runPair({ holdMs: holdA, holdMsB: holdB, staggerMs: stagger, phaseLock: true });
 
-    console.log(`asymmetric hold ${holdA}ms/${holdB}ms  beats=${fixed.beatsA}/${fixed.beatsB}`);
+    console.log(`asymmetric hold ${holdA}ms/${holdB}ms  beats=${fixed.beatsA}/${fixed.beatsB}  shared grid=${fixed.period} beats`);
     console.log(`  legacy (trim not applied to anchor): worst gap = ${legacy.worst.toFixed(3)} beats`);
     console.log(`  fixed  (trim + idle/creation snap):  worst gap = ${fixed.worst.toFixed(3)} beats`);
 

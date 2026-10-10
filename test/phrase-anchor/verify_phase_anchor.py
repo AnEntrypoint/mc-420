@@ -118,11 +118,11 @@ def run_take(master_len_samples, arm_offset_samples, take_len_samples,
     playback = out[search_start:]
     onsets = find_all_onsets(playback)
     if len(onsets) < 2:
-        return onsets
+        return [], 0
     period = onsets[1] - onsets[0]
     if period <= 0:
-        return onsets
-    return [(o + search_start) % period for o in onsets]
+        return [], 0
+    return [(o + search_start) % period for o in onsets], period
 
 
 def check_case(name, master_len_samples, take_len_samples, offsets, tol=8):
@@ -143,12 +143,12 @@ def check_case(name, master_len_samples, take_len_samples, offsets, tol=8):
     positions = []
     periods = []
     for off in offsets:
-        onsets = run_take(master_len_samples, off, take_len_samples)
+        onsets, per = run_take(master_len_samples, off, take_len_samples)
         if len(onsets) < 2:
             print(f"[{name}] FAIL: arm_offset={off} produced no repeating marker in playback")
             return False
         positions.append(onsets[0])
-        periods.append(onsets[1] - onsets[0])
+        periods.append(per)
 
     period = periods[0]
     for off, per in zip(offsets, periods):
