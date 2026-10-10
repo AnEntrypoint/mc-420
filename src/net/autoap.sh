@@ -8,6 +8,7 @@ SCAN_INTERVAL="${SCAN_INTERVAL:-15}"
 STA_RETRY_LIMIT="${STA_RETRY_LIMIT:-6}"
 ASSOC_WAIT="${ASSOC_WAIT:-12}"
 HOLD_MAX="${HOLD_MAX:-6}"
+AP_SCAN_IDLE="${AP_SCAN_IDLE:-90}"
 
 log() { echo "[autoap] $*"; }
 
@@ -98,6 +99,10 @@ ap_has_clients() {
     [ -n "$(iw dev "$IFACE" station dump 2>/dev/null)" ]
 }
 
+ap_up() {
+    iw dev "$IFACE" info 2>/dev/null | awk '$1 == "type" { print $2 }' | grep -qx "AP"
+}
+
 ip link set "$IFACE" up 2>/dev/null || true
 MAC="$(own_mac)"
 MACKEY="$(mac_key "$MAC")"
@@ -145,6 +150,7 @@ else
 fi
 
 retries=0
+idle=0
 while true; do
     sleep "$SCAN_INTERVAL"
     case "$state" in
@@ -166,10 +172,25 @@ while true; do
             fi
             ;;
         AP)
-            if ap_has_clients; then
+            if ! ap_up; then
+                log "AP not up on $IFACE -- restarting hostapd"
+                start_ap
+                idle=0
                 continue
             fi
+            if ap_has_clients; then
+                idle=0
+                continue
+            fi
+            idle=$((idle + SCAN_INTERVAL))
+            [ "$idle" -ge "$AP_SCAN_IDLE" ] || continue
             other="$(scan_mesh_bssid)"
+            idle=0
+            if ! ap_up; then
+                log "scan knocked $IFACE off AP mode -- restarting hostapd"
+                start_ap
+                continue
+            fi
             [ -n "$other" ] || continue
             otherkey="$(mac_key "$other")"
             [ "$otherkey" != "$MACKEY" ] || continue

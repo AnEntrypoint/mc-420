@@ -47,6 +47,8 @@ aloop (Pi 4) + `../esp-idf-link` form ONE ad-hoc single-AP mesh for Link multica
 
 `src/net/autoap.sh` hosts `ticker` never `aloop`, needs >=1 active `network={}` block before `start_ap()` does anything.
 
+brcmfmac: `iw dev wlan0 scan` while hostapd beacons knocks wlan0 off AP mode (channel flaps to 5 GHz chanspecs, `brcmf_escan_timeout`); hostapd stays alive with NO BSS, so no peer can ever associate. `iw dev wlan0 info` `type AP` is the ONLY truth: `/run/aloop/wifi_role` still says `ap` with the BSS down. `autoap.sh` AP branch watchdogs `ap_up()` every tick and gates `scan_mesh_bssid` behind `AP_SCAN_IDLE=90` s of client-less idle.
+
 ## Ableton Link checklist
 
 - `commitAppSessionState()` off-audio-thread, `commitAudioSessionState()` audio-thread only; audio thread reads lock-free double-buffered `LinkSnapshot` stamped `CLOCK_MONOTONIC`, extrapolated at session tempo.
