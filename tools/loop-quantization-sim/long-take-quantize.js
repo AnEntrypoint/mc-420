@@ -77,8 +77,8 @@ function main() {
         console.log(`    FAIL: fixed run ${fixed.loopBeats.toFixed(3)} beats is not a whole number of ${fixed.phraseBeats}-beat phrases`);
         failed++;
       }
-    } else if (Math.abs(fixedOff - legacyOff) > kPhraseToleranceBeats) {
-      console.log(`    FAIL: take shorter than two phrases moved off the legacy length (${legacyOff.toFixed(3)} -> ${fixedOff.toFixed(3)})`);
+    } else if (fixedOff > legacyOff + kPhraseToleranceBeats) {
+      console.log(`    FAIL: take shorter than two phrases moved further off the performed length (${legacyOff.toFixed(3)} -> ${fixedOff.toFixed(3)})`);
       failed++;
     }
   }
