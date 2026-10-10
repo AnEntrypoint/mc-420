@@ -250,6 +250,9 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             m_masterLenSamples = lenSamples;
             double recordedSeconds = (double)m_masterLenSamples / (double)kSampleRate;
             TempoSolveResult solved = deriveTempoQuant(recordedSeconds, 120.0);
+            fprintf(stderr, "[diag-quant] looper=%d MASTER raw=%ld beats=%.4f anchor=120.000 solvedBpm=%.3f solvedBeats=%.3f oneBeat=%.1f\n",
+                    looper, m_masterLenSamples, recordedSeconds * 120.0 / 60.0,
+                    solved.bpm, solved.beats, (double)m_masterLenSamples / solved.beats);
             ps.setByName("cmd/recorded_bpm", (float)solved.bpm);
             ps.setByName("cmd/recorded_beats", (float)solved.beats);
             ps.setByName("cmd/master_len", (float)m_masterLenSamples);
@@ -307,6 +310,14 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             long quantized = (long)(finalBeats * beatLenSamplesNow + 0.5);
             if (quantized < 64) quantized = 64;
             if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;
+            fprintf(stderr, "[diag-quant] looper=%d TAKE raw=%ld tempoScale=%.4f recBpm=%.1f curBpm=%.1f masterLen=%ld recBeats=%.3f oneBeat=%.1f takeBeats=%.4f anchor=%.3f phrase=%.3f past=%.3f future=%.3f over=%.3f tol=%.3f finalBeats=%.3f quantized=%ld\n",
+                    looper, rawSamples, tempoScale,
+                    (double)ps.get("cmd/recorded_bpm", 0.0f),
+                    (link ? link->audioRead().bpm : 0.0),
+                    m_masterLenSamples, beatsPerMasterLen, oneBeatSamples,
+                    takeLenBeats, anchorGridBeats, phraseBeats,
+                    pastNodeBeats, futureNodeBeats, overshootBeats, cutToleranceBeats,
+                    finalBeats, quantized);
             setLooper(ps, looper, "finishtarget", (float)quantized);
             setLooper(ps, looper, "finishreq", 1.0f);
             setLooper(ps, looper, "rec", 0.0f);
