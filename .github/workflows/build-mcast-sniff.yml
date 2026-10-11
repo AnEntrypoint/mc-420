@@ -1,0 +1,42 @@
+name: build-mcast-sniff
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mcast-sniff-aarch64-musl:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build musl-static aarch64 mcast_sniff in an Alpine aarch64 container
+        timeout-minutes: 15
+        run: |
+          docker run --rm --platform linux/arm64 -v "$PWD":/w -w /w alpine:3.20 sh -c '
+            set -ex
+            timeout 400 apk add --no-cache build-base linux-headers
+            gcc --version | head -1
+            gcc -O2 -std=c11 -Wall -Wextra -static -o mcast_sniff tools/mcast-sniff/mcast_sniff.c
+            file mcast_sniff 2>&1 || true
+            ldd mcast_sniff 2>&1 || true
+            echo "elf_header_bytes:"
+            head -c 20 mcast_sniff | od -An -tx1
+            ls -la mcast_sniff
+          '
+
+      - name: Smoke run the sniffer for 3 seconds
+        run: |
+          chmod +x mcast_sniff
+          sudo -n ./mcast_sniff 3 || true
+
+      - name: Upload mcast-sniff
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcast-sniff-aarch64-musl
+          path: mcast_sniff
+          retention-days: 7
