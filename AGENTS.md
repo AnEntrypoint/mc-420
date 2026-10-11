@@ -1,6 +1,6 @@
 # aloop - current-state constraints
 
-Real Pi 4 `192.168.137.100` root/aloop; Pi 3B+ netboots from host. BEHAVIOR clone of `../looper` only: never vendor its source / `LOOPER_DIR` / `loopMachine.cpp` / effects-bridge shim. Shipped+running `d316e22` (1273936 B; md5 in A/B bullet). Input-routing build `0947f3a`+`9cdcae0` (1274544 B, md5 `27d9a864a69bc204425b2226e0c97b47`, CI `38123683795`; control WITNESSED, audio blocked on clean ingress).
+Real Pi 4 `192.168.137.100` root/aloop; Pi 3B+ netboots from host. BEHAVIOR clone of `../looper` only: never vendor its source / `LOOPER_DIR` / `loopMachine.cpp` / effects-bridge shim. Shipped+running `ffaa83d` (1274080 B, md5 `170f0ee76b1ff9390a0a6f56354c5f43`, CI `38130094189`; audience gate snapped); `d316e22` (1273936 B; md5 in A/B bullet) kept as `/opt/aloop/aloop.prev-inputroute`-era baseline. Input-routing build `0947f3a`+`9cdcae0` (1274544 B, md5 `27d9a864a69bc204425b2226e0c97b47`, CI `38123683795`; control WITNESSED, audio blocked on clean ingress).
 
 # Working rules
 
