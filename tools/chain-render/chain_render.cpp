@@ -336,8 +336,10 @@ int main(int argc, char** argv)
         if (!sustSet) {
             if (pre.ui.set("SUSTAINGATE", 1.0f)) {
                 std::printf("override SUSTAINGATE=1.0 on pre\n");
+            } else if (post.ui.set("SUSTAINGATE", 1.0f)) {
+                std::printf("override SUSTAINGATE=1.0 on post\n");
             } else {
-                std::printf("WARN SUSTAINGATE zone not found on pre\n");
+                std::printf("WARN SUSTAINGATE zone not found on pre or post\n");
             }
         }
     }
