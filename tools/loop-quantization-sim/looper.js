@@ -80,7 +80,11 @@ function stepSample(s, inp) {
   const cycleInc = masterLen < 0.5 ? wrapLenCur : beatScaleNext * masterLen;
   const coffNext = armEdge
     ? 0.0
-    : (masterPhaseWrapped ? wrapAbs(s.coff + cycleInc, wrapLenCur) : s.coff);
+    : (finishEdge
+      ? wrapAbs(s.coff + (masterPhaseWrapped ? masterLen : 0), wrapLenCur)
+      : (gateCur > 0.5
+        ? (masterPhaseWrapped ? s.coff + masterLen : s.coff)
+        : (masterPhaseWrapped ? wrapAbs(s.coff + cycleInc, wrapLenCur) : s.coff)));
 
   const absPos = wrapAbs(beatScaleNext * (masterPhase - rsmNext) + inp.latencyBiasN + coffNext, wrapLenCur);
   const varispeedActive = effSpeed !== 1.0 || bakedActive;
