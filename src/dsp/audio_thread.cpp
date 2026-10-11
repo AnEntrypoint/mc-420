@@ -326,7 +326,7 @@ static void* worker(void*) {
     int extFreqGuardSilenceBlocks = 0;
     std::vector<float> preFilterOutBuf((size_t)N, 0.0f);
     std::vector<float> loopHarmonyWetBuf((size_t)N, 0.0f);
-    std::vector<float> masterGatedBuf((size_t)N, 0.0f);
+    std::vector<float> masterInBuf((size_t)N, 0.0f);
     std::vector<float> loopSumPreBuf((size_t)N, 0.0f);
     std::vector<float> grooveGateBuf((size_t)N, 1.0f);
     std::vector<float> looperSoloBuf[AudioThread::Telemetry::kLoopers];
@@ -346,7 +346,7 @@ static void* worker(void*) {
         resonodeInBuf.data(),
     };
     float* preOuts[4 + AudioThread::Telemetry::kLoopers] = {
-        preFilterOutBuf.data(), loopHarmonyWetBuf.data(), masterGatedBuf.data(), loopSumPreBuf.data(),
+        preFilterOutBuf.data(), loopHarmonyWetBuf.data(), masterInBuf.data(), loopSumPreBuf.data(),
         looperSoloBuf[0].data(), looperSoloBuf[1].data(), looperSoloBuf[2].data(), looperSoloBuf[3].data(),
         looperSoloBuf[4].data(), looperSoloBuf[5].data(), looperSoloBuf[6].data(), looperSoloBuf[7].data(),
         looperSoloBuf[8].data(), looperSoloBuf[9].data(), looperSoloBuf[10].data(), looperSoloBuf[11].data(),
@@ -1313,7 +1313,7 @@ static void* worker(void*) {
                     loopSumPreBuf[(size_t)i] *= grooveGate;
                     loopHarmonyWetBuf[(size_t)i] *= grooveGate;
                     preFilterOutBuf[(size_t)i] *= grooveGate;
-                    masterGatedBuf[(size_t)i] *= grooveGate;
+                    masterInBuf[(size_t)i] *= grooveGate;
                 }
             }
             if (g_clipExporter) {
@@ -1329,7 +1329,7 @@ static void* worker(void*) {
                 g_telem.clipExportState = (int)g_clipExporter->state();
             }
             std::copy(preFilterOutBuf.begin(), preFilterOutBuf.end(), cueWetBuf.begin());
-            std::copy(masterGatedBuf.begin(), masterGatedBuf.end(), masterWetBuf.begin());
+            std::copy(masterInBuf.begin(), masterInBuf.end(), masterWetBuf.begin());
             bool delayVerbActive = delayVerbFxCue.hasPlugins() && delayVerbFxMaster.hasPlugins() &&
                                    (delayVerbParamSlots[0].lastValue > 1e-4f ||
                                     delayVerbParamSlots[1].lastValue > 1e-4f);
