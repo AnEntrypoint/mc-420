@@ -71,6 +71,8 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("cmd/halfspeed", 0.0f);
     ps.bind("cmd/doublespeed", 0.0f);
     ps.bind("cmd/sustain", 0.0f);
+    ps.bind("cmd/input1_recordable", 1.0f);
+    ps.bind("cmd/input2_recordable", 1.0f);
 
     ps.bind("fx/reverb",  0.0f);
     ps.bind("fx/delay",   0.0f);
@@ -355,6 +357,13 @@ void ApcGrid::forgetLooperFromPresets(int looper) {
 
 void ApcGrid::onPadPress(int note, unsigned now_ms, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
     int row = note / kApcCols, col = note % kApcCols;
+
+    for (int c = 0; c < kApcInputRouteCount; c++) {
+        if (note == kApcInputRoutePadNotes[c]) {
+            onInputRoutePadPress(c, ps);
+            return;
+        }
+    }
 
     int looper = gridLooperIndex(row, col);
     if (looper >= 0) {
@@ -1183,6 +1192,14 @@ void ApcGrid::onGateModPress() {
 }
 void ApcGrid::onGateModRelease() {
     m_gateModHeld = false;
+}
+
+void ApcGrid::onInputRoutePadPress(int input, ParamStore& ps) {
+    if (input < 0 || input >= kApcInputRouteCount) return;
+    m_inputRecordable[input] = !m_inputRecordable[input];
+    ps.setByName(inputRecordableParamName(input), m_inputRecordable[input] ? 1.0f : 0.0f);
+    fprintf(stderr, "[input-route] input%d %s\n", input + 1,
+            m_inputRecordable[input] ? "recordable" : "passthrough-only");
 }
 
 void ApcGrid::onSidechainLooperToggle(int looper, ParamStore& ps) {

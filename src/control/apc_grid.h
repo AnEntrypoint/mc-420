@@ -24,6 +24,12 @@ constexpr int kApcBtnShift = 0x62;
 constexpr int kApcBtnRec = 0x5D;
 constexpr int kApcPadGateMod = 7;
 constexpr int kApcBeatPadNotes[4] = { 15, 23, 31, 39 };
+constexpr int kApcInputRoutePadNotes[2] = { 14, 22 };
+constexpr int kApcInputRouteCount = 2;
+
+inline const char* inputRecordableParamName(int input) {
+    return input == 0 ? "cmd/input1_recordable" : "cmd/input2_recordable";
+}
 
 enum class FxBank : uint8_t { Dub = 0, Guitar = 1, LofiFx = 2 };
 constexpr int kFxBankCount = 3;
@@ -105,6 +111,8 @@ public:
 
     void onShuffleButtonPress(int note, ParamStore& ps);
     void onShuffleButtonRelease(int note, ParamStore& ps);
+    void onInputRoutePadPress(int input, ParamStore& ps);
+    bool inputRecordable(int input) const { return m_inputRecordable[input]; }
     void onGateModPress();
     void onGateModRelease();
     int shuffleMode() const { return m_shuffleMode; }
@@ -220,6 +228,7 @@ private:
     int m_shuffleMode = 0;
     int m_gateMode = 0;
     bool m_gateModHeld = false;
+    bool m_inputRecordable[kApcInputRouteCount] = { true, true };
 
     void applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, class LinkBridge* link, class AudioThread* audio = nullptr);
     void capturePreset(int p, ParamStore& ps);

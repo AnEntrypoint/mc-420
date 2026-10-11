@@ -1,6 +1,7 @@
 #include "audio_thread.h"
 #include "../host/lv2_host.h"
 #include "../control/midi.h"
+#include "../control/apc_grid.h"
 #include "../link/link_bridge.h"
 #include "sampler/sampler.h"
 #include "../storage/usb_recorder.h"
@@ -304,6 +305,7 @@ static void* worker(void*) {
     faustPost.init((int)g_cfg.sampleRate);
     FaustUI fuiPost; faustPost.buildUserInterface(&fuiPost);
     std::vector<float> clearBuf((size_t)N, 0.0f);
+    std::vector<float> mixOnlyBuf((size_t)N, 0.0f);
     std::vector<float> speedBuf((size_t)N, 1.0f);
     std::vector<float> manualSpeedBuf((size_t)N, 1.0f);
     std::vector<float> masterPhaseBuf((size_t)N, 0.0f);
@@ -379,7 +381,9 @@ static void* worker(void*) {
     int recordedBpmSlot = -1;
     int recordedBeatsSlot = -1;
     int slotProbeEpoch = -1;
+    int inputRecordableSlot[kApcInputRouteCount] = { -1, -1 };
     const float kFoldStepPerSample = (1.0f / 16.0f) / (float)N;
+    float inputRecGain[kApcInputRouteCount] = { 1.0f, 1.0f };
     float loopDirectGateNow = 1.0f;
     struct ResolvedControl { int slot; float* zone; };
     std::vector<ResolvedControl> resolvedControls;
@@ -698,6 +702,9 @@ static void* worker(void*) {
                     if (masterLenSlot < 0) masterLenSlot = g_params->getSlot("cmd/master_len");
                     if (recordedBpmSlot < 0) recordedBpmSlot = g_params->getSlot("cmd/recorded_bpm");
                     if (recordedBeatsSlot < 0) recordedBeatsSlot = g_params->getSlot("cmd/recorded_beats");
+                    for (int c = 0; c < kApcInputRouteCount; c++) {
+                        if (inputRecordableSlot[c] < 0) inputRecordableSlot[c] = g_params->getSlot(inputRecordableParamName(c));
+                    }
                     for (auto& dp : delayVerbParamSlots) {
                         if (dp.slot < 0) dp.slot = g_params->getSlot(dp.target);
                     }
@@ -1080,12 +1087,37 @@ static void* worker(void*) {
                     g_telem.gridBeatIndex = -1;
                 }
             }
+            float inputRecTarget[kApcInputRouteCount] = { 1.0f, 1.0f };
+            if (g_params) {
+                for (int c = 0; c < kApcInputRouteCount; c++) {
+                    if (inputRecordableSlot[c] >= 0)
+                        inputRecTarget[c] = g_params->getBySlot(inputRecordableSlot[c]) > 0.5f ? 1.0f : 0.0f;
+                }
+            }
+            bool inputRouteRamping = false;
+            for (int c = 0; c < kApcInputRouteCount; c++) {
+                if (inputRecGain[c] != inputRecTarget[c]) inputRouteRamping = true;
+            }
             float inPeak = 0.0f;
             for (int i = 0; i < N; i++) {
-                float acc = 0.0f;
-                for (int c = 0; c < wireCh; c++) acc += (float)buf[(size_t)i * wireCh + c];
-                fin[i] = (acc / wireCh) / 2147483648.0f;
-                float a = fin[i] < 0 ? -fin[i] : fin[i];
+                if (inputRouteRamping) {
+                    for (int c = 0; c < kApcInputRouteCount; c++) {
+                        float& g = inputRecGain[c];
+                        if (g < inputRecTarget[c])      { g += kFoldStepPerSample; if (g > inputRecTarget[c]) g = inputRecTarget[c]; }
+                        else if (g > inputRecTarget[c]) { g -= kFoldStepPerSample; if (g < inputRecTarget[c]) g = inputRecTarget[c]; }
+                    }
+                }
+                float fullAcc = 0.0f;
+                float recAcc = 0.0f;
+                for (int c = 0; c < wireCh; c++) {
+                    float s = (float)buf[(size_t)i * wireCh + c];
+                    fullAcc += s;
+                    recAcc += (c < kApcInputRouteCount) ? s * inputRecGain[c] : s;
+                }
+                float fullNorm = (fullAcc / wireCh) / 2147483648.0f;
+                fin[i] = (recAcc / wireCh) / 2147483648.0f;
+                mixOnlyBuf[i] = fullNorm - fin[i];
+                float a = fullNorm < 0 ? -fullNorm : fullNorm;
                 if (a > inPeak) inPeak = a;
             }
             g_telem.inPeak = inPeak;
@@ -1319,8 +1351,8 @@ static void* worker(void*) {
             }
             float outPeak = 0.0f;
             for (int i = 0; i < N; i++) {
-                float masterSample = rawLoopSum[i] * loopDirectGateNow + inputFxOut[i];
-                float cueSample = fout[i];
+                float masterSample = rawLoopSum[i] * loopDirectGateNow + inputFxOut[i] + mixOnlyBuf[i];
+                float cueSample = fout[i] + mixOnlyBuf[i];
 
                 float mv32 = masterSample * 2147483648.0f;
                 int32_t ms32 = (int32_t)(mv32 > 2147483647.0f ? 2147483647 : (mv32 < -2147483648.0f ? -2147483648.0f : mv32));

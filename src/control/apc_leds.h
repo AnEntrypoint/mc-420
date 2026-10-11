@@ -59,11 +59,12 @@ public:
         for (int row = 0; row < kApcRows; row++) {
             for (int col = 0; col < kApcCols; col++) {
                 int note = row * kApcCols + col;
-                if (isBeatPadNote(note)) continue;
+                if (isBeatPadNote(note) || isInputRoutePadNote(note)) continue;
                 sendCoalesced(note, gridColor(row, col, grid, looperLevels), write);
             }
         }
         drawBeatPads(grid, gridBeatIndex, write);
+        drawInputRoutePads(grid, write);
         sendCoalesced(kApcPadGateMod, grid.gateModHeld() ? kLedYellow :
                                       grid.gateMode() > 0 ? kLedGreen : kLedOff, write);
         sendCoalesced(kApcBtnPlay, grid.shiftHeld() ? kLedYellow : kLedOff, write);
@@ -113,6 +114,19 @@ private:
     static bool isBeatPadNote(int note) {
         for (int g = 0; g < 4; g++) if (note == kApcBeatPadNotes[g]) return true;
         return false;
+    }
+
+    static bool isInputRoutePadNote(int note) {
+        for (int c = 0; c < kApcInputRouteCount; c++) if (note == kApcInputRoutePadNotes[c]) return true;
+        return false;
+    }
+
+    template <typename WriteFn>
+    void drawInputRoutePads(const ApcGrid& grid, WriteFn&& write) {
+        for (int c = 0; c < kApcInputRouteCount; c++) {
+            sendCoalesced(kApcInputRoutePadNotes[c],
+                          grid.inputRecordable(c) ? kLedGreen : kLedYellow, write);
+        }
     }
 
     template <typename WriteFn>
