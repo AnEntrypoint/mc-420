@@ -253,14 +253,26 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             if (lenSamples > kMaxLoopSamples) lenSamples = kMaxLoopSamples;
             m_masterLenSamples = lenSamples;
             double recordedSeconds = (double)m_masterLenSamples / (double)kSampleRate;
-            TempoSolveResult solved = deriveTempoQuant(recordedSeconds, 120.0);
-            fprintf(stderr, "[diag-quant] looper=%d MASTER raw=%ld beats=%.4f anchor=120.000 solvedBpm=%.3f solvedBeats=%.3f oneBeat=%.1f\n",
-                    looper, m_masterLenSamples, recordedSeconds * 120.0 / 60.0,
-                    solved.bpm, solved.beats, (double)m_masterLenSamples / solved.beats);
+            const bool setsSessionTempo = !m_tempoEstablished;
+            double sessionBpm = 120.0;
+            if (link && link->audioRead().bpm > 1.0) sessionBpm = link->audioRead().bpm;
+            TempoSolveResult solved;
+            if (setsSessionTempo) {
+                solved = deriveTempoQuant(recordedSeconds, 120.0);
+                m_tempoEstablished = true;
+            } else {
+                solved.bpm = sessionBpm;
+                solved.beats = std::max(1.0, std::floor(recordedSeconds * sessionBpm / 60.0 + 0.5));
+                m_masterLenSamples = (long)(solved.beats * 60.0 / sessionBpm * kSampleRate + 0.5);
+                if (m_masterLenSamples > kMaxLoopSamples) m_masterLenSamples = kMaxLoopSamples;
+            }
+            fprintf(stderr, "[diag-quant] looper=%d MASTER raw=%.0f sessionBpm=%.3f setsTempo=%d solvedBpm=%.3f solvedBeats=%.3f masterLen=%ld\n",
+                    looper, recordedSeconds * kSampleRate, sessionBpm, setsSessionTempo ? 1 : 0,
+                    solved.bpm, solved.beats, m_masterLenSamples);
             ps.setByName("cmd/recorded_bpm", (float)solved.bpm);
             ps.setByName("cmd/recorded_beats", (float)solved.beats);
             ps.setByName("cmd/master_len", (float)m_masterLenSamples);
-            if (link) link->imposeTempo(solved.bpm);
+            if (link && setsSessionTempo) link->imposeTempo(solved.bpm);
             setLooper(ps, looper, "finishtarget", (float)m_masterLenSamples);
             setLooper(ps, looper, "finishreq", 1.0f);
             setLooper(ps, looper, "rec", 0.0f);
@@ -537,7 +549,6 @@ void ApcGrid::pollHolds(unsigned now_ms, ParamStore& ps, LinkBridge* link, Audio
         ps.setByName("cmd/master_len", 0.0f);
         ps.setByName("cmd/recorded_bpm", 0.0f);
         ps.setByName("cmd/recorded_beats", 0.0f);
-        if (link) link->resetTempoAuthority();
     }
     for (int p = 0; p < kPresetCount; p++) {
         if (!m_presetHeld[p] || m_presetCaptured[p]) continue;
@@ -673,7 +684,6 @@ void ApcGrid::onClearAll(unsigned now_ms, bool held, ParamStore& ps, LinkBridge*
     ps.setByName("cmd/master_len", 0.0f);
     ps.setByName("cmd/recorded_bpm", 0.0f);
     ps.setByName("cmd/recorded_beats", 0.0f);
-    if (link) link->resetTempoAuthority();
     for (int v = 0; v < kTransposeVoices; v++) {
         if (m_transposeVoiceNote[v] < 0) continue;
         m_transposeVoiceNote[v] = -1;

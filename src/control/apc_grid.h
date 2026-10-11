@@ -179,6 +179,7 @@ private:
     int allocateTransposeVoice(int note);
     void releaseTransposeVoice(int note, ParamStore& ps);
     long m_masterLenSamples = 0;
+    bool m_tempoEstablished = false;
     int m_monitorFoldSlot = -1;
     int monitorFoldSlot(ParamStore& ps);
     void armResampleFoldWindow(int looper, class AudioThread* audio);
