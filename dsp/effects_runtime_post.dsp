@@ -59,7 +59,8 @@ with {
     anyVoiceGated  = min(1.0, g0+g1+g2+g3+g4+g5);
     loopDirectRaw  = 1.0 - max(max(MONITORFOLD, GLITCHFOLD), anyVoiceGated*freeXpose);
     loopDirectGate = loopDirectRaw : si.smoo;
-    audienceGate   = SUSTAINGATE : si.smoo;
+    snapGate(x) = select2(x > 0.999, select2(x < 0.001, x, 0.0), 1.0);
+    audienceGate   = SUSTAINGATE : si.smoo : snapGate;
 
     filtOut = mainOut + loopSumIn*loopDirectGate + loopHarmonyWet;
     recordTap = mainOut + loopHarmonyWet;
