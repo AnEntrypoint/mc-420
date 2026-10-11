@@ -227,17 +227,21 @@ int main(int argc, char** argv)
     float gain = (float)std::atof(argValue(argc, argv, "gain", "1.0").c_str());
     std::string dump = argValue(argc, argv, "dump", "");
     int sr = std::atoi(argValue(argc, argv, "sr", "48000").c_str());
+    int outSkip = std::atoi(argValue(argc, argv, "start", "0").c_str());
+    if (outSkip < 0) outSkip = 0;
 
     if (inPath.empty() || outPath.empty()) {
-        std::printf("usage: chain_render in=<wav> out=<wav> mode=<none|...|faust|full|...> tap=<master|cue|record|inputfx|loopsum> block=64 warmup=48000 gain=1.0 dump=<tag> sr=48000 postregress=0 set=ZONE:VALUE (repeatable) sweep=ZONE:FROM:TO (repeatable)\n");
+        std::printf("usage: chain_render in=<wav> out=<wav> mode=<none|...|faust|full|...> tap=<master|cue|record|inputfx|loopsum> block=64 warmup=48000 gain=1.0 dump=<tag> sr=48000 start=<output samples to discard> postregress=0 set=ZONE:VALUE (repeatable) sweep=ZONE:FROM:TO (repeatable) step=ZONE:VALUE:AT_OUTPUT_SAMPLE (repeatable)\n");
         return 2;
     }
     if (block < 1) block = 1;
 
     struct ZoneSet { std::string name; float value; };
     struct ZoneSweep { std::string name; double from; double to; };
+    struct ZoneStep { std::string name; float value; size_t at; };
     std::vector<ZoneSet> zoneSets;
     std::vector<ZoneSweep> zoneSweeps;
+    std::vector<ZoneStep> zoneSteps;
 
     std::vector<std::string> setArgs = argList(argc, argv, "set");
     for (size_t i = 0; i < setArgs.size(); i++) {
@@ -264,6 +268,21 @@ int main(int argc, char** argv)
         sw.from = std::atof(sweepArgs[i].substr(c1 + 1, c2 - c1 - 1).c_str());
         sw.to = std::atof(sweepArgs[i].substr(c2 + 1).c_str());
         zoneSweeps.push_back(sw);
+    }
+
+    std::vector<std::string> stepArgs = argList(argc, argv, "step");
+    for (size_t i = 0; i < stepArgs.size(); i++) {
+        size_t c1 = stepArgs[i].find(':');
+        size_t c2 = (c1 == std::string::npos) ? std::string::npos : stepArgs[i].find(':', c1 + 1);
+        if (c2 == std::string::npos) {
+            std::printf("bad step arg %s (want ZONE:VALUE:AT_OUTPUT_SAMPLE)\n", stepArgs[i].c_str());
+            return 2;
+        }
+        ZoneStep st;
+        st.name = stepArgs[i].substr(0, c1);
+        st.value = (float)std::atof(stepArgs[i].substr(c1 + 1, c2 - c1 - 1).c_str());
+        st.at = (size_t)std::atoll(stepArgs[i].substr(c2 + 1).c_str());
+        zoneSteps.push_back(st);
     }
 
     WavFile src;
@@ -404,6 +423,7 @@ int main(int argc, char** argv)
     }
 
     std::vector<float> prevFilt((size_t)block, 0.0f);
+    std::vector<char> stepFired(zoneSteps.size(), 0);
     float masterPhase = 0.0f;
     std::vector<float> stageBuf((size_t)block, 0.0f);
     std::vector<float*> monoIn(1);
@@ -451,6 +471,33 @@ int main(int argc, char** argv)
                 if (useDistortion) distortion.ui.set(zoneSweeps[k].name, v);
                 if (useVinyl) vinyl.ui.set(zoneSweeps[k].name, v);
                 if (useFlutter) flutter.ui.set(zoneSweeps[k].name, v);
+            }
+        }
+
+        if (!zoneSteps.empty()) {
+            size_t outIdx = (base > wu) ? base - wu : 0;
+            for (size_t k = 0; k < zoneSteps.size(); k++) {
+                if (outIdx < zoneSteps[k].at) continue;
+                float v = zoneSteps[k].value;
+                bool hit = false;
+                if (usePre) {
+                    if (pre.ui.set(zoneSteps[k].name, v)) hit = true;
+                    if (post.ui.set(zoneSteps[k].name, v)) hit = true;
+                }
+                if (useLfx && lfx.ui.set(zoneSteps[k].name, v)) hit = true;
+                if (useLfxNoBc && lfxNoBc.ui.set(zoneSteps[k].name, v)) hit = true;
+                if (useBitcrush && bitcrush.ui.set(zoneSteps[k].name, v)) hit = true;
+                if (useFlanger && flanger.ui.set(zoneSteps[k].name, v)) hit = true;
+                if (useTremolo && tremolo.ui.set(zoneSteps[k].name, v)) hit = true;
+                if (usePhaser && phaser.ui.set(zoneSteps[k].name, v)) hit = true;
+                if (useDistortion && distortion.ui.set(zoneSteps[k].name, v)) hit = true;
+                if (useVinyl && vinyl.ui.set(zoneSteps[k].name, v)) hit = true;
+                if (useFlutter && flutter.ui.set(zoneSteps[k].name, v)) hit = true;
+                if (!stepFired[k]) {
+                    stepFired[k] = 1;
+                    std::printf("step %s=%.6f at=%zu %s\n", zoneSteps[k].name.c_str(), (double)v,
+                                zoneSteps[k].at, hit ? "applied" : "WARN no such zone");
+                }
             }
         }
 
@@ -508,7 +555,9 @@ int main(int argc, char** argv)
         }
 
         if (base >= wu) {
+            size_t outBase = base - wu;
             for (int i = 0; i < n; i++) {
+                if (outBase + (size_t)i < (size_t)outSkip) continue;
                 float v = stageBuf[(size_t)i];
                 if (!(v == v) || v > 1.0e30f || v < -1.0e30f) nonFinite++;
                 sumSq += (double)v * (double)v;

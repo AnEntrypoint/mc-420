@@ -64,4 +64,15 @@ row observe sustgate0.record_vs_inputfx sustgate0 "$OUT/sustgate0.record.wav" "$
 row observe sustgate0.record_vs_cue sustgate0 "$OUT/sustgate0.record.wav" "$OUT/sustgate0.cue.wav" le 0
 row observe sustgate0.inputfx_vs_silence sustgate0 "$OUT/sustgate0.inputfx.wav" "$OUT/neutral.inputfx.wav" ge -30
 
+for t in record inputfx cue; do
+  render engage_on "$t" start=192000 set=FORMANT:0.6 set=ENGAGED:1.0
+  render engage_never "$t" start=192000 set=FORMANT:0.6 set=ENGAGED:0.0
+  render engage_after "$t" start=192000 set=FORMANT:0.6 set=ENGAGED:1.0 step=ENGAGED:0.0:96000
+done
+for t in record inputfx cue; do
+  row hiss engage.after_vs_never_$t engage "$OUT/engage_after.$t.wav" "$OUT/engage_never.$t.wav" le -120
+done
+row hiss engage.on_vs_never_inputfx engage "$OUT/engage_on.inputfx.wav" "$OUT/engage_never.inputfx.wav" ge -60
+row hiss engage.after_vs_on_inputfx engage "$OUT/engage_after.inputfx.wav" "$OUT/engage_on.inputfx.wav" ge -60
+
 python3 tools/chain-render/parity.py "$MAN"
