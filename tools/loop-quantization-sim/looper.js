@@ -81,7 +81,7 @@ function stepSample(s, inp) {
   const coffNext = armEdge
     ? 0.0
     : (finishEdge
-      ? wrapAbs(s.coff + (masterPhaseWrapped ? masterLen : 0), wrapLenCur)
+      ? wrapAbs(beatScaleNext * (s.coff + (masterPhaseWrapped ? masterLen : 0)), wrapLenCur)
       : (gateCur > 0.5
         ? (masterPhaseWrapped ? s.coff + masterLen : s.coff)
         : (masterPhaseWrapped ? wrapAbs(s.coff + cycleInc, wrapLenCur) : s.coff)));
