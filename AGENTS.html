@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop - current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=4344b0b0961957527518b53b43054ea01888c81d">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=75b56d9222edd26342dcc3e9ec2d7221884de102">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -140,7 +140,7 @@
       </tbody>
     </table>
   </li>
-  <li>SIM GAP: <code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim/link.js:47</code> <code class="language-plaintext highlighter-rouge">setIsPlayingAndRequestBeatAtTime</code> (via <code class="language-plaintext highlighter-rouge">setTransportPlaying</code> :100, quantum 16) shifts the beat origin by <code class="language-plaintext highlighter-rouge">(floor(beatsNow/quantum)+1)*quantum</code> on transport start, but real code is CLOCK-ONLY (<code class="language-plaintext highlighter-rouge">LinkBridge::setLocalTransportPlaying</code> never touches <code class="language-plaintext highlighter-rouge">setIsPlaying</code>; the only re-base is <code class="language-plaintext highlighter-rouge">forceBeatAtTime</code> via <code class="language-plaintext highlighter-rouge">requestPhaseImpose</code>). So the sim has a -16-beat re-base the device cannot produce and no mirror of the one it does → any sim case about cross-device phase at <code class="language-plaintext highlighter-rouge">rb</code> not in {1,2,4,8,16} is SUSPECT (that is how the fold bug <code class="language-plaintext highlighter-rouge">db8ebf8</code> hid). Fix: mirror <code class="language-plaintext highlighter-rouge">forceBeatAtTime</code> in <code class="language-plaintext highlighter-rouge">link.js</code>, drop the origin shift.</li>
+  <li>Sim now mirrors device Link (fixed <code class="language-plaintext highlighter-rouge">75d8b4a</code>, 17/17 suite PASS): <code class="language-plaintext highlighter-rouge">requestPhaseImpose</code> queued off-thread, applied on the next 5 Hz tick, <code class="language-plaintext highlighter-rouge">rebaseSeq</code> bumped — replacing a phantom transport-start re-base (<code class="language-plaintext highlighter-rouge">setIsPlayingAndRequestBeatAtTime</code>) that never existed in <code class="language-plaintext highlighter-rouge">src/</code> (real code is CLOCK-ONLY; <code class="language-plaintext highlighter-rouge">LinkBridge::setLocalTransportPlaying</code> never touches <code class="language-plaintext highlighter-rouge">setIsPlaying</code>). join-late/beat-count-race assert settled error from 500 ms after the impose (0.25 beats gap, 0.05 read head, settle &lt;=1000 ms) PLUS a <code class="language-plaintext highlighter-rouge">rebaseSeq</code> bump explaining the transient; pre-500 ms ~1.4 beats is by design, so asserting it small asserts an instantaneous re-base. Fold coverage is <code class="language-plaintext highlighter-rouge">loop-quantum-fold.js</code> (absolute-vs-grid at rb 3/6/30): the ~0.48 16-quantum residual is rb-INDEPENDENT trim-chase, not fold error.</li>
 </ul>
 
 <h1 id="audio-thread-and-alsa">Audio thread and ALSA</h1>
