@@ -8,7 +8,7 @@ function wrapAbs(p, len) {
 
 function initLooperDsp() {
   return {
-    fin: 0, act: 0, widx: 0, wlen: 1, rsm: 0, coff: 0, rpos: 0, gate: 0,
+    fin: 0, act: 0, widx: 0, wlen: 1, rpos: 0, gate: 0,
     beatScale: 1, bakedSpeed: 1,
     recPrevEdge: 0,
   };
@@ -34,8 +34,6 @@ function stepSample(s, inp) {
 
   const armPulse = recN > 0.5 && s.recPrevEdge < 0.5;
   const armEdge = armPulse;
-
-  const rsmNext = armEdge ? masterPhase : s.rsm;
 
   const finNext = armEdge ? 0 : (finishReqN > 0.5 ? 1 : s.fin);
   const recKeepAlive = recN > 0.5 || finNext > 0.5;
@@ -77,16 +75,8 @@ function stepSample(s, inp) {
   const speedForTake = bakedActive ? bakedSpeedNext / manualSafe : 1.0;
 
   const wrapLenCur = Math.max(1, wlenNext);
-  const cycleInc = masterLen < 0.5 ? wrapLenCur : beatScaleNext * masterLen;
-  const coffNext = armEdge
-    ? 0.0
-    : (finishEdge
-      ? wrapAbs(beatScaleNext * (s.coff + (masterPhaseWrapped ? masterLen : 0)), wrapLenCur)
-      : (gateCur > 0.5
-        ? (masterPhaseWrapped ? s.coff + masterLen : s.coff)
-        : (masterPhaseWrapped ? wrapAbs(s.coff + cycleInc, wrapLenCur) : s.coff)));
 
-  const absPos = wrapAbs(beatScaleNext * (masterPhase - rsmNext) + inp.latencyBiasN + coffNext, wrapLenCur);
+  const absPos = wrapAbs(beatScaleNext * masterPhase + inp.latencyBiasN, wrapLenCur);
   const varispeedActive = effSpeed !== 1.0 || bakedActive;
   const manualPunchActive = Math.abs(effSpeed - 1.0) > 0.3;
   const resyncCoeff = manualPunchActive || bakedActive ? 0.0 : inp.resyncCoeff;
@@ -99,7 +89,7 @@ function stepSample(s, inp) {
 
   return {
     fin: finNext, act: actNext, widx: widxNext, wlen: wlenNext,
-    rsm: rsmNext, coff: coffNext, rpos: rposNext, gate: gateNext,
+    rpos: rposNext, gate: gateNext,
     beatScale: beatScaleNext, bakedSpeed: bakedSpeedNext,
     recPrevEdge: recN > 0.5 ? 1 : 0,
     armEdge, finishEdge,

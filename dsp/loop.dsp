@@ -21,14 +21,12 @@ with {
     oneBeat = max(1.0, masterLen / beatsPerMasterLen);
     wrapAbs(p, len) = p - floor(p / float(len)) * float(len);
 
-    takeState(finPrev, actPrev, widxPrev, wlenPrev, rsmPrev, coffPrev, rposPrev, gatePrev, sPrev, vPrev, foldPrev) =
-        (finNext, actNext, widxNext, wlenNext, rsmNext, coffNext, rposNext, gateNext, sNext, vNext, foldNext)
+    takeState(finPrev, actPrev, widxPrev, wlenPrev, rposPrev, gatePrev, sPrev, vPrev, foldPrev) =
+        (finNext, actNext, widxNext, wlenNext, rposNext, gateNext, sNext, vNext, foldNext)
     with {
         recPrevEdge = recN : mem;
         armPulse = (recN > 0.5) & (recPrevEdge < 0.5);
         armEdge = armPulse;
-
-        rsmNext = ba.if(armEdge, masterPhase, rsmPrev);
 
         finNext = ba.if(armEdge, 0, ba.if(finishReqN > 0.5, 1, finPrev));
         recKeepAlive = (recN > 0.5) | finNext;
@@ -69,13 +67,7 @@ with {
         speedForTake = ba.if(vBaked, vNext / manualSafe, 1.0);
 
         wrapLenCur = max(1, wlenNext);
-        cycleInc = ba.if(masterLen < 0.5, wrapLenCur, sNext * masterLen);
-        coffNext = ba.if(armEdge, 0.0,
-                    ba.if(finishEdge, wrapAbs(sNext * (coffPrev + ba.if(masterPhaseWrapped, masterLen, 0.0)), wrapLenCur),
-                    ba.if(gateCur > 0.5, ba.if(masterPhaseWrapped, coffPrev + masterLen, coffPrev),
-                    ba.if(masterPhaseWrapped, wrapAbs(coffPrev + cycleInc, wrapLenCur), coffPrev))));
-
-        absPos = wrapAbs(sNext * (masterPhase - rsmNext) + latencyBiasN + coffNext, wrapLenCur);
+        absPos = wrapAbs(sNext * masterPhase + latencyBiasN, wrapLenCur);
         speedClamped = max(0.1, min(8.0, effSpeed));
         manualSafe = max(0.1, abs(manualSpeed));
         ratioClamped = max(0.1, min(8.0, effSpeed / manualSafe));
@@ -89,16 +81,14 @@ with {
                           absPos));
     };
 
-    takeStateBus = (_,_,_,_,_,_,_,_,_,_,_) ~ takeState;
-    pickState(k) = takeStateBus : (par(j, 11, *(j == k)) :> _);
+    takeStateBus = (_,_,_,_,_,_,_,_,_) ~ takeState;
+    pickState(k) = takeStateBus : (par(j, 9, *(j == k)) :> _);
     fin = pickState(0);
     act = pickState(1);
     widxRaw = pickState(2);
     wlenRaw = pickState(3);
-    rsm = pickState(4);
-    coff = pickState(5);
-    readPos = pickState(6);
-    gateNow = pickState(7);
+    readPos = pickState(4);
+    gateNow = pickState(5);
 
     wrapLen = max(1, wlenRaw);
     recordingGateNow = gateNow;

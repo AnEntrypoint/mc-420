@@ -44,12 +44,11 @@ function readHeadError(w, session, looper) {
   const oneBeat = w.masterLenSamples / w.recordedBeats;
   const loopBeatLen = oneBeat * dsp.beatScale;
   const loopBeats = Math.max(0.125, dsp.wlen / loopBeatLen);
-  const rsmBeats = dsp.rsm / oneBeat;
-  const originBeats = w.masterLooper === looper ? rsmBeats
-    : (lp.armBeatAbs === null ? rsmBeats : lp.armBeatAbs);
-  const contentBeat = originBeats + dsp.rpos / loopBeatLen;
+  const contentBeat = dsp.rpos / loopBeatLen;
   const nowBeats = beatAtTime(session, (w.t / SIM_SAMPLE_RATE) * 1000);
-  return circGap(contentBeat, nowBeats, loopBeats);
+  const phraseBeats = w.recordedBeats;
+  const phraseBeat = ((nowBeats % phraseBeats) + phraseBeats) % phraseBeats;
+  return circGap(contentBeat, phraseBeat, loopBeats);
 }
 
 function run(phaseLock, leadMs) {
