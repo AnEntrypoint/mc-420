@@ -801,7 +801,6 @@ static void* worker(void*) {
             static double linkPhaseTrim = 0.0;
             constexpr double kLinkPhaseTrimPerSample = 0.00005;
             constexpr double kLinkPhaseTrimMax = 0.03;
-            constexpr double kJoinSnapErrBeats = 0.25;
             float linkSpeedRatio = 1.0f;
             bool linkVarispeedEngaged = false;
             if (linkDrivingLength && g_params && g_link) {
@@ -913,18 +912,8 @@ static void* worker(void*) {
                         }
 
                         const bool linkJoined = !wasLinkDriving && !masterJustCreated;
-                        if (linkJoined && haveLinkTarget) {
+                        if (linkJoined && haveLinkTarget)
                             wasLinkDriving = true;
-                            double halfLenJ = (double)masterLen * 0.5;
-                            double dj = std::fmod(linkTargetSamples - masterPhaseSamples + halfLenJ, (double)masterLen);
-                            if (dj < 0.0) dj += (double)masterLen;
-                            dj -= halfLenJ;
-                            if (std::fabs(dj) / beatLenSamplesShared > kJoinSnapErrBeats) {
-                                g_link->requestPhaseImpose(masterPhaseSamples / beatLenSamplesShared,
-                                                           (int64_t)nowMicros,
-                                                           (double)recordedBeatsShared);
-                            }
-                        }
 
                         if (masterJustCreated && haveLinkTarget)
                             lastLinkPhaseMicroBeats = -1;
