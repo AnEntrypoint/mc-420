@@ -31,7 +31,7 @@ jobs:
 
       - name: Smoke run the sniffer for 3 seconds
         run: |
-          chmod +x mcast_sniff
+          sudo -n chmod +x mcast_sniff || true
           sudo -n ./mcast_sniff 3 || true
 
       - name: Upload mcast-sniff
