@@ -9,6 +9,7 @@ STA_RETRY_LIMIT="${STA_RETRY_LIMIT:-6}"
 ASSOC_WAIT="${ASSOC_WAIT:-12}"
 HOLD_MAX="${HOLD_MAX:-6}"
 AP_SCAN_IDLE="${AP_SCAN_IDLE:-90}"
+OUTRANK_TICKS="${OUTRANK_TICKS:-3}"
 
 log() { echo "[autoap] $*"; }
 
@@ -18,6 +19,14 @@ own_mac() {
 
 mac_key() {
     echo "$1" | tr 'A-F' 'a-f' | tr -d ':-'
+}
+
+lower_key() {
+    [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort | head -n1)" = "$1" ]
+}
+
+current_host_key() {
+    iw dev "$IFACE" link 2>/dev/null | awk '/Connected to/ { print $3 }' | tr 'A-F' 'a-f' | tr -d ':-'
 }
 
 scan_mesh_bssid() {
@@ -116,8 +125,8 @@ log "interface $IFACE mac=$MAC mesh_ssid=$MESH_SSID"
 
 state=""
 peer_bssid="$(scan_mesh_bssid)"
-if [ -n "$peer_bssid" ]; then
-    log "found '$MESH_SSID' (bssid $peer_bssid) — joining as STA"
+if [ -n "$peer_bssid" ] && lower_key "$(mac_key "$peer_bssid")" "$MACKEY"; then
+    log "found lower-key '$MESH_SSID' host $peer_bssid — joining as STA"
     if join_sta; then
         log "joined '$MESH_SSID' as STA"
         state="STA"
@@ -126,6 +135,10 @@ if [ -n "$peer_bssid" ]; then
         start_ap
         state="AP"
     fi
+elif [ -n "$peer_bssid" ]; then
+    log "'$MESH_SSID' host $peer_bssid is higher-key than $MAC — hosting as the lowest key"
+    start_ap
+    state="AP"
 else
     rank_hex="$(echo "$MACKEY" | tail -c 7)"
     rank="$(printf '%d' "0x${rank_hex:-0}" 2>/dev/null || echo 0)"
@@ -137,8 +150,8 @@ else
         sleep 1
         waited=$((waited + 1))
         peer_bssid="$(scan_mesh_bssid)"
-        if [ -n "$peer_bssid" ]; then
-            log "peer '$MESH_SSID' appeared during hold (bssid $peer_bssid) — joining"
+        if [ -n "$peer_bssid" ] && lower_key "$(mac_key "$peer_bssid")" "$MACKEY"; then
+            log "lower-key peer '$MESH_SSID' appeared during hold (bssid $peer_bssid) — joining"
             if join_sta; then
                 log "joined '$MESH_SSID' as STA"
                 state="STA"
@@ -149,11 +162,12 @@ else
         fi
     done
     if [ "$joined" -eq 0 ]; then
-        log "hold expired, no peer '$MESH_SSID' — hosting AP"
+        log "hold expired, no lower-key peer '$MESH_SSID' — hosting AP"
         start_ap
         state="AP"
     fi
 fi
+outrank=0
 
 retries=0
 idle=0
@@ -164,8 +178,22 @@ while true; do
         STA)
             if sta_associated && has_ip; then
                 retries=0
+                hostkey="$(current_host_key)"
+                if [ -n "$hostkey" ] && lower_key "$MACKEY" "$hostkey"; then
+                    outrank=$((outrank + 1))
+                    if [ "$outrank" -ge "$OUTRANK_TICKS" ]; then
+                        log "host key $hostkey is higher than our $MACKEY for $outrank ticks — taking over as AP"
+                        pkill wpa_supplicant 2>/dev/null || true
+                        start_ap
+                        state="AP"
+                        outrank=0
+                    fi
+                else
+                    outrank=0
+                fi
                 continue
             fi
+            outrank=0
             retries=$((retries + 1))
             log "STA link down ($retries/$STA_RETRY_LIMIT) — reconnecting"
             if join_sta; then
@@ -201,7 +229,7 @@ while true; do
             [ -n "$other" ] || continue
             otherkey="$(mac_key "$other")"
             [ "$otherkey" != "$MACKEY" ] || continue
-            if [ "$otherkey" \< "$MACKEY" ]; then
+            if lower_key "$otherkey" "$MACKEY"; then
                 log "lower-BSSID '$MESH_SSID' host $other exists — yielding AP and joining it"
                 stop_ap
                 if join_sta; then
