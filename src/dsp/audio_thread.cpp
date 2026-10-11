@@ -818,6 +818,8 @@ static void* worker(void*) {
                 static double masterPhaseSamples = 0.0;
                 static double standaloneQuantumPhaseSamples = 0.0;
                 static int64_t lastLinkPhaseMicroBeats = -1;
+                static int lastRebaseSeqSeen = -1;
+                static bool resnapAfterRebasePending = false;
                 static double lastLinkBpmSeen = 0.0;
                 static int tempoStableBlocks = 0;
                 double masterPhaseSlope = 1.0;
@@ -925,11 +927,20 @@ static void* worker(void*) {
                                              linkSnap.beatPhaseMicroBeats != lastLinkPhaseMicroBeats;
                         if (freshSnapshot) lastLinkPhaseMicroBeats = linkSnap.beatPhaseMicroBeats;
 
-                        if (haveLinkTarget && !masterJustCreated && !anyAudible) {
+                        if (lastRebaseSeqSeen < 0) {
+                            lastRebaseSeqSeen = linkSnap.rebaseSeq;
+                        } else if (linkSnap.rebaseSeq != lastRebaseSeqSeen) {
+                            lastRebaseSeqSeen = linkSnap.rebaseSeq;
+                            resnapAfterRebasePending = true;
+                        }
+
+                        if (haveLinkTarget && !masterJustCreated
+                            && (!anyAudible || resnapAfterRebasePending)) {
                             masterPhaseSlope = (double)linkSpeedRatio;
                             masterPhaseSamples = linkTargetSamples;
                             linkPhaseTrim = 0.0;
                             tempoStableBlocks = 0;
+                            resnapAfterRebasePending = false;
                             g_telem.linkPhaseErrBeats = 0.0f;
                         } else {
                             masterPhaseSlope = (double)linkSpeedRatio + linkPhaseTrim;
@@ -955,6 +966,7 @@ static void* worker(void*) {
                         masterPhaseSlope = (double)linkSpeedRatio;
                         masterPhaseSamples += (double)N * masterPhaseSlope;
                         wasLinkDriving = false;
+                        resnapAfterRebasePending = false;
                         lastLinkBpmSeen = 0.0;
                         tempoStableBlocks = 0;
                         lastLinkPhaseMicroBeats = -1;
@@ -977,6 +989,7 @@ static void* worker(void*) {
                 } else {
                     masterPhaseSamples = 0.0;
                     wasLinkDriving = false;
+                    resnapAfterRebasePending = false;
                     standaloneQuantumPhaseSamples = 0.0;
                     lastLinkPhaseMicroBeats = -1;
                     g_telem.masterPhaseBeats = 0.0f;

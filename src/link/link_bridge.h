@@ -20,6 +20,7 @@ struct LinkSnapshot {
     bool    isPlaying    = false;
     int     peerCount    = 0;
     bool    weOwnTempo   = false;
+    int     rebaseSeq    = 0;
 };
 
 class LinkBridge {

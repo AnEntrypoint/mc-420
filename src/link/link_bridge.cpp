@@ -33,6 +33,7 @@ std::atomic<int> g_candidateTicks{0};
 constexpr int kPeerSettleTicks = 2;
 
 std::atomic<bool> g_havePhaseImpose{false};
+std::atomic<int> g_rebaseSeq{0};
 std::atomic<double> g_imposeBeat{0.0};
 std::atomic<double> g_imposeQuantum{16.0};
 std::atomic<int64_t> g_imposeAtMicros{0};
@@ -113,6 +114,7 @@ void LinkBridge::controlTick() {
         auto state = l->captureAppSessionState();
         state.forceBeatAtTime(beat, std::chrono::microseconds(atMicros), quantum);
         l->commitAppSessionState(state);
+        g_rebaseSeq.fetch_add(1, std::memory_order_release);
         fprintf(stderr, "[link] first loop owns the phase: session beat %.3f forced at t=%lldus (quantum %.3f), %u peer(s) follow\n",
                 beat, (long long)atMicros, quantum, (unsigned)l->numPeers());
     }
@@ -150,6 +152,7 @@ void LinkBridge::publishSnapshot() {
     s.captureMicros       = (int64_t)capTs.tv_sec * 1000000 + capTs.tv_nsec / 1000;
     s.isPlaying           = g_localTransportRunning.load(std::memory_order_relaxed);
     s.weOwnTempo          = g_weSetTempo.load(std::memory_order_relaxed);
+    s.rebaseSeq           = g_rebaseSeq.load(std::memory_order_relaxed);
     g_active.store(nxt, std::memory_order_release);
 #endif
 }
