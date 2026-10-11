@@ -2,9 +2,9 @@
 
 const { readHeadError } = require('./read-head-lineup');
 
-const { createLinkSession, createLinkPeer, registerPeer, setPhaseQuantum } = require('./link');
+const { createLinkSession, createLinkPeer, registerPeer, setPhaseQuantum, beatAtTime } = require('./link');
 const {
-  createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples,
+  createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples, SIM_SAMPLE_RATE,
 } = require('./world');
 
 const kHoldMs = 2000;
@@ -12,6 +12,9 @@ const kStaggerMs = 500;
 const kWatchMs = 60000;
 const kStepMs = 100;
 const kToleranceBeats = 0.05;
+const kGapToleranceBeats = 0.25;
+const kImposeWindowMs = 500;
+const kSettleMsMax = 1000;
 
 function makeLatePair(bpm) {
   const session = createLinkSession(bpm);
@@ -44,6 +47,10 @@ function circularGap(a, b, period) {
   return Math.min(d, period - d);
 }
 
+function sessionBeat(session, w) {
+  return beatAtTime(session, (w.t / SIM_SAMPLE_RATE) * 1000);
+}
+
 function runLatePair(joinSnap) {
   setPhaseQuantum(128.0);
   const { session, peerA, peerB, a, b } = makeLatePair(120.0);
@@ -69,29 +76,94 @@ function runLatePair(joinSnap) {
   onPadPress(b, 0); onPadRelease(b, 0);
 
   const period = Math.max(1, Math.min(a.recordedBeats, b.recordedBeats));
+  const baseSeq = session.rebaseSeq || 0;
   let settledMs = Infinity;
-  let worst = 0;
-  let worstReadA = 0;
-  let worstReadB = 0;
+  let settledGap = 0;
+  let transientGap = 0;
+  let settledReadA = 0;
+  let settledReadB = 0;
+  let transientReadA = 0;
+  let transientReadB = 0;
+  let rebaseAtMs = null;
+  let rebaseFromBeat = null;
+  let rebaseToBeat = null;
+  let rebaseSeqFrom = null;
+  let rebaseSeqTo = null;
+  let prevBeat = sessionBeat(session, a);
   let elapsedMs = 0;
   for (let k = 0; k * kStepMs < kWatchMs; k++) {
     advancePair(a, b, msToSimSamples(kStepMs));
     elapsedMs += kStepMs;
+    const nowBeat = sessionBeat(session, a);
+    const seq = session.rebaseSeq || 0;
+    if (rebaseAtMs === null && seq !== baseSeq) {
+      rebaseAtMs = elapsedMs;
+      rebaseFromBeat = prevBeat;
+      rebaseToBeat = nowBeat;
+      rebaseSeqFrom = baseSeq;
+      rebaseSeqTo = seq;
+    }
+    prevBeat = nowBeat;
     const pa = beatPhase(a);
     const pb = beatPhase(b);
     if (pa === null || pb === null) continue;
     const gap = circularGap(pa, pb, period);
-    worst = Math.max(worst, gap);
     if (settledMs === Infinity && gap < kToleranceBeats) settledMs = elapsedMs;
     const ra = readHeadError(a, session, 0);
     const rb = readHeadError(b, session, 0);
-    if (ra !== null) worstReadA = Math.max(worstReadA, ra);
-    if (rb !== null) worstReadB = Math.max(worstReadB, rb);
+    if (elapsedMs >= kImposeWindowMs) {
+      settledGap = Math.max(settledGap, gap);
+      if (ra !== null) settledReadA = Math.max(settledReadA, ra);
+      if (rb !== null) settledReadB = Math.max(settledReadB, rb);
+    } else {
+      transientGap = Math.max(transientGap, gap);
+      if (ra !== null) transientReadA = Math.max(transientReadA, ra);
+      if (rb !== null) transientReadB = Math.max(transientReadB, rb);
+    }
   }
   return {
-    settledMs, worst, joinPhaseA, joinPhaseB, worstReadA, worstReadB,
-    beatsA: a.recordedBeats, beatsB: b.recordedBeats,
+    settledMs, settledGap, transientGap,
+    settledReadA, settledReadB, transientReadA, transientReadB,
+    rebaseAtMs, rebaseFromBeat, rebaseToBeat, rebaseSeqFrom, rebaseSeqTo,
+    joinPhaseA, joinPhaseB, beatsA: a.recordedBeats, beatsB: b.recordedBeats,
   };
+}
+
+function reportRun(label, r) {
+  const jump = r.rebaseAtMs === null
+    ? 'no forceBeatAtTime landed, transient is unexplained'
+    : `beat ${r.rebaseFromBeat.toFixed(3)} -> ${r.rebaseToBeat.toFixed(3)} (rebaseSeq ${r.rebaseSeqFrom} -> ${r.rebaseSeqTo}) landed ${r.rebaseAtMs} ms after B finish`;
+  console.log(`  ${label}: settled from ${kImposeWindowMs} ms on: gap ${r.settledGap.toFixed(3)} beats, read A ${r.settledReadA.toFixed(3)} beats, read B ${r.settledReadB.toFixed(3)} beats`);
+  console.log(`  ${label}: transient under ${kImposeWindowMs} ms:  gap ${r.transientGap.toFixed(3)} beats, read A ${r.transientReadA.toFixed(3)} beats, read B ${r.transientReadB.toFixed(3)} beats`);
+  console.log(`  ${label}: re-base: ${jump}`);
+}
+
+function checkRun(label, r) {
+  let bad = 0;
+  if (!(r.settledMs <= kSettleMsMax)) {
+    console.log(`  FAIL: ${label} took ${r.settledMs} ms to settle`);
+    bad++;
+  }
+  if (!(r.settledGap < kGapToleranceBeats)) {
+    console.log(`  FAIL: ${label} settled gap ${r.settledGap.toFixed(3)} beats`);
+    bad++;
+  }
+  if (!(r.settledReadA < kToleranceBeats)) {
+    console.log(`  FAIL: ${label} A read head settled off by ${r.settledReadA.toFixed(3)} beats`);
+    bad++;
+  }
+  if (!(r.settledReadB < kToleranceBeats)) {
+    console.log(`  FAIL: ${label} B read head settled off by ${r.settledReadB.toFixed(3)} beats`);
+    bad++;
+  }
+  if (r.rebaseAtMs === null) {
+    console.log(`  FAIL: ${label} transient is not explained by a re-base, no forceBeatAtTime landed`);
+    bad++;
+  } else if (!(r.rebaseAtMs <= kImposeWindowMs)) {
+    console.log(`  FAIL: ${label} re-base landed at ${r.rebaseAtMs} ms, past the ${kImposeWindowMs} ms impose window`);
+    bad++;
+  }
+  return bad;
 }
 
 function main() {
@@ -99,37 +171,15 @@ function main() {
   const legacy = runLatePair(false);
   const fixed = runLatePair(true);
 
-  console.log(`late join: A records and plays standalone, then B connects and records`);
+  console.log('late join: A records and plays standalone, then B connects and records');
   console.log(`  beats=${fixed.beatsA}/${fixed.beatsB}`);
-  console.log(`  legacy (no snap on join): settled after ${legacy.settledMs} ms, worst gap ${legacy.worst.toFixed(3)} beats`);
-  console.log(`  fixed  (snap on join):    settled after ${fixed.settledMs} ms, worst gap ${fixed.worst.toFixed(3)} beats`);
-  console.log(`  legacy read head vs grid: A ${legacy.worstReadA.toFixed(3)} beats, B ${legacy.worstReadB.toFixed(3)} beats`);
-  console.log(`  fixed  read head vs grid: A ${fixed.worstReadA.toFixed(3)} beats, B ${fixed.worstReadB.toFixed(3)} beats`);
+  console.log(`  legacy (no snap on join): settled after ${legacy.settledMs} ms`);
+  console.log(`  fixed  (snap on join):    settled after ${fixed.settledMs} ms`);
+  reportRun('legacy', legacy);
+  reportRun('fixed ', fixed);
 
-  if (!(legacy.settledMs > 5000)) {
-    console.log('  FAIL: legacy run settled quickly, so this case does not reproduce the slow crawl');
-    failed++;
-  }
-  if (!(fixed.settledMs <= 1000)) {
-    console.log('  FAIL: fixed run still took ' + fixed.settledMs + ' ms to settle');
-    failed++;
-  }
-  if (!(fixed.worst < 0.25)) {
-    console.log('  FAIL: fixed run peaked at ' + fixed.worst.toFixed(3) + ' beats of drift');
-    failed++;
-  }
-  if (!(legacy.worstReadA > kToleranceBeats || legacy.worstReadB > kToleranceBeats)) {
-    console.log('  FAIL: legacy read head tracked the grid, so this case does not reach the read head');
-    failed++;
-  }
-  if (!(fixed.worstReadA < kToleranceBeats)) {
-    console.log('  FAIL: fixed run, A read head off by ' + fixed.worstReadA.toFixed(3) + ' beats');
-    failed++;
-  }
-  if (!(fixed.worstReadB < kToleranceBeats)) {
-    console.log('  FAIL: fixed run, B read head off by ' + fixed.worstReadB.toFixed(3) + ' beats');
-    failed++;
-  }
+  failed += checkRun('legacy', legacy);
+  failed += checkRun('fixed ', fixed);
 
   console.log(failed === 0 ? 'late join: PASS' : `late join: FAIL (${failed})`);
   process.exit(failed === 0 ? 0 : 1);

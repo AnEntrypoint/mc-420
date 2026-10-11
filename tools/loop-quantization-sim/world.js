@@ -1,7 +1,7 @@
 'use strict';
 
 const { initLooperDsp, stepSample, MAXLEN } = require('./looper');
-const { createLinkWorld, LINK_QUANTUM, beatAtTime } = require('./link');
+const { createLinkWorld, LINK_QUANTUM, beatAtTime, requestPhaseImpose, applyPendingPhaseImpose } = require('./link');
 
 const ANCHOR_MIDPOINT_FRAC = 0.4142135623730951;
 const SCALE = 100;
@@ -98,12 +98,14 @@ function createWorld(opts) {
     loopPhaseCapture: true,
     varispeedOnAnchor: true,
     resnapOnReconnect: true,
+    resnapAfterRebase: true,
     joinSnapEnabled: true,
     beatsGuessEnabled: false,
     tempoScaleInverted: false,
     deferBeatsWrite: false,
     pendingBeats: null,
     creationSnapPending: false,
+    seenRebaseSeq: 0,
     wasLinkSynced: false,
     linkPhaseErrBeats: 0.0,
     linkSnapHeld: null,
@@ -136,6 +138,10 @@ function refreshLinkSnapshot(w) {
 function beatsFoldBasis(w) {
   if (w.recordedBeats >= 1.0) return w.recordedBeats;
   return w.beatsGuessEnabled ? 16.0 : 0.0;
+}
+
+function phaseImposeQuantumBeats(w) {
+  return w.recordedBeats >= 1.0 ? w.recordedBeats : 16.0;
 }
 
 function linkTargetSamplesAt(w, nowMicros) {
@@ -325,7 +331,6 @@ function publishTransport(w) {
   const timeMs = (w.t / SIM_SAMPLE_RATE) * 1000;
   w.link.local.setTransportPlaying(anyPlaying, timeMs);
   refreshLinkSnapshot(w);
-  w.creationSnapPending = true;
 }
 
 function onPadPress(w, looper) {
@@ -470,7 +475,14 @@ function stepOneSample(w) {
     w.recordedBeats = w.pendingBeats.beats;
     w.pendingBeats = null;
   }
-  if (w.t % kControlTickSamples === 0) refreshLinkSnapshot(w);
+  if (w.t % kControlTickSamples === 0) {
+    applyPendingPhaseImpose(w.link.session);
+    if (w.resnapAfterRebase && w.seenRebaseSeq !== w.link.session.rebaseSeq) {
+      w.seenRebaseSeq = w.link.session.rebaseSeq;
+      w.creationSnapPending = true;
+    }
+    refreshLinkSnapshot(w);
+  }
   const masterPhasePrev = w.masterPhaseSamples;
 
   const s = w.linkSnapHeld;
@@ -486,7 +498,9 @@ function stepOneSample(w) {
   const masterLen = w.masterLenSamples;
   const masterJustCreated = w.prevMasterLen <= 0 && masterLen > 0;
   w.prevMasterLen = masterLen;
-  if (masterJustCreated) w.creationSnapPending = true;
+  if (masterJustCreated) {
+    requestPhaseImpose(w.link.session, 0.0, (w.t / SIM_SAMPLE_RATE) * 1000, phaseImposeQuantumBeats(w), w.link.local);
+  }
 
   if (masterLen > 0) {
     if (linkDriving) {
@@ -512,11 +526,14 @@ function stepOneSample(w) {
         const raw = (target - w.masterPhaseSamples + half) % masterLen;
         const delta = ((raw < 0 ? raw + masterLen : raw)) - half;
         joinErrBeats = Math.abs(delta) / (masterLen / Math.max(1.0, w.recordedBeats));
+        if (!masterJustCreated && w.joinSnapEnabled && joinErrBeats > kJoinSnapErrBeats) {
+          const beatNow = w.masterPhaseSamples / (masterLen / Math.max(1.0, w.recordedBeats));
+          requestPhaseImpose(w.link.session, beatNow, (w.t / SIM_SAMPLE_RATE) * 1000, phaseImposeQuantumBeats(w), w.link.local);
+        }
       }
 
       const snapNow = w.phaseLockEnabled && target !== null
-          && (!anyAudible || masterJustCreated || w.creationSnapPending
-              || (w.joinSnapEnabled && linkJoined && joinErrBeats > kJoinSnapErrBeats));
+          && !masterJustCreated && (!anyAudible || w.creationSnapPending);
       if (snapNow) {
         w.masterPhaseSamples = target;
         w.linkPhaseTrim = 0.0;

@@ -2,7 +2,7 @@
 
 const { createLinkSession, createLinkPeer, registerPeer, setPhaseQuantum } = require('./link');
 const {
-  createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples,
+  createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples, effSpeedNow,
 } = require('./world');
 
 const kStaggerMs = 700;
@@ -71,15 +71,40 @@ function runPair(opts) {
   const period = beatGcd(a.recordedBeats, b.recordedBeats);
   let worst = 0;
   let samples = 0;
+  let polls = 0;
+  let peersHeld = 0;
+  let bpmMin = Infinity;
+  let bpmMax = -Infinity;
+  let effMinA = Infinity;
+  let effMaxA = -Infinity;
+  let effMinB = Infinity;
+  let effMaxB = -Infinity;
   for (let k = 0; k < 40; k++) {
     advancePair(a, b, msToSimSamples(100));
     const pa = beatPhase(a);
     const pb = beatPhase(b);
     if (pa === null || pb === null) return { worst: NaN, samples };
+    polls++;
+    if (a.link.local.connected && b.link.local.connected) peersHeld++;
+    if (a.linkSnapHeld && a.linkSnapHeld.bpm > 0) {
+      bpmMin = Math.min(bpmMin, a.linkSnapHeld.bpm);
+      bpmMax = Math.max(bpmMax, a.linkSnapHeld.bpm);
+    }
+    const effA = effSpeedNow(a);
+    const effB = effSpeedNow(b);
+    effMinA = Math.min(effMinA, effA);
+    effMaxA = Math.max(effMaxA, effA);
+    effMinB = Math.min(effMinB, effB);
+    effMaxB = Math.max(effMaxB, effB);
     worst = Math.max(worst, circularGap(pa, pb, period));
     samples += msToSimSamples(100);
   }
-  return { worst, samples, period, beatsA: a.recordedBeats, beatsB: b.recordedBeats };
+  const bpmSpread = bpmMax >= bpmMin ? bpmMax - bpmMin : 0;
+  const effSpeedSpread = Math.max(effMaxA - effMinA, effMaxB - effMinB);
+  return {
+    worst, samples, period, polls, peersHeld, bpmSpread, effSpeedSpread,
+    beatsA: a.recordedBeats, beatsB: b.recordedBeats,
+  };
 }
 
 function main() {
@@ -139,19 +164,29 @@ function main() {
   const longPeriod = Math.max(1, longFixed.beatsA);
 
   console.log(`hold ${longHoldMs}ms beats=${longFixed.beatsA}/${longFixed.beatsB} (loop longer than the 16-beat Link quantum)`);
-  console.log(`  legacy (phase captured at quantum 16):  worst gap = ${longLegacy.worst.toFixed(3)} beats`);
+  console.log('  sync stability only -- fold coverage: NONE, see loop-quantum-fold.js for the fold assertions');
+  console.log(`  legacy (phase captured at quantum 16):  worst gap = ${longLegacy.worst.toFixed(3)} beats (informational, not asserted: the 16-quantum residual is rb-independent trim-chase, not fold)`);
   console.log(`  fixed  (phase captured at quantum 128): worst gap = ${longFixed.worst.toFixed(3)} beats`);
+  console.log(`  sync stability: peers held ${longFixed.peersHeld}/${longFixed.polls} polls, bpm spread ${longFixed.bpmSpread.toFixed(3)}, eff_speed spread ${longFixed.effSpeedSpread.toFixed(5)}, xruns not modelled in sim`);
 
   if (longFixed.beatsA <= 16.0) {
     console.log('  FAIL: long take did not quantize past the 16-beat quantum, test proves nothing');
     failed++;
   }
-  if (!(longLegacy.worst > 1.0)) {
-    console.log('  FAIL: quantum-16 run converged, so this test does not reproduce the bug');
-    failed++;
-  }
   if (!(longFixed.worst < 0.05)) {
     console.log('  FAIL: quantum-128 run still off by ' + longFixed.worst.toFixed(3) + ' beats');
+    failed++;
+  }
+  if (!(longFixed.peersHeld === longFixed.polls)) {
+    console.log(`  FAIL: peers held on only ${longFixed.peersHeld} of ${longFixed.polls} polls`);
+    failed++;
+  }
+  if (!(longFixed.bpmSpread < 0.05)) {
+    console.log(`  FAIL: shared session bpm spread ${longFixed.bpmSpread.toFixed(3)} over the watch`);
+    failed++;
+  }
+  if (!(longFixed.effSpeedSpread < 0.005)) {
+    console.log(`  FAIL: eff_speed spread ${longFixed.effSpeedSpread.toFixed(5)} over the watch`);
     failed++;
   }
 

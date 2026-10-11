@@ -14,6 +14,8 @@ function createLinkSession(initialBpm) {
     gridOriginTimeMs: 0,
     beatOriginBeat: 0,
     isPlaying: false,
+    pendingPhaseImpose: null,
+    rebaseSeq: 0,
   };
 }
 
@@ -44,22 +46,25 @@ function setIsPlaying(session, playing, atTimeMs) {
   session.isPlaying = playing;
 }
 
-function setIsPlayingAndRequestBeatAtTime(session, playing, atTimeMs, beat, quantum, peerCount) {
-  session.isPlaying = playing;
-  const beatsNow = beatsSinceGrid(session, atTimeMs);
-  let beatsAtStart;
-  if (peerCount > 0) {
-    beatsAtStart = (Math.floor(beatsNow / quantum) + 1) * quantum;
-  } else {
-    const want = ((beat % quantum) + quantum) % quantum;
-    const cur = ((beatsNow % quantum) + quantum) % quantum;
-    let d = want - cur;
-    if (d > quantum * 0.5) d -= quantum;
-    if (d <= -quantum * 0.5) d += quantum;
-    beatsAtStart = beatsNow + d;
-    session.gridOriginTimeMs = atTimeMs - (beatsAtStart / session.tempo) * 60000;
-  }
-  session.beatOriginBeat = beat - beatsAtStart;
+function forceBeatAtTime(session, beat, atMs, quantum) {
+  const q = quantum > 0 ? quantum : LINK_QUANTUM;
+  const targetBeat = countOtherConnectedFromSession(session) > 0
+    ? beat
+    : (Math.floor(beatAtTime(session, atMs) / q) + 1) * q;
+  session.beatOriginBeat = targetBeat - beatsSinceGrid(session, atMs);
+}
+
+function requestPhaseImpose(session, beat, atMs, quantum, owner) {
+  session.pendingPhaseImpose = { beat, atMs, quantum, owner };
+}
+
+function applyPendingPhaseImpose(session) {
+  const req = session.pendingPhaseImpose;
+  if (!req) return null;
+  session.pendingPhaseImpose = null;
+  forceBeatAtTime(session, req.beat, req.atMs, req.quantum);
+  session.rebaseSeq = (session.rebaseSeq || 0) + 1;
+  return req;
 }
 
 function createLinkPeer(name, session) {
@@ -96,11 +101,7 @@ function createLinkPeer(name, session) {
     setTransportPlaying(playing, atTimeMs) {
       if (!this.connected) return;
       if (session.isPlaying === playing) return;
-      if (playing) {
-        setIsPlayingAndRequestBeatAtTime(session, true, atTimeMs, 0.0, LINK_QUANTUM, countOtherConnected(this));
-      } else {
-        setIsPlaying(session, false, atTimeMs);
-      }
+      setIsPlaying(session, playing, atTimeMs);
     },
   };
 }
@@ -116,6 +117,13 @@ function registerPeer(peer) {
 function countOtherConnected(peer) {
   const list = g_allPeersBySession.get(peer.session) || [];
   return list.filter((p) => p !== peer && p.connected).length;
+}
+
+function countOtherConnectedFromSession(session) {
+  const list = g_allPeersBySession.get(session) || [];
+  let n = 0;
+  for (const p of list) if (p.connected) n++;
+  return n > 0 ? n - 1 : 0;
 }
 
 function createLinkWorld(initialBpm) {
@@ -140,4 +148,7 @@ module.exports = {
   beatAtTime,
   phaseAtTime,
   setTempoContinuous,
+  forceBeatAtTime,
+  requestPhaseImpose,
+  applyPendingPhaseImpose,
 };

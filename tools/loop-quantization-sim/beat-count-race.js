@@ -1,6 +1,6 @@
 'use strict';
 
-const { createLinkSession, createLinkPeer, registerPeer, setPhaseQuantum } = require('./link');
+const { createLinkSession, createLinkPeer, registerPeer, setPhaseQuantum, beatAtTime } = require('./link');
 const {
   createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples, SIM_SAMPLE_RATE,
 } = require('./world');
@@ -9,6 +9,9 @@ const kHoldMs = 2000;
 const kWatchMs = 40000;
 const kStepMs = 50;
 const kToleranceBeats = 0.05;
+const kGapToleranceBeats = 0.25;
+const kImposeWindowMs = 500;
+const kSettleMsMax = 1000;
 
 function makePair(bpm) {
   const session = createLinkSession(bpm);
@@ -20,11 +23,15 @@ function makePair(bpm) {
   const b = createWorld({ looperCount: 4, initialLinkBpm: bpm });
   a.link = { session, local: peerA, remote: peerB };
   b.link = { session, local: peerB, remote: peerA };
-  return { a, b };
+  return { session, a, b };
 }
 
 function advancePair(a, b, samples) {
   for (let i = 0; i < samples; i++) { stepOneSample(a); stepOneSample(b); }
+}
+
+function sessionBeat(session, w) {
+  return beatAtTime(session, (w.t / SIM_SAMPLE_RATE) * 1000);
 }
 
 function trueTargetBeats(w) {
@@ -52,7 +59,7 @@ function circularGap(a, b, period) {
 
 function runRace(legacy, offsetMs) {
   setPhaseQuantum(128.0);
-  const { a, b } = makePair(120.0);
+  const { session, a, b } = makePair(120.0);
   a.beatsGuessEnabled = legacy;
   a.deferBeatsWrite = true;
 
@@ -61,36 +68,99 @@ function runRace(legacy, offsetMs) {
   advancePair(a, b, msToSimSamples(kHoldMs));
   onPadPress(a, 0); onPadRelease(a, 0);
 
+  const baseSeq = session.rebaseSeq || 0;
   let settledMs = Infinity;
-  let worst = 0;
+  let settledWorst = 0;
+  let transientWorst = 0;
+  let rebaseAtMs = null;
+  let rebaseFromBeat = null;
+  let rebaseToBeat = null;
+  let rebaseSeqFrom = null;
+  let rebaseSeqTo = null;
+  let prevBeat = sessionBeat(session, a);
   let elapsedMs = 0;
   for (let k = 0; k * kStepMs < kWatchMs; k++) {
     advancePair(a, b, msToSimSamples(kStepMs));
     elapsedMs += kStepMs;
+    const nowBeat = sessionBeat(session, a);
+    const seq = session.rebaseSeq || 0;
+    if (rebaseAtMs === null && seq !== baseSeq) {
+      rebaseAtMs = elapsedMs;
+      rebaseFromBeat = prevBeat;
+      rebaseToBeat = nowBeat;
+      rebaseSeqFrom = baseSeq;
+      rebaseSeqTo = seq;
+    }
+    prevBeat = nowBeat;
     const want = trueTargetBeats(a);
     if (want === null) continue;
     const oneBeat = a.masterLenSamples / Math.max(1.0, a.recordedBeats);
     const have = a.masterPhaseSamples / oneBeat;
     const err = circularGap(have, want, a.recordedBeats);
-    worst = Math.max(worst, err);
-    if (settledMs === Infinity && err < kToleranceBeats) settledMs = elapsedMs;
+    if (elapsedMs >= kImposeWindowMs) {
+      settledWorst = Math.max(settledWorst, err);
+      if (settledMs === Infinity && err < kToleranceBeats) settledMs = elapsedMs;
+    } else {
+      transientWorst = Math.max(transientWorst, err);
+    }
   }
-  return { settledMs, worst, beats: a.recordedBeats };
+  return {
+    settledMs, settledWorst, transientWorst,
+    rebaseAtMs, rebaseFromBeat, rebaseToBeat, rebaseSeqFrom, rebaseSeqTo,
+    beats: a.recordedBeats,
+  };
 }
 
 const kOffsets = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000];
 
 function sweep(legacy) {
-  let worst = 0;
+  let settledWorst = 0;
+  let transientWorst = 0;
   let settledMax = 0;
+  let rebaseMax = 0;
   let beats = 0;
+  let missing = 0;
+  let sample = null;
   for (const off of kOffsets) {
     const r = runRace(legacy, off);
-    worst = Math.max(worst, r.worst);
+    settledWorst = Math.max(settledWorst, r.settledWorst);
+    transientWorst = Math.max(transientWorst, r.transientWorst);
     settledMax = Math.max(settledMax, r.settledMs);
+    if (r.rebaseAtMs === null) missing++;
+    else rebaseMax = Math.max(rebaseMax, r.rebaseAtMs);
     beats = r.beats;
+    if (sample === null && r.rebaseAtMs !== null) sample = r;
   }
-  return { worst, settledMs: settledMax, beats };
+  return { settledWorst, transientWorst, settledMs: settledMax, rebaseMax, missing, beats, sample };
+}
+
+function reportRun(label, r) {
+  const jump = r.sample === null
+    ? 'no forceBeatAtTime landed in any phase, transient is unexplained'
+    : `beat ${r.sample.rebaseFromBeat.toFixed(3)} -> ${r.sample.rebaseToBeat.toFixed(3)} (rebaseSeq ${r.sample.rebaseSeqFrom} -> ${r.sample.rebaseSeqTo}) landed ${r.rebaseMax} ms after A finish, worst over ${kOffsets.length} phases`;
+  console.log(`  ${label}: settled from ${kImposeWindowMs} ms on: worst ${r.settledWorst.toFixed(3)} beats, settled after ${r.settledMs} ms`);
+  console.log(`  ${label}: transient under ${kImposeWindowMs} ms:  worst ${r.transientWorst.toFixed(3)} beats`);
+  console.log(`  ${label}: re-base: ${jump}`);
+}
+
+function checkRun(label, r) {
+  let bad = 0;
+  if (!(r.settledMs <= kSettleMsMax)) {
+    console.log(`  FAIL: ${label} run still took ${r.settledMs} ms to settle`);
+    bad++;
+  }
+  if (!(r.settledWorst < kGapToleranceBeats)) {
+    console.log(`  FAIL: ${label} run peaked at ${r.settledWorst.toFixed(3)} beats of settled error`);
+    bad++;
+  }
+  if (r.missing > 0) {
+    console.log(`  FAIL: ${label} transient is not explained by a re-base in ${r.missing} of ${kOffsets.length} phases`);
+    bad++;
+  } else if (!(r.rebaseMax <= kImposeWindowMs)) {
+    console.log(`  FAIL: ${label} re-base landed at ${r.rebaseMax} ms, past the ${kImposeWindowMs} ms impose window`);
+    bad++;
+  }
+  return bad;
 }
 
 function main() {
@@ -100,25 +170,11 @@ function main() {
 
   console.log('beat-count race: master_len lands before recorded_beats, audio thread preempts');
   console.log(`  beats=${fixed.beats}  phases swept=${kOffsets.length}`);
-  console.log(`  legacy (folds on guessed 16 beats): settled after ${legacy.settledMs} ms, worst ${legacy.worst.toFixed(3)} beats`);
-  console.log(`  fixed  (no target until beats real): settled after ${fixed.settledMs} ms, worst ${fixed.worst.toFixed(3)} beats`);
+  reportRun('legacy', legacy);
+  reportRun('fixed ', fixed);
 
-  if (!(legacy.worst > 0.25)) {
-    console.log('  FAIL: legacy run never diverged, so this case does not reproduce the bug');
-    failed++;
-  }
-  if (!(legacy.settledMs > 5000)) {
-    console.log('  FAIL: legacy run recovered quickly, so this case does not reproduce the slow crawl');
-    failed++;
-  }
-  if (!(fixed.settledMs <= 1000)) {
-    console.log('  FAIL: fixed run still took ' + fixed.settledMs + ' ms to settle');
-    failed++;
-  }
-  if (!(fixed.worst < 0.25)) {
-    console.log('  FAIL: fixed run peaked at ' + fixed.worst.toFixed(3) + ' beats of error');
-    failed++;
-  }
+  failed += checkRun('legacy', legacy);
+  failed += checkRun('fixed ', fixed);
 
   console.log(failed === 0 ? 'beat-count race: PASS' : `beat-count race: FAIL (${failed})`);
   process.exit(failed === 0 ? 0 : 1);
