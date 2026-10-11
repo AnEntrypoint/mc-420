@@ -3,6 +3,7 @@
 const { initLooperDsp, stepSample, MAXLEN } = require('./looper');
 const { createLinkWorld, LINK_QUANTUM, beatAtTime, requestPhaseImpose, applyPendingPhaseImpose } = require('./link');
 
+const WHOLE_BEAT_SNAP_BEATS = 0.4;
 const ANCHOR_MIDPOINT_FRAC = 0.4142135623730951;
 const SCALE = 100;
 const SIM_SAMPLE_RATE = 48000 / SCALE;
@@ -286,9 +287,11 @@ function applyRecPlayCycle(w, looper) {
       const futureNodeBeats = pastNodeBeats + anchorGridBeats;
       const overshootBeats = takeLenBeats - pastNodeBeats;
       const cutToleranceBeats = legacy ? 1.0 : anchorGridBeats * ANCHOR_MIDPOINT_FRAC;
-      const finalBeats = (pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001)
-        ? pastNodeBeats
-        : futureNodeBeats;
+      const finalBeats = (!legacy && Math.abs(takeLenBeats - 1) <= WHOLE_BEAT_SNAP_BEATS)
+        ? 1
+        : ((pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001)
+          ? pastNodeBeats
+          : futureNodeBeats);
       const beatLenSamplesNow = w.tempoScaleInverted ? oneBeat / tempoScale : oneBeat * tempoScale;
       let quantized = Math.round(finalBeats * beatLenSamplesNow);
       if (quantized < 1) quantized = 1;

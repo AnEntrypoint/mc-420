@@ -126,7 +126,7 @@ function nearCutFarExtendCandidate(effectiveSamples, masterLenSamples, recordedB
   const futureNodeBeats = pastNodeBeats + anchorGridBeats;
   const overshootBeats = takeLenBeats - pastNodeBeats;
   const cutToleranceBeats = anchorGridBeats * ANCHOR_MIDPOINT_FRAC;
-  const finalBeats = (pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001) ? pastNodeBeats : futureNodeBeats;
+  const finalBeats = Math.abs(takeLenBeats - 1) <= 0.4 ? 1 : ((pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001) ? pastNodeBeats : futureNodeBeats);
   return finalBeats * oneBeatSamples;
 }
 
