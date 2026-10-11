@@ -149,7 +149,6 @@ constexpr int kPitchShiftLatencySamples = 128;
 constexpr float kPitchShiftSemisFloor = 0.01f;
 
 float g_manualSpeedMul = 1.0f;
-constexpr int kTransposeVoices = 6;
 
 static bool isResonodeLv2ControlTarget(const std::string& target) {
     return target.rfind("fx/resonode/", 0) == 0 || target.rfind("fx/resonodevoice", 0) == 0;
