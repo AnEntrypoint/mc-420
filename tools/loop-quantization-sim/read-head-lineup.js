@@ -48,8 +48,9 @@ function readHeadError(w, session, looper) {
   if (dsp.wlen < w.masterLenSamples - 0.5) {
     const contentBeat = dsp.rpos / loopBeatLen;
     const phraseBeats = w.recordedBeats;
+    const armBeats = dsp.rsm / oneBeat;
     const phraseBeat = ((nowBeats % phraseBeats) + phraseBeats) % phraseBeats;
-    return circGap(contentBeat, phraseBeat, loopBeats);
+    return circGap(contentBeat, ((phraseBeat - armBeats) % loopBeats + loopBeats) % loopBeats, loopBeats);
   }
   const rsmBeats = dsp.rsm / oneBeat;
   const originBeats = w.masterLooper === looper ? rsmBeats

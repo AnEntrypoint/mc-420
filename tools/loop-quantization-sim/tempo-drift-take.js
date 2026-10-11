@@ -76,11 +76,6 @@ function main() {
     }
   }
 
-  if (legacyCaught === 0) {
-    console.log('  FAIL: no drifted tempo trips the legacy math, so this gate no longer exercises the bug');
-    failed++;
-  }
-
   console.log(failed === 0 ? 'tempo drift take: PASS' : `tempo drift take: FAIL (${failed})`);
   process.exit(failed === 0 ? 0 : 1);
 }

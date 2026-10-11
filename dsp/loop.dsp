@@ -76,7 +76,7 @@ with {
                     ba.if(masterPhaseWrapped, wrapAbs(coffPrev + cycleInc, wrapLenCur), coffPrev))));
         phaseLocked = wrapLenCur < masterLen - 0.5;
         absPos = ba.if(phaseLocked,
-                       wrapAbs(sNext * masterPhase + latencyBiasN, wrapLenCur),
+                       wrapAbs(sNext * (masterPhase - rsmNext) + latencyBiasN, wrapLenCur),
                        wrapAbs(sNext * (masterPhase - rsmNext) + latencyBiasN + coffNext, wrapLenCur));
         speedClamped = max(0.1, min(8.0, effSpeed));
         manualSafe = max(0.1, abs(manualSpeed));
