@@ -56,7 +56,9 @@ with {
                                      ba.if(takeLenBeats > 0.25 + gridPickEps, 0.25, 0.125)))))));
         anchorGridLenNow = max(1.0, min(anchorGridBeats * beatLenNow, masterLen));
         gridMultiple = max(1.0, ceil(finishTakeLen / anchorGridLenNow - gridPickEps));
-        snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen, gridMultiple * anchorGridLenNow);
+        snappedWrapLen = ba.if(masterLen < 0.5, finishTakeLen,
+                         ba.if(abs(finishTakeLen - masterLen) < 0.5, finishTakeLen,
+                               gridMultiple * anchorGridLenNow));
         wlenNext = ba.if(finishEdge, max(1.0, snappedWrapLen), wlenPrev);
         beatLenNow = ba.if(masterLen < 0.5, oneBeat, oneBeat / ratioClamped);
         sNext = ba.if(armEdge, 1.0,

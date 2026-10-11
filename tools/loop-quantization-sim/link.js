@@ -27,7 +27,7 @@ function beatAtTime(session, timeMs) {
 }
 
 function phaseAtTime(session, timeMs, quantum) {
-  let p = beatsSinceGrid(session, timeMs) % quantum;
+  let p = beatAtTime(session, timeMs) % quantum;
   if (p < 0) p += quantum;
   return p;
 }
@@ -68,9 +68,11 @@ function createLinkPeer(name, session) {
     session,
     connected: true,
     weOwnTempo: false,
+    foldBeats: 0,
     audioRead(timeMs) {
       if (!this.connected) return { synced: false, bpm: 120, peers: 0, playing: false, phaseValid: false, beatPhaseMicroBeats: 0, quantumMicroBeats: 0 };
       const peers = countOtherConnected(this);
+      const foldBeats = this.foldBeats || 0;
       return {
         synced: peers > 0,
         bpm: session.tempo,
@@ -79,6 +81,8 @@ function createLinkPeer(name, session) {
         phaseValid: true,
         beatPhaseMicroBeats: Math.round(phaseAtTime(session, timeMs, g_phaseQuantum) * 1e6),
         quantumMicroBeats: Math.round(g_phaseQuantum * 1e6),
+        loopPhaseMicroBeats: foldBeats >= 1.0 ? Math.round(phaseAtTime(session, timeMs, foldBeats) * 1e6) : 0,
+        loopQuantumBeats: foldBeats >= 1.0 ? foldBeats : 0,
       };
     },
     imposeTempo(bpm, atTimeMs) {

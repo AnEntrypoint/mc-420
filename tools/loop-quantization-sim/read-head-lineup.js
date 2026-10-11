@@ -57,6 +57,8 @@ function run(phaseLock, leadMs) {
   const { session, a, b } = makePair(120.0);
   a.phaseLockEnabled = phaseLock;
   b.phaseLockEnabled = phaseLock;
+  a.loopPhaseCapture = phaseLock;
+  b.loopPhaseCapture = phaseLock;
 
   advancePair(a, b, msToSimSamples(leadMs));
 

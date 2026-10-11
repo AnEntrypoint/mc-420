@@ -18,6 +18,8 @@ function run(phaseLock, aMs, bMs) {
   const { session, a, b } = makePair(120.0);
   a.phaseLockEnabled = phaseLock;
   b.phaseLockEnabled = phaseLock;
+  a.loopPhaseCapture = phaseLock;
+  b.loopPhaseCapture = phaseLock;
   advancePair(a, b, W.msToSimSamples(370));
 
   W.onPadPress(a, 0); W.onPadRelease(a, 0);

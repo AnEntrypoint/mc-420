@@ -55,6 +55,8 @@ function runPair(opts) {
   const { a, b } = makeSharedPair(120.0);
   a.phaseLockEnabled = opts.phaseLock !== false;
   b.phaseLockEnabled = opts.phaseLock !== false;
+  a.loopPhaseCapture = opts.loopPhaseCapture !== false;
+  b.loopPhaseCapture = opts.loopPhaseCapture !== false;
 
   onPadPress(a, 0); onPadRelease(a, 0);
   advancePair(a, b, msToSimSamples(holdMs));
@@ -85,7 +87,7 @@ function main() {
   setPhaseQuantum(128.0);
 
   for (const holdMs of [2000, 1500, 2600]) {
-    const legacy = runPair({ holdMs, phaseLock: false });
+    const legacy = runPair({ holdMs, phaseLock: false, loopPhaseCapture: false });
     const fixed = runPair({ holdMs, phaseLock: true });
 
     const legacyBad = !(legacy.worst < 0.25);
@@ -109,7 +111,7 @@ function main() {
     const holdA = asym[0];
     const holdB = asym[1];
     const stagger = asym[2];
-    const legacy = runPair({ holdMs: holdA, holdMsB: holdB, staggerMs: stagger, phaseLock: false });
+    const legacy = runPair({ holdMs: holdA, holdMsB: holdB, staggerMs: stagger, phaseLock: false, loopPhaseCapture: false });
     const fixed = runPair({ holdMs: holdA, holdMsB: holdB, staggerMs: stagger, phaseLock: true });
 
     console.log(`asymmetric hold ${holdA}ms/${holdB}ms  beats=${fixed.beatsA}/${fixed.beatsB}  shared grid=${fixed.period} beats`);
@@ -132,7 +134,7 @@ function main() {
 
   const longHoldMs = 15000;
   const longStaggerMs = 5000;
-  const longLegacy = runPair({ holdMs: longHoldMs, staggerMs: longStaggerMs, phaseLock: true, phaseQuantum: 16.0 });
+  const longLegacy = runPair({ holdMs: longHoldMs, staggerMs: longStaggerMs, phaseLock: true, phaseQuantum: 16.0, loopPhaseCapture: false });
   const longFixed = runPair({ holdMs: longHoldMs, staggerMs: longStaggerMs, phaseLock: true, phaseQuantum: 128.0 });
   const longPeriod = Math.max(1, longFixed.beatsA);
 

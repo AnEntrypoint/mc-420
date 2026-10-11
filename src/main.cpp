@@ -181,6 +181,8 @@ int main(int argc, char** argv) {
     printf("[aloop] ready.\n");
 
     while (g_run.load()) {
+        const float beatsForPhaseQuantum = params.get("cmd/recorded_beats", 0.0f);
+        link.setLoopPhaseQuantumBeats(beatsForPhaseQuantum >= 1.0f ? (double)beatsForPhaseQuantum : aloop::kLinkQuantum);
         link.controlTick();
         telem.publish();
         remote.poll();

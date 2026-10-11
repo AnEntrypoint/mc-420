@@ -65,7 +65,9 @@ function stepSample(s, inp) {
   else anchorGridBeats = 0.125;
   const anchorGridLenNow = Math.max(1.0, Math.min(anchorGridBeats * beatLenNow, masterLen));
   const gridMultiple = Math.max(1.0, Math.ceil(finishTakeLen / anchorGridLenNow - gridPickEps));
-  const snappedWrapLen = masterLen < 0.5 ? finishTakeLen : gridMultiple * anchorGridLenNow;
+  const snappedWrapLen = masterLen < 0.5
+    ? finishTakeLen
+    : (Math.abs(finishTakeLen - masterLen) < 0.5 ? finishTakeLen : gridMultiple * anchorGridLenNow);
   const wlenNext = finishEdge ? Math.max(1.0, snappedWrapLen) : s.wlen;
   const beatScaleNext = armEdge
     ? 1.0

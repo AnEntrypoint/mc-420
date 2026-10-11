@@ -95,6 +95,7 @@ function createWorld(opts) {
     events: [],
     linkPhaseTrim: 0.0,
     phaseLockEnabled: true,
+    loopPhaseCapture: true,
     varispeedOnAnchor: true,
     resnapOnReconnect: true,
     joinSnapEnabled: true,
@@ -125,6 +126,7 @@ const kResyncCoeffPerSample = 0.0005 * kSimSpeedup;
 const kJoinSnapErrBeats = 0.25;
 
 function refreshLinkSnapshot(w) {
+  w.link.local.foldBeats = w.loopPhaseCapture ? beatsFoldBasis(w) : 0;
   const snap = w.link.local.audioRead((w.t / SIM_SAMPLE_RATE) * 1000);
   snap.captureMicros = (w.t / SIM_SAMPLE_RATE) * 1e6;
   w.linkSnapHeld = snap;
@@ -143,13 +145,19 @@ function linkTargetSamplesAt(w, nowMicros) {
   if (elapsed < 0) elapsed = 0;
   if (elapsed > 4e6) elapsed = 4e6;
   const phaseMicroBeats = s.beatPhaseMicroBeats + elapsed * (s.bpm / 60.0);
-  let frac = phaseMicroBeats / s.quantumMicroBeats;
-  frac -= Math.floor(frac);
   const beats = beatsFoldBasis(w);
   if (!(beats >= 1.0)) return null;
   const oneBeat = w.masterLenSamples / beats;
-  const linkBeat = frac * (s.quantumMicroBeats / 1e6);
-  const loopBeatPos = ((linkBeat % beats) + beats) % beats;
+  let loopBeatPos;
+  if (s.loopQuantumBeats > 0 && Math.abs(s.loopQuantumBeats - beats) < 1e-3) {
+    const beatsAbs = s.loopPhaseMicroBeats / 1e6 + (elapsed / 1e6) * (s.bpm / 60.0);
+    loopBeatPos = ((beatsAbs % beats) + beats) % beats;
+  } else {
+    let frac = phaseMicroBeats / s.quantumMicroBeats;
+    frac -= Math.floor(frac);
+    const linkBeat = frac * (s.quantumMicroBeats / 1e6);
+    loopBeatPos = ((linkBeat % beats) + beats) % beats;
+  }
   return loopBeatPos * oneBeat;
 }
 
@@ -316,6 +324,8 @@ function publishTransport(w) {
   }
   const timeMs = (w.t / SIM_SAMPLE_RATE) * 1000;
   w.link.local.setTransportPlaying(anyPlaying, timeMs);
+  refreshLinkSnapshot(w);
+  w.creationSnapPending = true;
 }
 
 function onPadPress(w, looper) {
@@ -504,9 +514,10 @@ function stepOneSample(w) {
         joinErrBeats = Math.abs(delta) / (masterLen / Math.max(1.0, w.recordedBeats));
       }
 
-      if (w.phaseLockEnabled && target !== null
+      const snapNow = w.phaseLockEnabled && target !== null
           && (!anyAudible || masterJustCreated || w.creationSnapPending
-              || (w.joinSnapEnabled && linkJoined && joinErrBeats > kJoinSnapErrBeats))) {
+              || (w.joinSnapEnabled && linkJoined && joinErrBeats > kJoinSnapErrBeats));
+      if (snapNow) {
         w.masterPhaseSamples = target;
         w.linkPhaseTrim = 0.0;
         w.tempoStableSamples = 0;

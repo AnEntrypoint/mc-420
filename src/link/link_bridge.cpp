@@ -17,6 +17,7 @@ namespace {
 std::atomic<unsigned> g_active{0};
 std::atomic<bool> g_weSetTempo{false};
 std::atomic<double> g_ownedBpm{0.0};
+std::atomic<double> g_loopPhaseQuantumBeats{0.0};
 
 std::atomic<int> g_lastLoggedPeers{-1};
 std::atomic<double> g_lastLoggedTempo{-1.0};
@@ -138,6 +139,14 @@ void LinkBridge::publishSnapshot() {
     s.phaseValid          = true;
     s.beatPhaseMicroBeats = (int64_t)(phase * 1e6);
     s.quantumMicroBeats   = (int64_t)(kLinkPhaseQuantumBeats * 1e6);
+    const double loopQuantum = g_loopPhaseQuantumBeats.load(std::memory_order_relaxed);
+    if (loopQuantum >= 1.0) {
+        s.loopPhaseMicroBeats = (int64_t)(state.phaseAtTime(now, loopQuantum) * 1e6);
+        s.loopQuantumBeats    = loopQuantum;
+    } else {
+        s.loopPhaseMicroBeats = 0;
+        s.loopQuantumBeats    = 0.0;
+    }
     s.captureMicros       = (int64_t)capTs.tv_sec * 1000000 + capTs.tv_nsec / 1000;
     s.isPlaying           = g_localTransportRunning.load(std::memory_order_relaxed);
     s.weOwnTempo          = g_weSetTempo.load(std::memory_order_relaxed);
@@ -165,6 +174,10 @@ void LinkBridge::imposeTempo(double bpm) {
 #else
     (void)bpm;
 #endif
+}
+
+void LinkBridge::setLoopPhaseQuantumBeats(double beats) {
+    g_loopPhaseQuantumBeats.store(beats >= 1.0 ? beats : 0.0, std::memory_order_relaxed);
 }
 
 void LinkBridge::requestPhaseImpose(double beat, int64_t atMicros, double quantum) {

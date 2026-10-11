@@ -14,6 +14,8 @@ struct LinkSnapshot {
     bool    phaseValid   = false;
     int64_t beatPhaseMicroBeats = 0;
     int64_t quantumMicroBeats   = 0;
+    int64_t loopPhaseMicroBeats = 0;
+    double  loopQuantumBeats    = 0.0;
     int64_t captureMicros       = 0;
     bool    isPlaying    = false;
     int     peerCount    = 0;
@@ -26,6 +28,8 @@ public:
     void stop();
 
     void controlTick();
+
+    void setLoopPhaseQuantumBeats(double beats);
 
     LinkSnapshot audioRead() const;
 
