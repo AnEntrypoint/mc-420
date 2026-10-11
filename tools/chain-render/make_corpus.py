@@ -116,9 +116,13 @@ def write_wav(path, samples):
 
 def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else "test-audio-corpus/instruments"
+    force = "--force" in sys.argv[2:]
     os.makedirs(outdir, exist_ok=True)
     for name, fn in CLIPS:
         path = os.path.join(outdir, name + ".wav")
+        if os.path.exists(path) and not force:
+            print("kept   %s (%d bytes) -- pass --force to regenerate" % (path, os.path.getsize(path)))
+            continue
         write_wav(path, normalize(fn()))
         print("wrote %s (%d bytes)" % (path, os.path.getsize(path)))
 
