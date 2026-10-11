@@ -29,12 +29,12 @@ if(NOT EXISTS ${CMAKE_BINARY_DIR}/loop_pre.cpp OR NOT EXISTS ${CMAKE_BINARY_DIR}
   if(FAUST_BIN)
     add_custom_command(
       OUTPUT  ${CMAKE_BINARY_DIR}/loop_pre.cpp
-      COMMAND ${FAUST_BIN} -lang cpp -cn AloopPreDsp -I ${CMAKE_SOURCE_DIR}/../dsp -I ${CMAKE_SOURCE_DIR}/../effects/home/faust ${CMAKE_SOURCE_DIR}/../dsp/aloop_pre.dsp -o ${CMAKE_BINARY_DIR}/loop_pre.cpp
+      COMMAND ${FAUST_BIN} -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopPreDsp -I ${CMAKE_SOURCE_DIR}/../dsp -I ${CMAKE_SOURCE_DIR}/../effects/home/faust ${CMAKE_SOURCE_DIR}/../dsp/aloop_pre.dsp -o ${CMAKE_BINARY_DIR}/loop_pre.cpp
       DEPENDS ${CMAKE_SOURCE_DIR}/../dsp/aloop_pre.dsp ${CMAKE_SOURCE_DIR}/../dsp/loop.dsp ${CMAKE_SOURCE_DIR}/../dsp/effects_runtime_pre.dsp
       COMMENT "Compiling the Faust home stack pre-delayverb half (dsp/aloop_pre.dsp) to C++")
     add_custom_command(
       OUTPUT  ${CMAKE_BINARY_DIR}/loop_post.cpp
-      COMMAND ${FAUST_BIN} -lang cpp -cn AloopPostDsp -I ${CMAKE_SOURCE_DIR}/../dsp -I ${CMAKE_SOURCE_DIR}/../effects/home/faust ${CMAKE_SOURCE_DIR}/../dsp/aloop_post.dsp -o ${CMAKE_BINARY_DIR}/loop_post.cpp
+      COMMAND ${FAUST_BIN} -lang cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -cn AloopPostDsp -I ${CMAKE_SOURCE_DIR}/../dsp -I ${CMAKE_SOURCE_DIR}/../effects/home/faust ${CMAKE_SOURCE_DIR}/../dsp/aloop_post.dsp -o ${CMAKE_BINARY_DIR}/loop_post.cpp
       DEPENDS ${CMAKE_SOURCE_DIR}/../dsp/aloop_post.dsp ${CMAKE_SOURCE_DIR}/../dsp/effects_runtime_post.dsp
       COMMENT "Compiling the Faust home stack post-delayverb half (dsp/aloop_post.dsp) to C++")
     add_custom_target(faust_loop DEPENDS ${CMAKE_BINARY_DIR}/loop_pre.cpp ${CMAKE_BINARY_DIR}/loop_post.cpp)
