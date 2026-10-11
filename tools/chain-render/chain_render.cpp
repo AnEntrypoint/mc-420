@@ -12,6 +12,7 @@
 #include "gen_pre_bypass.cpp"
 #include "gen_pre_clean.cpp"
 #include "gen_post.cpp"
+#include "gen_post_regress.cpp"
 #include "gen_lfx.cpp"
 #include "gen_lfx_nobc.cpp"
 #include "gen_bitcrush.cpp"
@@ -167,6 +168,17 @@ std::string argValue(int argc, char** argv, const std::string& key, const std::s
     return def;
 }
 
+std::vector<std::string> argList(int argc, char** argv, const std::string& key)
+{
+    std::vector<std::string> out;
+    for (int i = 1; i < argc; i++) {
+        std::string a = argv[i];
+        size_t p = a.find('=');
+        if (p != std::string::npos && a.substr(0, p) == key) out.push_back(a.substr(p + 1));
+    }
+    return out;
+}
+
 double dbfs(double v)
 {
     if (v <= 0.0) return -999.0;
@@ -217,10 +229,42 @@ int main(int argc, char** argv)
     int sr = std::atoi(argValue(argc, argv, "sr", "48000").c_str());
 
     if (inPath.empty() || outPath.empty()) {
-        std::printf("usage: chain_render in=<wav> out=<wav> mode=<none|bitcrush|flanger|tremolo|phaser|distortion|vinyl|flutter|lfx|lfx_nobc|faust|full|faust_bp|full_bp|faust_clean> tap=<master|cue> block=64 warmup=48000 gain=1.0 dump=<tag>\n");
+        std::printf("usage: chain_render in=<wav> out=<wav> mode=<none|...|faust|full|...> tap=<master|cue|record|inputfx|loopsum> block=64 warmup=48000 gain=1.0 dump=<tag> sr=48000 postregress=0 set=ZONE:VALUE (repeatable) sweep=ZONE:FROM:TO (repeatable)\n");
         return 2;
     }
     if (block < 1) block = 1;
+
+    struct ZoneSet { std::string name; float value; };
+    struct ZoneSweep { std::string name; double from; double to; };
+    std::vector<ZoneSet> zoneSets;
+    std::vector<ZoneSweep> zoneSweeps;
+
+    std::vector<std::string> setArgs = argList(argc, argv, "set");
+    for (size_t i = 0; i < setArgs.size(); i++) {
+        size_t c = setArgs[i].find(':');
+        if (c == std::string::npos) {
+            std::printf("bad set arg %s (want ZONE:VALUE)\n", setArgs[i].c_str());
+            return 2;
+        }
+        ZoneSet zs;
+        zs.name = setArgs[i].substr(0, c);
+        zs.value = (float)std::atof(setArgs[i].substr(c + 1).c_str());
+        zoneSets.push_back(zs);
+    }
+    std::vector<std::string> sweepArgs = argList(argc, argv, "sweep");
+    for (size_t i = 0; i < sweepArgs.size(); i++) {
+        size_t c1 = sweepArgs[i].find(':');
+        size_t c2 = (c1 == std::string::npos) ? std::string::npos : sweepArgs[i].find(':', c1 + 1);
+        if (c2 == std::string::npos) {
+            std::printf("bad sweep arg %s (want ZONE:FROM:TO)\n", sweepArgs[i].c_str());
+            return 2;
+        }
+        ZoneSweep sw;
+        sw.name = sweepArgs[i].substr(0, c1);
+        sw.from = std::atof(sweepArgs[i].substr(c1 + 1, c2 - c1 - 1).c_str());
+        sw.to = std::atof(sweepArgs[i].substr(c2 + 1).c_str());
+        zoneSweeps.push_back(sw);
+    }
 
     WavFile src;
     if (!readWav(inPath, src)) {
@@ -257,17 +301,63 @@ int main(int argc, char** argv)
     if (usePreBypass) preObj = new AloopPreBypassDsp();
     else if (usePreClean) preObj = new AloopPreCleanDsp();
     else if (usePre) preObj = new AloopPreDsp();
+    int postRegress = std::atoi(argValue(argc, argv, "postregress", "0").c_str());
     Stage pre = preObj ? makeStage(preObj, sr) : Stage();
-    Stage post = usePre ? makeStage(new AloopPostDsp(), sr) : Stage();
+    dsp* postObj = postRegress ? (dsp*)new AloopPostRegressDsp() : (dsp*)new AloopPostDsp();
+    Stage post = usePre ? makeStage(postObj, sr) : Stage();
 
     if (usePre) {
         std::printf("pre in=%d out=%d\n", pre.obj->getNumInputs(), pre.obj->getNumOutputs());
-        std::printf("post in=%d out=%d\n", post.obj->getNumInputs(), post.obj->getNumOutputs());
-        if (pre.ui.set("SUSTAINGATE", 1.0f)) {
-            std::printf("override SUSTAINGATE=1.0 on pre\n");
-        } else {
-            std::printf("WARN SUSTAINGATE zone not found on pre\n");
+        std::printf("post in=%d out=%d%s\n", post.obj->getNumInputs(), post.obj->getNumOutputs(),
+                    postRegress ? " postregress=1" : "");
+        bool sustSet = false;
+        for (size_t i = 0; i < zoneSets.size(); i++) {
+            if (zoneSets[i].name == "SUSTAINGATE") sustSet = true;
         }
+        if (!sustSet) {
+            if (pre.ui.set("SUSTAINGATE", 1.0f)) {
+                std::printf("override SUSTAINGATE=1.0 on pre\n");
+            } else {
+                std::printf("WARN SUSTAINGATE zone not found on pre\n");
+            }
+        }
+    }
+
+    for (size_t i = 0; i < zoneSets.size(); i++) {
+        bool hit = false;
+        if (usePre) {
+            if (pre.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+            if (post.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+        }
+        if (useLfx && lfx.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+        if (useLfxNoBc && lfxNoBc.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+        if (useBitcrush && bitcrush.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+        if (useFlanger && flanger.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+        if (useTremolo && tremolo.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+        if (usePhaser && phaser.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+        if (useDistortion && distortion.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+        if (useVinyl && vinyl.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+        if (useFlutter && flutter.ui.set(zoneSets[i].name, zoneSets[i].value)) hit = true;
+        std::printf("set %s=%.6f %s\n", zoneSets[i].name.c_str(), (double)zoneSets[i].value,
+                    hit ? "applied" : "WARN no such zone");
+    }
+    for (size_t i = 0; i < zoneSweeps.size(); i++) {
+        bool hit = false;
+        if (usePre) {
+            if (pre.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+            if (post.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+        }
+        if (useLfx && lfx.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+        if (useLfxNoBc && lfxNoBc.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+        if (useBitcrush && bitcrush.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+        if (useFlanger && flanger.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+        if (useTremolo && tremolo.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+        if (usePhaser && phaser.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+        if (useDistortion && distortion.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+        if (useVinyl && vinyl.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+        if (useFlutter && flutter.ui.set(zoneSweeps[i].name, (float)zoneSweeps[i].from)) hit = true;
+        std::printf("sweep %s %.6f -> %.6f %s\n", zoneSweeps[i].name.c_str(),
+                    zoneSweeps[i].from, zoneSweeps[i].to, hit ? "armed" : "WARN no such zone");
     }
 
     if (!dump.empty()) {
@@ -341,6 +431,29 @@ int main(int argc, char** argv)
         for (int i = n; i < block; i++) stageBuf[(size_t)i] = 0.0f;
         int nb = block;
 
+        if (!zoneSweeps.empty()) {
+            double span = (double)(total > wu ? total - wu : 1);
+            double prog = (double)(base > wu ? base - wu : 0) / span;
+            if (prog < 0.0) prog = 0.0;
+            if (prog > 1.0) prog = 1.0;
+            for (size_t k = 0; k < zoneSweeps.size(); k++) {
+                float v = (float)(zoneSweeps[k].from + (zoneSweeps[k].to - zoneSweeps[k].from) * prog);
+                if (usePre) {
+                    pre.ui.set(zoneSweeps[k].name, v);
+                    post.ui.set(zoneSweeps[k].name, v);
+                }
+                if (useLfx) lfx.ui.set(zoneSweeps[k].name, v);
+                if (useLfxNoBc) lfxNoBc.ui.set(zoneSweeps[k].name, v);
+                if (useBitcrush) bitcrush.ui.set(zoneSweeps[k].name, v);
+                if (useFlanger) flanger.ui.set(zoneSweeps[k].name, v);
+                if (useTremolo) tremolo.ui.set(zoneSweeps[k].name, v);
+                if (usePhaser) phaser.ui.set(zoneSweeps[k].name, v);
+                if (useDistortion) distortion.ui.set(zoneSweeps[k].name, v);
+                if (useVinyl) vinyl.ui.set(zoneSweeps[k].name, v);
+                if (useFlutter) flutter.ui.set(zoneSweeps[k].name, v);
+            }
+        }
+
         if (useLfx) lfx.obj->compute(nb, monoIn.data(), monoOut.data());
         if (useLfxNoBc) lfxNoBc.obj->compute(nb, monoIn.data(), monoOut.data());
         if (useBitcrush) bitcrush.obj->compute(nb, monoIn.data(), monoOut.data());
@@ -384,8 +497,12 @@ int main(int argc, char** argv)
 
             for (int i = 0; i < nb; i++) {
                 prevFilt[(size_t)i] = postOutBuf[2][(size_t)i];
-                float s = (tap == "cue") ? postOutBuf[0][(size_t)i]
-                                         : (postOutBuf[1][(size_t)i] + postOutBuf[3][(size_t)i]);
+                float s;
+                if (tap == "cue") s = postOutBuf[0][(size_t)i];
+                else if (tap == "record") s = postOutBuf[2][(size_t)i];
+                else if (tap == "inputfx") s = postOutBuf[3][(size_t)i];
+                else if (tap == "loopsum") s = postOutBuf[1][(size_t)i];
+                else s = postOutBuf[1][(size_t)i] + postOutBuf[3][(size_t)i];
                 stageBuf[(size_t)i] = s;
             }
         }

@@ -1,0 +1,52 @@
+name: effect-parity-test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/chain-render/**'
+      - '.github/workflows/effect-parity-test.yml'
+      - 'dsp/**'
+      - 'effects/home/faust/**'
+
+permissions:
+  contents: read
+
+jobs:
+  effect-parity:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install faust and numpy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y faust python3-numpy
+
+      - name: faust version
+        run: faust --version
+
+      - name: generate faust cpp
+        run: sh tools/chain-render/gen.sh
+
+      - name: build chain_render
+        run: g++ -O2 -std=c++17 -I tools/chain-render -I build/chain-render -I effects/home/faust -I dsp -o build/chain-render/chain_render tools/chain-render/chain_render.cpp
+
+      - name: ensure audio corpus
+        run: |
+          if [ ! -f test-audio-corpus/instruments/piano_mid_C4.wav ]; then
+            python3 tools/chain-render/make_corpus.py test-audio-corpus/instruments
+          fi
+
+      - name: dump post zones
+        run: build/chain-render/chain_render in=test-audio-corpus/instruments/piano_mid_C4.wav out=/tmp/zone-dump.wav mode=faust dump=1
+
+      - name: render and check tap parity
+        run: sh tools/chain-render/parity.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: effect-parity-wavs
+          path: build/parity
