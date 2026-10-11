@@ -18,9 +18,10 @@ ENGAGED  = checkbox("ENGAGED");
 RESONODE_ENGAGED = checkbox("fx/resonode/engaged");
 glitchDivisor    = nentry("DIV", 0, 0, 16, 1);
 masterLoopBlocks = nentry("MLB", 0, 0, 4096, 1);
+recordedBeats    = nentry("RECORDEDBEATS", 16, 1, 128, 1);
 
 filterStage = component("effects/home/faust/filters.dsp")[ HPCUT=HPCUT; LPCUT=LPCUT; LPRES=LPRES; ];
-microStage  = component("effects/home/faust/microrepeat.dsp")[ DIV=glitchDivisor; MLB=masterLoopBlocks; ];
+microStage  = component("effects/home/faust/microrepeat.dsp")[ DIV=glitchDivisor; MLB=masterLoopBlocks; RECORDEDBEATS=recordedBeats; ];
 pitchStage  = component("effects/home/faust/pitch.dsp")[ SEMIS=SEMIS; FORMANT=FORMANT; ENGAGED=ENGAGED; ];
 
 harmonize = component("effects/home/faust/multitranspose.dsp");
