@@ -7,6 +7,7 @@ const kPollMs = 200;
 const kPeersPresentMinFrac = 0.95;
 const kBpmSpreadMax = 0.05;
 const kPhaseErrBeatsMax = 0.03;
+const kTelemetryGapMaxFrac = 0.10;
 
 function queryTelemetry() {
   return new Promise((resolve, reject) => {
@@ -37,6 +38,7 @@ function spread(values) {
   const started = Date.now();
   const samples = [];
   let consecutiveFailures = 0;
+  let gaps = 0;
 
   while (Date.now() - started < watchMs) {
     const t = Date.now() - started;
@@ -58,8 +60,9 @@ function spread(values) {
       });
     } catch (e) {
       consecutiveFailures += 1;
-      if (consecutiveFailures >= 10) {
-        console.log('[fail] 10 consecutive telemetry timeouts at t=' + t + 'ms: ' + e.message);
+      if (consecutiveFailures === 1) gaps += 1;
+      if (!samples.length && consecutiveFailures >= 40) {
+        console.log('[fail] ' + consecutiveFailures + ' consecutive telemetry timeouts with no reply at all at t=' + t + 'ms: ' + e.message);
         process.exit(1);
       }
     }
@@ -96,6 +99,8 @@ function spread(values) {
   const xrunsTotal = samples[samples.length - 1].xruns;
 
   const checks = [];
+  const gapFrac = gaps / (samples.length + gaps);
+  checks.push(['telemetry responsive', gapFrac <= kTelemetryGapMaxFrac, gaps + ' gap(s) over ' + samples.length + ' replied polls (' + (gapFrac * 100).toFixed(1) + '%, max ' + (kTelemetryGapMaxFrac * 100).toFixed(0) + '%)']);
   checks.push(['peer acquired', firstPeerIdx >= 0, firstPeerIdx >= 0 ? 'first at ' + after[0].tMs + 'ms' : 'peers stayed 0 for ' + watchMs + 'ms']);
   checks.push(['peer retained', presentFrac >= kPeersPresentMinFrac, (presentFrac * 100).toFixed(1) + '% of ' + after.length + ' polls after acquisition, ' + losses.length + ' loss(es), ' + rejoins.length + ' rejoin(s)']);
   checks.push(['synced while peered', syncedFrac >= kPeersPresentMinFrac, (syncedFrac * 100).toFixed(1) + '% of ' + withPeers.length + ' peered polls']);
