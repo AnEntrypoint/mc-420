@@ -253,7 +253,8 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             if (lenSamples > kMaxLoopSamples) lenSamples = kMaxLoopSamples;
             m_masterLenSamples = lenSamples;
             double recordedSeconds = (double)m_masterLenSamples / (double)kSampleRate;
-            const bool setsSessionTempo = !m_tempoEstablished;
+            const bool peersHaveTempo = link && link->audioRead().peerCount > 0;
+            const bool setsSessionTempo = !m_tempoEstablished && !peersHaveTempo;
             double sessionBpm = 120.0;
             if (link && link->audioRead().bpm > 1.0) sessionBpm = link->audioRead().bpm;
             TempoSolveResult solved;
@@ -261,6 +262,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
                 solved = deriveTempoQuant(recordedSeconds, 120.0);
                 m_tempoEstablished = true;
             } else {
+                m_tempoEstablished = true;
                 solved.bpm = sessionBpm;
                 solved.beats = std::max(1.0, std::floor(recordedSeconds * sessionBpm / 60.0 + 0.5));
                 m_masterLenSamples = (long)(solved.beats * 60.0 / sessionBpm * kSampleRate + 0.5);
