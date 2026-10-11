@@ -8,13 +8,13 @@ DIV = 0;
 MLB = 0;
 RECORDEDBEATS = 16;
 
-MR_MAX = 36000;
+MR_MAX = 96000;
 
 divSafe     = max(1, DIV);
 beatsSafe   = max(1, RECORDEDBEATS);
 roundNearest(x) = floor(x + 0.5);
 beatBlocks  = max(1, int(roundNearest(MLB / beatsSafe)));
-sliceBlocks = max(1, int(roundNearest(beatBlocks / divSafe))) * 2;
+sliceBlocks = max(1, int(roundNearest(beatBlocks / divSafe)));
 sliceLenRaw = sliceBlocks * BS;
 sliceLen    = min(MR_MAX, sliceLenRaw);
 
