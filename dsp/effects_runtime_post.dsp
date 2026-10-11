@@ -15,6 +15,7 @@ DUBLFOPHASE    = hslider("fx/dublfo/phase",        0.0, 0.0, 1.0, 0.001);
 
 MONITORFOLD = hslider("MONITORFOLD", 0.0, 0.0, 1.0, 1.0);
 GLITCHFOLD  = hslider("GLITCHFOLD",  0.0, 0.0, 1.0, 1.0);
+SUSTAINGATE = hslider("SUSTAINGATE", 0.0, 0.0, 1.0, 1.0);
 
 process(cueWet, masterWet, loopSumIn, loopHarmonyWet, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5) = filtOut, loopSumOut, recordTap, inputFxOut
 with {
@@ -58,8 +59,9 @@ with {
     anyVoiceGated  = min(1.0, g0+g1+g2+g3+g4+g5);
     loopDirectRaw  = 1.0 - max(max(MONITORFOLD, GLITCHFOLD), anyVoiceGated*freeXpose);
     loopDirectGate = loopDirectRaw : si.smoo;
+    audienceGate   = SUSTAINGATE : si.smoo;
 
     filtOut = mainOut + loopSumIn*loopDirectGate + loopHarmonyWet;
     recordTap = mainOut + loopHarmonyWet;
-    inputFxOut = (masterWet : dubGateLfoStage) + loopHarmonyWet;
+    inputFxOut = (masterWet : dubGateLfoStage) * audienceGate + loopHarmonyWet;
 };

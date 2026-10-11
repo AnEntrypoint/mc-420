@@ -19,15 +19,13 @@ RESONODE_ENGAGED = checkbox("fx/resonode/engaged");
 glitchDivisor    = nentry("DIV", 0, 0, 16, 1);
 masterLoopBlocks = nentry("MLB", 0, 0, 4096, 1);
 
-SUSTAINGATE = hslider("SUSTAINGATE", 0.0, 0.0, 1.0, 1.0);
-
 filterStage = component("effects/home/faust/filters.dsp")[ HPCUT=HPCUT; LPCUT=LPCUT; LPRES=LPRES; ];
 microStage  = component("effects/home/faust/microrepeat.dsp")[ DIV=glitchDivisor; MLB=masterLoopBlocks; ];
 pitchStage  = component("effects/home/faust/pitch.dsp")[ SEMIS=SEMIS; FORMANT=FORMANT; ENGAGED=ENGAGED; ];
 
 harmonize = component("effects/home/faust/multitranspose.dsp");
 
-process(dry, loopSum, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5, resonodeIn) = preFilterOut, loopHarmonyWet, masterGatedIn, loopSum
+process(dry, loopSum, freeXpose, s0,g0, s1,g1, s2,g2, s3,g3, s4,g4, s5,g5, resonodeIn) = preFilterOut, loopHarmonyWet, masterIn, loopSum
 with {
     anyVoiceGated = min(1.0, g0+g1+g2+g3+g4+g5);
     dryGate = (1.0 - anyVoiceGated) * (1.0 - KEYSMULTIMODE) : si.smoo;
@@ -38,5 +36,5 @@ with {
     preChain = (pitchStage(dry)*dryGate + dryWet)*(1.0-resonodeEngageGate) + resonodeIn*resonodeEngageGate;
 
     preFilterOut = preChain : microStage : filterStage;
-    masterGatedIn = preFilterOut * SUSTAINGATE;
+    masterIn = preFilterOut;
 };
