@@ -68,8 +68,13 @@ if [ -f "$DIR/cmdline.txt" ]; then
   fi
   echo "$CMD" | grep -q 'isolcpus' && ok "cmdline.txt has isolcpus (RT core isolation)" \
     || bad "cmdline.txt missing isolcpus tuning"
-  echo "$CMD" | grep -q 'ip=dhcp' && ok "cmdline.txt has ip=dhcp (initramfs NIC bring-up for netboot)" \
-    || bad "cmdline.txt missing ip=dhcp — diskless initramfs will not reach the network"
+  if echo "$CMD" | grep -qE 'ip=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; then
+    ok "cmdline.txt pins a static ip= (initramfs NIC bring-up without userspace udhcpc)"
+  elif echo "$CMD" | grep -q 'ip=dhcp'; then
+    ok "cmdline.txt has ip=dhcp (initramfs NIC bring-up for netboot)"
+  else
+    bad "cmdline.txt has no ip= for the initramfs — diskless initramfs will not reach the network"
+  fi
 else bad "missing cmdline.txt"; fi
 
 if [ -f "$DIR/aloop.apkovl.tar.gz" ]; then

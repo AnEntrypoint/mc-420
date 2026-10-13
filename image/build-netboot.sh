@@ -67,12 +67,13 @@ for _x in usr/sbin/hostapd usr/sbin/dnsmasq; do
 done
 
 NETBOOT_SERVER="${NETBOOT_SERVER:-192.168.137.1}"
-NBCMD="$(sed "s/@NETBOOT_SERVER@/$NETBOOT_SERVER/g" "$ROOT/image/config/netboot-cmdline.txt" | tr '\n' ' ')"
-if [ -f "$BOOT/cmdline.txt" ] && ! grep -q 'ip=dhcp' "$BOOT/cmdline.txt"; then
+NETBOOT_CLIENT_IP="${NETBOOT_CLIENT_IP:-$(printf '%s' "$NETBOOT_SERVER" | sed 's/\.[0-9][0-9]*$/.100/')}"
+NBCMD="$(sed -e "s/@NETBOOT_SERVER@/$NETBOOT_SERVER/g" -e "s/@NETBOOT_CLIENT_IP@/$NETBOOT_CLIENT_IP/g" "$ROOT/image/config/netboot-cmdline.txt" | tr '\n' ' ')"
+if [ -f "$BOOT/cmdline.txt" ] && ! grep -q 'ip=' "$BOOT/cmdline.txt"; then
   _base="$(tr '\n' ' ' < "$BOOT/cmdline.txt")"
   printf '%s\n' "$(printf '%s %s' "$_base" "$NBCMD" | tr -s ' ' | sed 's/^ //;s/ $//')" \
     > "$BOOT/cmdline.txt"
-  echo "[netboot] appended netboot cmdline as a single line (server=$NETBOOT_SERVER): $NBCMD"
+  echo "[netboot] appended netboot cmdline as a single line (server=$NETBOOT_SERVER client=$NETBOOT_CLIENT_IP): $NBCMD"
 fi
 
 if [ "${NETBOOT_DEBUG:-0}" = "1" ] && [ -f "$BOOT/cmdline.txt" ]; then

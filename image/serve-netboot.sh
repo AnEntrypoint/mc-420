@@ -71,6 +71,7 @@ start_dhcp_and_tftp() {
     $DHCP \
     --dhcp-vendorclass=set:rpi,PXEClient \
     --dhcp-option-force=tag:rpi,43,"Raspberry Pi Boot" \
+    --dhcp-option-force=tag:rpi,66,"$SERVER" \
     --enable-tftp --tftp-root="$ROOT" --tftp-no-fail \
     --port=0 >/tmp/aloop-dnsmasq.log 2>&1 &
   DNS_PID=$!
