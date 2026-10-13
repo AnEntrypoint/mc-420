@@ -12,14 +12,22 @@ const GRANULATOR_TAP_MS = 1000;
 const DUB_TARGETS = ["fx/reverb", "fx/delay", "fx/time", "fx/hp", "fx/lpres", "fx/lp", "fx/pitch"];
 const GUITAR_TARGETS = ["fx2/FLANGEAMT", "fx2/TREMOLOAMT", "fx2/BANKSPEED", "fx2/PHASERAMT", null, null, "fx2/COMPRESSAMT"];
 const RESONODE_PATCHES = [
-  { position: 0.08, decay: 0.15, damping: 0.8, stretch: -0.1, collision: 0.55 },
-  { position: 0.08, decay: 7.0, damping: 0.97, stretch: 1.2, collision: 0.15 },
-  { position: 0.08, decay: 7.0, damping: 0.97, stretch: -0.1, collision: 0.0 },
-  { position: 0.42, decay: 7.0, damping: 0.15, stretch: -0.1, collision: 0.3 },
+  { position: 0.08, decay: 0.15, damping: 0.8, stretch: -0.1, collision: 0.55,
+    shapeString: 0.0, shapeBell: 0.0, shapePlate: 0.4, shapeMembrane: 0.6, shapeBar: 0.0,
+    mallet: 1.0, bow: 0.0, hardness: 0.8 },
+  { position: 0.08, decay: 7.0, damping: 0.97, stretch: 1.2, collision: 0.15,
+    shapeString: 0.0, shapeBell: 0.7, shapePlate: 0.0, shapeMembrane: 0.0, shapeBar: 0.3,
+    mallet: 0.9, bow: 0.1, hardness: 1.0 },
+  { position: 0.08, decay: 7.0, damping: 0.97, stretch: -0.1, collision: 0.0,
+    shapeString: 1.0, shapeBell: 0.0, shapePlate: 0.0, shapeMembrane: 0.0, shapeBar: 0.0,
+    mallet: 0.2, bow: 0.8, hardness: 0.3 },
+  { position: 0.42, decay: 7.0, damping: 0.15, stretch: -0.1, collision: 0.3,
+    shapeString: 0.7, shapeBell: 0.0, shapePlate: 0.0, shapeMembrane: 0.3, shapeBar: 0.0,
+    mallet: 0.5, bow: 0.5, hardness: 0.35 },
 ];
 const RESONODE_DIRECT_RANGES = [
   { zone: "fx/resonode/tone", lo: 200.0, hi: 18000.0, logTaper: true },
-  { zone: "fx/resonode/level", lo: 0.0, hi: 1.5, logTaper: false },
+  { zone: "fx/resonode/level", lo: 2.0, hi: 60.0, logTaper: true },
 ];
 
 function looperGroupSegment(index) {

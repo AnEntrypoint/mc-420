@@ -70,10 +70,7 @@ punch-in-live performance instrument:
 - **6-voice polyphonic pitch-lock** (`multitranspose.dsp`) — a Whammy/Manipulator-
   style harmonizer that locks the input to held keys, with round-robin voice
   stealing and pitch-synchronous shift windows.
-- **Resonode** — a 4-voice, 6-mode-per-voice modal-resonator synth, excited by
-  the live input signal rather than a synthetic oscillator, engaged by holding
-  the LofiFx pad past a 1-second threshold (pressing it at all instead latches
-  a background granulator texture, on/off, from the instant of the press).
+- **Resonode** — a 4-voice, 16-mode-per-voice modal-resonator synth, excited by a blend of the live input signal and its own mallet/bow exciter, engaged by SHIFT+tap on the LofiFx pad (a plain tap instead latches a background granulator texture, on/off, from the instant of the press).
   Both live in the always-on home stack, never gated behind an LV2 host
   round-trip.
 - **A 6-patch granulator** (Glass/Cloud/Freeze/Chop/Tape/Shatter) blended as a

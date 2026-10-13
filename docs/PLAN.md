@@ -50,7 +50,7 @@ landed. In roughly chronological order (see `git log` for exact commits):
 - Continuous USB-drive ring recording of the fully-effected mix.
 - A 3-bank FX control surface (dub / guitar / lofi) with per-bank knob
   targets.
-- **Resonode**: a 4-voice, 6-mode-per-voice modal-resonator synth excited by
+- **Resonode**: a 4-voice, 16-mode-per-voice modal-resonator synth excited by
   the live input, reachable via a real-hold gesture on the LofiFx pad,
   replacing (never layering over) the dry/pitch-lock signal while engaged,
   with velocity-scaled exciter gain, alias-guarded higher modes, and

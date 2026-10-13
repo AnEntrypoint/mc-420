@@ -120,14 +120,28 @@ def check_velocity_response():
 
 
 def check_silent_without_live_input():
-    print("=== mic-only exciter regression check (gate held, zero live input) ===")
+    print("=== reactor-mode regression check (input=1, gate held, zero live input) ===")
     n = int(0.3 * SAMPLE_RATE)
     excite = np.zeros(n, dtype=np.float32)
-    params = {"fx_resonodevoice0_note": 60.0, "fx_resonodevoice0_vel": 1.0, "fx_resonodevoice0_gate": 1.0}
+    params = {"fx_resonodevoice0_note": 60.0, "fx_resonodevoice0_vel": 1.0,
+              "fx_resonodevoice0_gate": 1.0, "fx_resonode_input": 1.0}
     audio = render(DSP_PATH.read_text(), excite, n / SAMPLE_RATE, params=params)
     peak = float(np.max(np.abs(audio)))
-    print(f"peak amplitude with a held key and silent input: {peak:.3e}")
+    print(f"peak amplitude with a held key, silent input and input=1: {peak:.3e}")
     return peak < 1e-5
+
+
+def check_plays_without_live_input():
+    print("=== internal exciter check (input=0, gate held, zero live input) ===")
+    n = int(1.0 * SAMPLE_RATE)
+    excite = np.zeros(n, dtype=np.float32)
+    params = {"fx_resonodevoice0_note": 60.0, "fx_resonodevoice0_vel": 1.0,
+              "fx_resonodevoice0_gate": 1.0, "fx_resonode_input": 0.0}
+    audio = render(DSP_PATH.read_text(), excite, n / SAMPLE_RATE, params=params)
+    peak = float(np.max(np.abs(audio)))
+    rms = float(np.sqrt(np.mean(audio * audio)))
+    print(f"peak={peak:.6f} rms={rms:.6f} with a held key, silent input and input=0")
+    return peak > 1e-3
 
 
 def check_new_mode_alias_guard():
@@ -387,6 +401,7 @@ def main():
         "no_fadein_regression": check_no_fadein_regression(),
         "velocity_response": check_velocity_response(),
         "silent_without_live_input": check_silent_without_live_input(),
+        "plays_without_live_input": check_plays_without_live_input(),
         "new_mode_alias_guard": check_new_mode_alias_guard(),
         "voice_steal_with_velocity_change": check_voice_steal_with_velocity_change(),
         "collision_zero_is_identity": check_collision_zero_is_identity(),
