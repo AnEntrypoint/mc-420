@@ -15,6 +15,7 @@ namespace {
 
 const int kSampleRate = 48000;
 const int kBlockSize = 64;
+int g_blockSize = 64;
 
 struct WavFile {
     int sampleRate = 48000;
@@ -327,17 +328,18 @@ std::vector<float> runCase(const Case& c, const std::vector<float>& excite)
     }
 
     const int n = (int)excite.size();
+    const int bs = g_blockSize;
     std::vector<float> out((size_t)n, 0.0f);
-    std::vector<float> inBuf((size_t)kBlockSize, 0.0f);
-    std::vector<float> outBuf((size_t)kBlockSize, 0.0f);
+    std::vector<float> inBuf((size_t)bs, 0.0f);
+    std::vector<float> outBuf((size_t)bs, 0.0f);
     float* inPtr[1] = { inBuf.data() };
     float* outPtr[1] = { outBuf.data() };
 
-    for (int off = 0; off < n; off += kBlockSize) {
-        const int m = std::min(kBlockSize, n - off);
+    for (int off = 0; off < n; off += bs) {
+        const int m = std::min(bs, n - off);
         for (int i = 0; i < m; i++) inBuf[i] = excite[(size_t)(off + i)];
-        for (int i = m; i < kBlockSize; i++) inBuf[i] = 0.0f;
-        dsp.compute(kBlockSize, inPtr, outPtr);
+        for (int i = m; i < bs; i++) inBuf[i] = 0.0f;
+        dsp.compute(bs, inPtr, outPtr);
         for (int i = 0; i < m; i++) out[(size_t)(off + i)] = outBuf[i];
     }
     return out;
@@ -393,7 +395,9 @@ void report(const Case& c, const std::vector<float>& y)
     const int n = (int)y.size();
     double peak = 0.0, acc = 0.0, dacc = 0.0;
     int clipped = 0, saturated = 0;
+    int nonFinite = 0;
     for (int i = 0; i < n; i++) {
+        if (!std::isfinite((double)y[i])) { nonFinite++; continue; }
         const double a = std::fabs((double)y[i]);
         if (a > peak) peak = a;
         acc += a * a;
@@ -438,6 +442,7 @@ void report(const Case& c, const std::vector<float>& y)
     std::printf("  peak=%.6f rms=%.6f crest_db=%.2f clip_frac=%.4f sat_frac=%.4f diff_rms=%.8f\n",
                 peak, rms, 20.0 * std::log10(peak / std::max(1e-12, rms)),
                 (double)clipped / (double)n, (double)saturated / (double)n, diffRms);
+    std::printf("  nonfinite=%d\n", nonFinite);
     std::printf("  centroid_hz=%.1f f0_hz=%.2f f0_rel_peak_db=%.2f low_ratio=%.4f\n",
                 centroid, f0, f0MagDb, lowRatio);
     std::printf("  band_lt120=%.4f band_120_500=%.4f band_500_2k=%.4f band_2k_8k=%.4f\n",
@@ -516,6 +521,7 @@ int main(int argc, char** argv)
     c.voiceCount = argInt(argc, argv, "--voices", c.voiceCount);
     c.durationSec = (double)argFloat(argc, argv, "--dur", (float)c.durationSec);
     c.excitation = argString(argc, argv, "--exc", c.excitation);
+    g_blockSize = argInt(argc, argv, "--bs", 64);
     c.wavPath = argString(argc, argv, "--wav", "");
     c.specPath = argString(argc, argv, "--spec", "");
     c.audioPath = argString(argc, argv, "--audio", "");
