@@ -199,17 +199,34 @@ def check_voice_steal_with_velocity_change():
     return at_steal < 0.5
 
 
+def _strip_collision_drive(text):
+    key = "collisionDrive("
+    i = text.find(key)
+    if i < 0:
+        raise RuntimeError("collisionDrive() call site not found for stripping")
+    j = i + len(key)
+    depth = 1
+    while j < len(text) and depth > 0:
+        if text[j] == "(":
+            depth += 1
+        elif text[j] == ")":
+            depth -= 1
+        j += 1
+    if depth != 0:
+        raise RuntimeError("unbalanced parens at collisionDrive() call site")
+    return text[:i] + text[i + len(key):j - 1] + text[j:]
+
+
 def check_collision_zero_is_identity():
-    print("=== collision=0 is an exact passthrough (regex-stripped self-A/B) ===")
+    print("=== collision=0 is an exact passthrough (paren-matched self-A/B) ===")
     dsp_text = DSP_PATH.read_text()
-    needle = "collisionDrive(bank(freqGlide(note, gate, vel), exciteFor(sharedIn, note, gate, vel), positionLive, stretchLive)) * voiceGain"
-    replacement = "bank(freqGlide(note, gate, vel), exciteFor(sharedIn, note, gate, vel), positionLive, stretchLive) * voiceGain"
-    stripped = dsp_text.replace(needle, replacement)
+    stripped = _strip_collision_drive(dsp_text)
     if stripped == dsp_text:
         raise RuntimeError("collisionDrive() call site not found for stripping")
     n = int(0.4 * SAMPLE_RATE)
     excite = burst_excitation(n, seed=21)
-    params = {"fx_resonodevoice0_note": 60.0, "fx_resonodevoice0_vel": 1.0, "fx_resonodevoice0_gate": 1.0}
+    params = {"fx_resonodevoice0_note": 60.0, "fx_resonodevoice0_vel": 1.0,
+              "fx_resonodevoice0_gate": 1.0}
     a_with = render(dsp_text, excite, n / SAMPLE_RATE, params=params)
     a_stripped = render(stripped, excite, n / SAMPLE_RATE, params=params)
     diff = float(np.max(np.abs(a_with.astype(np.float64) - a_stripped.astype(np.float64))))
@@ -218,10 +235,12 @@ def check_collision_zero_is_identity():
 
 
 def check_collision_bounded_and_monotonic_energy():
-    print("=== collision raises tail energy, stays finite and bounded ===")
+    print("=== collision is a bounded peak compressor, never a level boost ===")
     n = int(0.4 * SAMPLE_RATE)
     excite = burst_excitation(n, seed=2)
     hf_rms = []
+    crests = []
+    peaks = []
     for coll in (0.0, 0.3, 0.7, 1.0):
         params = {"fx_resonode_collision": coll, "fx_resonodevoice0_note": 60.0,
                   "fx_resonodevoice0_vel": 1.0, "fx_resonodevoice0_gate": 1.0}
@@ -229,13 +248,35 @@ def check_collision_bounded_and_monotonic_energy():
         if not np.all(np.isfinite(audio)):
             print(f"collision={coll}: NON-FINITE OUTPUT")
             return False
-        if float(np.max(np.abs(audio))) > 1.001:
-            print(f"collision={coll}: peak exceeds bound ({np.max(np.abs(audio)):.4f})")
+        pk = float(np.max(np.abs(audio)))
+        rms = float(np.sqrt(np.mean(audio.astype(np.float64) ** 2)))
+        if pk > 1.001:
+            print(f"collision={coll}: peak exceeds bound ({pk:.4f})")
             return False
         d = np.abs(np.diff(audio.astype(np.float64)))
         hf_rms.append(float(np.sqrt(np.mean(d ** 2))))
-    print(f"tail-energy proxy (first-diff rms) across collision 0/0.3/0.7/1.0: {hf_rms}")
-    return all(hf_rms[i + 1] >= hf_rms[i] * 0.98 for i in range(len(hf_rms) - 1))
+        crests.append(pk / max(rms, 1e-12))
+        peaks.append(pk)
+    print(f"peaks across collision 0/0.3/0.7/1.0: {[round(v, 6) for v in peaks]}")
+    print(f"crest across collision 0/0.3/0.7/1.0: {[round(v, 3) for v in crests]}")
+    print(f"tail-energy proxy (first-diff rms): {hf_rms}")
+    ok = True
+    for i in range(len(peaks) - 1):
+        if peaks[i + 1] > peaks[i] * 1.02:
+            print(f"collision raised level at step {i}: {peaks[i]:.6f} -> {peaks[i + 1]:.6f}")
+            ok = False
+        if crests[i + 1] > crests[i] * 1.01:
+            print(f"collision raised crest (no compression) at step {i}: "
+                  f"{crests[i]:.3f} -> {crests[i + 1]:.3f}")
+            ok = False
+        if hf_rms[i + 1] > hf_rms[i] * 1.02:
+            print(f"collision raised transient energy at step {i}: "
+                  f"{hf_rms[i]:.8f} -> {hf_rms[i + 1]:.8f}")
+            ok = False
+    if crests[-1] > crests[0] * 0.90:
+        print(f"collision=1.0 barely compresses (crest {crests[0]:.3f} -> {crests[-1]:.3f})")
+        ok = False
+    return ok
 
 
 def check_pitch_mod_gated_by_velocity_and_flexibility():

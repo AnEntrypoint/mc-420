@@ -135,7 +135,7 @@ letrec {
     with { target = ba.midikey2hz(note) * (1.0 + pitchModDepth*velGain(vel)*flexibility*pitchEnv(note, gate)); };
 };
 
-driveAmt = 1.0 + collision*6.0;
+driveAmt = 1.0 + collision*collision*6.0;
 driveNorm = 1.0 / driveAmt;
 collisionDrive(x) = x*(1.0 - collision) + ma.tanh(x*driveAmt)*driveNorm*collision;
 
@@ -240,7 +240,7 @@ with {
     dampHz = objectDampFloorHz + max(0.05, min(1.0, damping))*objectDampSpanHz;
 };
 
-voice(busIn, note, gate, vel) = collisionDrive(bankOut + objOut*body) * voiceGain * voiceBassTilt(fundHz)
+voice(busIn, note, gate, vel) = collisionDrive((bankOut + objOut*body)*drivePreGain) * invDrivePreGain * voiceGain * voiceBassTilt(fundHz)
 with {
     fundHz = freqGlide(note, gate, vel);
     positionLive = max(0.0, min(1.2, position + positionDriftAmt*positionDriftEnv(note, gate)));
@@ -249,6 +249,9 @@ with {
     bankOut = (exc, fundHz, ratioExponent, positionLive) : modeBank(modeCount);
     objOut = objectVoice(exc, fundHz);
 };
+
+drivePreGain = max(0.001, outLevel*decayLoudnessNorm);
+invDrivePreGain = 1.0 / drivePreGain;
 
 loudnessRefDecayS = 1.2;
 loudnessNormExp = 0.17;

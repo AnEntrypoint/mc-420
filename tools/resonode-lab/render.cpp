@@ -59,7 +59,7 @@ bool readWav(const std::string& path, WavFile& w)
         } else if (std::memcmp(ch, "data", 4) == 0) {
             raw.resize(sz);
             if (std::fread(raw.data(), 1, sz, f) != sz) break;
-            if ((sz & 1) == 1) { unsigned char pad; std::fread(&pad, 1, 1, f); }
+            if ((sz & 1) == 1) { unsigned char pad; if (std::fread(&pad, 1, 1, f) != 1) break; }
         } else {
             if (std::fseek(f, (long)sz + (sz & 1), SEEK_CUR) != 0) break;
         }
@@ -391,7 +391,7 @@ void writeSpectrumCsv(const std::string& path, const Spectrum& s)
 void report(const Case& c, const std::vector<float>& y)
 {
     const int n = (int)y.size();
-    double peak = 0.0, acc = 0.0;
+    double peak = 0.0, acc = 0.0, dacc = 0.0;
     int clipped = 0, saturated = 0;
     for (int i = 0; i < n; i++) {
         const double a = std::fabs((double)y[i]);
@@ -399,8 +399,13 @@ void report(const Case& c, const std::vector<float>& y)
         acc += a * a;
         if (a > 0.98) clipped++;
         if (a > 0.70) saturated++;
+        if (i > 0) {
+            const double d = (double)y[i] - (double)y[i - 1];
+            dacc += d * d;
+        }
     }
     const double rms = std::sqrt(acc / (double)n);
+    const double diffRms = n > 1 ? std::sqrt(dacc / (double)(n - 1)) : 0.0;
 
     const int wFrom = (int)(0.10 * kSampleRate);
     const int wTo = (int)(0.40 * kSampleRate);
@@ -430,9 +435,9 @@ void report(const Case& c, const std::vector<float>& y)
     const double decayMs = decayToMinus24dB_ms(y);
 
     std::printf("case=%s note=%d vel=%.3f voices=%d exc=%s\n", c.name.c_str(), c.note, c.vel, c.voiceCount, c.excitation.c_str());
-    std::printf("  peak=%.6f rms=%.6f crest_db=%.2f clip_frac=%.4f sat_frac=%.4f\n",
+    std::printf("  peak=%.6f rms=%.6f crest_db=%.2f clip_frac=%.4f sat_frac=%.4f diff_rms=%.8f\n",
                 peak, rms, 20.0 * std::log10(peak / std::max(1e-12, rms)),
-                (double)clipped / (double)n, (double)saturated / (double)n);
+                (double)clipped / (double)n, (double)saturated / (double)n, diffRms);
     std::printf("  centroid_hz=%.1f f0_hz=%.2f f0_rel_peak_db=%.2f low_ratio=%.4f\n",
                 centroid, f0, f0MagDb, lowRatio);
     std::printf("  band_lt120=%.4f band_120_500=%.4f band_500_2k=%.4f band_2k_8k=%.4f\n",
