@@ -981,7 +981,7 @@ private:
     std::atomic<int> m_grainPitchQuantize{kGrainPitchContinuousSpray};
     int      m_perVoiceGrainBudget = MAX_GRAINS;
     uint32_t m_grainRngState = 2463534242u;
-    float    m_grainLiveMix = 0.0f;
+    float    m_grainLiveMix = 0.5f;
     int      m_grainLiveWrite = 0;
     short    m_grainLiveRing[kGrainLiveRingLen] = {0};
 };
