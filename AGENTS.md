@@ -64,16 +64,17 @@ Real Pi 4 `192.168.137.100` root/aloop; Pi 3B+ netboots from host. BEHAVIOR clon
 
 # Resonode and the granulator
 
-- Measure, never guess: `tools/resonode-lab/` compiles `resonode_synth.dsp` with the pinned flags into C++ and renders deterministic excitations, reporting peak/RMS/crest/clip/sat fraction, centroid, 4 band ratios, Goertzel f0, transient+sustain ratios, decay and a late window. Pre-change baseline at note 36 sustained: peak 0.087370 / RMS 0.020171.
-- Excitation bus is `sharedExciteIn*input + internalExciter*(1-input)`; at `input=1` it is bit-exactly the old live-only path. `mallet`/`bow` split a `hardness`-shaped noise source between struck and sustained envelopes, so a held key sounds with no input at all.
+- Hot-deploy the WHOLE `.lv2` bundle (`.so` AND `.ttl`): a stale `.ttl` against a new `.so` mismatches LV2 port indices, the plugin faults on first process and silently disables itself (`[host] plugin /effects/resonode/resonode.lv2 faulted -- disabled`).
+- Measure, never guess: `tools/resonode-lab/` compiles `resonode_synth.dsp` with the pinned flags into C++ and renders deterministic excitations, reporting peak/RMS/crest/clip/sat fraction, centroid, 4 band ratios, Goertzel f0, transient+sustain ratios, decay.
+- Excitation bus is `sharedExciteIn*input + internalExciter*(1-input)`. `mallet`/`bow` split a `hardness`-shaped noise source between struck and sustained envelopes, so a held key sounds with no input at all.
 - `highFreqDampExponent` is `1.0*(1-damping)`, NOT `1.934264*(-log(damping))/log(2)` (that reached 8.35 and collapsed the shipped Dance Bass patch to a single partial). 
 - `collisionDrive` normalises by `1/driveAmt`, never `1/tanh(driveAmt)` (that is a make-up gain reaching +17 dB at collision=1, which is why patches used to differ ~13 dB in loudness). It is scaled by `drivePreGain = outLevel*decayLoudnessNorm` and divided back out, because the pre-gain signal is ~25x smaller and tanh there is linear. Collision is a compressor: raising it LOWERS peak, crest and first-diff RMS. `verify_musical_controls.py` asserts that, and its collision=0 identity check strips `collisionDrive(` by paren matching, not a literal signature.
-- Each voice also drives a waveguide Object stage (one tuned feedback comb; `body` mix, `polarity` sign, `g = 0.001^(1/(T60*f0))`, peak normalised by `1-g`, 25 Hz output highpass to kill the DC peak). Positive polarity measures bassier (low-band 0.8194 vs 0.7996 at note 36). Codegen 8.1 s: the variable-delay cliff does not fire.
-- The granulator is `Sampler`, NOT `effects/home/faust/grainFormant.h` (that is only the SOLA pitch shifter's formant layer). Each grain reads either the key's captured buffer or a 2.7 s live ring, chosen per grain by `liveMix`; `Grain::wrap` makes ring grains wrap instead of dying at the buffer edge. Without the live ring the granulator is silent until something has been captured.
+- Each voice also drives a waveguide Object stage (one tuned feedback comb; `body` mix, `polarity` sign, `g = 0.001^(1/(T60*f0))`, peak normalised by `1-g`, 25 Hz output highpass to kill the DC peak). Positive polarity measures bassier (low-band 0.8194 vs 0.7996 at note 36).
+- The granulator is `Sampler`, NOT `effects/home/faust/grainFormant.h` (only the SOLA shifter's formant layer). Each grain reads the key's captured buffer or a 2.7 s live ring, chosen per grain by `liveMix`; `Grain::wrap` makes ring grains wrap instead of dying at the edge. Without the ring it is silent until something is captured.
 
 # Finding the device
 
-- The netbooting client's FIRMWARE-stage DHCP lease drifts (seen at .132); `cmdline.txt` pins the kernel-stage address to `192.168.137.100`. When .100 does not answer, read `/var/lib/misc/dnsmasq.leases`. `armstub8-gic.bin` being absent is harmless: `config.txt` has no `armstub=` line. Restart the serve stack with `sudo systemctl restart dnsmasq`, never mid-TFTP: killing it during the 23 MB `boot/vmlinuz-rpi` transfer strands the bootloader for tens of minutes.
+- The netbooting client's FIRMWARE-stage DHCP lease drifts (seen at .132); `cmdline.txt` pins the kernel-stage address to `192.168.137.100`. When .100 does not answer, read `/var/lib/misc/dnsmasq.leases`. `armstub8-gic.bin` being absent is harmless: `config.txt` has no `armstub=` line. Restart with `sudo systemctl restart dnsmasq`, never mid-TFTP: killing it during the 23 MB `boot/vmlinuz-rpi` transfer strands the bootloader for tens of minutes.
 
 # Faust DSP
 
