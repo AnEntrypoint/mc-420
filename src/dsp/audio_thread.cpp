@@ -1170,6 +1170,7 @@ static void* worker(void*) {
             }
             for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = (int32_t)(prevFiltOut[i] * 32768.0f);
             g_sampler->captureBlock(samplerBuf.data(), N);
+            g_sampler->feedLiveGrainSource(samplerBuf.data(), N);
             if (g_usbRecorder) g_usbRecorder->pushBlock(prevFiltOut.data(), N);
             g_telem.usbRecording = g_usbRecorder && g_usbRecorder->recording();
             g_telem.usbRecOverruns = g_usbRecorder ? g_usbRecorder->overruns() : 0;

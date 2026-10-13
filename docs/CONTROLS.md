@@ -109,11 +109,15 @@ off otherwise.
 
 ### Granulator and Resonode: named patches, blended, never raw sliders
 
-When Resonode is *not* engaged, knob slots 1–6 are the blend weight of one of
-6 fixed named grain patches — **Glass, Cloud, Freeze, Chop, Tape, Shatter** —
-each a full point in grain-size/density/pitch-spray/position-jitter/scan-rate/
-reverse-probability/envelope-shape space representing a distinct musical
-character. When Resonode *is* engaged, knob slots 1–4 blend the 4 named
+When Resonode is *not* engaged, knob slots 1–4 are the blend weight of one of
+4 fixed named grain patches — **Glass, Cloud, Chop, Shatter** — each a full
+point in grain-size/density/pitch-spray/position-jitter/scan-rate/reverse-probability/envelope-shape/live-source space
+representing a distinct musical character. The eighth dimension, **live
+source**, is how much of the grain stream is drawn from a continuously
+refreshed ring of the live signal rather than from the key's own captured
+buffer — so the granulator makes sound the instant it is latched on, with
+nothing recorded yet, and the captured material still layers in as it
+accumulates. When Resonode *is* engaged, knob slots 1–4 blend the 4 named
 material patches above instead. Both surfaces share the same convex-
 combination discipline: turning up multiple patch dials together produces a
 coherent blend, never independent raw parameters fighting each other, and all

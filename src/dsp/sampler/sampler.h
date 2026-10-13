@@ -23,6 +23,8 @@ public:
     static const int PREROLL        = 32;
     static const int LEAD_DECLICK   = 8;
     static const int MAX_GRAINS     = 48;
+    static const int kGrainLiveRingSpan = 1 << 17;
+    static const int kGrainLiveRingLen = kGrainLiveRingSpan + 4;
     static constexpr float kGrainTimingJitterAmt = 0.15f;
 
     enum GrainPitchQuantize {
@@ -127,7 +129,7 @@ public:
 
     void setGrainPatch(float grainMs, float grainRateHz, float pitchSprayCents,
                         float posJitterMs, float scanRate, float reverseProb,
-                        float envShape)
+                        float envShape, float liveMix)
     {
         if (grainMs < 5.0f) grainMs = 5.0f;
         if (grainMs > 500.0f) grainMs = 500.0f;
@@ -143,6 +145,8 @@ public:
         if (reverseProb > 1.0f) reverseProb = 1.0f;
         if (envShape < 0.0f) envShape = 0.0f;
         if (envShape > 1.0f) envShape = 1.0f;
+        if (liveMix < 0.0f) liveMix = 0.0f;
+        if (liveMix > 1.0f) liveMix = 1.0f;
 
         m_grainMs = grainMs;
         m_grainRateHz = grainRateHz;
@@ -151,9 +155,20 @@ public:
         m_scanRate = scanRate;
         m_reverseProb = reverseProb;
         m_envShape = envShape;
+        m_grainLiveMix = liveMix;
         _recomputeGrainGainComp();
         _rebuildGrainWindowLut();
     }
+
+    void feedLiveGrainSource(const int *in, int n)
+    {
+        for (int i = 0; i < n; i++) {
+            m_grainLiveRing[m_grainLiveWrite] = _clip16(in[i]);
+            m_grainLiveWrite = (m_grainLiveWrite + 1) & (kGrainLiveRingSpan - 1);
+        }
+    }
+
+    float grainLiveMix() const { return m_grainLiveMix; }
 
     void setGrainPitchQuantize(int mode)
     {
@@ -369,6 +384,7 @@ private:
         static const int kWindowLutSize = 129;
 
         bool   active;
+        bool   wrap;
         int    voiceSlot;
         const short *M;
         int    len;
@@ -600,23 +616,43 @@ private:
         if (wasActive) _removeGrainIdxFromVoice(oldOwner, slot);
         vo.grainIdx[vo.grainCount++] = slot;
 
+        bool useLiveSource = (m_grainLiveMix > 0.0f)
+                          && ((_randBipolar() * 0.5f + 0.5f) < m_grainLiveMix);
+
         double jitterSamples = 0.0;
         if (m_posJitterMs > 0.0f) {
             jitterSamples = (double)(_randTriangular() * m_posJitterMs * 0.001f * (float)SR);
         }
-        double p = scanPos + jitterSamples;
-        if (p < 0.0) p = 0.0;
-        if (p > (double)(vo.len - 1)) p = (double)(vo.len - 1);
-        gr.pos = p;
-
-        gr.rate = vo.rate * _grainPitchRatio();
-
-        bool grainReversed = (m_reverseProb > 0.0f) && ((_randBipolar() * 0.5f + 0.5f) < m_reverseProb);
-        if (grainReversed) gr.rate = -gr.rate;
 
         int nominalLifeSamples = (int)((m_grainMs * 0.001f) * (float)SR);
         if (nominalLifeSamples < 2) nominalLifeSamples = 2;
-        gr.lifeSamples = _clipGrainLifeToBuffer(gr.pos, gr.rate, vo.len, nominalLifeSamples);
+
+        gr.wrap = false;
+        if (useLiveSource) {
+            gr.M = m_grainLiveRing;
+            gr.len = kGrainLiveRingSpan;
+            gr.wrap = true;
+            gr.rate = vo.rate * _grainPitchRatio();
+            bool grainReversed = (m_reverseProb > 0.0f) && ((_randBipolar() * 0.5f + 0.5f) < m_reverseProb);
+            if (grainReversed) gr.rate = -gr.rate;
+            double lag = (gr.rate > 0.0) ? (double)nominalLifeSamples * gr.rate : 2.0;
+            double p = (double)m_grainLiveWrite - lag + jitterSamples;
+            p = fmod(p, (double)kGrainLiveRingSpan);
+            if (p < 0.0) p += (double)kGrainLiveRingSpan;
+            gr.pos = p;
+        } else {
+            double p = scanPos + jitterSamples;
+            if (p < 0.0) p = 0.0;
+            if (p > (double)(vo.len - 1)) p = (double)(vo.len - 1);
+            gr.pos = p;
+
+            gr.rate = vo.rate * _grainPitchRatio();
+
+            bool grainReversed = (m_reverseProb > 0.0f) && ((_randBipolar() * 0.5f + 0.5f) < m_reverseProb);
+            if (grainReversed) gr.rate = -gr.rate;
+        }
+
+        gr.lifeSamples = _clipGrainLifeToBuffer(gr.pos, gr.rate, gr.len, nominalLifeSamples);
         gr.lifePos = 0;
 
         memcpy(gr.win, m_grainWinLutBuf[m_grainWinLutLive.load(std::memory_order_acquire)], sizeof(gr.win));
@@ -683,7 +719,13 @@ private:
                 gr.pos += gr.rate;
                 gr.lifePos++;
 
-                bool grainDone = (gr.lifePos >= gr.lifeSamples || gr.pos < 0.0 || gr.pos >= (double)(gr.len - 1));
+                if (gr.wrap) {
+                    if (gr.pos < 0.0) gr.pos += (double)gr.len;
+                    else if (gr.pos >= (double)gr.len) gr.pos -= (double)gr.len;
+                }
+
+                bool grainDone = (gr.lifePos >= gr.lifeSamples)
+                               || (!gr.wrap && (gr.pos < 0.0 || gr.pos >= (double)(gr.len - 1)));
                 if (grainDone) {
                     gr.active = false;
                     vo.grainIdx[gi] = vo.grainIdx[--vo.grainCount];
@@ -939,6 +981,9 @@ private:
     std::atomic<int> m_grainPitchQuantize{kGrainPitchContinuousSpray};
     int      m_perVoiceGrainBudget = MAX_GRAINS;
     uint32_t m_grainRngState = 2463534242u;
+    float    m_grainLiveMix = 0.0f;
+    int      m_grainLiveWrite = 0;
+    short    m_grainLiveRing[kGrainLiveRingLen] = {0};
 };
 
 }

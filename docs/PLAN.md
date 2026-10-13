@@ -55,7 +55,7 @@ landed. In roughly chronological order (see `git log` for exact commits):
   replacing (never layering over) the dry/pitch-lock signal while engaged,
   with velocity-scaled exciter gain, alias-guarded higher modes, and
   click-free voice stealing.
-- A 6-patch granulator (Glass/Cloud/Freeze/Chop/Tape/Shatter) blended as a
+- A 4-patch granulator (Glass/Cloud/Chop/Shatter) blended as a
   convex morph, with velocity-sensitive grain density and a grain
   envelope-shape parameter.
 - A 16-beat grid visualization on 4 dedicated pads, reading the shared Link

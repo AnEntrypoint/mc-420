@@ -73,7 +73,7 @@ punch-in-live performance instrument:
 - **Resonode** — a 4-voice, 16-mode-per-voice modal-resonator synth, excited by a blend of the live input signal and its own mallet/bow exciter, engaged by SHIFT+tap on the LofiFx pad (a plain tap instead latches a background granulator texture, on/off, from the instant of the press).
   Both live in the always-on home stack, never gated behind an LV2 host
   round-trip.
-- **A 6-patch granulator** (Glass/Cloud/Freeze/Chop/Tape/Shatter) blended as a
+- **A 4-patch granulator** (Glass/Cloud/Chop/Shatter) blended as a
   continuous convex morph across 6 knob slots, with real velocity-sensitive
   grain density.
 - **A 16-beat grid visualization** on 4 dedicated pads showing the shared Link
