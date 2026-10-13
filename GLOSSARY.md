@@ -40,7 +40,7 @@ Domain terms used throughout aloop, so the docs are self-contained.
   Pi 4 running Alpine + PREEMPT_RT.
 - **mlockall** — a syscall that locks a process's memory into RAM so it never
   page-faults (page faults would blow the audio deadline).
-- **Resonode** — the 4-voice, 6-mode-per-voice modal-resonator synth mode
+- **Resonode** — the 4-voice, 16-mode-per-voice modal-resonator synth mode
   engaged instantly by SHIFT+tap on the LofiFx pad (edge-triggered, not a
   hold-duration gesture); excited by the
   live input signal ("reactor mode"), not a synthetic oscillator, and replaces

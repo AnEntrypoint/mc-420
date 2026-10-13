@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c47d056f44591662d62bb5ab8754ff16850003e6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=53f8340091e99171d963c807ebe45384a843571c">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -113,28 +113,35 @@ down. This turns the grain engine into a persistent, backgrounded texture
 layered under everything else; a second plain tap flips it back off. The
 latch survives release regardless of how long the press turns out to last.</li>
   <li><strong>SHIFT + tap</strong>: toggles the instrument entirely into/out of <strong>Resonode</strong>, a
-4-voice, 6-mode-per-voice coupled modal-resonator synth in the spirit of a
+4-voice, 16-mode-per-voice coupled modal-resonator synth in the spirit of a
 classic hardware physical-modeling instrument. While engaged:
     <ul>
       <li>The keybed drives up to 4 Resonode voices (round-robin/oldest-steal
 allocation, same shape as the pitch-lock voice allocator below), each
 carrying its own real MIDI velocity into the exciter’s gain — a harder
 key press rings out louder.</li>
+      <li><strong>Knob slot 0 is <code class="language-plaintext highlighter-rouge">input</code></strong>: how much of the excitation comes from the live
+signal versus the instrument’s own internal exciter. 0 is a self-contained
+instrument (keys sound with nothing plugged in), 1 is the original
+“reactor mode” (the live signal is the only exciter).</li>
       <li>Knob slots 1–4 are the blend weight of one of 4 named material patches —
 <strong>Percussive, Metal/Glass, Strings, Dance Bass</strong> — each a full point
-in position/decay/damping/stretch/collision space, blended as a convex
-combination exactly like the granulator’s own patch surface below. Knob
+in position/decay/damping/stretch/collision plus the five shape weights
+<em>and</em> an exciter character (mallet vs. bow balance and mallet hardness),
+blended as a convex combination exactly like the granulator’s own patch
+surface below. Knob
 slots 5–7 are direct performative dials: <strong>tone</strong> (exponential-taper
 brightness), <strong>level</strong> (output loudness), and <strong>couple</strong> (nearest-neighbor
 energy exchange between adjacent modes — 0 is the original independent-
 mode behavior, higher values let modes audibly interact/beat rather than
 ring in isolation, the single biggest lever for making two patches feel
 distinct from each other rather than variations on one tone).</li>
-      <li>Resonode is excited by the <em>live input signal</em> (“reactor mode”), not a
-synthetic oscillator — it only sounds through a voice while that voice’s
-key is held (silent input still renders bit-exact silence), and it fully
-<strong>replaces</strong> the dry/pitch-lock signal while engaged rather than layering
-under it. The exciter itself is broadband (each of the 6 modes performs
+      <li>Resonode is excited by a blend of the <em>live input signal</em> and an internal
+mallet/bow source, so a held key sounds on its own and the live signal
+colours it — at <code class="language-plaintext highlighter-rouge">input</code> = 1 the live signal is the only exciter and a
+silent input still renders bit-exact silence. While engaged it fully
+<strong>replaces</strong> the dry/pitch-lock signal rather than layering
+under it. The exciter itself is broadband (each of the 16 modes performs
 its own frequency selection, rather than a shared note-locked filter
 pre-narrowing what reaches the bank) and shaped by a percussive strike
 envelope — a fast attack that decays to a low sustain floor while the key

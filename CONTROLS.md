@@ -54,27 +54,34 @@ the hold before the threshold, so Resonode never actually engaged):
   layered under everything else; a second plain tap flips it back off. The
   latch survives release regardless of how long the press turns out to last.
 - **SHIFT + tap**: toggles the instrument entirely into/out of **Resonode**, a
-  4-voice, 6-mode-per-voice coupled modal-resonator synth in the spirit of a
+  4-voice, 16-mode-per-voice coupled modal-resonator synth in the spirit of a
   classic hardware physical-modeling instrument. While engaged:
   - The keybed drives up to 4 Resonode voices (round-robin/oldest-steal
     allocation, same shape as the pitch-lock voice allocator below), each
     carrying its own real MIDI velocity into the exciter's gain — a harder
     key press rings out louder.
+  - **Knob slot 0 is `input`**: how much of the excitation comes from the live
+    signal versus the instrument's own internal exciter. 0 is a self-contained
+    instrument (keys sound with nothing plugged in), 1 is the original
+    "reactor mode" (the live signal is the only exciter).
   - Knob slots 1–4 are the blend weight of one of 4 named material patches —
     **Percussive, Metal/Glass, Strings, Dance Bass** — each a full point
-    in position/decay/damping/stretch/collision space, blended as a convex
-    combination exactly like the granulator's own patch surface below. Knob
+    in position/decay/damping/stretch/collision plus the five shape weights
+    *and* an exciter character (mallet vs. bow balance and mallet hardness),
+    blended as a convex combination exactly like the granulator's own patch
+    surface below. Knob
     slots 5–7 are direct performative dials: **tone** (exponential-taper
     brightness), **level** (output loudness), and **couple** (nearest-neighbor
     energy exchange between adjacent modes — 0 is the original independent-
     mode behavior, higher values let modes audibly interact/beat rather than
     ring in isolation, the single biggest lever for making two patches feel
     distinct from each other rather than variations on one tone).
-  - Resonode is excited by the *live input signal* ("reactor mode"), not a
-    synthetic oscillator — it only sounds through a voice while that voice's
-    key is held (silent input still renders bit-exact silence), and it fully
-    **replaces** the dry/pitch-lock signal while engaged rather than layering
-    under it. The exciter itself is broadband (each of the 6 modes performs
+  - Resonode is excited by a blend of the *live input signal* and an internal
+    mallet/bow source, so a held key sounds on its own and the live signal
+    colours it — at `input` = 1 the live signal is the only exciter and a
+    silent input still renders bit-exact silence. While engaged it fully
+    **replaces** the dry/pitch-lock signal rather than layering
+    under it. The exciter itself is broadband (each of the 16 modes performs
     its own frequency selection, rather than a shared note-locked filter
     pre-narrowing what reaches the bank) and shaped by a percussive strike
     envelope — a fast attack that decays to a low sustain floor while the key

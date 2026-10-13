@@ -1,7 +1,7 @@
 declare name "Resonode";
 declare author "aloop";
 declare license "GPLv3";
-declare description "Mic-excited modal resonator instrument, packaged as the standalone resonode.lv2 bundle. Four voices, sixteen coupled modes per voice, convex-blended string/bell/plate/membrane/bar partial-ratio tables, constant-Q mode bandwidth, and nearest-neighbour mode coupling bounded below unity loop gain by peak-gain normalisation.";
+declare description "Playable modal resonator instrument, packaged as the standalone resonode.lv2 bundle. Four voices, sixteen coupled modes per voice, convex-blended string/bell/plate/membrane/bar partial-ratio tables, constant-Q mode bandwidth, and nearest-neighbour mode coupling bounded below unity loop gain by peak-gain normalisation. Excited by a blend of the live input signal and an internal mallet/bow source, so a held key sounds on its own and the input colours it.";
 
 import("stdfaust.lib");
 
@@ -22,6 +22,11 @@ stretch   = hslider("fx/resonode/stretch", 0.0, -0.5, 1.5, 0.001) : morphGlide;
 collision = hslider("fx/resonode/collision", 0.0, 0.0, 1.0, 0.001) : morphGlide;
 outLevel  = hslider("fx/resonode/level", 25.0, 0.0, 60.0, 0.001) : morphGlide;
 couple    = hslider("fx/resonode/couple", 0.15, 0.0, 1.0, 0.001) : morphGlide;
+
+inputAmt  = hslider("fx/resonode/input", 0.5, 0.0, 1.0, 0.001) : morphGlide;
+malletAmt = hslider("fx/resonode/mallet", 0.65, 0.0, 1.0, 0.001) : morphGlide;
+bowAmt    = hslider("fx/resonode/bow", 0.35, 0.0, 1.0, 0.001) : morphGlide;
+hardness  = hslider("fx/resonode/hardness", 0.5, 0.0, 1.0, 0.001) : morphGlide;
 
 shapeStringWeight   = hslider("fx/resonode/shape/string",   1.0, 0.0, 1.0, 0.001) : morphGlide;
 shapeBellWeight     = hslider("fx/resonode/shape/bell",     0.0, 0.0, 1.0, 0.001) : morphGlide;
@@ -78,6 +83,10 @@ excDecayS = 0.11;
 excSustainFloor = 0.09;
 excReleaseS = 0.25;
 
+bowAttackS = 0.02;
+bowDecayS = 0.06;
+bowReleaseS = 0.15;
+
 stealEvent(note, gate) = (note != note') * (gate <= gate');
 retriggerGate(note, gate) = gate * (1.0 - stealEvent(note, gate));
 attackEdge(note, gate) = (gate > gate') + stealEvent(note, gate);
@@ -97,12 +106,25 @@ letrec {
 
 noteJitter(note, gate) = ba.sAndH(attackEdge(note, gate) > 0.5, no.noise);
 
-sharedExciteIn(exciteIn) = exciteIn : fi.highpass(2, 60.0) : fi.lowpass(2, tone);
+inputHighpassHz = 25.0;
+sharedExciteIn(exciteIn) = exciteIn : fi.highpass(2, inputHighpassHz) : fi.lowpass(2, tone);
 
-exciteFor(sharedIn, note, gate, vel) = sharedIn * (strikeEnv * velGain(vel))
+malletToneHz = 300.0 + hardness*hardness*14000.0;
+bowToneHz = 200.0 + hardness*4000.0;
+malletSrc = no.noise : fi.lowpass(2, malletToneHz);
+bowSrc = no.noise : fi.lowpass(2, bowToneHz);
+internalExciterSum = malletSrc*malletAmt + bowSrc*bowAmt;
+internalExciterNorm = 1.0 / max(0.0001, malletAmt + bowAmt);
+internalExciter = internalExciterSum * internalExciterNorm;
+
+exciteBus(exciteIn) = sharedExciteIn(exciteIn)*inputAmt + internalExciter*(1.0 - inputAmt);
+
+exciteFor(busIn, note, gate, vel) = busIn * (excEnv * velGain(vel))
 with {
     xgate = retriggerGate(note, gate);
     strikeEnv = en.adsr(excAttackS, excDecayS, excSustainFloor, excReleaseS, xgate);
+    sustainEnv = en.adsr(bowAttackS, bowDecayS, 1.0, bowReleaseS, xgate);
+    excEnv = strikeEnv*(1.0 - bowAmt) + sustainEnv*bowAmt;
 };
 
 freqGlide(note, gate, vel) = f
@@ -112,16 +134,15 @@ letrec {
 };
 
 driveAmt = 1.0 + collision*6.0;
-driveNorm = 1.0 / ma.tanh(driveAmt);
+driveNorm = 1.0 / driveAmt;
 collisionDrive(x) = x*(1.0 - collision) + ma.tanh(x*driveAmt)*driveNorm*collision;
 
 aliasGuard(f) = min(1.0, max(0.0, (ma.SR*0.5 - f) / (ma.SR*0.05)));
 
-bassBoostAmt = 0.35;
-bassCornerHz = 220.0;
-bassSpanHz = 160.0;
-bassBoost(freqHz) = 1.0 + bassBoostAmt*max(0.0, min(1.0, (bassCornerHz - freqHz)/bassSpanHz));
-fundamentalBassBoost(i, freqHz) = 1.0 + (bassBoost(freqHz) - 1.0)*float(i == 0);
+voiceBassTiltCornerHz = 180.0;
+voiceBassTiltSpanHz = 140.0;
+voiceBassTiltMaxGain = 2.0;
+voiceBassTilt(freqFund) = 1.0 + (voiceBassTiltMaxGain - 1.0)*max(0.0, min(1.0, (voiceBassTiltCornerHz - freqFund)/voiceBassTiltSpanHz));
 
 constantQRefHz = 261.6255653;
 invConstantQRefHz = 1.0/constantQRefHz;
@@ -131,8 +152,8 @@ modeT60Floor = 0.004;
 invT60Floor = 1.0/modeT60Ceiling;
 invT60Ceiling = 1.0/modeT60Floor;
 
-highFreqDampSlope = 1.934264;
-highFreqDampExponent = highFreqDampSlope*(0.0 - log(max(0.05, damping)))/log(2.0);
+highFreqDampExponentMax = 1.0;
+highFreqDampExponent = highFreqDampExponentMax*(1.0 - max(0.05, min(1.0, damping)));
 invDecayTime = 1.0/max(0.05, decayTime);
 noteDampScale(freqFund) = max(20.0, freqFund)*invConstantQRefHz;
 modeInvT60(freqFund, modeHfDampFactor) = max(invT60Floor, min(invT60Ceiling, invDecayTime*noteDampScale(freqFund)*modeHfDampFactor));
@@ -181,8 +202,7 @@ with {
     weightedOut = rawOut
                 * modeAmpBase(i)
                 * modePositionSin(i, positionLive)
-                * modeAliasGuard
-                * fundamentalBassBoost(i, freqMode);
+                * modeAliasGuard;
 };
 
 modeBankStep(n) = route(n+4, n*5,
@@ -196,12 +216,13 @@ modeBankStep(n) = route(n+4, n*5,
 
 modeBank(n) = (modeBankStep(n) ~ couplingNetwork(n)) : (par(i, n, !), _);
 
-voice(sharedIn, note, gate, vel) = collisionDrive(bankOut) * voiceGain
+voice(busIn, note, gate, vel) = collisionDrive(bankOut) * voiceGain * voiceBassTilt(fundHz)
 with {
+    fundHz = freqGlide(note, gate, vel);
     positionLive = max(0.0, min(1.2, position + positionDriftAmt*positionDriftEnv(note, gate)));
     ratioExponent = 1.0 + stretch + stretchJitterAmt*noteJitter(note, gate);
-    bankOut = (exciteFor(sharedIn, note, gate, vel),
-               freqGlide(note, gate, vel),
+    bankOut = (exciteFor(busIn, note, gate, vel),
+               fundHz,
                ratioExponent,
                positionLive) : modeBank(modeCount);
 };
@@ -212,8 +233,8 @@ bankOutputTrim = 1.06;
 decayLoudnessNorm = bankOutputTrim*pow(max(0.05, min(8.0, decayTime))/loudnessRefDecayS, loudnessNormExp);
 
 process(exciteIn) =
-    (voice(sharedIn,note0,gate0,vel0) + voice(sharedIn,note1,gate1,vel1) + voice(sharedIn,note2,gate2,vel2) + voice(sharedIn,note3,gate3,vel3))
+    (voice(bus,note0,gate0,vel0) + voice(bus,note1,gate1,vel1) + voice(bus,note2,gate2,vel2) + voice(bus,note3,gate3,vel3))
     : *(outLevel*decayLoudnessNorm) : ma.tanh
 with {
-    sharedIn = sharedExciteIn(exciteIn);
+    bus = exciteBus(exciteIn);
 };

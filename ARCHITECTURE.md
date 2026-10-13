@@ -132,8 +132,8 @@ this is the accepted cost model here, not a regression to fix.
   a pitch tracker plus 6 crossfaded-delay-line shifter voices, each gated by a
   held key. Locked output *replaces* the dry signal via a dedicated gate, it
   never layers over it.
-- **Resonode** (`effects/home/faust/resonode_synth.dsp`) — a 4-voice, 6-mode-
-  per-voice modal resonator synth excited by the live input signal, with
+- **Resonode** (`effects/home/faust/resonode_synth.dsp`) — a 4-voice, 16-mode-
+  per-voice modal resonator synth excited by a blend of the live input signal and its own mallet/bow exciter, with
   velocity-scaled exciter gain, alias-guarded higher modes (a mode above
   Nyquist fades to silence rather than folding back into an unrelated
   frequency), and click-free voice stealing (a stolen voice gets a synthetic
