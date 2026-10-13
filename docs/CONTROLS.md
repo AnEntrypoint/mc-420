@@ -66,10 +66,12 @@ the hold before the threshold, so Resonode never actually engaged):
     "reactor mode" (the live signal is the only exciter).
   - Knob slots 1–4 are the blend weight of one of 4 named material patches —
     **Percussive, Metal/Glass, Strings, Dance Bass** — each a full point
-    in position/decay/damping/stretch/collision plus the five shape weights
-    *and* an exciter character (mallet vs. bow balance and mallet hardness),
-    blended as a convex combination exactly like the granulator's own patch
-    surface below. Knob
+    in position/decay/damping/stretch/collision plus the five shape weights,
+    an exciter character (mallet vs. bow balance and mallet hardness) and a
+    waveguide-object character (how much a tuned feedback-comb stage is mixed
+    in, and its feedback polarity — positive lets through more low
+    frequencies and is the bassier of the two), blended as a convex
+    combination exactly like the granulator's own patch surface below. Knob
     slots 5–7 are direct performative dials: **tone** (exponential-taper
     brightness), **level** (output loudness), and **couple** (nearest-neighbor
     energy exchange between adjacent modes — 0 is the original independent-

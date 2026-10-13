@@ -960,14 +960,14 @@ static int granPitchIntervalSetFromKnob(float v01) {
 
 struct ResonodePatch { float position, decay, damping, stretch, collision;
                        float shapeString, shapeBell, shapePlate, shapeMembrane, shapeBar;
-                       float mallet, bow, hardness; };
+                       float mallet, bow, hardness, body, polarity; };
 
 constexpr int kResonodePatchCount = 4;
 static const ResonodePatch kResonodePatches[kResonodePatchCount] = {
-    { 0.080f, 0.150f, 0.800f, -0.100f, 0.550f,  0.0f, 0.0f, 0.4f, 0.6f, 0.0f,  1.00f, 0.00f, 0.80f },
-    { 0.080f, 7.000f, 0.970f,  1.200f, 0.150f,  0.0f, 0.7f, 0.0f, 0.0f, 0.3f,  0.90f, 0.10f, 1.00f },
-    { 0.080f, 7.000f, 0.970f, -0.100f, 0.000f,  1.0f, 0.0f, 0.0f, 0.0f, 0.0f,  0.20f, 0.80f, 0.30f },
-    { 0.420f, 7.000f, 0.150f, -0.100f, 0.300f,  0.7f, 0.0f, 0.0f, 0.3f, 0.0f,  0.50f, 0.50f, 0.35f },
+    { 0.080f, 0.150f, 0.800f, -0.100f, 0.550f,  0.0f, 0.0f, 0.4f, 0.6f, 0.0f,  1.00f, 0.00f, 0.80f, 0.20f,  1.0f },
+    { 0.080f, 7.000f, 0.970f,  1.200f, 0.150f,  0.0f, 0.7f, 0.0f, 0.0f, 0.3f,  0.90f, 0.10f, 1.00f, 0.35f, -1.0f },
+    { 0.080f, 7.000f, 0.970f, -0.100f, 0.000f,  1.0f, 0.0f, 0.0f, 0.0f, 0.0f,  0.20f, 0.80f, 0.30f, 0.45f,  1.0f },
+    { 0.420f, 7.000f, 0.150f, -0.100f, 0.300f,  0.7f, 0.0f, 0.0f, 0.3f, 0.0f,  0.50f, 0.50f, 0.35f, 0.85f,  1.0f },
 };
 
 struct ResonodeDirectKnobRange { const char* zone; float lo; float hi; bool logTaper; };
@@ -992,7 +992,7 @@ void ApcGrid::applyResonodePatchMorph(ParamStore& ps) {
 
     ResonodePatch blend = kResonodePatches[0];
     if (totalWeight > 0.0001f) {
-        blend = ResonodePatch{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+        blend = ResonodePatch{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
         for (int p = 0; p < kResonodePatchCount; p++) {
             float wn = weight[p] / totalWeight;
             blend.position  += wn * kResonodePatches[p].position;
@@ -1008,6 +1008,8 @@ void ApcGrid::applyResonodePatchMorph(ParamStore& ps) {
             blend.mallet        += wn * kResonodePatches[p].mallet;
             blend.bow           += wn * kResonodePatches[p].bow;
             blend.hardness      += wn * kResonodePatches[p].hardness;
+            blend.body          += wn * kResonodePatches[p].body;
+            blend.polarity      += wn * kResonodePatches[p].polarity;
         }
     }
     ps.setByName("fx/resonode/shape/string", blend.shapeString);
@@ -1023,6 +1025,8 @@ void ApcGrid::applyResonodePatchMorph(ParamStore& ps) {
     ps.setByName("fx/resonode/mallet", blend.mallet);
     ps.setByName("fx/resonode/bow", blend.bow);
     ps.setByName("fx/resonode/hardness", blend.hardness);
+    ps.setByName("fx/resonode/body", blend.body);
+    ps.setByName("fx/resonode/polarity", blend.polarity);
 }
 
 void ApcGrid::applyGranulatorMorph(Sampler* sampler) {

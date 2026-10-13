@@ -27,6 +27,8 @@ inputAmt  = hslider("fx/resonode/input", 0.5, 0.0, 1.0, 0.001) : morphGlide;
 malletAmt = hslider("fx/resonode/mallet", 0.65, 0.0, 1.0, 0.001) : morphGlide;
 bowAmt    = hslider("fx/resonode/bow", 0.35, 0.0, 1.0, 0.001) : morphGlide;
 hardness  = hslider("fx/resonode/hardness", 0.5, 0.0, 1.0, 0.001) : morphGlide;
+body      = hslider("fx/resonode/body", 0.0, 0.0, 1.0, 0.001) : morphGlide;
+polarity  = hslider("fx/resonode/polarity", 1.0, -1.0, 1.0, 0.001) : morphGlide;
 
 shapeStringWeight   = hslider("fx/resonode/shape/string",   1.0, 0.0, 1.0, 0.001) : morphGlide;
 shapeBellWeight     = hslider("fx/resonode/shape/bell",     0.0, 0.0, 1.0, 0.001) : morphGlide;
@@ -216,15 +218,36 @@ modeBankStep(n) = route(n+4, n*5,
 
 modeBank(n) = (modeBankStep(n) ~ couplingNetwork(n)) : (par(i, n, !), _);
 
-voice(busIn, note, gate, vel) = collisionDrive(bankOut) * voiceGain * voiceBassTilt(fundHz)
+objectMaxDelay = 4096;
+objectMinFreqHz = 20.0;
+objectFeedbackCeiling = 0.995;
+objectDampFloorHz = 200.0;
+objectDampSpanHz = 7800.0;
+objectHighpassHz = 25.0;
+
+objectFeedbackMagnitude(freqHz) = min(objectFeedbackCeiling,
+    exp(0.0 - 6.907755279/(max(0.05, decayTime)*max(objectMinFreqHz, freqHz))));
+objectDelayLen(freqHz) = ma.SR / max(objectMinFreqHz, freqHz);
+objectTrim(freqHz) = 1.0 - objectFeedbackMagnitude(freqHz);
+
+objectVoice(exc, freqHz) = y * objectTrim(freqHz) : fi.highpass(2, objectHighpassHz)
+letrec {
+    'y = exc + fb * (de.fdelay(objectMaxDelay, dl, y) : fi.lowpass(1, dampHz));
+}
+with {
+    dl = objectDelayLen(freqHz);
+    fb = polarity * objectFeedbackMagnitude(freqHz);
+    dampHz = objectDampFloorHz + max(0.05, min(1.0, damping))*objectDampSpanHz;
+};
+
+voice(busIn, note, gate, vel) = collisionDrive(bankOut + objOut*body) * voiceGain * voiceBassTilt(fundHz)
 with {
     fundHz = freqGlide(note, gate, vel);
     positionLive = max(0.0, min(1.2, position + positionDriftAmt*positionDriftEnv(note, gate)));
     ratioExponent = 1.0 + stretch + stretchJitterAmt*noteJitter(note, gate);
-    bankOut = (exciteFor(busIn, note, gate, vel),
-               fundHz,
-               ratioExponent,
-               positionLive) : modeBank(modeCount);
+    exc = exciteFor(busIn, note, gate, vel);
+    bankOut = (exc, fundHz, ratioExponent, positionLive) : modeBank(modeCount);
+    objOut = objectVoice(exc, fundHz);
 };
 
 loudnessRefDecayS = 1.2;

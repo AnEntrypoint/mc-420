@@ -241,6 +241,8 @@ struct Case {
     float malletAmt = 0.65f;
     float bowAmt = 0.35f;
     float hardness = 0.5f;
+    float body = 0.0f;
+    float polarity = 1.0f;
     float shapeString = 1.0f;
     float shapeBell = 0.0f;
     float shapePlate = 0.0f;
@@ -305,6 +307,8 @@ std::vector<float> runCase(const Case& c, const std::vector<float>& excite)
     ui.set("fx/resonode/mallet", c.malletAmt);
     ui.set("fx/resonode/bow", c.bowAmt);
     ui.set("fx/resonode/hardness", c.hardness);
+    ui.set("fx/resonode/body", c.body);
+    ui.set("fx/resonode/polarity", c.polarity);
     ui.set("fx/resonode/shape/string", c.shapeString);
     ui.set("fx/resonode/shape/bell", c.shapeBell);
     ui.set("fx/resonode/shape/plate", c.shapePlate);
@@ -495,6 +499,8 @@ int main(int argc, char** argv)
     c.malletAmt = argFloat(argc, argv, "--mallet", c.malletAmt);
     c.bowAmt = argFloat(argc, argv, "--bow", c.bowAmt);
     c.hardness = argFloat(argc, argv, "--hardness", c.hardness);
+    c.body = argFloat(argc, argv, "--body", c.body);
+    c.polarity = argFloat(argc, argv, "--polarity", c.polarity);
     c.shapeString = argFloat(argc, argv, "--shape-string", c.shapeString);
     c.shapeBell = argFloat(argc, argv, "--shape-bell", c.shapeBell);
     c.shapePlate = argFloat(argc, argv, "--shape-plate", c.shapePlate);
