@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Netbooting aloop over TFTP/DHCP — the pre-SD dry run","url":"https://anentrypoint.github.io/mc-420/NETBOOT.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=cf73c10f045c316a56f6a24f3ab7bd2f4cb5b6ee">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c47d056f44591662d62bb5ab8754ff16850003e6">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -157,7 +157,7 @@ GND→pin 6, Pi TX GPIO14→adapter RX, Pi RX GPIO15→adapter TX, <strong>11520
 <ul>
   <li>dnsmasq (<code class="language-plaintext highlighter-rouge">-d</code>) logs the DHCP handshake then each TFTP fetch: <code class="language-plaintext highlighter-rouge">bootcode.bin</code> →
 <code class="language-plaintext highlighter-rouge">start4.elf</code> → <code class="language-plaintext highlighter-rouge">config.txt</code> → <code class="language-plaintext highlighter-rouge">bcm2711-rpi-4-b.dtb</code> → kernel + initramfs.</li>
-  <li>The initramfs brings up the NIC (<code class="language-plaintext highlighter-rouge">ip=dhcp</code>, added by the netboot builder), mounts
+  <li>The initramfs brings up the NIC (static <code class="language-plaintext highlighter-rouge">ip=</code>, added by the netboot builder), mounts
 <code class="language-plaintext highlighter-rouge">modloop-rpi</code>, restores <code class="language-plaintext highlighter-rouge">aloop.apkovl.tar.gz</code>, and OpenRC starts the <code class="language-plaintext highlighter-rouge">aloop</code> +
 <code class="language-plaintext highlighter-rouge">autoap</code> services — same as <code class="language-plaintext highlighter-rouge">docs/BOOT.md</code>.</li>
   <li>The USB-audio gadget still comes up (<code class="language-plaintext highlighter-rouge">dtoverlay=dwc2,dr_mode=peripheral</code>); network
@@ -207,7 +207,27 @@ apkovl=…/aloop.apkovl.tar.gz</code> to the cmdline, and <code class="language-
 server for the root. The initramfs then fetches the whole root over HTTP (watch
 for <code class="language-plaintext highlighter-rouge">GET /apks/aarch64/APKINDEX.tar.gz</code>, <code class="language-plaintext highlighter-rouge">GET /boot/modloop-rpi</code>,
 <code class="language-plaintext highlighter-rouge">GET /aloop.apkovl.tar.gz</code>, all <code class="language-plaintext highlighter-rouge">200</code>).</li>
-  <li><strong>Pi drops off the wired LAN after boot</strong> — <code class="language-plaintext highlighter-rouge">ip=dhcp</code> brings <code class="language-plaintext highlighter-rouge">eth0</code> up only inside
+  <li><strong>DHCP loops DISCOVER↔OFFER with only one server (missing option 66)</strong> — the Pi 4
+bootloader puts option 66 (TFTP server) in its parameter-request list and will not
+complete the handshake on option 67 (<code class="language-plaintext highlighter-rouge">bootfile-name</code>) + next-server alone: it keeps
+re-DISCOVERing and never sends REQUEST, so TFTP never starts. It looks identical to
+the two-server loop described below, but there is only one DHCP server on the link.
+<strong>Fix:</strong> <code class="language-plaintext highlighter-rouge">serve-netboot.sh</code> also sends <code class="language-plaintext highlighter-rouge">--dhcp-option-force=tag:rpi,66,"$SERVER"</code>.
+Witnessed on a real Pi 4 (<code class="language-plaintext highlighter-rouge">7bec0617</code>): adding option 66 turned DISCOVER→OFFER into
+DISCOVER→OFFER→REQUEST→ACK within the same second.</li>
+  <li><strong>Kernel loads over TFTP and then hangs with zero network output (<code class="language-plaintext highlighter-rouge">ip=dhcp</code>)</strong> —
+Alpine’s diskless initramfs configures the NIC in <em>userspace</em>: <code class="language-plaintext highlighter-rouge">configure_ip()</code>
+waits for <code class="language-plaintext highlighter-rouge">operstate</code> up and then runs <code class="language-plaintext highlighter-rouge">udhcpc</code> (see <code class="language-plaintext highlighter-rouge">init</code> inside
+<code class="language-plaintext highlighter-rouge">boot/initramfs-rpi</code>). When that wait loses the race the initramfs never emits a DHCP
+packet at all, so there is nothing whatsoever on the wire and the boot dies silently
+right after <code class="language-plaintext highlighter-rouge">vmlinuz-rpi</code> is delivered — no initramfs DHCP round, no HTTP GET, Pi
+unreachable. <strong>Fix:</strong> the netboot cmdline pins a static
+<code class="language-plaintext highlighter-rouge">ip=&lt;client&gt;::&lt;server&gt;:255.255.255.0:aloop:eth0:off</code>, which the kernel autoconfigures
+without udhcpc. <code class="language-plaintext highlighter-rouge">build-netboot.sh</code> derives <code class="language-plaintext highlighter-rouge">&lt;client&gt;</code> as <code class="language-plaintext highlighter-rouge">NETBOOT_SERVER</code> with its
+last octet replaced by <code class="language-plaintext highlighter-rouge">.100</code> (<code class="language-plaintext highlighter-rouge">NETBOOT_CLIENT_IP</code> overrides it). Userspace DHCP
+still comes up afterwards from the injected <code class="language-plaintext highlighter-rouge">/etc/network/interfaces</code>, so the Pi
+stays reachable and takes a normal lease.</li>
+  <li><strong>Pi drops off the wired LAN after boot</strong> — the kernel <code class="language-plaintext highlighter-rouge">ip=</code> brings <code class="language-plaintext highlighter-rouge">eth0</code> up only inside
 the <em>initramfs</em>; the aloop overlay manages <code class="language-plaintext highlighter-rouge">wlan0</code> (autoap) but nothing brings
 <code class="language-plaintext highlighter-rouge">eth0</code> back up once userspace starts, so a netbooted Pi became unreachable right
 after the HTTP root fetches. <strong>Fix:</strong> the netboot build injects
@@ -258,8 +278,10 @@ and power-cycle. A <strong>healthy</strong> boot prints, in order:</p>
 <p>Where it stops tells you the layer:</p>
 
 <ul>
-  <li><strong>No <code class="language-plaintext highlighter-rouge">Obtaining IP via DHCP (eth0)</code> line at all</strong> → the kernel never got <code class="language-plaintext highlighter-rouge">ip=dhcp</code>
-(the embedded-newline bug above — check <code class="language-plaintext highlighter-rouge">od -c cmdline.txt</code>).</li>
+  <li><strong>No <code class="language-plaintext highlighter-rouge">Obtaining IP via DHCP (eth0)</code> line at all</strong> → expected with the static <code class="language-plaintext highlighter-rouge">ip=</code>
+the builder emits, since there is then no initramfs DHCP round at all; it only
+matters if the HTTP GETs never arrive. On an <code class="language-plaintext highlighter-rouge">ip=dhcp</code> cmdline it means the kernel
+never got it (the embedded-newline bug above — check <code class="language-plaintext highlighter-rouge">od -c cmdline.txt</code>).</li>
   <li><strong><code class="language-plaintext highlighter-rouge">Obtaining IP via DHCP (eth0)</code> but no DHCP in the serve log</strong> → the initramfs
 <code class="language-plaintext highlighter-rouge">udhcpc</code> DISCOVER isn’t reaching your dnsmasq. <strong>The wired link must have no other
 DHCP server for the initramfs round</strong> — Windows ICS runs a second one on the same

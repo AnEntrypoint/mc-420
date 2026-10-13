@@ -98,7 +98,7 @@ GND→pin 6, Pi TX GPIO14→adapter RX, Pi RX GPIO15→adapter TX, **115200 8N1*
 
 - dnsmasq (`-d`) logs the DHCP handshake then each TFTP fetch: `bootcode.bin` →
   `start4.elf` → `config.txt` → `bcm2711-rpi-4-b.dtb` → kernel + initramfs.
-- The initramfs brings up the NIC (`ip=dhcp`, added by the netboot builder), mounts
+- The initramfs brings up the NIC (static `ip=`, added by the netboot builder), mounts
   `modloop-rpi`, restores `aloop.apkovl.tar.gz`, and OpenRC starts the `aloop` +
   `autoap` services — same as `docs/BOOT.md`.
 - The USB-audio gadget still comes up (`dtoverlay=dwc2,dr_mode=peripheral`); network
@@ -144,7 +144,27 @@ These are the actual problems a live netboot surfaced (Pi 4, board serial
   server for the root. The initramfs then fetches the whole root over HTTP (watch
   for `GET /apks/aarch64/APKINDEX.tar.gz`, `GET /boot/modloop-rpi`,
   `GET /aloop.apkovl.tar.gz`, all `200`).
-- **Pi drops off the wired LAN after boot** — `ip=dhcp` brings `eth0` up only inside
+- **DHCP loops DISCOVER↔OFFER with only one server (missing option 66)** — the Pi 4
+  bootloader puts option 66 (TFTP server) in its parameter-request list and will not
+  complete the handshake on option 67 (`bootfile-name`) + next-server alone: it keeps
+  re-DISCOVERing and never sends REQUEST, so TFTP never starts. It looks identical to
+  the two-server loop described below, but there is only one DHCP server on the link.
+  **Fix:** `serve-netboot.sh` also sends `--dhcp-option-force=tag:rpi,66,"$SERVER"`.
+  Witnessed on a real Pi 4 (`7bec0617`): adding option 66 turned DISCOVER→OFFER into
+  DISCOVER→OFFER→REQUEST→ACK within the same second.
+- **Kernel loads over TFTP and then hangs with zero network output (`ip=dhcp`)** —
+  Alpine's diskless initramfs configures the NIC in *userspace*: `configure_ip()`
+  waits for `operstate` up and then runs `udhcpc` (see `init` inside
+  `boot/initramfs-rpi`). When that wait loses the race the initramfs never emits a DHCP
+  packet at all, so there is nothing whatsoever on the wire and the boot dies silently
+  right after `vmlinuz-rpi` is delivered — no initramfs DHCP round, no HTTP GET, Pi
+  unreachable. **Fix:** the netboot cmdline pins a static
+  `ip=<client>::<server>:255.255.255.0:aloop:eth0:off`, which the kernel autoconfigures
+  without udhcpc. `build-netboot.sh` derives `<client>` as `NETBOOT_SERVER` with its
+  last octet replaced by `.100` (`NETBOOT_CLIENT_IP` overrides it). Userspace DHCP
+  still comes up afterwards from the injected `/etc/network/interfaces`, so the Pi
+  stays reachable and takes a normal lease.
+- **Pi drops off the wired LAN after boot** — the kernel `ip=` brings `eth0` up only inside
   the *initramfs*; the aloop overlay manages `wlan0` (autoap) but nothing brings
   `eth0` back up once userspace starts, so a netbooted Pi became unreachable right
   after the HTTP root fetches. **Fix:** the netboot build injects
@@ -195,8 +215,10 @@ Loading boot drivers    → Mounting boot media    → Obtaining IP via DHCP (et
 
 Where it stops tells you the layer:
 
-- **No `Obtaining IP via DHCP (eth0)` line at all** → the kernel never got `ip=dhcp`
-  (the embedded-newline bug above — check `od -c cmdline.txt`).
+- **No `Obtaining IP via DHCP (eth0)` line at all** → expected with the static `ip=`
+  the builder emits, since there is then no initramfs DHCP round at all; it only
+  matters if the HTTP GETs never arrive. On an `ip=dhcp` cmdline it means the kernel
+  never got it (the embedded-newline bug above — check `od -c cmdline.txt`).
 - **`Obtaining IP via DHCP (eth0)` but no DHCP in the serve log** → the initramfs
   `udhcpc` DISCOVER isn't reaching your dnsmasq. **The wired link must have no other
   DHCP server for the initramfs round** — Windows ICS runs a second one on the same
