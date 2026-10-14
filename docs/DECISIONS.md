@@ -223,3 +223,49 @@ Why: aloop has no L/R bus anywhere. The 2-channel wire is master (ch0) / cue (ch
 Evidence: `lv2_host.cpp:229-231` connected `ioBuffer_.data()` for every audio port; `lv2_host.cpp:279-282` memcpys only `n` floats each way; port discovery (`:147`) records only `isAudio`/`isInput` and reads no channel or group index; `audio_thread.cpp:1097-1106` averages input channels to mono; all of `effects/home/faust/*.dsp`, `delayverb.dsp`, `pitchtracker_ac.dsp` and `resonode_synth.dsp` are single-input/single-output.
 Alternatives rejected: per-voice pan in Resonode (compiles, 7.196 s vs 7.145 s baseline, +0.7%, zero runtime cost — but `apc_grid.cpp:730-745` allocates lowest-free-index-first, so the 1- and 2-note playing that is the entire APC Key25 use case lands on voices 0 and 1, both L, width 0); alternating mode groups across L/R (27.4 s elaboration, 3.8x baseline, then failed with `sequential composition A:B — outputs [4] of A must equal inputs [2] of B`); either option summed back to mono (the standard `(L+R)/2` downmix is -6.02 dB, and our path has no summing stage to compensate, so `fx/resonode/level` would need re-tuning and every sweet-spot gate would re-open). Parity decides it outright: `tools/chain-render/parity.sh` gates `record_vs_inputfx`, `record_vs_cue` and `inputfx_vs_cue` at `le -120` dB, and if L/R were mapped onto the only available pair (master/cue) the residual becomes the whole L-R spread and all three rows fail — a stereo Resonode cannot both widen and keep those rows green in a mono path.
 Revisit if: a real second MASTER channel exists (the Focusrite can present 4 outputs — confirm out3/out4 can be a second master pair and measure `snd_pcm_hw_params_set_channels` at 4 with `period_size=64` on the device). The DSP is not the blocker; the destination is. Until then, decide the destination before the DSP.
+
+## ADR-029 — the Focusrite loopback, and the granulator live ring witnessed on hardware
+
+Decision: the Focusrite Scarlett 18i8 3rd Gen is the host-side signal source for loopback
+testing. It is attached to the HOST (webtop), not the Pi; the Pi's only instrument interface is
+still the M-Audio AIR 192|4, so the loop is host USB -> Scarlett analogue out -> AIR 192 analogue
+in -> aloop capture, with the AIR 192's own output fed back into a Scarlett analogue input as a
+tap. `instrument_device_match` stays `AIR 192`.
+
+Why: AGENTS.md had carried "No CLEAN ingress reaches `dry` (#4 UNWITNESSED; unblocker Focusrite
+passthrough)" for a long time, and the granulator's live-source ring could not be witnessed
+because the AIR 192 read silent. The Scarlett closes both.
+
+Three separate things muted the Scarlett output, and none of them is visible from Pulse, which
+reported the sink RUNNING with a live sink-input while the device emitted nothing:
+
+1. `Line 05 Mute` and `Line 06 Mute` were `[on]`. Headphones 1 is Line Out 05/06.
+2. `Analogue Output 05` (the output source selector) was `'Off'`. This was the binding one.
+3. `Speaker Switching` was `'Off'`; it is now `'Main'`.
+
+Fixed by `amixer -c 2 sset "Analogue Output NN" "PCM N"` for N in 1..8 (so every analogue output
+carries its matching channel, and whichever jack is cabled gets signal) plus unmuting all eight.
+Playback then goes through Pulse, because PulseAudio holds the device and `aplay -D plughw:2,0`
+returns "Device or resource busy":
+
+    paplay -d alsa_output.usb-Focusrite_Scarlett_18i8_USB_....analog-surround-71 \
+      --channel-map=front-left,front-right,rear-left,rear-right,front-center,lfe,side-left,side-right \
+      <8ch wav>
+
+The channel map matters: without it paplay warns "Failed to determine channel map from file".
+
+Evidence the loop closed: before the fix, a `parec` of the Scarlett's own multichannel input read
+~0.00003 on every channel; after, ch04 = 0.8883 and ch05 = 0.2961. On the Pi, `audio_peak.in`
+went from a pinned 0.0001 to 0.2542 with `peakOut` 0.2643.
+
+Evidence the granulator's live ring works: `rc-service aloop restart` clears every captured
+sampler buffer, so the first note after a restart has nothing to granulate from the captured
+path. With the granulator latched and note 48 held as that first note, `audio_peak.out` read
+0.2253 against an input of 0.2627. Before the live ring this was exactly zero, because
+`captureBlock` returns immediately unless `m_recActive`. This closes the witness that was
+blocked; `m_grainLiveMix` defaulting to 0.5 (shipped earlier) is what makes it audible without
+touching a knob.
+
+Alternatives rejected: moving the Scarlett to the Pi and pointing `instrument_device_match` at
+it (rejected - it is a host-side source, and the Pi would then have no monitoring path back);
+`aplay` direct to `plughw:2,0` (rejected - PulseAudio holds the device).
