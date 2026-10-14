@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=6c61ff50462054a0e3d2a543d3ec14c27e2dd0bd">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d2b586716646dd05270b26ace75dc82b4ab65276">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -484,6 +484,19 @@ be re-baselined, because <code class="language-plaintext highlighter-rouge">fin[
 4-out/2-in interface, dropping the record path 6.02 dB, and <code class="language-plaintext highlighter-rouge">mixOnlyBuf[i] = fullNorm - fin[i]</code> shifts
 with it; (b) cue physically relocates from output 2 to outputs 3/4, a re-patch that must be witnessed.
 Until both are done the key stays commented out.</p>
+
+<h2 id="addendum--a-netbooted-client-loses-hot-deploys-on-every-reboot">Addendum — a netbooted client loses hot-deploys on every reboot</h2>
+
+<p>Observed while closing the master-bus witness: a device that had been verified running
+<code class="language-plaintext highlighter-rouge">0cd0cc0416345d49d36aa0710185cef9</code> (the 0d0c3f0 build) later reported <code class="language-plaintext highlighter-rouge">2af0406bf6acd3a0f93edc94df7c3e40</code>
+— the pre-session binary baked into the image. The cause is that a netbooted client runs from tmpfs, so
+anything sftp’d to /opt/aloop/aloop is gone the moment it boots again. This is distinct from the
+SD-booted Pi 4 that AGENTS.md already describes, where hot-deploy does persist.</p>
+
+<p>Consequence for anyone measuring: check <code class="language-plaintext highlighter-rouge">md5sum /opt/aloop/aloop</code> before trusting any hot-deploy, and
+expect to re-deploy after a power cycle. It also means a witness taken against a hot-deployed binary is
+only valid until the next reboot; to make a change survive, it has to go into the served netboot payload,
+not onto the running filesystem.</p>
 
 
       </section>

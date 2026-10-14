@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop - current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=6c61ff50462054a0e3d2a543d3ec14c27e2dd0bd">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d2b586716646dd05270b26ace75dc82b4ab65276">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -159,7 +159,7 @@
 <h1 id="finding-the-device">Finding the device</h1>
 
 <ul>
-  <li>The netbooting client’s FIRMWARE-stage DHCP lease drifts (seen at .132); <code class="language-plaintext highlighter-rouge">cmdline.txt</code> pins the kernel-stage address to <code class="language-plaintext highlighter-rouge">192.168.137.100</code>. When .100 does not answer, read <code class="language-plaintext highlighter-rouge">/var/lib/misc/dnsmasq.leases</code>. <code class="language-plaintext highlighter-rouge">armstub8-gic.bin</code> being absent is harmless: <code class="language-plaintext highlighter-rouge">config.txt</code> has no <code class="language-plaintext highlighter-rouge">armstub=</code> line. Restart with <code class="language-plaintext highlighter-rouge">sudo systemctl restart dnsmasq</code>, never mid-TFTP: killing it during the 23 MB <code class="language-plaintext highlighter-rouge">boot/vmlinuz-rpi</code> transfer strands the bootloader for tens of minutes.</li>
+  <li>The netbooting client’s FIRMWARE-stage DHCP lease drifts (seen at .132); <code class="language-plaintext highlighter-rouge">cmdline.txt</code> pins the kernel-stage address to <code class="language-plaintext highlighter-rouge">192.168.137.100</code>. When .100 does not answer, read <code class="language-plaintext highlighter-rouge">/var/lib/misc/dnsmasq.leases</code>. <code class="language-plaintext highlighter-rouge">armstub8-gic.bin</code> being absent is harmless: <code class="language-plaintext highlighter-rouge">config.txt</code> has no <code class="language-plaintext highlighter-rouge">armstub=</code> line. Restart with <code class="language-plaintext highlighter-rouge">sudo systemctl restart dnsmasq</code>, never mid-TFTP: killing it during the 23 MB <code class="language-plaintext highlighter-rouge">boot/vmlinuz-rpi</code> transfer strands the bootloader.</li>
 </ul>
 
 <h1 id="faust-dsp">Faust DSP</h1>
