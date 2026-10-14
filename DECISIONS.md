@@ -302,3 +302,117 @@ Three consequences, two of which correct things said earlier:
    not just wider buffers. Repurposing ch1 as "right" would destroy the performer's cue monitor.
 
 AGENTS.md line 107 cites `masterSample`/`cueSample` at `:1353`/`:1354`; they are at `:1343`/`:1344`.
+
+## ADR-030 — Grain transposition takes the spray dial's middle band; no fifth patch row, no second patch page
+
+Decision: `Sampler` gains `setGrainTransposeCents(float)` / `grainTransposeCents()` and a
+`m_grainTransposeCents` member defaulting to `0.0f`, applied inside `_grainPitchRatio()` as an addend
+to the exponent in both the quantised-degree branch and the continuous-spray branch, plus a new
+branch so transposition alone (spray 0) still shifts. The spray dial (LofiFx knob slot 7) becomes
+three bands: `v01 <= 0.5` is the unchanged continuous spray, `0.5 < v01 <= 0.875` is integer-semitone
+transposition −12..+12 (`kGranTransposeSemitones`, unison at `v01 = 0.6875`), and `v01 > 0.875` is the
+four interval sets, now compressed from 64 MIDI steps to 16. `kGranPatchCount`, `kGranPatches`,
+`kGranDirectKnobCount` and every other knob binding are untouched, and `m_granTransposeCents`
+defaults to 0 and is written only from spray-knob `case 2`, so every shipped patch is bit-identical
+until the dial enters the new band. Nothing was added to any `.dsp`.
+
+Why: ADR-027 deferred grain transposition for want of a knob slot and named a second LofiFx page as
+the unblocker. Measurement removed both premises. The spray dial's upper half was a 4-position
+selector occupying 64 MIDI steps — 4 per set is enough, so 48 steps were free with no new gesture and
+no lost capability. And the thing a second page would have bought (a "Tape" row) does not exist:
+eight swept Tape candidates land at centroid 1440.2–1561.9 Hz / flux 0.0874–0.0967, entirely inside
+the shipped four's 1079.5–1868.8 Hz / 0.0930–0.3348 (1308.7–1794.2 Hz on this run — see Evidence),
+because the granulator has no filter and grain size/rate only move the centroid about ±20%. A row
+that measures as indistinguishable from what is
+already there cannot be justified, and a hidden second page also collides with ADR-023's press-edge
+latch toggle.
+
+Evidence: the prior session's scratch bench (`/tmp/granbench/bench.cpp`) drives `sampler.h` directly
+with `test-audio-corpus/instruments/piano_mid_C4.wav` as the chrom buffer fed to the live ring, 48 kHz,
+N=64, 5 s, deterministic RNG seed. It was **rebuilt and re-run against this commit's edited header**,
+and every run below reports `nf=0` (nonfinite 0). Glass at ±2400/±1200/0 cents, 4 voices: centroid
+450.5 / 753.7 / 1414.5 / 2742.7 / 5185.0 Hz — monotone, 11.5x span — at 17.652 / 17.786 / 17.504 /
+17.515 / 17.252 µs per 64-sample block, i.e. flat within noise (transposition is one float add inside
+a `pow` that already runs per grain spawn, ~0.037 spawns/block). Tape as a recipe (Cloud at −1200 c):
+centroid 1794.2 → 1204.4 Hz, sub-500 Hz band 0.607 → 0.913, CPU 10.182 → 10.435 µs/block. Shipped
+patches on the same bench: Glass 1414.5 Hz / 17.504 µs, Cloud 1794.2 / 10.182, Chop 1308.7 / 10.499,
+Shatter 1385.4 / 12.836 — the eight Tape candidates (1440.2–1561.9 Hz) sit inside that span, which is
+why no row can be justified. (The earlier session's runs on the same harness gave Glass 1247.6 Hz and
+17.153 µs/block against ADR-027's recorded 17.56 µs/block, Cloud 1868.8 → 1335.0 at −1200 c with band
+0.540 → 0.906 and specCorr 0.9787; the two runs agree in direction, magnitude and cost.) Resonode guard, since the edit lands next to it: `tools/resonode-lab`
+rebuilt (`gen.sh` 9.77 s, no codegen cliff) and all four shipped patches re-rendered at notes
+36/48/60 with `--exc=sustain --bs=128`, late window 2000–2300 ms — `nonfinite=0` and `clip_frac=0.0000`
+on all twelve, Dance Bass note 36 `late_band_lt120 = 0.8973` and `late_centroid_hz = 1953.6`
+(ADR-026's figures exactly, no regression), plus two extreme corners (note 127, 4 voices, all shape
+weights and collision at 1.0; note 21, vel 0.05, all weights at 0.0) both `nonfinite=0`.
+
+Latency: none. Transposition is a scalar on the grain read rate — no buffering, no new stage, no new
+filter.
+
+Alternatives rejected: a fifth `kGranPatchCount` row (measured indistinguishable, above); a second
+LofiFx patch page via a within-`kBankFlashMs` double-tap (buys only transposition, costs a hidden
+mode that fights ADR-023's press-edge latch); widening `kFxKnobCount` (the APC Key25 bank has exactly
+8 CCs and all eight are bound).
+
+Revisit if: a filter ever enters the granulator, at which point a genuinely dark row becomes
+expressible and this ADR's rejection no longer holds.
+
+## ADR-031 — Stereo output is opt-in behind `stereo_out`, refused unless the hardware grants 4 playback channels; `audio_peak.master` witnesses the gated bus
+
+Decision: two independent landings.
+
+1. `AudioConfig::stereoOut` (default `false`), parsed from `[audio] stereo_out =` in `aloop.conf`
+   (shipped commented out, the in-repo convention). `worker()` computes
+   `bool stereoOut = g_cfg.stereoOut && wireCh >= 4` — without a third and fourth wire channel cue
+   has nowhere to go, so the flag refuses rather than stealing ch1. After `snd_pcm_hw_params()`
+   succeeds, `configurePcm` reads back the **granted** channel count with
+   `snd_pcm_hw_params_get_channels(hw, &grantedCh)` and, if it is below 4, prints
+   `[audio] stereo_out=1 needs 4 playback channels, device granted N -- falling back to master/cue`
+   and clears the flag. Only then does the wire fill write `stereoOut ? ms32 : cs32` into ch1. At
+   `stereoOut == false` the emitted buffer is byte-for-byte what it was before. `otgBuf` keeps
+   duplicating master, and `g_telem.outPeak` (the cue bus) is untouched, so every existing
+   `audio_peak.out` witness stays comparable.
+2. `AudioThread::Telemetry::masterPeak` is accumulated in the same per-sample loop that already
+   computes `masterSample` and `cueSample` (two float ops per sample) and published as
+   `audio_peak.master` alongside `in` and `out`. `out` is deliberately NOT renamed.
+
+Why: ADR-028 closed Resonode stereo as architecturally blocked and said "decide the destination
+before the DSP"; the addendum above showed any channel past the second is a cue duplicate. The
+destination question is now measured **negative** for the shipped interface, which is exactly why the
+change must be an inert opt-in rather than a new default: `/proc/asound/A4/stream0` Playback has one
+altset only, `Channels: 2`, `Channel map: FL FR`, and `/proc/asound/A4/` contains only `pcm0c`,
+`pcm0p` — `channels = 4` is impossible on the M-Audio AIR 192|4. The OTG gadget, the only second PCM
+in the box, is a `S16_LE`, `period_size: 256 / buffer_size: 1024` = 21.33 ms best-effort mirror
+against the instrument path's 5.33 ms, opened `SND_PCM_NONBLOCK` with `-EAGAIN` swallowed; and when
+no host is attached `otgBuf` is never filled and never written, so cue moved there would be lost with
+no fallback and the performer would go deaf. Widening `cfg.channels` instead is not an option either:
+`audio_thread.cpp:483-505` passes `ch` to `Lv2Host::connect(N, ch)` and `process()` memcpys exactly
+`nframes` floats, so a wider `channels` would let ADR-028's own guard admit a 2-in/2-out plugin and
+corrupt it. Hence a dedicated key.
+
+Evidence: measured on the live device (Pi `192.168.137.132`, ssh2) — the AIR 192 altset/channel
+readings above; gadget `pcm0p/sub0/hw_params` and `p_chmask=3`/`c_chmask=3`; `dmesg` shows
+`dwc2 … bound driver configfs-gadget.aloop` with no `[audio] OTG gadget mirror … unavailable` line,
+i.e. `otgReady == true` right now. Signature risk on the new ALSA call was resolved against
+alsa-lib v1.2.11's own `include/pcm.h`: `int snd_pcm_hw_params_get_channels(const snd_pcm_hw_params_t *params, unsigned int *val)`.
+Compilation was verified locally with both `#ifdef` regions live: `g++ -fsyntax-only` over
+`src/dsp/audio_thread.cpp` with generated `loop_pre.cpp`/`loop_post.cpp` in place, `-Ieffects/home/faust`
+for `pitch_ffi.h`, and alsa-lib v1.2.11 headers — clean. Parity is unaffected: `tools/chain-render/parity.sh`
+builds every row from the `record`/`cue`/`inputfx` Faust taps produced by `chain_render`, and the ALSA
+wire buffer is never compared, so Stage 1 cannot move the `le -120` rows.
+
+Latency: none in either mode. The master peak reads a sample already computed in the same loop.
+
+Alternatives rejected: moving cue to the OTG gadget (21.33 ms, 16-bit, droppy, and lost entirely when
+nothing is attached); repurposing ch1 as "right" by default (destroys the performer's cue monitor —
+the standing rule is that stereo must never take cue away); keying the fallback on the requested count
+rather than the granted one (a device that silently narrows the request would drop cue with no
+message); making Resonode stereo now (ADR-028: a 2-output bundle is disabled by its own guard, and
+per-channel buffers are a precondition).
+
+Revisit if: a 4-channel instrument interface is actually attached to the Pi. Two measurements are
+required before `stereo_out = 1` is trusted there, and neither has been run: (a) `audio_peak.in` must
+be re-baselined, because `fin[i] = (recAcc / wireCh) / 2147483648.0f` divides by 4 instead of 2 on a
+4-out/2-in interface, dropping the record path 6.02 dB, and `mixOnlyBuf[i] = fullNorm - fin[i]` shifts
+with it; (b) cue physically relocates from output 2 to outputs 3/4, a re-patch that must be witnessed.
+Until both are done the key stays commented out.

@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5787b857aeb2702cad6736c241a4142dbb82390e">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0d0c3f098abc6bdd20866e4bd2e0fb51a588d2cc">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -368,6 +368,122 @@ not just wider buffers. Repurposing ch1 as “right” would destroy the perform
 </ol>
 
 <p>AGENTS.md line 107 cites <code class="language-plaintext highlighter-rouge">masterSample</code>/<code class="language-plaintext highlighter-rouge">cueSample</code> at <code class="language-plaintext highlighter-rouge">:1353</code>/<code class="language-plaintext highlighter-rouge">:1354</code>; they are at <code class="language-plaintext highlighter-rouge">:1343</code>/<code class="language-plaintext highlighter-rouge">:1344</code>.</p>
+
+<h2 id="adr-030--grain-transposition-takes-the-spray-dials-middle-band-no-fifth-patch-row-no-second-patch-page">ADR-030 — Grain transposition takes the spray dial’s middle band; no fifth patch row, no second patch page</h2>
+
+<p>Decision: <code class="language-plaintext highlighter-rouge">Sampler</code> gains <code class="language-plaintext highlighter-rouge">setGrainTransposeCents(float)</code> / <code class="language-plaintext highlighter-rouge">grainTransposeCents()</code> and a
+<code class="language-plaintext highlighter-rouge">m_grainTransposeCents</code> member defaulting to <code class="language-plaintext highlighter-rouge">0.0f</code>, applied inside <code class="language-plaintext highlighter-rouge">_grainPitchRatio()</code> as an addend
+to the exponent in both the quantised-degree branch and the continuous-spray branch, plus a new
+branch so transposition alone (spray 0) still shifts. The spray dial (LofiFx knob slot 7) becomes
+three bands: <code class="language-plaintext highlighter-rouge">v01 &lt;= 0.5</code> is the unchanged continuous spray, <code class="language-plaintext highlighter-rouge">0.5 &lt; v01 &lt;= 0.875</code> is integer-semitone
+transposition −12..+12 (<code class="language-plaintext highlighter-rouge">kGranTransposeSemitones</code>, unison at <code class="language-plaintext highlighter-rouge">v01 = 0.6875</code>), and <code class="language-plaintext highlighter-rouge">v01 &gt; 0.875</code> is the
+four interval sets, now compressed from 64 MIDI steps to 16. <code class="language-plaintext highlighter-rouge">kGranPatchCount</code>, <code class="language-plaintext highlighter-rouge">kGranPatches</code>,
+<code class="language-plaintext highlighter-rouge">kGranDirectKnobCount</code> and every other knob binding are untouched, and <code class="language-plaintext highlighter-rouge">m_granTransposeCents</code>
+defaults to 0 and is written only from spray-knob <code class="language-plaintext highlighter-rouge">case 2</code>, so every shipped patch is bit-identical
+until the dial enters the new band. Nothing was added to any <code class="language-plaintext highlighter-rouge">.dsp</code>.</p>
+
+<p>Why: ADR-027 deferred grain transposition for want of a knob slot and named a second LofiFx page as
+the unblocker. Measurement removed both premises. The spray dial’s upper half was a 4-position
+selector occupying 64 MIDI steps — 4 per set is enough, so 48 steps were free with no new gesture and
+no lost capability. And the thing a second page would have bought (a “Tape” row) does not exist:
+eight swept Tape candidates land at centroid 1440.2–1561.9 Hz / flux 0.0874–0.0967, entirely inside
+the shipped four’s 1079.5–1868.8 Hz / 0.0930–0.3348 (1308.7–1794.2 Hz on this run — see Evidence),
+because the granulator has no filter and grain size/rate only move the centroid about ±20%. A row
+that measures as indistinguishable from what is
+already there cannot be justified, and a hidden second page also collides with ADR-023’s press-edge
+latch toggle.</p>
+
+<p>Evidence: the prior session’s scratch bench (<code class="language-plaintext highlighter-rouge">/tmp/granbench/bench.cpp</code>) drives <code class="language-plaintext highlighter-rouge">sampler.h</code> directly
+with <code class="language-plaintext highlighter-rouge">test-audio-corpus/instruments/piano_mid_C4.wav</code> as the chrom buffer fed to the live ring, 48 kHz,
+N=64, 5 s, deterministic RNG seed. It was <strong>rebuilt and re-run against this commit’s edited header</strong>,
+and every run below reports <code class="language-plaintext highlighter-rouge">nf=0</code> (nonfinite 0). Glass at ±2400/±1200/0 cents, 4 voices: centroid
+450.5 / 753.7 / 1414.5 / 2742.7 / 5185.0 Hz — monotone, 11.5x span — at 17.652 / 17.786 / 17.504 /
+17.515 / 17.252 µs per 64-sample block, i.e. flat within noise (transposition is one float add inside
+a <code class="language-plaintext highlighter-rouge">pow</code> that already runs per grain spawn, ~0.037 spawns/block). Tape as a recipe (Cloud at −1200 c):
+centroid 1794.2 → 1204.4 Hz, sub-500 Hz band 0.607 → 0.913, CPU 10.182 → 10.435 µs/block. Shipped
+patches on the same bench: Glass 1414.5 Hz / 17.504 µs, Cloud 1794.2 / 10.182, Chop 1308.7 / 10.499,
+Shatter 1385.4 / 12.836 — the eight Tape candidates (1440.2–1561.9 Hz) sit inside that span, which is
+why no row can be justified. (The earlier session’s runs on the same harness gave Glass 1247.6 Hz and
+17.153 µs/block against ADR-027’s recorded 17.56 µs/block, Cloud 1868.8 → 1335.0 at −1200 c with band
+0.540 → 0.906 and specCorr 0.9787; the two runs agree in direction, magnitude and cost.) Resonode guard, since the edit lands next to it: <code class="language-plaintext highlighter-rouge">tools/resonode-lab</code>
+rebuilt (<code class="language-plaintext highlighter-rouge">gen.sh</code> 9.77 s, no codegen cliff) and all four shipped patches re-rendered at notes
+36/48/60 with <code class="language-plaintext highlighter-rouge">--exc=sustain --bs=128</code>, late window 2000–2300 ms — <code class="language-plaintext highlighter-rouge">nonfinite=0</code> and <code class="language-plaintext highlighter-rouge">clip_frac=0.0000</code>
+on all twelve, Dance Bass note 36 <code class="language-plaintext highlighter-rouge">late_band_lt120 = 0.8973</code> and <code class="language-plaintext highlighter-rouge">late_centroid_hz = 1953.6</code>
+(ADR-026’s figures exactly, no regression), plus two extreme corners (note 127, 4 voices, all shape
+weights and collision at 1.0; note 21, vel 0.05, all weights at 0.0) both <code class="language-plaintext highlighter-rouge">nonfinite=0</code>.</p>
+
+<p>Latency: none. Transposition is a scalar on the grain read rate — no buffering, no new stage, no new
+filter.</p>
+
+<p>Alternatives rejected: a fifth <code class="language-plaintext highlighter-rouge">kGranPatchCount</code> row (measured indistinguishable, above); a second
+LofiFx patch page via a within-<code class="language-plaintext highlighter-rouge">kBankFlashMs</code> double-tap (buys only transposition, costs a hidden
+mode that fights ADR-023’s press-edge latch); widening <code class="language-plaintext highlighter-rouge">kFxKnobCount</code> (the APC Key25 bank has exactly
+8 CCs and all eight are bound).</p>
+
+<p>Revisit if: a filter ever enters the granulator, at which point a genuinely dark row becomes
+expressible and this ADR’s rejection no longer holds.</p>
+
+<h2 id="adr-031--stereo-output-is-opt-in-behind-stereo_out-refused-unless-the-hardware-grants-4-playback-channels-audio_peakmaster-witnesses-the-gated-bus">ADR-031 — Stereo output is opt-in behind <code class="language-plaintext highlighter-rouge">stereo_out</code>, refused unless the hardware grants 4 playback channels; <code class="language-plaintext highlighter-rouge">audio_peak.master</code> witnesses the gated bus</h2>
+
+<p>Decision: two independent landings.</p>
+
+<ol>
+  <li><code class="language-plaintext highlighter-rouge">AudioConfig::stereoOut</code> (default <code class="language-plaintext highlighter-rouge">false</code>), parsed from <code class="language-plaintext highlighter-rouge">[audio] stereo_out =</code> in <code class="language-plaintext highlighter-rouge">aloop.conf</code>
+(shipped commented out, the in-repo convention). <code class="language-plaintext highlighter-rouge">worker()</code> computes
+<code class="language-plaintext highlighter-rouge">bool stereoOut = g_cfg.stereoOut &amp;&amp; wireCh &gt;= 4</code> — without a third and fourth wire channel cue
+has nowhere to go, so the flag refuses rather than stealing ch1. After <code class="language-plaintext highlighter-rouge">snd_pcm_hw_params()</code>
+succeeds, <code class="language-plaintext highlighter-rouge">configurePcm</code> reads back the <strong>granted</strong> channel count with
+<code class="language-plaintext highlighter-rouge">snd_pcm_hw_params_get_channels(hw, &amp;grantedCh)</code> and, if it is below 4, prints
+<code class="language-plaintext highlighter-rouge">[audio] stereo_out=1 needs 4 playback channels, device granted N -- falling back to master/cue</code>
+and clears the flag. Only then does the wire fill write <code class="language-plaintext highlighter-rouge">stereoOut ? ms32 : cs32</code> into ch1. At
+<code class="language-plaintext highlighter-rouge">stereoOut == false</code> the emitted buffer is byte-for-byte what it was before. <code class="language-plaintext highlighter-rouge">otgBuf</code> keeps
+duplicating master, and <code class="language-plaintext highlighter-rouge">g_telem.outPeak</code> (the cue bus) is untouched, so every existing
+<code class="language-plaintext highlighter-rouge">audio_peak.out</code> witness stays comparable.</li>
+  <li><code class="language-plaintext highlighter-rouge">AudioThread::Telemetry::masterPeak</code> is accumulated in the same per-sample loop that already
+computes <code class="language-plaintext highlighter-rouge">masterSample</code> and <code class="language-plaintext highlighter-rouge">cueSample</code> (two float ops per sample) and published as
+<code class="language-plaintext highlighter-rouge">audio_peak.master</code> alongside <code class="language-plaintext highlighter-rouge">in</code> and <code class="language-plaintext highlighter-rouge">out</code>. <code class="language-plaintext highlighter-rouge">out</code> is deliberately NOT renamed.</li>
+</ol>
+
+<p>Why: ADR-028 closed Resonode stereo as architecturally blocked and said “decide the destination
+before the DSP”; the addendum above showed any channel past the second is a cue duplicate. The
+destination question is now measured <strong>negative</strong> for the shipped interface, which is exactly why the
+change must be an inert opt-in rather than a new default: <code class="language-plaintext highlighter-rouge">/proc/asound/A4/stream0</code> Playback has one
+altset only, <code class="language-plaintext highlighter-rouge">Channels: 2</code>, <code class="language-plaintext highlighter-rouge">Channel map: FL FR</code>, and <code class="language-plaintext highlighter-rouge">/proc/asound/A4/</code> contains only <code class="language-plaintext highlighter-rouge">pcm0c</code>,
+<code class="language-plaintext highlighter-rouge">pcm0p</code> — <code class="language-plaintext highlighter-rouge">channels = 4</code> is impossible on the M-Audio AIR 192|4. The OTG gadget, the only second PCM
+in the box, is a <code class="language-plaintext highlighter-rouge">S16_LE</code>, <code class="language-plaintext highlighter-rouge">period_size: 256 / buffer_size: 1024</code> = 21.33 ms best-effort mirror
+against the instrument path’s 5.33 ms, opened <code class="language-plaintext highlighter-rouge">SND_PCM_NONBLOCK</code> with <code class="language-plaintext highlighter-rouge">-EAGAIN</code> swallowed; and when
+no host is attached <code class="language-plaintext highlighter-rouge">otgBuf</code> is never filled and never written, so cue moved there would be lost with
+no fallback and the performer would go deaf. Widening <code class="language-plaintext highlighter-rouge">cfg.channels</code> instead is not an option either:
+<code class="language-plaintext highlighter-rouge">audio_thread.cpp:483-505</code> passes <code class="language-plaintext highlighter-rouge">ch</code> to <code class="language-plaintext highlighter-rouge">Lv2Host::connect(N, ch)</code> and <code class="language-plaintext highlighter-rouge">process()</code> memcpys exactly
+<code class="language-plaintext highlighter-rouge">nframes</code> floats, so a wider <code class="language-plaintext highlighter-rouge">channels</code> would let ADR-028’s own guard admit a 2-in/2-out plugin and
+corrupt it. Hence a dedicated key.</p>
+
+<p>Evidence: measured on the live device (Pi <code class="language-plaintext highlighter-rouge">192.168.137.132</code>, ssh2) — the AIR 192 altset/channel
+readings above; gadget <code class="language-plaintext highlighter-rouge">pcm0p/sub0/hw_params</code> and <code class="language-plaintext highlighter-rouge">p_chmask=3</code>/<code class="language-plaintext highlighter-rouge">c_chmask=3</code>; <code class="language-plaintext highlighter-rouge">dmesg</code> shows
+<code class="language-plaintext highlighter-rouge">dwc2 … bound driver configfs-gadget.aloop</code> with no <code class="language-plaintext highlighter-rouge">[audio] OTG gadget mirror … unavailable</code> line,
+i.e. <code class="language-plaintext highlighter-rouge">otgReady == true</code> right now. Signature risk on the new ALSA call was resolved against
+alsa-lib v1.2.11’s own <code class="language-plaintext highlighter-rouge">include/pcm.h</code>: <code class="language-plaintext highlighter-rouge">int snd_pcm_hw_params_get_channels(const snd_pcm_hw_params_t *params, unsigned int *val)</code>.
+Compilation was verified locally with both <code class="language-plaintext highlighter-rouge">#ifdef</code> regions live: <code class="language-plaintext highlighter-rouge">g++ -fsyntax-only</code> over
+<code class="language-plaintext highlighter-rouge">src/dsp/audio_thread.cpp</code> with generated <code class="language-plaintext highlighter-rouge">loop_pre.cpp</code>/<code class="language-plaintext highlighter-rouge">loop_post.cpp</code> in place, <code class="language-plaintext highlighter-rouge">-Ieffects/home/faust</code>
+for <code class="language-plaintext highlighter-rouge">pitch_ffi.h</code>, and alsa-lib v1.2.11 headers — clean. Parity is unaffected: <code class="language-plaintext highlighter-rouge">tools/chain-render/parity.sh</code>
+builds every row from the <code class="language-plaintext highlighter-rouge">record</code>/<code class="language-plaintext highlighter-rouge">cue</code>/<code class="language-plaintext highlighter-rouge">inputfx</code> Faust taps produced by <code class="language-plaintext highlighter-rouge">chain_render</code>, and the ALSA
+wire buffer is never compared, so Stage 1 cannot move the <code class="language-plaintext highlighter-rouge">le -120</code> rows.</p>
+
+<p>Latency: none in either mode. The master peak reads a sample already computed in the same loop.</p>
+
+<p>Alternatives rejected: moving cue to the OTG gadget (21.33 ms, 16-bit, droppy, and lost entirely when
+nothing is attached); repurposing ch1 as “right” by default (destroys the performer’s cue monitor —
+the standing rule is that stereo must never take cue away); keying the fallback on the requested count
+rather than the granted one (a device that silently narrows the request would drop cue with no
+message); making Resonode stereo now (ADR-028: a 2-output bundle is disabled by its own guard, and
+per-channel buffers are a precondition).</p>
+
+<p>Revisit if: a 4-channel instrument interface is actually attached to the Pi. Two measurements are
+required before <code class="language-plaintext highlighter-rouge">stereo_out = 1</code> is trusted there, and neither has been run: (a) <code class="language-plaintext highlighter-rouge">audio_peak.in</code> must
+be re-baselined, because <code class="language-plaintext highlighter-rouge">fin[i] = (recAcc / wireCh) / 2147483648.0f</code> divides by 4 instead of 2 on a
+4-out/2-in interface, dropping the record path 6.02 dB, and <code class="language-plaintext highlighter-rouge">mixOnlyBuf[i] = fullNorm - fin[i]</code> shifts
+with it; (b) cue physically relocates from output 2 to outputs 3/4, a re-patch that must be witnessed.
+Until both are done the key stays commented out.</p>
 
 
       </section>
