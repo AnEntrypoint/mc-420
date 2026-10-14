@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c738d0138bd021de0caa368fb10d1ecba41411e6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=ad283604500837b39cb01cf368a4676cc9b83712">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -279,6 +279,55 @@ Why: aloop has no L/R bus anywhere. The 2-channel wire is master (ch0) / cue (ch
 Evidence: <code class="language-plaintext highlighter-rouge">lv2_host.cpp:229-231</code> connected <code class="language-plaintext highlighter-rouge">ioBuffer_.data()</code> for every audio port; <code class="language-plaintext highlighter-rouge">lv2_host.cpp:279-282</code> memcpys only <code class="language-plaintext highlighter-rouge">n</code> floats each way; port discovery (<code class="language-plaintext highlighter-rouge">:147</code>) records only <code class="language-plaintext highlighter-rouge">isAudio</code>/<code class="language-plaintext highlighter-rouge">isInput</code> and reads no channel or group index; <code class="language-plaintext highlighter-rouge">audio_thread.cpp:1097-1106</code> averages input channels to mono; all of <code class="language-plaintext highlighter-rouge">effects/home/faust/*.dsp</code>, <code class="language-plaintext highlighter-rouge">delayverb.dsp</code>, <code class="language-plaintext highlighter-rouge">pitchtracker_ac.dsp</code> and <code class="language-plaintext highlighter-rouge">resonode_synth.dsp</code> are single-input/single-output.
 Alternatives rejected: per-voice pan in Resonode (compiles, 7.196 s vs 7.145 s baseline, +0.7%, zero runtime cost — but <code class="language-plaintext highlighter-rouge">apc_grid.cpp:730-745</code> allocates lowest-free-index-first, so the 1- and 2-note playing that is the entire APC Key25 use case lands on voices 0 and 1, both L, width 0); alternating mode groups across L/R (27.4 s elaboration, 3.8x baseline, then failed with <code class="language-plaintext highlighter-rouge">sequential composition A:B — outputs [4] of A must equal inputs [2] of B</code>); either option summed back to mono (the standard <code class="language-plaintext highlighter-rouge">(L+R)/2</code> downmix is -6.02 dB, and our path has no summing stage to compensate, so <code class="language-plaintext highlighter-rouge">fx/resonode/level</code> would need re-tuning and every sweet-spot gate would re-open). Parity decides it outright: <code class="language-plaintext highlighter-rouge">tools/chain-render/parity.sh</code> gates <code class="language-plaintext highlighter-rouge">record_vs_inputfx</code>, <code class="language-plaintext highlighter-rouge">record_vs_cue</code> and <code class="language-plaintext highlighter-rouge">inputfx_vs_cue</code> at <code class="language-plaintext highlighter-rouge">le -120</code> dB, and if L/R were mapped onto the only available pair (master/cue) the residual becomes the whole L-R spread and all three rows fail — a stereo Resonode cannot both widen and keep those rows green in a mono path.
 Revisit if: a real second MASTER channel exists (the Focusrite can present 4 outputs — confirm out3/out4 can be a second master pair and measure <code class="language-plaintext highlighter-rouge">snd_pcm_hw_params_set_channels</code> at 4 with <code class="language-plaintext highlighter-rouge">period_size=64</code> on the device). The DSP is not the blocker; the destination is. Until then, decide the destination before the DSP.</p>
+
+<h2 id="adr-029--the-focusrite-loopback-and-the-granulator-live-ring-witnessed-on-hardware">ADR-029 — the Focusrite loopback, and the granulator live ring witnessed on hardware</h2>
+
+<p>Decision: the Focusrite Scarlett 18i8 3rd Gen is the host-side signal source for loopback
+testing. It is attached to the HOST (webtop), not the Pi; the Pi’s only instrument interface is
+still the M-Audio AIR 192|4, so the loop is host USB -&gt; Scarlett analogue out -&gt; AIR 192 analogue
+in -&gt; aloop capture, with the AIR 192’s own output fed back into a Scarlett analogue input as a
+tap. <code class="language-plaintext highlighter-rouge">instrument_device_match</code> stays <code class="language-plaintext highlighter-rouge">AIR 192</code>.</p>
+
+<p>Why: AGENTS.md had carried “No CLEAN ingress reaches <code class="language-plaintext highlighter-rouge">dry</code> (#4 UNWITNESSED; unblocker Focusrite
+passthrough)” for a long time, and the granulator’s live-source ring could not be witnessed
+because the AIR 192 read silent. The Scarlett closes both.</p>
+
+<p>Three separate things muted the Scarlett output, and none of them is visible from Pulse, which
+reported the sink RUNNING with a live sink-input while the device emitted nothing:</p>
+
+<ol>
+  <li><code class="language-plaintext highlighter-rouge">Line 05 Mute</code> and <code class="language-plaintext highlighter-rouge">Line 06 Mute</code> were <code class="language-plaintext highlighter-rouge">[on]</code>. Headphones 1 is Line Out 05/06.</li>
+  <li><code class="language-plaintext highlighter-rouge">Analogue Output 05</code> (the output source selector) was <code class="language-plaintext highlighter-rouge">'Off'</code>. This was the binding one.</li>
+  <li><code class="language-plaintext highlighter-rouge">Speaker Switching</code> was <code class="language-plaintext highlighter-rouge">'Off'</code>; it is now <code class="language-plaintext highlighter-rouge">'Main'</code>.</li>
+</ol>
+
+<p>Fixed by <code class="language-plaintext highlighter-rouge">amixer -c 2 sset "Analogue Output NN" "PCM N"</code> for N in 1..8 (so every analogue output
+carries its matching channel, and whichever jack is cabled gets signal) plus unmuting all eight.
+Playback then goes through Pulse, because PulseAudio holds the device and <code class="language-plaintext highlighter-rouge">aplay -D plughw:2,0</code>
+returns “Device or resource busy”:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>paplay -d alsa_output.usb-Focusrite_Scarlett_18i8_USB_....analog-surround-71 \
+  --channel-map=front-left,front-right,rear-left,rear-right,front-center,lfe,side-left,side-right \
+  &lt;8ch wav&gt;
+</code></pre></div></div>
+
+<p>The channel map matters: without it paplay warns “Failed to determine channel map from file”.</p>
+
+<p>Evidence the loop closed: before the fix, a <code class="language-plaintext highlighter-rouge">parec</code> of the Scarlett’s own multichannel input read
+~0.00003 on every channel; after, ch04 = 0.8883 and ch05 = 0.2961. On the Pi, <code class="language-plaintext highlighter-rouge">audio_peak.in</code>
+went from a pinned 0.0001 to 0.2542 with <code class="language-plaintext highlighter-rouge">peakOut</code> 0.2643.</p>
+
+<p>Evidence the granulator’s live ring works: <code class="language-plaintext highlighter-rouge">rc-service aloop restart</code> clears every captured
+sampler buffer, so the first note after a restart has nothing to granulate from the captured
+path. With the granulator latched and note 48 held as that first note, <code class="language-plaintext highlighter-rouge">audio_peak.out</code> read
+0.2253 against an input of 0.2627. Before the live ring this was exactly zero, because
+<code class="language-plaintext highlighter-rouge">captureBlock</code> returns immediately unless <code class="language-plaintext highlighter-rouge">m_recActive</code>. This closes the witness that was
+blocked; <code class="language-plaintext highlighter-rouge">m_grainLiveMix</code> defaulting to 0.5 (shipped earlier) is what makes it audible without
+touching a knob.</p>
+
+<p>Alternatives rejected: moving the Scarlett to the Pi and pointing <code class="language-plaintext highlighter-rouge">instrument_device_match</code> at
+it (rejected - it is a host-side source, and the Pi would then have no monitoring path back);
+<code class="language-plaintext highlighter-rouge">aplay</code> direct to <code class="language-plaintext highlighter-rouge">plughw:2,0</code> (rejected - PulseAudio holds the device).</p>
 
 
       </section>
