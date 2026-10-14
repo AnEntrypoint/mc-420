@@ -172,7 +172,7 @@ import { AloopFaustEngine } from './faust-engine.js';
 
 const N_LOOPERS = 20, N_PRESETS = 10;
 const DIVS = [1,2,4,8,16];
-const KNOB_CC = [48,49,50,51,54,55,57];
+const KNOB_CC = [48,49,50,51,54,55,57,53];
 const VU_MID = 0.32, VU_HIGH = 0.62;
 const GRAN_PATCHES = ['Glass','Cloud','Chop','Shatter'];
 const GRAN_DIALS = ['Scan','Density','Spray'];
@@ -200,7 +200,7 @@ const state = {
   granLatched: false,
   resonodeEngaged: false,
   bankBeforeHold: 'dub',
-  knobs: { dub: [0,0,0.5,0,0,1,0], guitar: [0,0,0.5,0,0,0,0], lofi: [0,0,0,0,0,0,0] },
+  knobs: { dub: [0,0,0.5,0,0,1,0,0], guitar: [0,0,0.5,0,0,0,0,0], lofi: [0,0,0,0,0,0,0,0] },
   transposeVoices: Array(6).fill(null),
   resonodeVoices: Array(4).fill(null),
   modWheel: 0.5,
@@ -468,7 +468,7 @@ function padGrid() {
 
 function knobRow() {
   const knobs = [];
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 8; i++) {
     const v = state.knobs[state.bank][i];
     const angle = -135 + v * 270;
     knobs.push(h('div', {class: 'knob-cell', key: 'knob' + i},
