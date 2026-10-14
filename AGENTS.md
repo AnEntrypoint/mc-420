@@ -75,7 +75,7 @@ Real Pi 4 `192.168.137.100` root/aloop; Pi 3B+ netboots from host. BEHAVIOR clon
 
 # Finding the device
 
-- The netbooting client's FIRMWARE-stage DHCP lease drifts (seen at .132); `cmdline.txt` pins the kernel-stage address to `192.168.137.100`. When .100 does not answer, read `/var/lib/misc/dnsmasq.leases`. `armstub8-gic.bin` being absent is harmless: `config.txt` has no `armstub=` line. Restart with `sudo systemctl restart dnsmasq`, never mid-TFTP: killing it during the 23 MB `boot/vmlinuz-rpi` transfer strands the bootloader for tens of minutes.
+- The netbooting client's FIRMWARE-stage DHCP lease drifts (seen at .132); `cmdline.txt` pins the kernel-stage address to `192.168.137.100`. When .100 does not answer, read `/var/lib/misc/dnsmasq.leases`. `armstub8-gic.bin` being absent is harmless: `config.txt` has no `armstub=` line. Restart with `sudo systemctl restart dnsmasq`, never mid-TFTP: killing it during the 23 MB `boot/vmlinuz-rpi` transfer strands the bootloader.
 
 # Faust DSP
 

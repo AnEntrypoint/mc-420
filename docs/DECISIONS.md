@@ -416,3 +416,16 @@ be re-baselined, because `fin[i] = (recAcc / wireCh) / 2147483648.0f` divides by
 4-out/2-in interface, dropping the record path 6.02 dB, and `mixOnlyBuf[i] = fullNorm - fin[i]` shifts
 with it; (b) cue physically relocates from output 2 to outputs 3/4, a re-patch that must be witnessed.
 Until both are done the key stays commented out.
+
+## Addendum — a netbooted client loses hot-deploys on every reboot
+
+Observed while closing the master-bus witness: a device that had been verified running
+`0cd0cc0416345d49d36aa0710185cef9` (the 0d0c3f0 build) later reported `2af0406bf6acd3a0f93edc94df7c3e40`
+— the pre-session binary baked into the image. The cause is that a netbooted client runs from tmpfs, so
+anything sftp'd to /opt/aloop/aloop is gone the moment it boots again. This is distinct from the
+SD-booted Pi 4 that AGENTS.md already describes, where hot-deploy does persist.
+
+Consequence for anyone measuring: check `md5sum /opt/aloop/aloop` before trusting any hot-deploy, and
+expect to re-deploy after a power cycle. It also means a witness taken against a hot-deployed binary is
+only valid until the next reboot; to make a change survive, it has to go into the served netboot payload,
+not onto the running filesystem.
