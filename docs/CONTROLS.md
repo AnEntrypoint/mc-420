@@ -136,7 +136,38 @@ ring stops being written and every grain is drawn from the held 2.7-second
 snapshot, so the cloud holds a static spectrum (measured spectral correlation
 first-half vs second-half 0.986 vs 0.784 unfrozen, centroid shift 6 Hz vs
 291 Hz). Freeze is a gesture, not one of the four named patches, and it works
-on every patch; turning the dial back up releases it. Real key velocity
+on every patch; turning the dial back up releases it.
+
+The spray dial (slot 7) carries three bands, bottom to top:
+
+- **bottom half** — continuous random pitch spray, 0 to 1200 cents. This is
+  what shipped before; the lower half is unchanged.
+- **middle three eighths** — deterministic **grain transposition** in integer
+  semitones, −12 to +12, unison at the band centre (~1.9 MIDI steps per
+  semitone). Measured on Glass at 4 voices, N=64, 5 s, piano C4 through the
+  live ring: spectral centroid 450.5 Hz at −2400 cents rising monotonically
+  through 753.7 / 1414.5 (unison) / 2742.7 to 5185.0 Hz at +2400 — an 11.5x
+  span — at 17.652 / 17.786 / 17.504 / 17.515 / 17.252 µs per block, i.e. flat
+  within noise, because transposition is one float add inside a `pow` that
+  already runs per grain spawn (~0.037 spawns/block).
+- **top eighth** — the four interval sets (Octaves / Fifths / Minor Triad /
+  Minor Pentatonic), all still reachable, now at 4 MIDI steps each instead of
+  16.
+
+**Tape is a dial position, not a patch row:** patch Cloud with the spray dial
+at −12 semitones. Measured: centroid 1794.2 → 1204.4 Hz, sub-500 Hz band
+energy 0.607 → 0.913, 10.182 → 10.435 µs/block. A fifth named "Tape" row was
+measured and rejected — eight swept candidate points (grain 180–400 ms, rate
+4–10 Hz, spray 0–14 c, jitter 0–25 ms, scan 0.25–0.50, env 0–0.20, live mix
+0.35–0.55) all land at centroid 1440.2–1561.9 Hz and flux 0.0874–0.0967,
+inside the shipped four's measured 1308.7–1794.2 Hz (and inside the earlier
+session's 1079.5–1868.8 Hz / 0.0930–0.3348 on the same harness). The
+granulator has no filter, so grain size and rate move the centroid by only about ±20%; no patch row can be *warm*. A
+second LofiFx patch page was rejected for the same reason — it buys only
+transposition, and a hidden mode collides with ADR-023's press-edge latch
+toggle.
+
+Real key velocity
 scales overall voice loudness for both instruments, and (for granular voices
 only) grain spawn density, so a harder key press plays louder — and for the
 granulator, spawns a denser, brighter grain cloud.

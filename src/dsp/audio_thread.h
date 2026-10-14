@@ -26,6 +26,7 @@ struct AudioConfig {
     std::string pitchTrackerDir = "/effects/pitchtracker";
     std::string delayVerbDir = "/effects/delayverb";
     bool disableCore3Lv2 = false;
+    bool stereoOut = false;
 
     bool linkEnabled = true;
     std::string linkIface = "wlan0";
@@ -63,6 +64,7 @@ public:
         uint64_t usbRecOverruns = 0;
         float    inPeak = 0.0f;
         float    outPeak = 0.0f;
+        float    masterPeak = 0.0f;
         float    effSpeed = 1.0f;
         float    sustainCmd = 0.0f;
         float    sustainGate = 0.0f;

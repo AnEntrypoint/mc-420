@@ -101,6 +101,7 @@ aloop::AudioConfig loadConfig(const char* path) {
         else if (sscanf(line, " block_size = %d", &v) == 1) cfg.blockSize = v;
         else if (sscanf(line, " sample_rate = %d", &v) == 1) cfg.sampleRate = v;
         else if (sscanf(line, " channels = %d", &v) == 1) cfg.channels = v;
+        else if (sscanf(line, " stereo_out = %d", &v) == 1) cfg.stereoOut = (v != 0);
         else if (sscanf(line, " home_dir = %199s", s) == 1) cfg.homeDir = s;
         else if (sscanf(line, " user_dir = %199s", s) == 1) cfg.userDir = s;
         else if (sscanf(line, " resonode_dir = %199s", s) == 1) cfg.resonodeDir = s;

@@ -287,6 +287,7 @@ static void* worker(void*) {
     const int ch = g_cfg.channels;
 
     const int wireCh = (ch < 2) ? 2 : ch;
+    bool stereoOut = g_cfg.stereoOut && wireCh >= 4;
 
     std::vector<int32_t> buf((size_t)N * wireCh, 0);
     std::vector<int16_t> otgBuf((size_t)N * wireCh, 0);
@@ -542,7 +543,12 @@ static void* worker(void*) {
             snd_pcm_uframes_t bufSize = period * 4;
             snd_pcm_hw_params_set_buffer_size_near(pcm, hw, &bufSize);
             if (snd_pcm_hw_params(pcm, hw) < 0) return false;
+            unsigned int grantedCh = 0;
             snd_pcm_format_t negotiatedFmt;
+            if (stereoOut && snd_pcm_hw_params_get_channels(hw, &grantedCh) == 0 && grantedCh < 4) {
+                fprintf(stderr, "[audio] stereo_out=1 needs 4 playback channels, device granted %u -- falling back to master/cue\n", grantedCh);
+                stereoOut = false;
+            }
             if (snd_pcm_hw_params_get_format(hw, &negotiatedFmt) == 0 && negotiatedFmt != SND_PCM_FORMAT_S32_LE)
                 fprintf(stderr, "[audio] warning: instrument device negotiated format %s, not S32_LE — audio will be corrupted (buf is int32_t)\n",
                         snd_pcm_format_name(negotiatedFmt));
@@ -1338,7 +1344,7 @@ static void* worker(void*) {
                 float& slot = g_telem.coreBusyPct[g_cfg.homeFxCore & 3];
                 slot = slot * 0.9f + (float)pct * 0.1f;
             }
-            float outPeak = 0.0f;
+            float outPeak = 0.0f, masterPeak = 0.0f;
             for (int i = 0; i < N; i++) {
                 float masterSample = rawLoopSum[i] * loopDirectGateNow + inputFxOut[i] + mixOnlyBuf[i];
                 float cueSample = fout[i] + mixOnlyBuf[i];
@@ -1349,7 +1355,7 @@ static void* worker(void*) {
                 int32_t cs32 = (int32_t)(cv32 > 2147483647.0f ? 2147483647 : (cv32 < -2147483648.0f ? -2147483648.0f : cv32));
 
                 buf[(size_t)i * wireCh + 0] = ms32;
-                buf[(size_t)i * wireCh + 1] = cs32;
+                buf[(size_t)i * wireCh + 1] = stereoOut ? ms32 : cs32;
                 for (int c = 2; c < wireCh; c++) {
                     buf[(size_t)i * wireCh + c] = cs32;
                 }
@@ -1364,9 +1370,12 @@ static void* worker(void*) {
                     }
                 }
                 float a = cueSample < 0 ? -cueSample : cueSample;
+                float b = masterSample < 0 ? -masterSample : masterSample;
                 if (a > outPeak) outPeak = a;
+                if (b > masterPeak) masterPeak = b;
             }
             g_telem.outPeak = outPeak;
+            g_telem.masterPeak = masterPeak;
 #endif
 
             snd_pcm_sframes_t playDelayFrames = 0;

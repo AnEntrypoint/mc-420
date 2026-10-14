@@ -78,8 +78,14 @@ punch-in-live performance instrument:
   round-trip.
 - **A 4-patch granulator** (Glass/Cloud/Chop/Shatter) blended as a
   continuous convex morph across 6 knob slots, with real velocity-sensitive
-  grain density, and a freeze gesture on the bottom eighth of the scan-rate
-  dial that holds the live ring and draws every grain from that snapshot.
+  grain density, a freeze gesture on the bottom eighth of the scan-rate dial
+  that holds the live ring and draws every grain from that snapshot, and
+  integer-semitone grain transposition (−12..+12) on the middle band of the
+  spray dial. A "tape"-like dark cloud is a dial position — patch Cloud
+  transposed −12 — not a fifth patch row: eight swept Tape candidate points
+  all measured inside the shipped four's centroid span (1440–1562 Hz vs
+  1309–1794 Hz measured, 1079–1869 Hz on an earlier run of the same bench),
+  because the granulator has no filter to make a row warm.
 - **A 16-beat grid visualization** on 4 dedicated pads showing the shared Link
   phrase position live.
 - **Continuous USB-drive ring recording** of the fully-effected mix, and an

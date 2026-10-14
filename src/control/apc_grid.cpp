@@ -949,10 +949,21 @@ static_assert(kGranPitchContinuousSprayMode == Sampler::kGrainPitchContinuousSpr
 
 static constexpr float kGranPitchSprayKnobSpan = 0.5f;
 static constexpr float kGranFreezeKnobSpan = 0.125f;
+static constexpr float kGranTransposeKnobLo = 0.5f;
+static constexpr float kGranTransposeKnobHi = 0.875f;
+static constexpr int   kGranTransposeSemitones = 12;
+
+static int granTransposeSemisFromKnob(float v01) {
+    float t = (v01 - kGranTransposeKnobLo) / (kGranTransposeKnobHi - kGranTransposeKnobLo);
+    int semis = (int)lroundf(t * (float)(2 * kGranTransposeSemitones)) - kGranTransposeSemitones;
+    if (semis < -kGranTransposeSemitones) semis = -kGranTransposeSemitones;
+    if (semis >  kGranTransposeSemitones) semis =  kGranTransposeSemitones;
+    return semis;
+}
 
 static int granPitchIntervalSetFromKnob(float v01) {
     const int intervalSetCount = Sampler::kGrainPitchQuantizeCount - 1;
-    float t = (v01 - kGranPitchSprayKnobSpan) / (1.0f - kGranPitchSprayKnobSpan);
+    float t = (v01 - kGranTransposeKnobHi) / (1.0f - kGranTransposeKnobHi);
     int idx = (int)(t * (float)intervalSetCount);
     if (idx < 0) idx = 0;
     if (idx >= intervalSetCount) idx = intervalSetCount - 1;
@@ -1053,6 +1064,7 @@ void ApcGrid::applyGranulatorMorph(Sampler* sampler) {
     }
     if (m_lofiFxKnobTouched[1 + kGranPatchCount])     blend.scanRate        = m_granDirectScanRate;
     sampler->setGrainFreeze(m_granFreeze);
+    sampler->setGrainTransposeCents(m_granTransposeCents);
     if (m_lofiFxKnobTouched[2 + kGranPatchCount])     blend.grainRateHz     = m_granDirectDensityHz;
     if (m_lofiFxKnobTouched[3 + kGranPatchCount])     blend.pitchSprayCents = m_granDirectSprayCents;
     sampler->setGrainPitchQuantize(m_lofiFxKnobTouched[3 + kGranPatchCount]
@@ -1077,9 +1089,15 @@ void ApcGrid::applyGranulatorDirectKnob(int knobIdx, float v01, Sampler* sampler
             if (v01 <= kGranPitchSprayKnobSpan) {
                 m_granDirectSprayCents = (v01 / kGranPitchSprayKnobSpan) * r.hi;
                 m_granPitchQuantize = kGranPitchContinuousSprayMode;
+                m_granTransposeCents = 0.0f;
+            } else if (v01 <= kGranTransposeKnobHi) {
+                m_granDirectSprayCents = 0.0f;
+                m_granPitchQuantize = kGranPitchContinuousSprayMode;
+                m_granTransposeCents = 100.0f * (float)granTransposeSemisFromKnob(v01);
             } else {
                 m_granDirectSprayCents = 0.0f;
                 m_granPitchQuantize = granPitchIntervalSetFromKnob(v01);
+                m_granTransposeCents = 0.0f;
             }
             break;
         default: break;

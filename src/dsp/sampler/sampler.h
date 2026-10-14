@@ -173,6 +173,15 @@ public:
 
     void setGrainFreeze(float f) { m_grainFreeze = f > 0.5f ? 1.0f : 0.0f; }
 
+    void setGrainTransposeCents(float c)
+    {
+        if (c < -2400.0f) c = -2400.0f;
+        if (c >  2400.0f) c =  2400.0f;
+        m_grainTransposeCents = c;
+    }
+
+    float grainTransposeCents() const { return m_grainTransposeCents; }
+
     void setGrainPitchQuantize(int mode)
     {
         if (mode < 0) mode = kGrainPitchContinuousSpray;
@@ -488,10 +497,12 @@ private:
             int pick = (int)(_randUnitInterval() * (float)degrees.count);
             if (pick < 0) pick = 0;
             if (pick >= degrees.count) pick = degrees.count - 1;
-            return pow(2.0, (double)degrees.cents[pick] / 1200.0);
+            return pow(2.0, ((double)degrees.cents[pick] + (double)m_grainTransposeCents) / 1200.0);
         }
         if (m_pitchSprayCents > 0.0f)
-            return pow(2.0, (double)(_randTriangular() * m_pitchSprayCents) / 1200.0);
+            return pow(2.0, ((double)(_randTriangular() * m_pitchSprayCents) + (double)m_grainTransposeCents) / 1200.0);
+        if (m_grainTransposeCents != 0.0f)
+            return pow(2.0, (double)m_grainTransposeCents / 1200.0);
         return 1.0;
     }
 
@@ -975,6 +986,7 @@ private:
     float    m_grainMs;
     float    m_grainRateHz;
     float    m_pitchSprayCents;
+    float    m_grainTransposeCents = 0.0f;
     float    m_posJitterMs;
     float    m_scanRate;
     float    m_reverseProb = 0.0f;

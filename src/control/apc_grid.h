@@ -206,6 +206,7 @@ private:
     bool m_granulatorLatched = false;
     float m_granDirectScanRate = 1.0f;
     float m_granFreeze = 0.0f;
+    float m_granTransposeCents = 0.0f;
     float m_granDirectDensityHz = 20.0f;
     float m_granDirectSprayCents = 0.0f;
     int   m_granPitchQuantize = kGranPitchContinuousSprayMode;

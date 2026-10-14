@@ -127,7 +127,7 @@ void Telemetry::publish() {
         "\"wifi\":\"%s\",\"monitor_mode\":%s,"
         "\"glitch_engaged\":%s,"
         "\"usb_recording\":%s,\"usb_rec_overruns\":%llu,"
-        "\"audio_peak\":{\"in\":%.4f,\"out\":%.4f},\"eff_speed\":%.4f,"
+        "\"audio_peak\":{\"in\":%.4f,\"out\":%.4f,\"master\":%.4f},\"eff_speed\":%.4f,"
         "\"alsa_roundtrip_samples\":%.1f,\"latency_bias_samples\":%.1f,\"latency_trim_samples\":%.1f,"
         "\"resample_fold\":{\"sum\":%.1f,\"samples\":%llu},"
         "\"resample_chain\":{\"sum\":%.1f,\"samples\":%llu},"
@@ -146,7 +146,7 @@ void Telemetry::publish() {
         t.monitorMode ? "true" : "false",
         t.glitchEngaged ? "true" : "false",
         t.usbRecording ? "true" : "false", (unsigned long long)t.usbRecOverruns,
-        t.inPeak, t.outPeak, t.effSpeed,
+        t.inPeak, t.outPeak, t.masterPeak, t.effSpeed,
         t.alsaRoundTripSamples, t.latencyBiasSamples, t.latencyTrimSamples,
         t.resampleFoldSum, (unsigned long long)t.resampleFoldSamples,
         t.resampleChainSum, (unsigned long long)t.resampleChainSamples,

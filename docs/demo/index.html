@@ -174,7 +174,8 @@ const N_LOOPERS = 20, N_PRESETS = 10;
 const DIVS = [1,2,4,8,16];
 const KNOB_CC = [48,49,50,51,54,55,57];
 const VU_MID = 0.32, VU_HIGH = 0.62;
-const GRAN_PATCHES = ['Glass','Cloud','Freeze','Chop','Tape','Shatter'];
+const GRAN_PATCHES = ['Glass','Cloud','Chop','Shatter'];
+const GRAN_DIALS = ['Scan','Density','Spray'];
 const RESONODE_PATCHES = ['Percussive','Metal/Glass','Strings','Dance Bass'];
 const DUB_LABELS = ['Reverb','Delay','Time','HP Cut','LP Res','LP Cut','Pitch'];
 const GUITAR_LABELS = ['Flange','Tremolo','Bank Spd','Phaser','Attack','Release','Compress'];
@@ -346,8 +347,10 @@ function knobLabel(idx) {
     if (idx >= 1 && idx <= 4) return RESONODE_PATCHES[idx - 1];
     if (idx === 5) return 'Tone';
     if (idx === 6) return 'Level';
+    if (idx === 7) return 'Couple';
   } else {
-    return GRAN_PATCHES[idx - 1];
+    if (idx >= 1 && idx <= 4) return GRAN_PATCHES[idx - 1];
+    if (idx >= 5 && idx <= 7) return GRAN_DIALS[idx - 5];
   }
   return '';
 }
