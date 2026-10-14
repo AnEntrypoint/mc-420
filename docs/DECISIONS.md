@@ -269,3 +269,36 @@ touching a knob.
 Alternatives rejected: moving the Scarlett to the Pi and pointing `instrument_device_match` at
 it (rejected - it is a host-side source, and the Pi would then have no monitoring path back);
 `aplay` direct to `plughw:2,0` (rejected - PulseAudio holds the device).
+
+## Addendum — the output pair is master/cue, not stereo L/R (correction to ADR-028 and ADR-029)
+
+Correction, not a new finding. The instrument PCM's two channels are **master** and **cue**, two
+independent mono buses — they are not a stereo pair. `src/dsp/audio_thread.cpp:1343-1366`:
+
+    float masterSample = rawLoopSum[i]*loopDirectGateNow + inputFxOut[i] + mixOnlyBuf[i];
+    float cueSample    = fout[i] + mixOnlyBuf[i];
+    buf[i*wireCh + 0] = ms32;                        // ch0 = MASTER
+    buf[i*wireCh + 1] = cs32;                        // ch1 = CUE
+    for (c = 2; c < wireCh; c++) buf[...] = cs32;    // any further channel duplicates CUE
+    g_telem.outPeak  = |cueSample|;                  // telemetry audio_peak.out IS THE CUE BUS
+
+Three consequences, two of which correct things said earlier:
+
+1. **Every `peakOut` figure in ADR-029 and in this session's witnesses is the cue bus, not the
+   gated master/audience output.** The witnesses still stand, and are arguably better than stated:
+   cue carries the record path unconditionally (it is upstream of SUSTAINGATE), so those numbers
+   were never affected by whether sustain or SHIFT was held. That is why they were stable across
+   gate configurations. But the label was wrong and the numbers must not be read as "what the
+   audience hears".
+
+2. **The Focusrite loopback tap is capturing cue**, since the user's cable takes AIR 192 output
+   channel 2. Also correct for witnessing, and the reason the tap read 0.8883 while the master
+   would have been gated.
+
+3. **ADR-028's stereo conclusion is stronger than written, not weaker.** It is not merely that
+   there is no L/R bus: any channel beyond the second is filled with a duplicate of cue, so a
+   4-channel PCM would give master, cue, cue, cue. True stereo needs a genuinely new third bus
+   (a master-right) plus a change to how `wireCh` is filled and how `masterSample` is computed —
+   not just wider buffers. Repurposing ch1 as "right" would destroy the performer's cue monitor.
+
+AGENTS.md line 107 cites `masterSample`/`cueSample` at `:1353`/`:1354`; they are at `:1343`/`:1344`.
