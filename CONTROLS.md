@@ -71,7 +71,10 @@ the hold before the threshold, so Resonode never actually engaged):
     waveguide-object character (how much a tuned feedback-comb stage is mixed
     in, and its feedback polarity — positive lets through more low
     frequencies and is the bassier of the two), blended as a convex
-    combination exactly like the granulator's own patch surface below. Knob
+    combination exactly like the granulator's own patch surface below. Each
+    material also carries its own per-partial decay and gain curves, so a bar
+    sheds its high partials fastest and a bell holds them longest while
+    `damping` keeps its existing single-knob meaning. Knob
     slots 5–7 are direct performative dials: **tone** (exponential-taper
     brightness), **level** (output loudness), and **couple** (nearest-neighbor
     energy exchange between adjacent modes — 0 is the original independent-
@@ -89,7 +92,10 @@ the hold before the threshold, so Resonode never actually engaged):
     envelope — a fast attack that decays to a low sustain floor while the key
     stays held, so a keypress reads as a struck-object transient rather than
     continuously re-opening a high-Q filter on whatever the mic is currently
-    picking up.
+    picking up. Under that envelope sits a short bounded impact pulse whose
+    length tracks `hardness` (0.6 ms hard to 14 ms soft) and whose tone is the
+    mallet's own, so a soft mallet reads as a dull thud and a hard one as a
+    click; it is scaled out entirely at `input` = 1.
   - A harder key press also bends the pitch briefly upward on attack before
     settling to the true note — more so on "flexible" (low-dispersion)
     patches, barely at all on "stiff" (high-dispersion) ones — and
@@ -124,7 +130,13 @@ material patches above instead. Both surfaces share the same convex-
 combination discipline: turning up multiple patch dials together produces a
 coherent blend, never independent raw parameters fighting each other, and all
 weights at zero falls back to the first named patch (Glass for the granulator,
-Percussive for Resonode) rather than dividing by zero. Real key velocity
+Percussive for Resonode) rather than dividing by zero. Turning the scan-rate
+dial (slot 5) fully counter-clockwise freezes the granulator: the live-source
+ring stops being written and every grain is drawn from the held 2.7-second
+snapshot, so the cloud holds a static spectrum (measured spectral correlation
+first-half vs second-half 0.986 vs 0.784 unfrozen, centroid shift 6 Hz vs
+291 Hz). Freeze is a gesture, not one of the four named patches, and it works
+on every patch; turning the dial back up releases it. Real key velocity
 scales overall voice loudness for both instruments, and (for granular voices
 only) grain spawn density, so a harder key press plays louder — and for the
 granulator, spawns a denser, brighter grain cloud.

@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=cbf5ffe52ff314821f628c1370016b3302a9522a">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c738d0138bd021de0caa368fb10d1ecba41411e6">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -131,7 +131,10 @@ an exciter character (mallet vs. bow balance and mallet hardness) and a
 waveguide-object character (how much a tuned feedback-comb stage is mixed
 in, and its feedback polarity — positive lets through more low
 frequencies and is the bassier of the two), blended as a convex
-combination exactly like the granulator’s own patch surface below. Knob
+combination exactly like the granulator’s own patch surface below. Each
+material also carries its own per-partial decay and gain curves, so a bar
+sheds its high partials fastest and a bell holds them longest while
+<code class="language-plaintext highlighter-rouge">damping</code> keeps its existing single-knob meaning. Knob
 slots 5–7 are direct performative dials: <strong>tone</strong> (exponential-taper
 brightness), <strong>level</strong> (output loudness), and <strong>couple</strong> (nearest-neighbor
 energy exchange between adjacent modes — 0 is the original independent-
@@ -149,7 +152,10 @@ pre-narrowing what reaches the bank) and shaped by a percussive strike
 envelope — a fast attack that decays to a low sustain floor while the key
 stays held, so a keypress reads as a struck-object transient rather than
 continuously re-opening a high-Q filter on whatever the mic is currently
-picking up.</li>
+picking up. Under that envelope sits a short bounded impact pulse whose
+length tracks <code class="language-plaintext highlighter-rouge">hardness</code> (0.6 ms hard to 14 ms soft) and whose tone is the
+mallet’s own, so a soft mallet reads as a dull thud and a hard one as a
+click; it is scaled out entirely at <code class="language-plaintext highlighter-rouge">input</code> = 1.</li>
       <li>A harder key press also bends the pitch briefly upward on attack before
 settling to the true note — more so on “flexible” (low-dispersion)
 patches, barely at all on “stiff” (high-dispersion) ones — and
@@ -187,7 +193,13 @@ material patches above instead. Both surfaces share the same convex-
 combination discipline: turning up multiple patch dials together produces a
 coherent blend, never independent raw parameters fighting each other, and all
 weights at zero falls back to the first named patch (Glass for the granulator,
-Percussive for Resonode) rather than dividing by zero. Real key velocity
+Percussive for Resonode) rather than dividing by zero. Turning the scan-rate
+dial (slot 5) fully counter-clockwise freezes the granulator: the live-source
+ring stops being written and every grain is drawn from the held 2.7-second
+snapshot, so the cloud holds a static spectrum (measured spectral correlation
+first-half vs second-half 0.986 vs 0.784 unfrozen, centroid shift 6 Hz vs
+291 Hz). Freeze is a gesture, not one of the four named patches, and it works
+on every patch; turning the dial back up releases it. Real key velocity
 scales overall voice loudness for both instruments, and (for granular voices
 only) grain spawn density, so a harder key press plays louder — and for the
 granulator, spawns a denser, brighter grain cloud.</p>
