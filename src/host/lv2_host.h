@@ -72,6 +72,7 @@ private:
     Topology topology_ = Topology::SERIAL;
 
     std::vector<float> ioBuffer_;
+    int numChannels_ = 1;
     void* lilvWorld_ = nullptr;
 
     bool readTtl(const std::string& bundlePath, Lv2Plugin& out);

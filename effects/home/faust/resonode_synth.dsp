@@ -68,6 +68,18 @@ modeRatio(i) = (shapeStringEffective*ba.take(i+1, stringRatios)
               + shapeBarWeight*ba.take(i+1, barRatios)) * shapeWeightNorm;
 modeLogRatio(i) = log(modeRatio(i));
 
+decayScaleString   = (1.000000,1.624505,2.157669,2.639016,3.085169,3.505144,3.904529,4.287094,4.655537,5.011872,5.357657,5.694123,6.022272,6.342926,6.656775,6.964405);
+decayScaleBell     = (1.000000,1.536875,1.976128,2.361985,2.712448,3.037063,3.341649,3.630077,3.905084,4.168694,4.422455,4.667586,4.905066,5.135697,5.360146,5.578975);
+decayScalePlate    = (1.000000,1.765406,2.461724,3.116658,3.742445,4.345943,4.931515,5.502167,6.060087,6.606934,7.144009,7.672354,8.192823,8.706127,9.212868,9.713559);
+decayScaleMembrane = (1.000000,2.445281,4.125593,5.979397,7.973910,10.088233,12.307688,14.621303,17.020521,19.498446,22.049389,24.668560,27.351864,30.095750,32.897108,35.753188);
+decayScaleBar      = (1.000000,3.271608,6.544513,10.703420,15.676125,21.411083,27.868760,35.017398,42.830653,51.286138,60.364484,70.048676,80.323594,91.175665,102.592604,114.563209);
+
+modeDecayScale(i) = (shapeStringEffective*ba.take(i+1, decayScaleString)
+                   + shapeBellWeight*ba.take(i+1, decayScaleBell)
+                   + shapePlateWeight*ba.take(i+1, decayScalePlate)
+                   + shapeMembraneWeight*ba.take(i+1, decayScaleMembrane)
+                   + shapeBarWeight*ba.take(i+1, decayScaleBar)) * shapeWeightNorm;
+
 voiceGain = 0.5;
 retuneGlide = 0.01;
 pitchModDepth = 0.04;
@@ -121,12 +133,24 @@ internalExciter = internalExciterSum * internalExciterNorm;
 
 exciteBus(exciteIn) = sharedExciteIn(exciteIn)*inputAmt + internalExciter*(1.0 - inputAmt);
 
-exciteFor(busIn, note, gate, vel) = busIn * (excEnv * velGain(vel))
+impactMinS = 0.0006;
+impactMaxS = 0.0140;
+impactAmt = 0.30;
+impactLenS = impactMinS + (impactMaxS - impactMinS)*(1.0 - hardness);
+impactStep = 1.0/max(1.0, impactLenS*ma.SR);
+impactPhase(note, gate) = p
+letrec {
+    'p = ba.if(attackEdge(note, gate) > 0.5, 0.0, min(1.0, p + impactStep));
+};
+impactWindow(p) = p*(1.0 - p)*4.0;
+
+exciteFor(busIn, note, gate, vel) = busIn*(excEnv*velGain(vel)) + impactSig*velGain(vel)
 with {
     xgate = retriggerGate(note, gate);
     strikeEnv = en.adsr(excAttackS, excDecayS, excSustainFloor, excReleaseS, xgate);
     sustainEnv = en.adsr(bowAttackS, bowDecayS, 1.0, bowReleaseS, xgate);
     excEnv = strikeEnv*(1.0 - bowAmt) + sustainEnv*bowAmt;
+    impactSig = malletSrc*impactWindow(impactPhase(note, gate))*impactAmt*malletAmt*(1.0 - inputAmt);
 };
 
 freqGlide(note, gate, vel) = f
@@ -182,8 +206,17 @@ with {
 };
 modePositionSin(i, pos) = sin(ma.PI*pos)*chebyshevU(i, cos(ma.PI*pos));
 
-modeAmpTilt = 0.85;
-modeAmpBase(i) = pow(float(i+1), -modeAmpTilt);
+ampString   = (1.000000,0.554785,0.393049,0.307786,0.254610,0.218058,0.191279,0.170755,0.154488,0.141254,0.130262,0.120975,0.113018,0.106119,0.100074,0.094732);
+ampBell     = (0.269209,0.358946,0.598243,0.568331,0.478594,0.418770,0.370911,0.329034,0.287157,0.251262,0.221350,0.197420,0.173490,0.155543,0.137596,0.119649);
+ampPlate    = (0.654887,0.496311,0.422005,0.376134,0.344016,0.319820,0.300696,0.285056,0.271938,0.260715,0.250963,0.242378,0.234741,0.227885,0.221682,0.216032);
+ampMembrane = (1.260923,0.415950,0.217418,0.137212,0.096014,0.071721,0.056044,0.045263,0.037489,0.031673,0.027193,0.023659,0.020815,0.018488,0.016556,0.014931);
+ampBar      = (1.194797,0.485239,0.286442,0.197068,0.147446,0.116332,0.095207,0.080035,0.068672,0.059882,0.052903,0.047245,0.042576,0.038666,0.035349,0.032504);
+
+modeAmpBase(i) = (shapeStringEffective*ba.take(i+1, ampString)
+                + shapeBellWeight*ba.take(i+1, ampBell)
+                + shapePlateWeight*ba.take(i+1, ampPlate)
+                + shapeMembraneWeight*ba.take(i+1, ampMembrane)
+                + shapeBarWeight*ba.take(i+1, ampBar)) * shapeWeightNorm;
 
 coupleSmallGainMax = 0.45;
 coupleCoef = couple*coupleSmallGainMax;
@@ -197,7 +230,7 @@ modeStage(i, coupledIn, exc, freqFund, ratioExponent, positionLive) = normalised
 with {
     modeLogRatioLive = ratioExponent*modeLogRatio(i);
     freqMode = freqFund*exp(modeLogRatioLive);
-    poleRadius = modePole(freqFund, exp(highFreqDampExponent*modeLogRatioLive));
+    poleRadius = modePole(freqFund, modeDecayScale(i)*exp(highFreqDampExponent*modeLogRatioLive));
     modeAliasGuard = aliasGuard(freqMode);
     rawOut = modeResonator(poleRadius, freqMode, exc + coupledIn);
     normalisedOut = rawOut*modeAliasGuard/modePeakGain(poleRadius);

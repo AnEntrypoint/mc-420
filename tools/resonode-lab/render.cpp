@@ -16,6 +16,8 @@ namespace {
 const int kSampleRate = 48000;
 const int kBlockSize = 64;
 int g_blockSize = 64;
+double g_specFromMs = 100.0;
+double g_specToMs = 400.0;
 
 struct WavFile {
     int sampleRate = 48000;
@@ -411,8 +413,8 @@ void report(const Case& c, const std::vector<float>& y)
     const double rms = std::sqrt(acc / (double)n);
     const double diffRms = n > 1 ? std::sqrt(dacc / (double)(n - 1)) : 0.0;
 
-    const int wFrom = (int)(0.10 * kSampleRate);
-    const int wTo = (int)(0.40 * kSampleRate);
+    const int wFrom = (int)(g_specFromMs * 0.001 * kSampleRate);
+    const int wTo = (int)(g_specToMs * 0.001 * kSampleRate);
     const Spectrum spec = spectrumOf(y, wFrom, wTo, 16384);
     const Spectrum specLate = spectrumOf(y, (int)(2.0 * kSampleRate), (int)(2.3 * kSampleRate), 16384);
     const double centroid = spectralCentroid(spec);
@@ -453,6 +455,15 @@ void report(const Case& c, const std::vector<float>& y)
     const double lateLowRatio = lateTotal > 0.0 ? bandEnergy(specLate, 0.0, 1.5 * f0) / lateTotal : 0.0;
 
     std::printf("  transient_ratio=%.4f sustain_ratio=%.4f decay_ms=%.1f\n", transientRatio, sustainRatio, decayMs);
+    {
+        const Spectrum specAttack = spectrumOf(y, 0, (int)(0.020 * kSampleRate), 16384);
+        std::printf("  attack_centroid_hz=%.1f attack_band_lt120=%.4f attack_band_120_500=%.4f attack_band_500_2k=%.4f attack_band_2k_8k=%.4f\n",
+                    spectralCentroid(specAttack),
+                    [&] { const double t = bandEnergy(specAttack, 0.0, 1.0e9); return t > 0.0 ? bandEnergy(specAttack, 0.0, 120.0) / t : 0.0; }(),
+                    [&] { const double t = bandEnergy(specAttack, 0.0, 1.0e9); return t > 0.0 ? bandEnergy(specAttack, 120.0, 500.0) / t : 0.0; }(),
+                    [&] { const double t = bandEnergy(specAttack, 0.0, 1.0e9); return t > 0.0 ? bandEnergy(specAttack, 500.0, 2000.0) / t : 0.0; }(),
+                    [&] { const double t = bandEnergy(specAttack, 0.0, 1.0e9); return t > 0.0 ? bandEnergy(specAttack, 2000.0, 8000.0) / t : 0.0; }());
+    }
     std::printf("  late_centroid_hz=%.1f late_low_ratio=%.4f late_band_lt120=%.4f late_band_120_500=%.4f late_band_500_2k=%.4f late_band_2k_8k=%.4f\n",
                 lateCentroid, lateLowRatio,
                 lateTotal > 0.0 ? bandEnergy(specLate, 0.0, 120.0) / lateTotal : 0.0,
@@ -522,6 +533,8 @@ int main(int argc, char** argv)
     c.durationSec = (double)argFloat(argc, argv, "--dur", (float)c.durationSec);
     c.excitation = argString(argc, argv, "--exc", c.excitation);
     g_blockSize = argInt(argc, argv, "--bs", 64);
+    g_specFromMs = (double)argFloat(argc, argv, "--spec-from", 100.0f);
+    g_specToMs = (double)argFloat(argc, argv, "--spec-to", 400.0f);
     c.wavPath = argString(argc, argv, "--wav", "");
     c.specPath = argString(argc, argv, "--spec", "");
     c.audioPath = argString(argc, argv, "--audio", "");

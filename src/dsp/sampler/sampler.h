@@ -162,6 +162,7 @@ public:
 
     void feedLiveGrainSource(const int *in, int n)
     {
+        if (m_grainFreeze > 0.5f) return;
         for (int i = 0; i < n; i++) {
             m_grainLiveRing[m_grainLiveWrite] = _clip16(in[i]);
             m_grainLiveWrite = (m_grainLiveWrite + 1) & (kGrainLiveRingSpan - 1);
@@ -169,6 +170,8 @@ public:
     }
 
     float grainLiveMix() const { return m_grainLiveMix; }
+
+    void setGrainFreeze(float f) { m_grainFreeze = f > 0.5f ? 1.0f : 0.0f; }
 
     void setGrainPitchQuantize(int mode)
     {
@@ -616,8 +619,9 @@ private:
         if (wasActive) _removeGrainIdxFromVoice(oldOwner, slot);
         vo.grainIdx[vo.grainCount++] = slot;
 
-        bool useLiveSource = (m_grainLiveMix > 0.0f)
-                          && ((_randBipolar() * 0.5f + 0.5f) < m_grainLiveMix);
+        bool useLiveSource = (m_grainFreeze > 0.5f)
+                          || ((m_grainLiveMix > 0.0f)
+                              && ((_randBipolar() * 0.5f + 0.5f) < m_grainLiveMix));
 
         double jitterSamples = 0.0;
         if (m_posJitterMs > 0.0f) {
@@ -982,6 +986,7 @@ private:
     int      m_perVoiceGrainBudget = MAX_GRAINS;
     uint32_t m_grainRngState = 2463534242u;
     float    m_grainLiveMix = 0.5f;
+    float    m_grainFreeze = 0.0f;
     int      m_grainLiveWrite = 0;
     short    m_grainLiveRing[kGrainLiveRingLen] = {0};
 };

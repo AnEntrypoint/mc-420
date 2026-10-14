@@ -948,6 +948,7 @@ static_assert(kGranPitchContinuousSprayMode == Sampler::kGrainPitchContinuousSpr
               "apc_grid's granulator pitch-quantize default must match Sampler's enum");
 
 static constexpr float kGranPitchSprayKnobSpan = 0.5f;
+static constexpr float kGranFreezeKnobSpan = 0.125f;
 
 static int granPitchIntervalSetFromKnob(float v01) {
     const int intervalSetCount = Sampler::kGrainPitchQuantizeCount - 1;
@@ -1051,6 +1052,7 @@ void ApcGrid::applyGranulatorMorph(Sampler* sampler) {
         }
     }
     if (m_lofiFxKnobTouched[1 + kGranPatchCount])     blend.scanRate        = m_granDirectScanRate;
+    sampler->setGrainFreeze(m_granFreeze);
     if (m_lofiFxKnobTouched[2 + kGranPatchCount])     blend.grainRateHz     = m_granDirectDensityHz;
     if (m_lofiFxKnobTouched[3 + kGranPatchCount])     blend.pitchSprayCents = m_granDirectSprayCents;
     sampler->setGrainPitchQuantize(m_lofiFxKnobTouched[3 + kGranPatchCount]
@@ -1067,7 +1069,9 @@ void ApcGrid::applyGranulatorDirectKnob(int knobIdx, float v01, Sampler* sampler
     const GranDirectKnobRange& r = kGranDirectKnobRanges[i];
     float v = r.logTaper ? r.lo * std::pow(r.hi / r.lo, v01) : r.lo + v01 * (r.hi - r.lo);
     switch (i) {
-        case 0: m_granDirectScanRate   = v; break;
+        case 0: m_granDirectScanRate = v;
+                m_granFreeze = (v01 <= kGranFreezeKnobSpan) ? 1.0f : 0.0f;
+                break;
         case 1: m_granDirectDensityHz  = v; break;
         case 2:
             if (v01 <= kGranPitchSprayKnobSpan) {

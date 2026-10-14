@@ -223,6 +223,13 @@ void Lv2Host::connectPorts(Lv2Plugin& p, int blockSize) {
     if (!d || !d->connect_port) return;
 
     p.controlValues.assign(p.ports.size(), 0.0f);
+    size_t nAudioIn = 0, nAudioOut = 0;
+    for (auto& pi : p.ports) { if (pi.isAudio) (pi.isInput ? nAudioIn : nAudioOut)++; }
+    if (nAudioIn > (size_t)numChannels_ || nAudioOut > (size_t)numChannels_) {
+        fprintf(stderr, "[host] plugin %s wants %zu in / %zu out audio channels, host has %d — disabled\n",
+                p.bundlePath.c_str(), nAudioIn, nAudioOut, numChannels_);
+        p.enabled = false; return;
+    }
     for (size_t i = 0; i < p.ports.size(); i++) {
         auto& pi = p.ports[i];
         if (pi.isAudio) {
@@ -242,7 +249,8 @@ void Lv2Host::connectPorts(Lv2Plugin& p, int blockSize) {
 }
 
 void Lv2Host::connect(int blockSize, int numChannels) {
-    ioBuffer_.assign((size_t)blockSize * numChannels, 0.0f);
+    numChannels_ = numChannels > 0 ? numChannels : 1;
+    ioBuffer_.assign((size_t)blockSize * numChannels_, 0.0f);
     for (auto& p : plugins_) {
         instantiate(p, 48000.0);
         connectPorts(p, blockSize);
