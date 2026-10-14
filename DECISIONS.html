@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=50e5793225d740b93e8dfcc007bef1990eba581a">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5787b857aeb2702cad6736c241a4142dbb82390e">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -328,6 +328,46 @@ touching a knob.</p>
 <p>Alternatives rejected: moving the Scarlett to the Pi and pointing <code class="language-plaintext highlighter-rouge">instrument_device_match</code> at
 it (rejected - it is a host-side source, and the Pi would then have no monitoring path back);
 <code class="language-plaintext highlighter-rouge">aplay</code> direct to <code class="language-plaintext highlighter-rouge">plughw:2,0</code> (rejected - PulseAudio holds the device).</p>
+
+<h2 id="addendum--the-output-pair-is-mastercue-not-stereo-lr-correction-to-adr-028-and-adr-029">Addendum — the output pair is master/cue, not stereo L/R (correction to ADR-028 and ADR-029)</h2>
+
+<p>Correction, not a new finding. The instrument PCM’s two channels are <strong>master</strong> and <strong>cue</strong>, two
+independent mono buses — they are not a stereo pair. <code class="language-plaintext highlighter-rouge">src/dsp/audio_thread.cpp:1343-1366</code>:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float masterSample = rawLoopSum[i]*loopDirectGateNow + inputFxOut[i] + mixOnlyBuf[i];
+float cueSample    = fout[i] + mixOnlyBuf[i];
+buf[i*wireCh + 0] = ms32;                        // ch0 = MASTER
+buf[i*wireCh + 1] = cs32;                        // ch1 = CUE
+for (c = 2; c &lt; wireCh; c++) buf[...] = cs32;    // any further channel duplicates CUE
+g_telem.outPeak  = |cueSample|;                  // telemetry audio_peak.out IS THE CUE BUS
+</code></pre></div></div>
+
+<p>Three consequences, two of which correct things said earlier:</p>
+
+<ol>
+  <li>
+    <p><strong>Every <code class="language-plaintext highlighter-rouge">peakOut</code> figure in ADR-029 and in this session’s witnesses is the cue bus, not the
+gated master/audience output.</strong> The witnesses still stand, and are arguably better than stated:
+cue carries the record path unconditionally (it is upstream of SUSTAINGATE), so those numbers
+were never affected by whether sustain or SHIFT was held. That is why they were stable across
+gate configurations. But the label was wrong and the numbers must not be read as “what the
+audience hears”.</p>
+  </li>
+  <li>
+    <p><strong>The Focusrite loopback tap is capturing cue</strong>, since the user’s cable takes AIR 192 output
+channel 2. Also correct for witnessing, and the reason the tap read 0.8883 while the master
+would have been gated.</p>
+  </li>
+  <li>
+    <p><strong>ADR-028’s stereo conclusion is stronger than written, not weaker.</strong> It is not merely that
+there is no L/R bus: any channel beyond the second is filled with a duplicate of cue, so a
+4-channel PCM would give master, cue, cue, cue. True stereo needs a genuinely new third bus
+(a master-right) plus a change to how <code class="language-plaintext highlighter-rouge">wireCh</code> is filled and how <code class="language-plaintext highlighter-rouge">masterSample</code> is computed —
+not just wider buffers. Repurposing ch1 as “right” would destroy the performer’s cue monitor.</p>
+  </li>
+</ol>
+
+<p>AGENTS.md line 107 cites <code class="language-plaintext highlighter-rouge">masterSample</code>/<code class="language-plaintext highlighter-rouge">cueSample</code> at <code class="language-plaintext highlighter-rouge">:1353</code>/<code class="language-plaintext highlighter-rouge">:1354</code>; they are at <code class="language-plaintext highlighter-rouge">:1343</code>/<code class="language-plaintext highlighter-rouge">:1344</code>.</p>
 
 
       </section>
