@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1840701778ab21df830cf238c2a235f117fa9ddf">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=012d9683bc808ea7861034d24307a7351f65a22a">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -530,6 +530,25 @@ broadband source, never warm); a dedicated knob (rejected — all eight LofiFx s
 <code class="language-plaintext highlighter-rouge">m_chromLoaded</code>, so with nothing captured no voice exists to consume the live grain ring at all.
 Feeds to the ring are simply unused. This is the cold-start path a new user hits, and it is worth
 its own row rather than a change to voice allocation made without measurement.</p>
+
+<h2 id="adr-033--the-granulator-can-start-from-nothing-captured">ADR-033 — the granulator can start from nothing captured</h2>
+
+<p>Decision: <code class="language-plaintext highlighter-rouge">_noteOn</code> gains an <code class="language-plaintext highlighter-rouge">else if (m_granOn)</code> branch that spawns a voice bound to the live
+grain ring (<code class="language-plaintext highlighter-rouge">m_grainLiveRing</code>, <code class="language-plaintext highlighter-rouge">kGrainLiveRingSpan</code>) when no drum key is loaded and the chromatic
+buffer is not loaded.</p>
+
+<p>Why: ADR-032 recorded this as observed-but-not-changed. It is the first thing a new user hits —
+latch the granulator, play a key, get nothing — because with no loaded buffer no voice is created
+at all, so every feed to the live ring is simply unused. The live ring added earlier could only be
+reached once something else had already been captured.</p>
+
+<p>Evidence: the standalone bench renders the four shipped patches with and without a preceding
+capture. Cold (nothing captured): Glass rms 0.255447 peak 0.888947, Cloud 0.053945 / 0.291229,
+Chop 0.128241 / 0.654480, Shatter 0.198451 / 0.647827. Warm (captured first): 0.257467 /
+0.942261, 0.054013 / 0.288483, 0.128883 / 0.637634, 0.199653 / 0.668915. The two are within a few
+percent, so the ring supplies the same material either way and the cold path now sounds.
+nonfinite=0 in every run, and the branch only fires when the granulator is on and nothing is
+loaded, so ordinary sampler playback is untouched.</p>
 
 
       </section>
