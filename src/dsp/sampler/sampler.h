@@ -23,6 +23,8 @@ public:
     static const int PREROLL        = 32;
     static const int LEAD_DECLICK   = 8;
     static const int MAX_GRAINS     = 48;
+    static constexpr float kGrainToneMinHz = 120.0f;
+    static constexpr float kGrainToneMaxHz = 18000.0f;
     static const int kGrainLiveRingSpan = 1 << 17;
     static const int kGrainLiveRingLen = kGrainLiveRingSpan + 4;
     static constexpr float kGrainTimingJitterAmt = 0.15f;
@@ -129,7 +131,7 @@ public:
 
     void setGrainPatch(float grainMs, float grainRateHz, float pitchSprayCents,
                         float posJitterMs, float scanRate, float reverseProb,
-                        float envShape, float liveMix)
+                        float envShape, float liveMix, float toneNorm)
     {
         if (grainMs < 5.0f) grainMs = 5.0f;
         if (grainMs > 500.0f) grainMs = 500.0f;
@@ -147,6 +149,8 @@ public:
         if (envShape > 1.0f) envShape = 1.0f;
         if (liveMix < 0.0f) liveMix = 0.0f;
         if (liveMix > 1.0f) liveMix = 1.0f;
+        if (toneNorm < 0.0f) toneNorm = 0.0f;
+        if (toneNorm > 1.0f) toneNorm = 1.0f;
 
         m_grainMs = grainMs;
         m_grainRateHz = grainRateHz;
@@ -156,6 +160,7 @@ public:
         m_reverseProb = reverseProb;
         m_envShape = envShape;
         m_grainLiveMix = liveMix;
+        m_grainToneNorm = toneNorm;
         _recomputeGrainGainComp();
         _rebuildGrainWindowLut();
     }
@@ -170,6 +175,17 @@ public:
     }
 
     float grainLiveMix() const { return m_grainLiveMix; }
+    float grainToneNorm() const { return m_grainToneNorm; }
+
+    float _grainToneAlpha() const
+    {
+        if (m_grainToneNorm >= 0.999f) return 1.0f;
+        const float hz = kGrainToneMinHz * powf(kGrainToneMaxHz / kGrainToneMinHz, m_grainToneNorm);
+        float a = 1.0f - expf(-2.0f * 3.14159265f * hz / (float)SR);
+        if (a < 0.0f) a = 0.0f;
+        if (a > 1.0f) a = 1.0f;
+        return a;
+    }
 
     void setGrainFreeze(float f) { m_grainFreeze = f > 0.5f ? 1.0f : 0.0f; }
 
@@ -354,6 +370,8 @@ private:
     }
 
     struct Voice {
+        float grainLpState = 0.0f;
+        float grainLpState2 = 0.0f;
         bool   active;
         const short *M;
         int    len;
@@ -677,6 +695,7 @@ private:
     {
         Voice &vo = m_voice[vSlot];
         bool chrom = vo.isChrom;
+        const float ga = _grainToneAlpha();
 
         float densityFromVel = 0.4f + 0.6f * vo.velGain;
         double spawnPeriod = (double)SR / ((double)m_grainRateHz * (double)densityFromVel);
@@ -758,6 +777,10 @@ private:
                 vo.lpState += alpha * (mixed - vo.lpState);
                 mixed = vo.lpState;
             }
+
+            vo.grainLpState += ga * (mixed - vo.grainLpState);
+            vo.grainLpState2 += ga * (vo.grainLpState - vo.grainLpState2);
+            mixed = vo.grainLpState2;
 
             float finalGain = chrom ? (envLevel * vo.velGain) : envLevel;
             inout[i] += (int)(mixed * finalGain * grainGainComp);
@@ -998,6 +1021,7 @@ private:
     int      m_perVoiceGrainBudget = MAX_GRAINS;
     uint32_t m_grainRngState = 2463534242u;
     float    m_grainLiveMix = 0.5f;
+    float    m_grainToneNorm = 1.0f;
     float    m_grainFreeze = 0.0f;
     int      m_grainLiveWrite = 0;
     short    m_grainLiveRing[kGrainLiveRingLen] = {0};

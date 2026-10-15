@@ -926,14 +926,14 @@ static const FxKnobTarget kLofiFxTargets[kFxKnobCount] = {
     { FxKnobKind::Unused, nullptr },
 };
 
-struct GranPatch { float grainMs, grainRateHz, pitchSprayCents, posJitterMs, scanRate, reverseProb, envShape, liveMix; };
+struct GranPatch { float grainMs, grainRateHz, pitchSprayCents, posJitterMs, scanRate, reverseProb, envShape, liveMix, toneNorm; };
 
 constexpr int kGranPatchCount = 4;
 static const GranPatch kGranPatches[kGranPatchCount] = {
-    {  90.0f,  35.0f, 25.0f,  35.0f, 0.4f, 0.10f, 0.15f, 0.35f },
-    { 200.0f,   8.0f,  0.0f,   0.0f, 1.0f, 0.00f, 0.00f, 0.75f },
-    {  22.0f,  70.0f,  0.0f,   0.0f, 2.5f, 0.00f, 0.85f, 0.20f },
-    {  14.0f, 150.0f, 90.0f, 300.0f, 4.5f, 0.50f, 1.00f, 0.60f },
+    {  90.0f,  35.0f, 25.0f,  35.0f, 0.4f, 0.10f, 0.15f, 0.35f, 0.95f },
+    { 200.0f,   8.0f,  0.0f,   0.0f, 1.0f, 0.00f, 0.00f, 0.75f, 0.25f },
+    {  22.0f,  70.0f,  0.0f,   0.0f, 2.5f, 0.00f, 0.85f, 0.20f, 0.72f },
+    {  14.0f, 150.0f, 90.0f, 300.0f, 4.5f, 0.50f, 1.00f, 0.60f, 0.88f },
 };
 
 struct GranDirectKnobRange { float lo; float hi; bool logTaper; };
@@ -1049,7 +1049,7 @@ void ApcGrid::applyGranulatorMorph(Sampler* sampler) {
 
     GranPatch blend = kGranPatches[0];
     if (totalWeight > 0.0001f) {
-        blend = GranPatch{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+        blend = GranPatch{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
         for (int p = 0; p < kGranPatchCount; p++) {
             float wn = weight[p] / totalWeight;
             blend.grainMs         += wn * kGranPatches[p].grainMs;
@@ -1060,6 +1060,7 @@ void ApcGrid::applyGranulatorMorph(Sampler* sampler) {
             blend.reverseProb     += wn * kGranPatches[p].reverseProb;
             blend.envShape        += wn * kGranPatches[p].envShape;
             blend.liveMix         += wn * kGranPatches[p].liveMix;
+            blend.toneNorm        += wn * kGranPatches[p].toneNorm;
         }
     }
     if (m_lofiFxKnobTouched[1 + kGranPatchCount])     blend.scanRate        = m_granDirectScanRate;
@@ -1072,7 +1073,7 @@ void ApcGrid::applyGranulatorMorph(Sampler* sampler) {
                                    : kGranPitchContinuousSprayMode);
     sampler->setGrainPatch(blend.grainMs, blend.grainRateHz, blend.pitchSprayCents,
                             blend.posJitterMs, blend.scanRate, blend.reverseProb, blend.envShape,
-                            blend.liveMix);
+                            blend.liveMix, blend.toneNorm);
 }
 
 void ApcGrid::applyGranulatorDirectKnob(int knobIdx, float v01, Sampler* sampler) {
