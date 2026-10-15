@@ -462,3 +462,22 @@ Also observed, not changed: `_noteOn` only spawns a voice when `m_drumLoaded[k]`
 `m_chromLoaded`, so with nothing captured no voice exists to consume the live grain ring at all.
 Feeds to the ring are simply unused. This is the cold-start path a new user hits, and it is worth
 its own row rather than a change to voice allocation made without measurement.
+
+## ADR-033 — the granulator can start from nothing captured
+
+Decision: `_noteOn` gains an `else if (m_granOn)` branch that spawns a voice bound to the live
+grain ring (`m_grainLiveRing`, `kGrainLiveRingSpan`) when no drum key is loaded and the chromatic
+buffer is not loaded.
+
+Why: ADR-032 recorded this as observed-but-not-changed. It is the first thing a new user hits —
+latch the granulator, play a key, get nothing — because with no loaded buffer no voice is created
+at all, so every feed to the live ring is simply unused. The live ring added earlier could only be
+reached once something else had already been captured.
+
+Evidence: the standalone bench renders the four shipped patches with and without a preceding
+capture. Cold (nothing captured): Glass rms 0.255447 peak 0.888947, Cloud 0.053945 / 0.291229,
+Chop 0.128241 / 0.654480, Shatter 0.198451 / 0.647827. Warm (captured first): 0.257467 /
+0.942261, 0.054013 / 0.288483, 0.128883 / 0.637634, 0.199653 / 0.668915. The two are within a few
+percent, so the ring supplies the same material either way and the cold path now sounds.
+nonfinite=0 in every run, and the branch only fires when the granulator is on and nothing is
+loaded, so ordinary sampler playback is untouched.

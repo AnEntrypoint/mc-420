@@ -930,6 +930,10 @@ private:
             double rate = pow(2.0, (double)(note - ROOT_NOTE) / 12.0);
             int slot = _spawnVoice(m_chromM, m_chromLen, rate, true, note, true, velGain);
             if (slot >= 0 && m_granOn) m_voice[slot].granular = true;
+        } else if (m_granOn) {
+            double rate = pow(2.0, (double)(note - ROOT_NOTE) / 12.0);
+            int slot = _spawnVoice(m_grainLiveRing, kGrainLiveRingSpan, rate, true, note, true, velGain);
+            if (slot >= 0) m_voice[slot].granular = true;
         }
     }
 
