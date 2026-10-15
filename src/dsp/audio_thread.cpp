@@ -325,6 +325,7 @@ static void* worker(void*) {
     float extFreqGuardCandidate = 0.0f;
     int extFreqGuardStreakBlocks = 0;
     int extFreqGuardSilenceBlocks = 0;
+    constexpr float kExtFreqDetMaxHz = 1500.0f;
     std::vector<float> preFilterOutBuf((size_t)N, 0.0f);
     std::vector<float> loopHarmonyWetBuf((size_t)N, 0.0f);
     std::vector<float> masterInBuf((size_t)N, 0.0f);
@@ -1301,6 +1302,11 @@ static void* worker(void*) {
                         }
                     }
                 }
+            }
+            if (extFreqDetZone) {
+                float extHz = extFreqGuardAnchor;
+                if (extHz > kExtFreqDetMaxHz) extHz = kExtFreqDetMaxHz;
+                *extFreqDetZone = extHz;
             }
             faustPre.compute(N, fins, preOuts);
             if (g_telem.gateMode > 0) {
