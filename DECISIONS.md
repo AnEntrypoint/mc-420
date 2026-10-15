@@ -429,3 +429,36 @@ Consequence for anyone measuring: check `md5sum /opt/aloop/aloop` before trustin
 expect to re-deploy after a power cycle. It also means a witness taken against a hot-deployed binary is
 only valid until the next reboot; to make a change survive, it has to go into the served netboot payload,
 not onto the running filesystem.
+
+## ADR-032 — the granulator gets a tonal control carried on the patch blend
+
+Decision: the granulator gains a per-voice tonal filter whose cutoff is a ninth field on
+`GranPatch`, convex-blended exactly like the other eight, so it costs no knob slot. Sampler
+applies two cascaded one-poles (12 dB/oct) to the granular voice output, and `toneNorm` maps
+0..1 logarithmically onto 120 Hz .. 18 kHz. `toneNorm` defaults to 1.0 and `_grainToneAlpha()`
+returns exactly 1.0 at or above 0.999, so the filter is a bit-exact bypass until a patch blend
+sets it — no shipped patch changes by default.
+
+Why: while trying to ship a "Tape" patch, eight swept candidates all measured centroid
+1440-1562 Hz, entirely inside the shipped four's 1308-1794 Hz range. The cause is that grain
+size and rate only move the spectral centroid about +/-20 percent, so with no filter the patch
+space cannot produce a warm character at all. Measured with the filter off, all four shipped
+patches sit at ~11.5 kHz centroid — they are sonically distinguishable by grain behaviour but
+not by tone.
+
+Evidence (bench: Sampler instantiated standalone, 5 s render, note 60, broadband source,
+centroid over the last 3 s, `nf=0` in every run):
+  toneNorm sweep  0.00 -> 1.00 gives 444.3 / 650.8 / 963.2 / 1419.7 / 2069.3 / 2965.4 /
+  4156.8 / 5661.5 / 7414.0 / 9188.9 / 11506.9 Hz — monotone, a 26x span.
+  Per patch with tone off (1.00): Glass 11506.9, Cloud 11528.0, Chop 11522.5, Shatter 11508.4 —
+  indistinguishable. With tone on: Glass 9962.9, Cloud 1922.6, Chop 6022.4, Shatter 8854.6 —
+  separated across 5.2x. Cloud's shipped value is 0.25, which lands it near 1100 Hz, below the
+  ~1300 Hz floor that made a warm patch unreachable before.
+
+Alternatives rejected: a single one-pole (rejected — measured range was only 4499-11507 Hz on a
+broadband source, never warm); a dedicated knob (rejected — all eight LofiFx slots are taken).
+
+Also observed, not changed: `_noteOn` only spawns a voice when `m_drumLoaded[k]` or
+`m_chromLoaded`, so with nothing captured no voice exists to consume the live grain ring at all.
+Feeds to the ring are simply unused. This is the cold-start path a new user hits, and it is worth
+its own row rather than a change to voice allocation made without measurement.
