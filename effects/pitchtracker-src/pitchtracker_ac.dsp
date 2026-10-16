@@ -6,7 +6,7 @@ declare description "Normalized-autocorrelation pitch tracker, packaged as its o
 import("stdfaust.lib");
 
 minTrackHz = 60.0;
-maxTrackHz = 1500.0;
+maxTrackHz = 2600.0;
 corrThresh = 0.85;
 
 delayTableSize = 4096;
@@ -49,6 +49,16 @@ with {
     isPeak(cLo, cMid, cHi) = (cMid >= corrThresh) & (cMid >= cLo) & (cMid >= cHi);
 
     result =
+        ba.if(isPeak(c(2677.32), c(2539.96), c(2409.65)), 2539.96,
+        ba.if(isPeak(c(2539.96), c(2409.65), c(2286.02)), 2409.65,
+        ba.if(isPeak(c(2409.65), c(2286.02), c(2168.73)), 2286.02,
+        ba.if(isPeak(c(2286.02), c(2168.73), c(2057.47)), 2168.73,
+        ba.if(isPeak(c(2168.73), c(2057.47), c(1951.91)), 2057.47,
+        ba.if(isPeak(c(2057.47), c(1951.91), c(1851.76)), 1951.91,
+        ba.if(isPeak(c(1951.91), c(1851.76), c(1756.76)), 1851.76,
+        ba.if(isPeak(c(1851.76), c(1756.76), c(1666.63)), 1756.76,
+        ba.if(isPeak(c(1756.76), c(1666.63), c(1581.12)), 1666.63,
+        ba.if(isPeak(c(1666.63), c(1581.12), c(1500.0)), 1581.12,
         ba.if(isPeak(c(1581.12), c(1500.0), c(1423.02)), 1500.0,
         ba.if(isPeak(c(1500.0), c(1423.02), c(1350.0)), 1423.02,
         ba.if(isPeak(c(1423.02), c(1350.0), c(1272.79)), 1350.0,
@@ -88,22 +98,24 @@ with {
         ba.if(isPeak(c(71.33), c(65.4), c(62.64)), 65.4,
         ba.if(isPeak(c(65.4), c(62.64), c(60.0)), 62.64,
         ba.if(c(60.0) >= corrThresh, 60.0,
-        60.0)))))))))))))))))))))))))))))))))))))));
+        60.0)))))))))))))))))))))))))))))))))))))))))))))))));
 };
 
 refineSpreadK = 16;
 
 refineFreq(x, w, coarseFreq) = refinedFreq
 with {
-    L0 = int(ma.SR / coarseFreq) : max(2 + refineSpreadK) : min(3199 - refineSpreadK);
-    cLo  = corrAtLagVar(x, w, L0 - refineSpreadK);
+    P = ma.SR / coarseFreq;
+    L0 = int(P) : max(4) : min(3199 - refineSpreadK);
+    K = int(P * 0.25) : max(1) : min(refineSpreadK);
+    cLo  = corrAtLagVar(x, w, L0 - K);
     cMid = corrAtLagVar(x, w, L0);
-    cHi  = corrAtLagVar(x, w, L0 + refineSpreadK);
+    cHi  = corrAtLagVar(x, w, L0 + K);
     denom = cLo - 2.0*cMid + cHi;
     safeDenom = ba.if(abs(denom) < 1e-6, 1e-6, denom);
     delta = 0.5 * (cLo - cHi) / safeDenom : max(-1.0) : min(1.0);
     delta2 = ba.if(abs(denom) < 1e-6, 0.0, delta);
-    refinedLag = float(L0) + delta2 * refineSpreadK;
+    refinedLag = float(L0) + delta2 * float(K);
     refinedFreq = ma.SR / max(1.0, refinedLag);
 };
 
