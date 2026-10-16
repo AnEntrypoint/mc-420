@@ -6,8 +6,9 @@ class SnacPeriodTracker {
 public:
     static const int SNAC_WIN = 1024;
     static const int SNAC_HOP = 2048;
-    static const int MIN_PERIOD = 48;
+    static const int MIN_PERIOD = 16;
     static const int MAX_PERIOD = 800;
+    static const int SHORT_LAG_STRICT_PERIOD = 48;
     static const int LAGS_PER_STEP = 48;
     static const int BLOCK = 64;
     static constexpr float FIDELITY_THRESH_DEFAULT = 0.30f;
@@ -268,7 +269,7 @@ private:
                         }
                     }
                 }
-                if (bestTau >= 0 && m_r[bestTau] > kDiffFallback) bestTau = -1;
+                if (bestTau >= 0 && m_r[bestTau] > (bestTau < SHORT_LAG_STRICT_PERIOD ? kDiffAccept : kDiffFallback)) bestTau = -1;
                 q = 1.0f - peakBest;
                 qThresh = 1.0f - m_fidelityThresh;
             }
