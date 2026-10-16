@@ -108,6 +108,114 @@
       "source_url": "https://upload.wikimedia.org/wikipedia/commons/f/f9/F.Dur.ohne.und.mit.Saengerformant.ogg",
       "license": "Public domain (self-published, PD-self), Wikimedia Commons, uploader Membeth, verified via Commons API extmetadata (License=pd)",
       "description": "Solo male baritone voice, sung F major scale (with and without singer's formant), sustained low-mid register vocal tone, trimmed to first 12s"
+    },
+    {
+      "filename": "flute_trill_high_C7.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Woodwinds/flute/Flute.vib.mf.C7Db7.aiff",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Flute with vibrato, C7-Db7 trill: pitch moves continuously above the 1000 Hz tracker ceiling"
+    },
+    {
+      "filename": "flute_high_C7.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS%20Pitches%20-%202014/Woodwinds/Flute/Flute.nonvib.ff.C7.stereo.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Flute, sustained C7 (~2093 Hz), near-sinusoidal with almost no harmonics to disambiguate an octave"
+    },
+    {
+      "filename": "soprano_sax_high_C6.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS%20Pitches%20-%202014/Woodwinds/Bb%20Soprano%20Saxophone/SopSax.nonvib.ff.C6.stereo.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Soprano saxophone C6 (~1046 Hz), at the tracker blind edge, rich harmonics and a hard attack"
+    },
+    {
+      "filename": "xylophone_roll_AM_C6B6.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Percussion/Xylophone/xylophone.hardrubber.roll.ff.C6B6.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Xylophone roll: roughly 15 Hz amplitude modulation inside 1046-1975 Hz, so the envelope is slower than the period - subharmonic-lock bait"
+    },
+    {
+      "filename": "marimba_roll_AM_C5B5.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Percussion/Marimba/Marimba.roll.ff.C5B5.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Marimba roll, fast amplitude modulation and near-continuous excitation"
+    },
+    {
+      "filename": "bells_glock_run_C6B6.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Percussion/Bells/bells.brass.C6B6.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Glockenspiel run C6-B6, struck metal with inharmonic partials"
+    },
+    {
+      "filename": "xylophone_run_C7B7.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Percussion/Xylophone/xylophone.rosewood.ff.C7B7.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Xylophone run C7-B7 whose third harmonic dominates, inviting octave and twelfth errors"
+    },
+    {
+      "filename": "glockenspiel_high_C7.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS%20Pitches%20-%202014/Percussion/Bells/bells.brass.ff.C7.stereo.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Glockenspiel C7 (~2093 Hz), struck metal with a very sharp attack"
+    },
+    {
+      "filename": "crotale_high_C7.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Percussion/crotales/crotale.C7.ff.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Crotale C7 (~2093 Hz) with a loud second partial, a classic octave-flicker case"
+    },
+    {
+      "filename": "cymbal_inharmonic.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Percussion/cymbals/suspended%20cymbals/stick/17crash.stick.bell.ff.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Suspended cymbal struck at the bell: broadband with no fundamental, so the tracker must not lock at all"
+    },
+    {
+      "filename": "tamtam_inharmonic.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Percussion/gongs%20&%20tamtams/28tamtam.ff.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Tam-tam: unpitched dense inharmonic cluster with a long decay"
+    },
+    {
+      "filename": "balloon_pop_transient.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/balloonpop/Balloon.pop.aiff",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Balloon pop: a single broadband transient with no periodic content, the hardest transient-lock case"
+    },
+    {
+      "filename": "guitar_pluck_C4B4.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/guitar/Guitar.ff.sulG.C4B4.mono.aif",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Acoustic guitar plucked run C4-B4, stiff-string inharmonicity and fast decay"
+    },
+    {
+      "filename": "tuba_run_C2B2.wav",
+      "source_url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Brass/tuba/Tuba.ff.C2B2.aiff",
+      "license": "Public domain (University of Iowa Electronic Music Studios MIS)",
+      "description": "Tuba run C2-B2 (65-123 Hz), period up to 738 against MAX_PERIOD 800"
+    },
+    {
+      "filename": "vocal_soprano_range_PD.wav",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/f/f0/Soprano_261-880.ogg",
+      "license": "Public domain (Wikimedia Commons, verified via Commons API extmetadata)",
+      "description": "Soprano glide 261 to 880 Hz, formant-dominated, continuous pitch movement"
+    },
+    {
+      "filename": "vocal_tenor_range_PD.wav",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/1/1f/Tenor_130-440.ogg",
+      "license": "Public domain (Wikimedia Commons, verified via Commons API extmetadata)",
+      "description": "Tenor glide 130 to 440 Hz, low fundamental with strong harmonics"
+    },
+    {
+      "filename": "vocal_tenor_operatic_PD.wav",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/f/f7/%22Quando_le_sere_al_placido%22_%28Ferruccio_Giannini%29.wav",
+      "license": "Public domain (Wikimedia Commons, verified via Commons API extmetadata)",
+      "description": "Operatic tenor with accompaniment, so more than one fundamental is present"
+    },
+    {
+      "filename": "vocal_melody_twinkle_CC0.wav",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/4/4f/Twinkle_Twinkle_Little_Star_-_sung_with_full_lyrics.ogg",
+      "license": "CC0 1.0 Universal (Public Domain Dedication), Wikimedia Commons, uploader Dcoetzee",
+      "description": "Sung melody with continuous pitch movement and no steady state"
     }
   ]
 }
