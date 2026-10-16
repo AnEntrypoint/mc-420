@@ -325,6 +325,11 @@ static void* worker(void*) {
     float extFreqGuardCandidate = 0.0f;
     int extFreqGuardStreakBlocks = 0;
     int extFreqGuardSilenceBlocks = 0;
+    unsigned extFreqGuardDiagBlocks = 0;
+    int extFreqGuardDiagOutOfBand = 0;
+    unsigned extFreqGuardDiagBigJumps = 0;
+    float extFreqGuardDiagRawMin = 0.0f;
+    float extFreqGuardDiagRawMax = 0.0f;
     constexpr float kExtFreqDetMaxHz = 1500.0f;
     std::vector<float> preFilterOutBuf((size_t)N, 0.0f);
     std::vector<float> loopHarmonyWetBuf((size_t)N, 0.0f);
@@ -1237,21 +1242,25 @@ static void* worker(void*) {
                 pitchTrackerFx.process(pitchTrackerBuf.data(), N);
                 float rawFreq = pitchTrackerBuf[N - 1];
                 constexpr float kJumpMaxRatio = 1.6817928f;
-                constexpr int kJumpConfirmBlocks = 9;
                 constexpr int kOctaveConfirmBlocks = 60;
+                constexpr int kOctaveHardConfirmBlocks = 120;
                 constexpr float kOctaveToleranceRatio = 1.05f;
                 constexpr int kSilenceResetBlocks = 40;
-                constexpr int kFreshOnsetConfirmBlocks = 3;
+                constexpr int kFreshOnsetConfirmBlocks = 30;
                 constexpr float kTrackerFloorHz = 60.0f;
                 constexpr float kTrackerFloorMarginHz = 0.5f;
                 bool rawAtTrackerFloor = rawFreq > 0.0f &&
                     rawFreq < kTrackerFloorHz + kTrackerFloorMarginHz;
-                if (rawFreq <= 0.0f) {
-                    extFreqGuardSilenceBlocks++;
-                    if (extFreqGuardSilenceBlocks >= kSilenceResetBlocks) {
-                        extFreqGuardAnchor = 0.0f;
-                        extFreqGuardCandidate = 0.0f;
-                        extFreqGuardStreakBlocks = 0;
+                if (rawFreq <= 0.0f || rawAtTrackerFloor) {
+                    extFreqGuardCandidate = 0.0f;
+                    extFreqGuardStreakBlocks = 0;
+                    if (rawFreq <= 0.0f) {
+                        extFreqGuardSilenceBlocks++;
+                        if (extFreqGuardSilenceBlocks >= kSilenceResetBlocks) {
+                            extFreqGuardAnchor = 0.0f;
+                            extFreqGuardCandidate = 0.0f;
+                            extFreqGuardStreakBlocks = 0;
+                        }
                     }
                 } else {
                     extFreqGuardSilenceBlocks = 0;
@@ -1271,8 +1280,8 @@ static void* worker(void*) {
                             extFreqGuardStreakBlocks = 0;
                         }
                     } else {
-                        bool plausibleVsAnchor = !rawAtTrackerFloor &&
-                            (rawFreq < extFreqGuardAnchor * kJumpMaxRatio && rawFreq > extFreqGuardAnchor / kJumpMaxRatio);
+                        bool plausibleVsAnchor = rawFreq < extFreqGuardAnchor * kJumpMaxRatio &&
+                                                 rawFreq > extFreqGuardAnchor / kJumpMaxRatio;
                         if (plausibleVsAnchor) {
                             constexpr float kAnchorSmoothCoeff = 0.25f;
                             extFreqGuardAnchor = extFreqGuardAnchor * (1.0f - kAnchorSmoothCoeff) + rawFreq * kAnchorSmoothCoeff;
@@ -1292,15 +1301,36 @@ static void* worker(void*) {
                             bool octaveSuspicious =
                                 (octaveRatioUp < kOctaveToleranceRatio && octaveRatioUp > 1.0f / kOctaveToleranceRatio) ||
                                 (octaveRatioDown < kOctaveToleranceRatio && octaveRatioDown > 1.0f / kOctaveToleranceRatio);
-                            int requiredStreak = (octaveSuspicious || rawAtTrackerFloor) ? kOctaveConfirmBlocks : kJumpConfirmBlocks;
+                            int requiredStreak = octaveSuspicious ? kOctaveHardConfirmBlocks : kOctaveConfirmBlocks;
                             if (extFreqGuardStreakBlocks >= requiredStreak) {
-                                constexpr float kConfirmedJumpSmoothCoeff = 0.15f;
-                                extFreqGuardAnchor = extFreqGuardAnchor * (1.0f - kConfirmedJumpSmoothCoeff) + rawFreq * kConfirmedJumpSmoothCoeff;
-                                extFreqGuardCandidate = rawFreq;
-                                extFreqGuardStreakBlocks = requiredStreak - 1;
+                                extFreqGuardAnchor = rawFreq;
+                                extFreqGuardCandidate = 0.0f;
+                                extFreqGuardStreakBlocks = 0;
+                                extFreqGuardDiagBigJumps++;
                             }
                         }
                     }
+                }
+                extFreqGuardDiagBlocks++;
+                if (rawFreq > extFreqGuardDiagRawMax) extFreqGuardDiagRawMax = rawFreq;
+                if (extFreqGuardDiagRawMin <= 0.0f || rawFreq < extFreqGuardDiagRawMin) extFreqGuardDiagRawMin = rawFreq;
+                if (extFreqGuardAnchor > 0.0f && rawFreq > 0.0f &&
+                    (rawFreq >= extFreqGuardAnchor * kJumpMaxRatio ||
+                     rawFreq <= extFreqGuardAnchor / kJumpMaxRatio)) {
+                    extFreqGuardDiagOutOfBand++;
+                }
+                if (extFreqGuardDiagBlocks >= 750) {
+                    timespec diagTs;
+                    clock_gettime(CLOCK_MONOTONIC, &diagTs);
+                    fprintf(stderr, "[diag-lock] t=%ld.%03ld anchor=%.1f rawMin=%.1f rawMax=%.1f outOfBand=%d/750 bigJumps=%u\n",
+                            (long)diagTs.tv_sec, (long)(diagTs.tv_nsec / 1000000),
+                            extFreqGuardAnchor, extFreqGuardDiagRawMin, extFreqGuardDiagRawMax,
+                            extFreqGuardDiagOutOfBand, extFreqGuardDiagBigJumps);
+                    extFreqGuardDiagBlocks = 0;
+                    extFreqGuardDiagOutOfBand = 0;
+                    extFreqGuardDiagBigJumps = 0;
+                    extFreqGuardDiagRawMin = 0.0f;
+                    extFreqGuardDiagRawMax = 0.0f;
                 }
             }
             if (extFreqDetZone) {
