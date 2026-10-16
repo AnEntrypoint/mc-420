@@ -1,0 +1,19 @@
+Stage hunt: 2093 Hz sine -> raw tracker 719.3 Hz. Pinned flags: -vec -fun -dfs -vs 32 -nvi -ct 0. Faust 2.81.10 host.
+(a) ZC estimator, multitranspose.dsp trackPitchHzAndHp copied verbatim into zc_probe.dsp
+    faust -lang c ... zc_{1000,2093}.dsp  rc=0 both; gcc drv_zc_*.c rc=0; run rc=0
+    result: 1000 Hz -> 1002.565 ; 2093 Hz -> 2094.8 (steady) => NOT the stage
+(b) pitchtracker_ac.dsp (verbatim copy pt_ac.dsp)
+    faust ... -cn ptac  rc=14 twice (SIGALRM, faust 120 s watchdog on this host)
+    faust with LD_PRELOAD=noalarm.so (alarm() shim, compile only) rc=0, ~6 min
+    gcc drv_pt_*.c rc=0; run rc=0
+    result: 1000 Hz -> 999.236 ; 2093 Hz -> 719.625 (settles at 719.152 at 0.1 s)
+(b2) internal probe pt_probe3.dsp (outputs coarse=pickFundamental, refined=refineFreq(coarse), held=detectedFreq)
+    faust rc=0; gcc rc=0; run rc=0
+    1000 Hz: coarse 1000.000, refined 999.236, held 999.236
+    2093 Hz: coarse 700.000, refined 719.625, held 719.625
+(b3) variant refineSpreadK 16 -> 4 (sed on pt_ac.dsp), compile rc=0 with noalarm shim
+    1000 Hz -> 998.766 ; 2093 Hz -> 698.247 (settles at 1 s)
+Named stage: effects/pitchtracker-src/pitchtracker_ac.dsp refineFreq (refineSpreadK = 16, line 94; refineFreq lines 101-112).
+Coarse candidate 700.000 comes from pickFundamental (lines 56-96, isPeak test at line 67): a 2093 Hz sine's grid tops at 1581 Hz, so the true period is unreachable and the 3-period lag alias (~698 Hz) wins. The +-16-sample parabolic refine straddles more than one period (P/2 = 11.5 samples at 2093 Hz) and moves 698 -> 719.6.
+Guard (c): audio_thread.cpp extFreqGuard block (lines ~1263-1327) only forms an EMA / octave comparison of rawFreq; it cannot produce a value that is not in its input stream, so it passes 719 through.
+Sha256 of kept traces: see sha256.txt
