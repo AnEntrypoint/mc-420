@@ -237,6 +237,8 @@ function estimateF0At(samples, rate, start, win) {
   const limit = Math.min(maxLag, samples.length - start - win - 1);
   let bestScore = Infinity;
   let bestLag = 0;
+  const scores = new Float64Array(limit - minLag + 1);
+  scores.fill(Infinity);
   for (let lag = minLag; lag <= limit; lag += 1) {
     let num = 0;
     let denA = 0;
@@ -252,9 +254,17 @@ function estimateF0At(samples, rate, start, win) {
     const den = denA + denB;
     if (den <= 0) continue;
     const score = num / den;
+    scores[lag - minLag] = den > 0 ? score : Infinity;
     if (score < bestScore) { bestScore = score; bestLag = lag; }
   }
   if (!bestLag || bestScore > 0.75) return null;
+  const submultipleTolerance = 0.02;
+  for (let lag = minLag + 1; lag < bestLag; lag += 1) {
+    const sc = scores[lag - minLag];
+    if (sc > bestScore + submultipleTolerance) continue;
+    if (sc > scores[lag - minLag - 1] || sc > scores[lag - minLag + 1]) continue;
+    return { hz: rate / lag, score: sc };
+  }
   return { hz: rate / bestLag, score: bestScore };
 }
 

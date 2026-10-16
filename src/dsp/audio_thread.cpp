@@ -324,7 +324,6 @@ static void* worker(void*) {
     float extFreqGuardAnchor = 0.0f;
     float extFreqGuardCandidate = 0.0f;
     int extFreqGuardStreakBlocks = 0;
-    int extFreqGuardSilenceBlocks = 0;
     unsigned extFreqGuardDiagBlocks = 0;
     int extFreqGuardDiagOutOfBand = 0;
     unsigned extFreqGuardDiagBigJumps = 0;
@@ -1245,8 +1244,7 @@ static void* worker(void*) {
                 constexpr int kOctaveConfirmBlocks = 60;
                 constexpr int kOctaveHardConfirmBlocks = 120;
                 constexpr float kOctaveToleranceRatio = 1.05f;
-                constexpr int kSilenceResetBlocks = 40;
-                constexpr int kFreshOnsetConfirmBlocks = 30;
+                constexpr int kFreshOnsetConfirmBlocks = 3;
                 constexpr float kTrackerFloorHz = 60.0f;
                 constexpr float kTrackerFloorMarginHz = 0.5f;
                 bool rawAtTrackerFloor = rawFreq > 0.0f &&
@@ -1254,16 +1252,7 @@ static void* worker(void*) {
                 if (rawFreq <= 0.0f || rawAtTrackerFloor) {
                     extFreqGuardCandidate = 0.0f;
                     extFreqGuardStreakBlocks = 0;
-                    if (rawFreq <= 0.0f) {
-                        extFreqGuardSilenceBlocks++;
-                        if (extFreqGuardSilenceBlocks >= kSilenceResetBlocks) {
-                            extFreqGuardAnchor = 0.0f;
-                            extFreqGuardCandidate = 0.0f;
-                            extFreqGuardStreakBlocks = 0;
-                        }
-                    }
                 } else {
-                    extFreqGuardSilenceBlocks = 0;
                     bool freshOnset = extFreqGuardAnchor <= 0.0f;
                     if (freshOnset) {
                         bool candidatePlausible = extFreqGuardCandidate > 0.0f &&
@@ -1303,9 +1292,10 @@ static void* worker(void*) {
                                 (octaveRatioDown < kOctaveToleranceRatio && octaveRatioDown > 1.0f / kOctaveToleranceRatio);
                             int requiredStreak = octaveSuspicious ? kOctaveHardConfirmBlocks : kOctaveConfirmBlocks;
                             if (extFreqGuardStreakBlocks >= requiredStreak) {
-                                extFreqGuardAnchor = rawFreq;
-                                extFreqGuardCandidate = 0.0f;
-                                extFreqGuardStreakBlocks = 0;
+                                constexpr float kConfirmedJumpSmoothCoeff = 0.15f;
+                                extFreqGuardAnchor = extFreqGuardAnchor * (1.0f - kConfirmedJumpSmoothCoeff) + rawFreq * kConfirmedJumpSmoothCoeff;
+                                extFreqGuardCandidate = rawFreq;
+                                extFreqGuardStreakBlocks = requiredStreak - 1;
                                 extFreqGuardDiagBigJumps++;
                             }
                         }
