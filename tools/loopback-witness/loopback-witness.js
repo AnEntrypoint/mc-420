@@ -15,7 +15,8 @@ const kSustainCC = 64;
 const kScanToneHz = 440;
 const kMinHz = 50;
 const kMaxHz = 4000;
-const kMinSegRms = 0.0013;
+const kMinSilentDb = 10;
+const kNoteOnMs = 500;
 const kWorkDir = path.join(os.tmpdir(), 'loopback-witness');
 
 const args = process.argv.slice(2);
@@ -242,8 +243,15 @@ function refinedHz(scores, minLag, lag, limit, rate) {
   return rate / (lag + Math.max(-0.5, Math.min(0.5, 0.5 * (a - c) / d)));
 }
 
-function measurable(segRms, validHops) {
-  return validHops > 0 && segRms >= kMinSegRms;
+function measurable(segRms, silentRms, validHops) {
+  if (validHops <= 0) return false;
+  return 20 * Math.log10(segRms / Math.max(silentRms, 1e-12)) >= kMinSilentDb;
+}
+
+function settleSegment(captured, noteOnMs) {
+  const settleStart = Math.round((noteOnMs / 1000 + 0.45) * kRate);
+  const settleEnd = Math.max(settleStart + 8192, captured.length - Math.round(0.3 * kRate));
+  return captured.subarray(settleStart, settleEnd);
 }
 
 function estimateF0At(samples, rate, start, win) {
@@ -410,6 +418,13 @@ function buildProgram(source, seconds) {
   return { program: tile(resample(w.samples, w.rate, kRate, ratio), frames), label: `${source}${opts.semis ? ` ${opts.semis >= 0 ? '+' : ''}${opts.semis} semis` : ''}`, inputHz: null };
 }
 
+async function silentControlRms(secs) {
+  const file = path.join(kWorkDir, 'lock-silence.raw');
+  await withGate(opts.gate, () => captureRaw(file, opts.capChannels, secs));
+  const captured = deinterleave(fs.readFileSync(file), opts.capChannels, opts.capCh);
+  return stats(settleSegment(captured, kNoteOnMs)).rms;
+}
+
 async function runLock() {
   const lock = opts.lock;
   const secs = lock.secs;
@@ -420,10 +435,13 @@ async function runLock() {
   writeInterleavedS32(playFile, built.program, opts.playChannels, opts.playCh, opts.gain);
 
   await clearAll();
+  const silentRms = await silentControlRms(secs);
+  console.log(`[loopback-witness] silent control (same run, ${secs}s, no playback) seg rms ${silentRms.toFixed(6)}`);
+  await clearAll();
   const before = await telemetry();
   console.log(`[loopback-witness] LOCK source=${built.label} note=${lock.note} expect ${expectedHz.toFixed(2)} Hz, ${secs}s, before in ${peakOf(before).in} out ${peakOf(before).out}`);
 
-  const noteOnMs = 500;
+  const noteOnMs = kNoteOnMs;
   const noteOffMs = secs * 1000 - 250;
   await withGate(opts.gate, async () => {
     const capturing = captureRaw(capFile, opts.capChannels, secs);
@@ -452,9 +470,7 @@ async function runLock() {
 
   const preEnd = Math.round((noteOnMs / 1000 - 0.05) * kRate);
   const preF0 = estimateF0(captured.subarray(0, preEnd), kRate);
-  const settleStart = Math.round((noteOnMs / 1000 + 0.45) * kRate);
-  const settleEnd = Math.max(settleStart + 8192, captured.length - Math.round(0.3 * kRate));
-  const seg = captured.subarray(settleStart, settleEnd);
+  const seg = settleSegment(captured, noteOnMs);
   const f0 = estimateF0(seg, kRate);
   const segStats = stats(seg);
 
@@ -467,7 +483,8 @@ async function runLock() {
     traj.push({ ms: Math.round(((s - noteOnMs / 1000 * kRate) / kRate) * 1000), hz: f ? f.hz : null });
   }
   const valid = traj.filter((t) => t.hz !== null);
-  const verdictValid = measurable(segStats.rms, valid.length);
+  const verdictValid = measurable(segStats.rms, silentRms, valid.length);
+  const segDb = 20 * Math.log10(segStats.rms / Math.max(silentRms, 1e-12));
 
   console.log(`[loopback-witness] loudest capture channels: ${ranked.slice(0, 3).map((r) => `ch${r.ch} rms ${r.rms.toFixed(6)}`).join(' | ')}`);
   console.log(`[loopback-witness] input (pre note-on) f0 ${preF0 ? `${preF0.hz.toFixed(2)} Hz` : 'not detected'} | played ${built.inputHz ? `${built.inputHz.toFixed(2)} Hz` : built.label}`);
@@ -482,20 +499,20 @@ async function runLock() {
   const offOct = valid.filter((t) => Math.abs(Math.round(centsBetween(t.hz, expectedHz) / 1200)) >= 1).length;
   console.log(`[loopback-witness] hops an octave or more off target: ${offOct}/${valid.length}`);
   if (!verdictValid) {
-    console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz INVALID (seg rms ${segStats.rms.toFixed(6)} floor ${kMinSegRms}, ${valid.length} valid hops): no measurement, excluded from octave count`);
+    console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz INVALID (seg rms ${segStats.rms.toFixed(6)} silent rms ${silentRms.toFixed(6)} ${segDb.toFixed(1)} dB over silent, need ${kMinSilentDb} dB, ${valid.length} valid hops): no measurement, excluded from octave count`);
     if (opts.out) console.log(`[loopback-witness] wrote ${opts.out}`);
     process.exitCode = 1;
     return;
   }
   if (!f0) {
-    console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz measured NOT DETECTED (seg rms ${segStats.rms.toFixed(6)} peak ${segStats.peak.toFixed(6)})`);
+    console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz measured NOT DETECTED (seg rms ${segStats.rms.toFixed(6)} silent rms ${silentRms.toFixed(6)} peak ${segStats.peak.toFixed(6)})`);
     if (opts.out) console.log(`[loopback-witness] wrote ${opts.out}`);
     process.exitCode = 1;
     return;
   }
   const cents = centsBetween(f0.hz, expectedHz);
   const octavesOff = Math.round(cents / 1200);
-  console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz measured ${f0.hz.toFixed(2)} Hz (score ${f0.score.toFixed(3)}) -> ${cents >= 0 ? '+' : ''}${cents.toFixed(1)} cents, octaves off ${octavesOff}${Math.abs(octavesOff) >= 1 ? ' OCTAVE ERROR' : ''} | seg rms ${segStats.rms.toFixed(6)} peak ${segStats.peak.toFixed(6)}`);
+  console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz measured ${f0.hz.toFixed(2)} Hz (score ${f0.score.toFixed(3)}) -> ${cents >= 0 ? '+' : ''}${cents.toFixed(1)} cents, octaves off ${octavesOff}${Math.abs(octavesOff) >= 1 ? ' OCTAVE ERROR' : ''} | seg rms ${segStats.rms.toFixed(6)} silent rms ${silentRms.toFixed(6)} (${segDb.toFixed(1)} dB) peak ${segStats.peak.toFixed(6)}`);
   if (opts.out) console.log(`[loopback-witness] wrote ${opts.out}`);
 }
 
@@ -507,17 +524,29 @@ function selfTest() {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
     return 0.1 * (seed / 0x7fffffff * 2 - 1);
   });
+  const floorNoise = (seedIn) => {
+    let s = seedIn;
+    return Float64Array.from({ length: n }, () => {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      return 0.00003 * Math.sqrt(3) * (s / 0x7fffffff * 2 - 1);
+    });
+  };
+  const addTo = (a, b) => a.map((v, i) => v + b[i]);
+  const silentRef = floorNoise(777);
+  const silentRefRms = stats(silentRef).rms;
   const cases = [
-    { name: 'periodic 440 Hz sine', samples: sine(440, 0.1), expectHz: 440 },
-    { name: 'periodic 2093 Hz sine (C7)', samples: sine(2093, 0.1), expectHz: 2093 },
-    { name: 'silence', samples: new Float64Array(n), expectHz: null },
-    { name: 'white noise', samples: noise, expectHz: null },
+    { name: 'periodic 440 Hz sine', samples: sine(440, 0.1), expectHz: 440, ref: silentRef },
+    { name: 'periodic 2093 Hz sine (C7)', samples: sine(2093, 0.1), expectHz: 2093, ref: silentRef },
+    { name: 'quiet periodic 1000 Hz tone 0.0005 rms over 0.00003 floor', samples: addTo(sine(1000, 0.0005 * Math.SQRT2), floorNoise(4242)), expectHz: 1000, ref: silentRef, expectValid: true },
+    { name: 'silence at 0.00003 floor', samples: floorNoise(9001), expectHz: null, ref: silentRef, expectValid: false },
+    { name: 'all-zero silence', samples: new Float64Array(n), expectHz: null, ref: silentRef, expectValid: false },
+    { name: 'white noise', samples: noise, expectHz: null, ref: silentRef, expectValid: false },
   ];
   let failed = 0;
   for (const c of cases) {
     const f = estimateF0(c.samples, kRate);
     const rms = stats(c.samples).rms;
-    const valid = measurable(rms, f ? 1 : 0);
+    const valid = measurable(rms, stats(c.ref).rms, f ? 1 : 0);
     const measured = f ? f.hz.toFixed(2) : 'none';
     let ok;
     if (c.expectHz === null) ok = !valid;
