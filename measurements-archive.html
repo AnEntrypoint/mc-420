@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Measurement archive | aloop</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Measurement archive" />
+<meta property="og:locale" content="en_US" />
+<link rel="canonical" href="https://anentrypoint.github.io/mc-420/measurements-archive.html" />
+<meta property="og:url" content="https://anentrypoint.github.io/mc-420/measurements-archive.html" />
+<meta property="og:site_name" content="aloop" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Measurement archive" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=2280253abc6531173c74ce0a3c74a57efbe8fde4">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/mc-420/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1><a href="https://anentrypoint.github.io/mc-420/">aloop</a></h1>
+
+        
+
+        <p></p>
+
+        
+        <p class="view"><a href="https://github.com/AnEntrypoint/mc-420">View the Project on GitHub <small>AnEntrypoint/mc-420</small></a></p>
+        
+
+        
+
+        
+      </header>
+      <section>
+
+      <h1 id="measurement-archive">Measurement archive</h1>
+
+<p>Numeric evidence relocated verbatim from AGENTS.md. Each section is one bullet; the one-line rule for it stays in AGENTS.md with a pointer back here.</p>
+
+<h2 id="clean-ingress-focusrite-loopback">Clean ingress (Focusrite loopback)</h2>
+
+<ul>
+  <li>A clean ingress now exists via the Focusrite loopback (ADR-029); the bare AIR 192 reads silent (<code class="language-plaintext highlighter-rouge">in</code> 0.0001). #4 hiss WITNESSED absent (silent input -&gt; <code class="language-plaintext highlighter-rouge">out</code> 0.0001). <code class="language-plaintext highlighter-rouge">snd-pcm-oss</code> 8000 Hz U8 no resampling (~150 xruns/s at 48k; 8k stalls aloop); <code class="language-plaintext highlighter-rouge">snd-aloop</code> jiffies-paced + TEARS -&gt; ANY click/tear witness through it INVALID (17 glitches vs host 0; drift ±15 &gt; effect); <code class="language-plaintext highlighter-rouge">period_size=64</code>+HZ=250 -&gt; xruns 125/s, tears 0.25-7/s, only timer <code class="language-plaintext highlighter-rouge">G0</code> (4000 µs), unfixable.</li>
+</ul>
+
+<h2 id="aarch64-vs-host">aarch64 vs host</h2>
+
+<ul>
+  <li>aarch64 vs host: characterization-identical, NOT bit-identical. 9 cells EXACT: vocal_female_vibrato 0/11/46, piano_mid_C4 1/4/5, marimba_mid_C5B5 2/5/4 at +0/+12/+24; sums -24/-12/0/+12/+19/+24 -&gt; Pi 3/9/19/209/142/199 vs host 4/9/19/212/144/200 (±2). Codegen PINNED: CI compiles committed <code class="language-plaintext highlighter-rouge">dsp_generated.cpp</code>; <code class="language-plaintext highlighter-rouge">--solad</code> returns at <code class="language-plaintext highlighter-rouge">dsp_cli.cpp:1097</code>, before <code class="language-plaintext highlighter-rouge">AloopEffectDsp</code> at 1100 -&gt; codegen link-only.</li>
+</ul>
+
+<h2 id="faust-codegen-cliff">Faust codegen cliff</h2>
+
+<ul>
+  <li>Faust codegen cliff: a NEW UI primitive in <code class="language-plaintext highlighter-rouge">resonode_synth.dsp</code>/<code class="language-plaintext highlighter-rouge">pitchtracker_ac.dsp</code>/<code class="language-plaintext highlighter-rouge">multitranspose.dsp</code>/<code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code> risks unbounded compile; new controls go in <code class="language-plaintext highlighter-rouge">effects_runtime.dsp</code>. Measured: <code class="language-plaintext highlighter-rouge">pitchtracker_ac.dsp</code> arm 10.2-10.8 s, demote 12.6, promote 16.1, both &gt;120 s rc=142; <code class="language-plaintext highlighter-rouge">ubuntu-24.04-arm</code> 53.3 s base: fixed-lag +8/+32/+148, +1 var-lag <code class="language-plaintext highlighter-rouge">@</code> 70.2 s, +4 120.1 s rc=142. Cost tracks what FEEDS an index, not tap count (13 rwtable taps 0.0 s). Read lag taps from a 4096-deep <code class="language-plaintext highlighter-rouge">rwtable</code> with a modulo-bounded counter, never variable-lag <code class="language-plaintext highlighter-rouge">@</code> or a float accumulator (not integer-exact past 2^24).</li>
+</ul>
+
+<h2 id="per-block-fprintf">Per-block fprintf</h2>
+
+<ul>
+  <li>NEVER per-block <code class="language-plaintext highlighter-rouge">fprintf</code> on the audio path: <code class="language-plaintext highlighter-rouge">[diag-pitchguard]</code> ~500 lines/s -&gt; 475 MB <code class="language-plaintext highlighter-rouge">/var/log/aloop.log</code>; <code class="language-plaintext highlighter-rouge">[diag-gap]</code> 503 MB at 18.75 KB/s, loadavg 6.18, root tmpfs 547 MB/1.9 G. Rate tracks live audio -&gt; silence reads +0 lines, hiding it.</li>
+</ul>
+
+<h2 id="two-device-sync-acceptance">Two-device sync acceptance</h2>
+
+<ul>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>TWO-DEVICE LINK SYNC UP: <code class="language-plaintext highlighter-rouge">verify-two-device-sync.js &lt;pi-ip&gt; 600000</code> PASS at 118.500 bpm (peer retained 100%, 0 rejoins, 0 gaps, bpm spread 0.000, max</td>
+          <td>phase_err_beats</td>
+          <td>0.0010, xruns 0). FAIL thresholds: peer &lt;95% post-acquisition, bpm spread &gt;0.05,</td>
+          <td>phase_err_beats</td>
+          <td>&gt;0.03, eff_speed spread &gt;0.005, gaps &gt;10%.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+</ul>
+
+<h2 id="soaks-and-route-flap">Soaks and route flap</h2>
+
+<ul>
+  <li>Soaks (25 min <code class="language-plaintext highlighter-rouge">df18c36</code>, 30 min post-<code class="language-plaintext highlighter-rouge">df18c36</code>): peers=1 every poll, <code class="language-plaintext highlighter-rouge">synced=true</code>, bpm 118.600, phase_err_beats 0, eff_speed 1.00000. Route flap: 1-&gt;0 in ~4 s, unrestored within 45 s or a restart, self-heals ~1 h. ENOMEM at t=218.9 s UNREPRODUCED (pre-fix <code class="language-plaintext highlighter-rouge">0a8760c</code>: fail=1501 giveup=396 errno=12).</li>
+</ul>
+
+<h2 id="link-phase-trim">Link phase trim</h2>
+
+<ul>
+  <li>Phase trim applies to <code class="language-plaintext highlighter-rouge">masterPhaseSamples</code> ONLY (<code class="language-plaintext highlighter-rouge">kLinkPhaseTrimPerSample=0.00005</code>, clamp <code class="language-plaintext highlighter-rouge">kLinkPhaseTrimMax=0.03</code>, ZEROED unless <code class="language-plaintext highlighter-rouge">linkVarispeedEngaged &amp;&amp; !manualPunchActive</code>). <code class="language-plaintext highlighter-rouge">masterPhaseBuf</code> ramps per-sample (never <code class="language-plaintext highlighter-rouge">std::fill()</code>) at <code class="language-plaintext highlighter-rouge">masterPhaseSlope=linkSpeedRatio+linkPhaseTrim</code>; <code class="language-plaintext highlighter-rouge">effSpeed = g_manualSpeedMul*linkSpeedRatio</code> carries TEMPO alone; <code class="language-plaintext highlighter-rouge">masterPhaseSamples</code> advances at <code class="language-plaintext highlighter-rouge">linkSpeedRatio</code> ALONE; <code class="language-plaintext highlighter-rouge">resyncCoeff</code> closes ~42 ms. Tempo must hold <code class="language-plaintext highlighter-rouge">kTempoStableBlocksThreshold = sr/N</code> blocks.</li>
+</ul>
+
+<h2 id="link-tempo-authority">Link tempo authority</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">setTempo</code> rewrites EVERY peer; <code class="language-plaintext highlighter-rouge">imposeTempo(bpm)</code> unconditioned, only writer of <code class="language-plaintext highlighter-rouge">weOwnTempo</code>; never gate <code class="language-plaintext highlighter-rouge">linkSpeedRatio</code> on it. Match tempo by read RATE (<code class="language-plaintext highlighter-rouge">linkSpeedRatio=linkBpm/recordedBpm</code> &gt; <code class="language-plaintext highlighter-rouge">effSpeed</code>); <code class="language-plaintext highlighter-rouge">imposeTempo()</code> republishes in the same call or the finish edge doubles the take. Latches <code class="language-plaintext highlighter-rouge">g_ownedBpm</code>, re-imposed by <code class="language-plaintext highlighter-rouge">controlTick()</code> after <code class="language-plaintext highlighter-rouge">kPeerSettleTicks=2</code> (~400 ms) on join/leave; else a joiner merges its own 120.000 session and <code class="language-plaintext highlighter-rouge">eff_speed</code> settles 1.0067. <code class="language-plaintext highlighter-rouge">resetTempoAuthority()</code> clears it.</li>
+</ul>
+
+<h2 id="two-quantums">Two quantums</h2>
+
+<ul>
+  <li>Two quantums: 16 transport (PAIRED: transport anchor, <code class="language-plaintext highlighter-rouge">beatNow()</code>, 24-PPQN clock), 128 phase CAPTURE (<code class="language-plaintext highlighter-rouge">controlTick()</code> at <code class="language-plaintext highlighter-rouge">kLinkPhaseQuantumBeats=128.0</code>; consumers fold <code class="language-plaintext highlighter-rouge">(quantumMicroBeats/1e6)</code>, never <code class="language-plaintext highlighter-rouge">16.0</code>). Phase is ABSOLUTE-beat (<code class="language-plaintext highlighter-rouge">phaseAtTime(t,q) == beatAtTime(t) mod q</code>): folding a 128-beat capture at <code class="language-plaintext highlighter-rouge">rb</code> is WRONG unless <code class="language-plaintext highlighter-rouge">rb|128</code>. Capture at loop quantum (<code class="language-plaintext highlighter-rouge">setLoopPhaseQuantumBeats(cmd/recorded_beats)</code> &gt; <code class="language-plaintext highlighter-rouge">loopPhaseMicroBeats</code>); fall back to 128 only when absent or != recorded beats.</li>
+</ul>
+
+<h2 id="anchors-before-timeline-re-base">Anchors before timeline re-base</h2>
+
+<ul>
+  <li>Any anchor taken BEFORE a timeline re-base (<code class="language-plaintext highlighter-rouge">forceBeatAtTime</code>; creation <code class="language-plaintext highlighter-rouge">audio_thread.cpp:866</code>, join <code class="language-plaintext highlighter-rouge">:915</code>) is off by <code class="language-plaintext highlighter-rouge">(-dBeat) mod rb</code>: invisible for <code class="language-plaintext highlighter-rouge">rb in {1,2,4,8,16}</code> at <code class="language-plaintext highlighter-rouge">dBeat=-16</code>, a whole beat off otherwise, ±0.03 trim over ~16 s to recover. FIXED+DEPLOYED <code class="language-plaintext highlighter-rouge">d316e22</code>: <code class="language-plaintext highlighter-rouge">rebaseSeq</code> (<code class="language-plaintext highlighter-rouge">link_bridge.cpp</code>, bumped per applied <code class="language-plaintext highlighter-rouge">forceBeatAtTime</code>) + <code class="language-plaintext highlighter-rouge">resnapAfterRebasePending</code> force ONE resnap past the idle-only gate.</li>
+</ul>
+
+<h2 id="resnap-witness-rb3">Resnap witness rb=3</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">.gm/resnap-rb3.js 900000</code>, <code class="language-plaintext highlighter-rouge">recorded_beats=3</code> (<code class="language-plaintext highlighter-rouge">128 mod 3 = 2</code> -&gt; a mis-fold reads ~2 beats): shipped <code class="language-plaintext highlighter-rouge">d316e22</code> max 0.0010 mean 0.0002 (n=483) vs pre-resnap <code class="language-plaintext highlighter-rouge">aloop.fixed</code> max 0.9880 mean 0.1473 (n=569). Judge the NEXT 1.5 s after the impose (both &lt;=0.011 at first); needs 0-&gt;1 WHILE audible (2 of 4 windows caught none). Restore only from CI md5 <code class="language-plaintext highlighter-rouge">e624728ac1aa50ecfad4db4a1b0d3087</code>.</li>
+</ul>
+
+<h2 id="sim-mirrors-device-link">Sim mirrors device Link</h2>
+
+<ul>
+  <li>Sim mirrors device Link (fixed <code class="language-plaintext highlighter-rouge">75d8b4a</code>, 17/17 PASS: <code class="language-plaintext highlighter-rouge">requestPhaseImpose</code> off-thread + <code class="language-plaintext highlighter-rouge">rebaseSeq</code> bump; pre-500 ms ~1.4 beats by design). Fold coverage <code class="language-plaintext highlighter-rouge">loop-quantum-fold.js</code> (rb 3/6/30): ~0.48 16-quantum residual is rb-INDEPENDENT trim-chase, not fold error.</li>
+</ul>
+
+<h2 id="diag-gap-limiter">diag-gap limiter</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">[diag-gap]</code>: 1 s <code class="language-plaintext highlighter-rouge">diagGapAllow()</code> limiter (was 503 MB at 18.75 KB/s); FIXED + WITNESSED gap_lines=1, fatals=0. <code class="language-plaintext highlighter-rouge">kExpectedPeriodMs</code> = 1.333 ms, threshold 1.5x = 2.0 ms. Device 113/569 hits at 2.0-3.0 ms, xruns=0, worst 4.4 ms vs 5.33 ms -&gt; no underrun; USB iso jitter (<code class="language-plaintext highlighter-rouge">xhci_hcd</code> IRQ 29 pinned CPU0).</li>
+</ul>
+
+<h2 id="per-partial-decay-and-impact">Per-partial decay and impact</h2>
+
+<ul>
+  <li>Per-partial <code class="language-plaintext highlighter-rouge">modeDecayScale(i)</code>/<code class="language-plaintext highlighter-rouge">modeAmpBase(i)</code> (blended like <code class="language-plaintext highlighter-rouge">modeRatio(i)</code>) give each material its own decay+gain curve. <code class="language-plaintext highlighter-rouge">highFreqDampExponent</code> stays <code class="language-plaintext highlighter-rouge">1.0*(1-damping)</code>, NOT <code class="language-plaintext highlighter-rouge">1.934264*(-log(damping))/log(2)</code> (8.35 collapsed Dance Bass to one partial). <code class="language-plaintext highlighter-rouge">impactSig</code> (0.6-14 ms by <code class="language-plaintext highlighter-rouge">hardness</code>) sits OUTSIDE <code class="language-plaintext highlighter-rouge">excEnv</code>, scaled by <code class="language-plaintext highlighter-rouge">(1-inputAmt)</code> so <code class="language-plaintext highlighter-rouge">input=1</code> stays bit-exact.</li>
+</ul>
+
+<h2 id="collisiondrive-normalisation">collisionDrive normalisation</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">collisionDrive</code> normalises by <code class="language-plaintext highlighter-rouge">1/driveAmt</code>, never <code class="language-plaintext highlighter-rouge">1/tanh(driveAmt)</code> (a +17 dB make-up gain at collision=1, why patches differed ~13 dB). Scaled by <code class="language-plaintext highlighter-rouge">drivePreGain = outLevel*decayLoudnessNorm</code> and divided back out: the pre-gain signal is ~25x smaller and tanh there is linear. Collision is a compressor: raising it LOWERS peak, crest and first-diff RMS; <code class="language-plaintext highlighter-rouge">verify_musical_controls.py</code>’s collision=0 identity check strips <code class="language-plaintext highlighter-rouge">collisionDrive(</code> by paren matching, not a literal signature.</li>
+</ul>
+
+<h2 id="waveguide-object-stage">Waveguide Object stage</h2>
+
+<ul>
+  <li>Each voice drives a waveguide Object stage (tuned feedback comb; <code class="language-plaintext highlighter-rouge">body</code> mix, <code class="language-plaintext highlighter-rouge">polarity</code> sign, <code class="language-plaintext highlighter-rouge">g = 0.001^(1/(T60*f0))</code>, peak normalised by <code class="language-plaintext highlighter-rouge">1-g</code>, 25 Hz highpass kills DC). Positive polarity is bassier (0.8194 vs 0.7996 low-band, note 36).</li>
+</ul>
+
+<h2 id="netbooted-address-and-dsp-shippability">Netbooted address and dsp shippability</h2>
+
+<ul>
+  <li>The netbooted client’s address drifts: the firmware-stage lease was 192.168.137.132 while <code class="language-plaintext highlighter-rouge">cmdline.txt</code> pins .100, and .100 answered nothing. <code class="language-plaintext highlighter-rouge">/var/lib/misc/dnsmasq.leases</code> is the authority, not the pinned address. SSH is root/aloop; no <code class="language-plaintext highlighter-rouge">ssh2</code> in this checkout, so use <code class="language-plaintext highlighter-rouge">SSH_ASKPASS</code> + <code class="language-plaintext highlighter-rouge">setsid ssh</code>. A <code class="language-plaintext highlighter-rouge">.dsp</code> edit is NOT shippable from this host: <code class="language-plaintext highlighter-rouge">build-binary.yml</code> regenerates only <code class="language-plaintext highlighter-rouge">aloop_pre</code>/<code class="language-plaintext highlighter-rouge">aloop_post</code>, <code class="language-plaintext highlighter-rouge">dsp_generated.cpp</code> is committed and compiled as-is, the pinned faust is 2.85.9 and this host has 2.81.10, which also hits faust’s own 120 s SIGALRM (exit 142) on <code class="language-plaintext highlighter-rouge">pitchtracker_ac.dsp</code>. So the multitranspose-side lead (<code class="language-plaintext highlighter-rouge">lastConvergedNote</code> carrying the previous note’s decision across a note-on, seeded from <code class="language-plaintext highlighter-rouge">targetNote</code> only at <code class="language-plaintext highlighter-rouge">ba.time == 0</code>) is UNTESTED, not disproven.</li>
+</ul>
+
+<h2 id="upward-shift-fold-back-refuted">Upward-shift fold-back refuted</h2>
+
+<ul>
+  <li>Upward-shift clicks are NOT fold-back aliasing. <code class="language-plaintext highlighter-rouge">tools/upshift-fold-map/fold_map.py</code> measured it: over 16 sources x 5 shifts, Pearson r(glitches, out-of-band energy above fs/(2s)) is -0.04 pooled, and every per-column r is negative. It fails both ways: <code class="language-plaintext highlighter-rouge">marimba_low_C2B2</code> has the least out-of-band energy in the corpus and glitches at every setting; <code class="language-plaintext highlighter-rouge">violin_high_sulE_C7E7</code> has the most and sits mid-pack. Two facts settle it regardless of r: 7 of 16 sources glitch at +0 where s=1 so folding is impossible by construction, and the count is not monotone in stride (clarinet 35/13/7/2, trumpet_high 30/4/3/2). What the count does track is <code class="language-plaintext highlighter-rouge">peakStep</code> (r up to +0.45): splice step size, i.e. source transient content and splice placement. Treat “fold-back” as a retired explanation. Both old fixes stay REJECTED: stride-adaptive kernel (+24 32&gt;27); write-side anti-alias (~3 smp at <code class="language-plaintext highlighter-rouge">s=4</code>, FORBIDDEN).</li>
+</ul>
+
+<h2 id="tremoloam-subharmonic-lock">Tremolo/AM subharmonic lock</h2>
+
+<ul>
+  <li>Tremolo/AM subharmonic lock is NOT an anti-jitter clamp: a bad lock lands on the FIRST completed detection. YIN-style cumulative-mean normalized difference (<code class="language-plaintext highlighter-rouge">kDiffAccept</code> 0.15/<code class="language-plaintext highlighter-rouge">kDiffStrict</code> 0.05/<code class="language-plaintext highlighter-rouge">kDiffFallback</code> 0.50) + parabolic refinement <code class="language-plaintext highlighter-rouge">(c-a)/(2(2b-a-c))</code>; AM grid (<code class="language-plaintext highlighter-rouge">--am-probe grid=1</code>, 108 cases): worst 3371.9&gt;425.7 c, mean-of-means 227.44&gt;6.18.</li>
+</ul>
+
+<h2 id="8df2e2c-above-1000-hz">8df2e2c above 1000 Hz</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">SnacPeriodTracker</code> above 1000 Hz: FIXED <code class="language-plaintext highlighter-rouge">8df2e2c</code>. <code class="language-plaintext highlighter-rouge">MIN_PERIOD</code> 48 -&gt; 16 (was the only way to see a 45.9-sample period) plus a stricter CMNDF accept below lag 48 (<code class="language-plaintext highlighter-rouge">kDiffAccept</code> 0.15 instead of <code class="language-plaintext highlighter-rouge">kDiffFallback</code> 0.50) so the shorter floor cannot read an octave UP. Measured <code class="language-plaintext highlighter-rouge">--trk</code> mean cents: trumpet_high_C6 1192.3 -&gt; 3.8, flute_high_C7 1900.2 -&gt; 390.4, clarinet 1634.4 -&gt; 745.3, and 1046.5/1318.5/1568/2093 all land within a few cents. Frames within +-60 c of the true note: trumpet_high_C6 and violin_high 0.0 -&gt; 100%, clarinet 0.0 -&gt; 78.3%, piano_high_C7 0.0 -&gt; 20.6%. The 9 EXACT glitch cells are unchanged (0/21/52, 1/3/2, 4/5/5 on the post-<code class="language-plaintext highlighter-rouge">d271dd0</code> tree; 0/18/47, 1/3/1, 4/6/5 while <code class="language-plaintext highlighter-rouge">fd0e3f04</code> was present). Low/mid MEDIAN periods are identical; two files move on the frames-within-+-60 c count: oboe_mid_C5B5 96.7 -&gt; 91.9 and marimba_mid_C5B5 98.8 -&gt; 96.0, and oboe’s octave-flip rate is the one that moves, 3.3% -&gt; 8.1%. Oboe octave-UP stays 0.0%, which is the point of the gate: bare 16 put 13.7% of its frames an octave UP. Cost, measured over the 34-file corpus: +56 glitches total (1089 -&gt; 1145), concentrated entirely in the 18 high-register/AM/inharmonic files added in <code class="language-plaintext highlighter-rouge">50cdfef5</code> where the tracker now attempts detection it used to clamp. Do NOT lower <code class="language-plaintext highlighter-rouge">MIN_PERIOD</code> without the short-lag gate: bare 16/24/12 measured 455/464/464 against 418 on the old corpus. Above 1000 Hz prefer <code class="language-plaintext highlighter-rouge">--pitch</code> for a quick read, never <code class="language-plaintext highlighter-rouge">--trk</code>, only because <code class="language-plaintext highlighter-rouge">--trk</code> needs a known <code class="language-plaintext highlighter-rouge">hz=</code>.</li>
+</ul>
+
+<h2 id="pitch-lock-witness-and-void-figures">Pitch-lock witness and void figures</h2>
+
+<ul>
+  <li>Pitch-lock live witness: <code class="language-plaintext highlighter-rouge">tools/loopback-witness/loopback-witness.js --lock &lt;hz|wav&gt; &lt;midiNote&gt; [secs]</code> plays out of host ch6, injects the keybed note on ch1 at +500 ms (<code class="language-plaintext highlighter-rouge">0x91</code>, <code class="language-plaintext highlighter-rouge">apc_grid.cpp:786-793</code> sets <code class="language-plaintext highlighter-rouge">fx/xposeN/note</code>), captures host ch1 and reports measured f0, cents vs the MIDI note and the 100 ms f0 trajectory for the first 2 s. <code class="language-plaintext highlighter-rouge">shiftTarget = targetNote - heldDetNote</code> (<code class="language-plaintext highlighter-rouge">effects/home/faust/multitranspose.dsp:88</code>) means a detection octave error becomes an output octave error one-for-one. ALWAYS <code class="language-plaintext highlighter-rouge">rc-service aloop restart</code> between lock cases: run back-to-back they contaminate each other (440/45 read -1204.5 cents unrestarted, -6.5 restarted). The figures recorded here earlier (220/45 +1201.4 -&gt; -2.5, 440/45 +2401.4 -&gt; -6.5, 440/57 -&gt; -1202.5, piano C4/45 +1495.0 -&gt; -6.5, piano C4/60 6 -&gt; 10 jumps and 3/21 -&gt; 7/21) were measured with an <code class="language-plaintext highlighter-rouge">estimateF0At</code> that returned the smallest-NSD lag: on a periodic tone the NSD at 2T/3T/4T is also ~0, so a correct sustained output read at 1/2, 1/3 or 1/4 of the target at random and was scored as an octave error. It now returns the smallest lag that is a LOCAL MINIMUM within 0.02 NSD of the best (verified exact on synthetic 55/110/262 Hz tones with and without harmonics), so those figures are void. Re-measured A/B, <code class="language-plaintext highlighter-rouge">a9509f8f</code> (bf09be8b) vs <code class="language-plaintext highlighter-rouge">fe3583bd</code>, restart between every case: 220/45 -2.5 -&gt; -2.5, 440/45 -6.5 -&gt; -2.5, both 0 jumps and 0/21; piano C4/57 three reps hops-octave-off 3,2,3 -&gt; 1,1,3 with real octave excursions 3 -&gt; 0; piano C4/45 two reps 8,7 -&gt; 6,1; piano C4/60 two reps 2,3 -&gt; 2,4. Real octave excursions summed over the 7 paired piano runs: 7 -&gt; 2.</li>
+</ul>
+
+<h2 id="pitch-lock-lead-in">Pitch-lock lead-in</h2>
+
+<ul>
+  <li>Pitch-lock residual is the LEAD-IN, not an octave error: <code class="language-plaintext highlighter-rouge">piano_mid_C4.wav</code> has a silent ~500 ms pre-roll (rms 6e-4) and its note attack lands exactly where the witness injects the note at +500 ms, and the AC tracker’s <code class="language-plaintext highlighter-rouge">energyReady</code> floor (<code class="language-plaintext highlighter-rouge">env &gt; 1e-6</code>) keeps it unready through the pre-roll, so no pitch is published until ~35 ms after the attack and the harmony is unpitched for the first 100-300 ms. Most remaining “an octave off” hops are that unpitched lead-in read as the 2000 Hz <code class="language-plaintext highlighter-rouge">minLag</code> floor.</li>
+</ul>
+
+<h2 id="extfreqguardanchor-corroboration">extFreqGuardAnchor corroboration</h2>
+
+<ul>
+  <li>The <code class="language-plaintext highlighter-rouge">extFreqGuardAnchor</code> corroboration, at <code class="language-plaintext highlighter-rouge">audio_thread.cpp:1239</code>: a move past <code class="language-plaintext highlighter-rouge">kJumpMaxRatio</code> needs 60 blocks (80 ms) of the tracker holding ONE candidate, 120 blocks (160 ms) when it sits within 5 percent of an exact octave, and a reading at the tracker’s 60 Hz floor is never latched. The old rule accepted any non-octave jump after 9 blocks (12 ms) and then chased it at 15 percent per block, so a 2x or 3x reading carried the anchor the whole way within ~30 ms. Two variants were REJECTED by measurement: holding the anchor while the tracker reports no pitch makes a wrong value STICKY (piano C4/57 gained 1-2 octave-down excursions per run, because the drop-out that used to clear it no longer does), and <code class="language-plaintext highlighter-rouge">kFreshOnsetConfirmBlocks</code> 3 -&gt; 30 only bought a longer unpitched lead-in at every note. The tracker already gates its own onset (35 ms hold + a 512-sample stability run), so 4 ms of agreement is not the onset problem.</li>
+</ul>
+
+<h2 id="free-transpose-pitch-independent-of-tracker">Free-transpose pitch independent of tracker</h2>
+
+<ul>
+  <li>Free-transpose pitch does NOT depend on the tracked period: <code class="language-plaintext highlighter-rouge">semis</code> sets the ratio outright, so a tracker octave error corrupts splice alignment, not the output pitch. Proven by a synthetic sweep 55 Hz to 2637 Hz at +12: <code class="language-plaintext highlighter-rouge">achievedSemis</code> +12.00 +/- 0.03, worst 8 c. An octave JUMP in the audible output can therefore only come from the pitch-LOCK path (<code class="language-plaintext highlighter-rouge">shiftTarget = targetNote - heldDetNote</code>), never from the free-transpose knob - chase octave complaints there.</li>
+</ul>
+
+<h2 id="extfreqdet-written-four-estimates">extfreqdet written, four estimates</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">fx/extfreqdet</code> is now written (<code class="language-plaintext highlighter-rouge">bf09be8b</code>, <code class="language-plaintext highlighter-rouge">audio_thread.cpp</code> publishes <code class="language-plaintext highlighter-rouge">extFreqGuardAnchor</code>, clamped to 1500); the corroboration rule it applies is in the pitch-lock bullet above. Before that it was resolved and never written, so <code class="language-plaintext highlighter-rouge">multitranspose.dsp:141-143</code> always took its internal branch and the harmony lock ran off the ZERO-CROSSING-RATE estimator <code class="language-plaintext highlighter-rouge">trackPitchHzAndHp</code> (<code class="language-plaintext highlighter-rouge">multitranspose.dsp:33-44</code>) while the real AC tracker (<code class="language-plaintext highlighter-rouge">pitchtracker.lv2</code>, loaded on core 1) was computed, octave-guarded and discarded. Four independent pitch estimates exist (mono SNAC, poly SNAC, LV2 AC, ZCR); the mux at <code class="language-plaintext highlighter-rouge">multitranspose.dsp:141</code> is the place they can disagree.</li>
+</ul>
+
+<h2 id="measurement-gates-the-claim">Measurement gates the claim</h2>
+
+<ul>
+  <li>Measurement gates the claim, and a small corpus lies. A period-hysteresis gate in <code class="language-plaintext highlighter-rouge">soladSnacOctaver.h</code> measured 436 -&gt; 418 glitches on the old 16-file corpus and was shipped as <code class="language-plaintext highlighter-rouge">fd0e3f04</code>; on the 34-file corpus it is 1089 -&gt; 1094 with 25 cells worse against 15 better, and no retune beat it. Reverted as <code class="language-plaintext highlighter-rouge">d271dd0</code>. Measure on the full corpus before believing a delta.</li>
+</ul>
+
+<h2 id="ac-tracker-timbre-shift">AC-tracker timbre shift</h2>
+
+<ul>
+  <li>AC-tracker timbre shift (2nd harmonic overtaking f0) is OCTAVE FLICKER, not a lasting swap: coarse pick flip-flops f0/2f0 ~300 ms while <code class="language-plaintext highlighter-rouge">demoteNow</code> ramps, <code class="language-plaintext highlighter-rouge">confident</code> stays 1 -&gt; <code class="language-plaintext highlighter-rouge">holdLastGood</code> never masks it. Fix = <code class="language-plaintext highlighter-rouge">takeNew</code> also requires <code class="language-plaintext highlighter-rouge">stableRun &gt;= confirmSamples</code> (512), counting samples where <code class="language-plaintext highlighter-rouge">coarseFreq</code> moved &lt;6%; worst window 278 c &gt; 4.4 c. Counter MUST read <code class="language-plaintext highlighter-rouge">coarseFreq</code>, never <code class="language-plaintext highlighter-rouge">refinedNow</code> (drags the refine tree into <code class="language-plaintext highlighter-rouge">~</code> recursion).</li>
+</ul>
+
+<h2 id="sustaingate-and-snapgate">SUSTAINGATE and snapGate</h2>
+
+<ul>
+  <li>SUSTAINGATE is at the END of the master chain, so master and record are the SAME process: <code class="language-plaintext highlighter-rouge">effects_runtime_pre.dsp:39</code> is <code class="language-plaintext highlighter-rouge">masterIn = preFilterOut</code> (no SUSTAINGATE; the hslider moved to <code class="language-plaintext highlighter-rouge">effects_runtime_post.dsp</code>), which has <code class="language-plaintext highlighter-rouge">audienceGate = SUSTAINGATE : si.smoo : snapGate</code> and <code class="language-plaintext highlighter-rouge">inputFxOut = (masterWet : dubGateLfoStage)*audienceGate + loopHarmonyWet</code>. <code class="language-plaintext highlighter-rouge">snapGate</code> is REQUIRED: float32 <code class="language-plaintext highlighter-rouge">si.smoo</code> never settles (error amplified 1/(1-0.999)=1000, bounded 9e-5), so bare <code class="language-plaintext highlighter-rouge">si.smoo</code> left master 2.8e-5 off -&gt; <code class="language-plaintext highlighter-rouge">inputfx_vs_cue</code>/<code class="language-plaintext highlighter-rouge">record_vs_inputfx</code> residuals -91 dB, failing the le -120 dB parity rows. Snap thresholds have ~11x margin. Record = <code class="language-plaintext highlighter-rouge">preFilterOut -&gt; delayVerbFxCue -&gt; dubGateLfoStage + loopHarmonyWet</code>; master = the same through <code class="language-plaintext highlighter-rouge">delayVerbFxMaster * audienceGate</code>: identical but for the gate. <code class="language-plaintext highlighter-rouge">loopHarmonyWet</code> is harmonized LOOP audio (<code class="language-plaintext highlighter-rouge">multitranspose.dsp</code> 2nd out), not harmonized input, so reaching master while the dry record path is muted is NOT a leak. <code class="language-plaintext highlighter-rouge">si.smoo</code> is a ~21 ms fade, not a hard cut, so chopping a reverb tail does not click. Mixer/passthrough channels are UNGATED: <code class="language-plaintext highlighter-rouge">mixOnlyBuf</code> (<code class="language-plaintext highlighter-rouge">:1118</code>) sums into <code class="language-plaintext highlighter-rouge">masterSample</code>/<code class="language-plaintext highlighter-rouge">cueSample</code> (<code class="language-plaintext highlighter-rouge">:1343</code>/<code class="language-plaintext highlighter-rouge">:1344</code>) OUTSIDE every gate and never enters <code class="language-plaintext highlighter-rouge">fin</code> -&gt; never reaches <code class="language-plaintext highlighter-rouge">recordTap</code>. Cue (<code class="language-plaintext highlighter-rouge">filtOut</code>) carries the record path unconditionally, so shift+sustain is the master/audience gate only. <code class="language-plaintext highlighter-rouge">audio_peak.out</code> IS cue; <code class="language-plaintext highlighter-rouge">audio_peak.master</code> IS the gated audience bus.</li>
+</ul>
+
+<h2 id="arm-anchor">ARM anchor</h2>
+
+<ul>
+  <li>ARM anchors a take at the master phase it was armed at, NOT a grid node: <code class="language-plaintext highlighter-rouge">rsmNext = ba.if(armEdge, masterPhase, rsmPrev)</code> (<code class="language-plaintext highlighter-rouge">dsp/loop.dsp:31</code>); <code class="language-plaintext highlighter-rouge">kFineGridBeats</code>/<code class="language-plaintext highlighter-rouge">rsmNearestNode</code> gone (nearest-node anchoring displaced takes ~31 ms). <code class="language-plaintext highlighter-rouge">verify-arm-lineup.js 192.168.137.100 2000 20000 6</code> (<code class="language-plaintext highlighter-rouge">readpos</code> vs <code class="language-plaintext highlighter-rouge">master_phase_beats*beatLen</code>, one reply, despiked, tol 16): off MATERIAL before max 1242.7 mean 783.3 -&gt; after max 3.4 mean 2.7 (stalled floor max 29.1 mean 18.3); off GRID now max 1395.4 mean 1049.8 = INTENDED. Per-loop beat scale <code class="language-plaintext highlighter-rouge">s</code>: <code class="language-plaintext highlighter-rouge">1/ratioClamped</code> at <code class="language-plaintext highlighter-rouge">finishEdge</code>, <code class="language-plaintext highlighter-rouge">1.0</code> at <code class="language-plaintext highlighter-rouge">armEdge</code>; read-head rate <code class="language-plaintext highlighter-rouge">s*masterPhaseSlope</code> -&gt; drift off grid IFF <code class="language-plaintext highlighter-rouge">s != 1</code>.</li>
+</ul>
+
+<h2 id="finish-length">FINISH length</h2>
+
+<ul>
+  <li>FINISH length near-cut/far-extend (<code class="language-plaintext highlighter-rouge">pickAnchorGridBeats</code>: 16/8/4/2/1/0.5/0.25/0.125), CAPPED at 1 phrase: <code class="language-plaintext highlighter-rouge">min(pickAnchorGridBeats(takeLenBeats), max(1, cmd/recorded_beats))</code>. Overshoot within <code class="language-plaintext highlighter-rouge">cutTolerance = anchor*kAnchorMidpointFrac</code> (<code class="language-plaintext highlighter-rouge">sqrt(2)-1</code>) cuts now, else next tier. After: 5.9290-&gt;8, 5.7804-&gt;8, 1.4233-&gt;2, 2.9710-&gt;4, 3.9841-&gt;4, 1.9921-&gt;2. Bounds 64 .. <code class="language-plaintext highlighter-rouge">kMaxLoopSamples</code> 48000*60. <code class="language-plaintext highlighter-rouge">snappedWrapLen = ceil(finishTakeLen/anchorGridLenNow)*anchorGridLenNow</code>, <code class="language-plaintext highlighter-rouge">anchorGridLenNow = max(1.0, min(anchorGridBeats*beatLenNow, masterLen))</code>. <code class="language-plaintext highlighter-rouge">cmd/master_len</code> fallback must run whenever Link is not the length driver: nested in <code class="language-plaintext highlighter-rouge">if (g_link)</code> it never ran with NULL Link.</li>
+</ul>
+
+<h2 id="first-take-owns-tempo">First take owns tempo</h2>
+
+<ul>
+  <li>First (master-establishing) take OWNS tempo: <code class="language-plaintext highlighter-rouge">master_len</code> stays the raw write index; <code class="language-plaintext highlighter-rouge">deriveTempoQuant(seconds, anchor)</code> picks the INTEGER beat count 1..128 log-closest to <code class="language-plaintext highlighter-rouge">anchor</code> in <code class="language-plaintext highlighter-rouge">anchor/2..anchor*2</code>; the master-establishing branch passes <code class="language-plaintext highlighter-rouge">120.0</code> LITERALLY, never inherited Link session tempo (session-tempo anchoring: 0.817 s at mesh 73.80 -&gt; 1/73.41 vs 2/146.8). Power-of-2-only errs 1.414x; integer counts land ON ~120 (&lt;=1.09x at &gt;=5 beats): 3.015s-&gt;6/119.42, 6.016s-&gt;12/119.68. Link-driven length must not pin <code class="language-plaintext highlighter-rouge">looperLen</code>/<code class="language-plaintext highlighter-rouge">MLB</code>/<code class="language-plaintext highlighter-rouge">recorded_beats</code> over an existing take: an 8-beat take folds against a 4-beat grid. Measure grid against <code class="language-plaintext highlighter-rouge">master_len_samples / recorded_beats</code>, never rounded <code class="language-plaintext highlighter-rouge">link.bpm</code>.</li>
+</ul>
+
+<h2 id="live-recorded-beats-pin">Live recorded-beats pin</h2>
+
+<ul>
+  <li>Only <code class="language-plaintext highlighter-rouge">MLB</code> of the 3 recorded-beats pins is live (<code class="language-plaintext highlighter-rouge">dsp/effects_runtime_pre.dsp:20</code>): <code class="language-plaintext highlighter-rouge">block_size=64</code> gives <code class="language-plaintext highlighter-rouge">sliceLen</code> 12544 vs 24960 -&gt; micro-repeat an octave too fast; <code class="language-plaintext highlighter-rouge">looperN/len</code> + <code class="language-plaintext highlighter-rouge">RECORDEDBEATS</code> INERT (nothing declares <code class="language-plaintext highlighter-rouge">looperN/len</code>, <code class="language-plaintext highlighter-rouge">audio_thread.cpp:785</code>; <code class="language-plaintext highlighter-rouge">beatsSafe</code> stays 16).</li>
+</ul>
+
+<h2 id="varispeed-ratio">Varispeed ratio</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">cmd/halfspeed</code>/<code class="language-plaintext highlighter-rouge">cmd/doublespeed</code> are APC NOTES 70/71 ch0 (never cc70/cc71) &gt; <code class="language-plaintext highlighter-rouge">g_manualSpeedMul</code> (0.5/1/2) &gt; <code class="language-plaintext highlighter-rouge">effSpeed</code>; <code class="language-plaintext highlighter-rouge">loop.dsp</code> in9 <code class="language-plaintext highlighter-rouge">manualSpeed</code>, in10 <code class="language-plaintext highlighter-rouge">foldNow</code> (raw SHIFT <code class="language-plaintext highlighter-rouge">freeXpose</code>): <code class="language-plaintext highlighter-rouge">manualSafe = max(0.1, abs(manualSpeed))</code>, <code class="language-plaintext highlighter-rouge">ratioClamped = clamp(effSpeed/manualSafe, 0.1, 8.0)</code>. Beat lengths use <code class="language-plaintext highlighter-rouge">ratioClamped</code>, never <code class="language-plaintext highlighter-rouge">speedClamped</code>: else <code class="language-plaintext highlighter-rouge">finishtarget</code> stops matching <code class="language-plaintext highlighter-rouge">snappedWrapLen</code> and the take doubles. <code class="language-plaintext highlighter-rouge">eff_speed</code> holds 0.5000/2.0000 punched, returns to 1.0000; release returns to the UN-PUNCHED playhead (fixed <code class="language-plaintext highlighter-rouge">2995660</code>).</li>
+</ul>
+
+<h2 id="dry-vs-shift-resample-take-punch">Dry vs SHIFT-resample take punch</h2>
+
+<ul>
+  <li>Dry take (<code class="language-plaintext highlighter-rouge">foldNext == 0</code>) latches <code class="language-plaintext highlighter-rouge">v = manualSafe</code> at <code class="language-plaintext highlighter-rouge">finishEdge</code> (1.0 at <code class="language-plaintext highlighter-rouge">armEdge</code>): <code class="language-plaintext highlighter-rouge">vBaked = v != 1.0</code>, <code class="language-plaintext highlighter-rouge">speedForTake = v / manualSafe</code>. SHIFT-resample take (<code class="language-plaintext highlighter-rouge">foldNext == 1</code>, sticky from <code class="language-plaintext highlighter-rouge">armEdge</code>) has the punch IN the captured audio (fold tap post-varispeed), read at LIVE punch alone (<code class="language-plaintext highlighter-rouge">vNext</code> forced 1.0 at <code class="language-plaintext highlighter-rouge">finishEdge</code>, <code class="language-plaintext highlighter-rouge">vBaked</code> false); never divide it back out (neutral 440 Hz; <code class="language-plaintext highlighter-rouge">kRateDecim=64</code> removal flickered <code class="language-plaintext highlighter-rouge">resyncCoeff</code>).</li>
+</ul>
+
+<h2 id="passthrough-hiss-4">Passthrough hiss #4</h2>
+
+<ul>
+  <li>Passthrough hiss (#4) is UPSTREAM of <code class="language-plaintext highlighter-rouge">fin</code>: offline null test (<code class="language-plaintext highlighter-rouge">tools/chain-render/</code>, <code class="language-plaintext highlighter-rouge">chain-null-test.yml</code>; float32 floor ≈ -152 dB) nulls piano/marimba/vocal/cello at -151.9 dB, ZERO added delay, master + cue identical; <code class="language-plaintext highlighter-rouge">pitchStage</code> removal bit-exact; microrepeat/filters/guitar-lofi true bypass; bitcrush.dsp NO true bypass (-113 dB, inaudible). ONLY inharmonic residue: ENGAGED=1 + FORMANT&gt;0. WITNESSED offline (CI <code class="language-plaintext highlighter-rouge">38119023175</code>, 29 cases / 0 fail; <code class="language-plaintext highlighter-rouge">parity.sh</code> <code class="language-plaintext highlighter-rouge">engage_*</code>, <code class="language-plaintext highlighter-rouge">step=ENGAGED:0.0:96000</code> + <code class="language-plaintext highlighter-rouge">start=192000</code>): engaged tail -9.75 dB vs never-engaged at lag -129; released tail EXACT on record/inputfx/cue.</li>
+</ul>
+
+<h2 id="snac-cap-900-below-60-hz">SNAC cap 900 below 60 Hz</h2>
+
+<p>commit 8ed5946 body, verbatim</p>
+
+<p>pitch: SNAC tracker sees below 60 Hz, gated</p>
+
+<p>MAX_PERIOD 800 caps f0 at 60 Hz at 48 kHz. piano_low_A1 is A1 at
+55.69 Hz, true period 861.9, outside the range, so the tracker
+never sees it: dsp_cli –trk reports mean 1116.1 cents, worst
+1667.3, and the trace wanders 450-780 with peakTau often 16.</p>
+
+<p>Ceiling raised to 900 (f0 53.3 Hz). A period of 862 leaves 162 of
+the 1024-sample window, 1.19 periods; that is enough, the file
+locks at 59.7 cents mean, 824.6 worst.</p>
+
+<p>LAGS_PER_STEP goes 48 -&gt; 53 in the same commit. The sweep advances
+one step per 64-sample block and must still finish in 17 of them:
+1+17<em>48 = 817 &gt; 800 and 1+17</em>53 = 902 &gt; 900, so detection lands on
+the same sample as before. Without it the sweep takes 19 blocks,
+every detection window shifts 128 samples, and 11 of 19 files move
+for timing reasons alone, which hides what the range change does.
+With it, 14 of 19 are identical.</p>
+
+<p>The new lags are gated, mirroring SHORT_LAG_STRICT_PERIOD:
+LONG_LAG_STRICT_PERIOD = 800 is the characterized ceiling, and
+everything that sets a threshold from the curve (rPeak, the global
+CMNDF minimum, the raw-correlation peak) is computed over that
+range only. A lag at or above 800 is reachable only when that range
+shows no periodicity at all (refMin &gt; kDiffAccept) and only through
+a CMNDF minimum below kDiffStrict, never through a raw correlation
+peak. cello_low_sulC_A2 (112.01 Hz, 2x period 857, the one file
+whose octave-down lands inside the new range) is byte-identical:
+no octave-down adoption.</p>
+
+<p>Bare 900 without the gates is a large regression: oboe_mid_C5B5
+376.5 -&gt; 1760.8, vibraphone_mid_C5B5 165.3 -&gt; 1441.0,
+soprano_sax_high_C6 2.8 -&gt; 1233.7, violin_high_sulE_C7E7
+126.3 -&gt; 1799.7.</p>
+
+<p>piano_low_A1 renders at normrms=0.21, cents vs measured input f0:
+  ncc     0.3832 -&gt; 0.5655 (+12), 0.2831 -&gt; 0.5109 (+19),
+          0.2766 -&gt; 0.5136 (+24)
+  splices 294 -&gt; 192, 575 -&gt; 374, 859 -&gt; 564
+  cents   -0.9 / -2.7 / -1.7, was +1.1 / -1.7 / -1.2</p>
+
+<p>Honest counter-number: glitch count on this one file moves the
+other way, 24 -&gt; 27 at +12 and 27 -&gt; 28 at +19, 31 -&gt; 29 at +24.
+Every hit on it is a 0.25-0.31 first difference after normrms=0.21
+scales a peak-0.0757 source about 30x, clustered at t=0.48-0.70 s
+in the base render too, so the count sits on the threshold and a
+large coherence win moves it either way. violin_high_sulE_C7E7
+reads 7 -&gt; 10 and 10 -&gt; 14 glitches the same way, deltas 0.25-0.32.</p>
+
+<p>9 EXACT cells unchanged: vocal_female_vibrato 0/21/52,
+piano_mid_C4 1/3/2, marimba_mid_C5B5 4/5/5.</p>
+
+<p>Zero added latency: still 17 sweep blocks, no buffer, and the gate
+is a comparison over the already-computed CMNDF curve. Cost is 900
+lags per detection instead of 800, +12.5% SNAC work spread over
+the same 17 blocks.</p>
+
+
+      </section>
+      <footer>
+        
+        <p>This project is maintained by <a href="https://github.com/AnEntrypoint">AnEntrypoint</a></p>
+        
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="/mc-420/assets/js/scale.fix.js"></script>
+  </body>
+</html>

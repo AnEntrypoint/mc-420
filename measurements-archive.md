@@ -1,0 +1,204 @@
+# Measurement archive
+
+Numeric evidence relocated verbatim from AGENTS.md. Each section is one bullet; the one-line rule for it stays in AGENTS.md with a pointer back here.
+
+## Clean ingress (Focusrite loopback)
+
+- A clean ingress now exists via the Focusrite loopback (ADR-029); the bare AIR 192 reads silent (`in` 0.0001). #4 hiss WITNESSED absent (silent input -> `out` 0.0001). `snd-pcm-oss` 8000 Hz U8 no resampling (~150 xruns/s at 48k; 8k stalls aloop); `snd-aloop` jiffies-paced + TEARS -> ANY click/tear witness through it INVALID (17 glitches vs host 0; drift ±15 > effect); `period_size=64`+HZ=250 -> xruns 125/s, tears 0.25-7/s, only timer `G0` (4000 µs), unfixable.
+
+## aarch64 vs host
+
+- aarch64 vs host: characterization-identical, NOT bit-identical. 9 cells EXACT: vocal_female_vibrato 0/11/46, piano_mid_C4 1/4/5, marimba_mid_C5B5 2/5/4 at +0/+12/+24; sums -24/-12/0/+12/+19/+24 -> Pi 3/9/19/209/142/199 vs host 4/9/19/212/144/200 (±2). Codegen PINNED: CI compiles committed `dsp_generated.cpp`; `--solad` returns at `dsp_cli.cpp:1097`, before `AloopEffectDsp` at 1100 -> codegen link-only.
+
+## Faust codegen cliff
+
+- Faust codegen cliff: a NEW UI primitive in `resonode_synth.dsp`/`pitchtracker_ac.dsp`/`multitranspose.dsp`/`dsp/loop.dsp` risks unbounded compile; new controls go in `effects_runtime.dsp`. Measured: `pitchtracker_ac.dsp` arm 10.2-10.8 s, demote 12.6, promote 16.1, both >120 s rc=142; `ubuntu-24.04-arm` 53.3 s base: fixed-lag +8/+32/+148, +1 var-lag `@` 70.2 s, +4 120.1 s rc=142. Cost tracks what FEEDS an index, not tap count (13 rwtable taps 0.0 s). Read lag taps from a 4096-deep `rwtable` with a modulo-bounded counter, never variable-lag `@` or a float accumulator (not integer-exact past 2^24).
+
+## Per-block fprintf
+
+- NEVER per-block `fprintf` on the audio path: `[diag-pitchguard]` ~500 lines/s -> 475 MB `/var/log/aloop.log`; `[diag-gap]` 503 MB at 18.75 KB/s, loadavg 6.18, root tmpfs 547 MB/1.9 G. Rate tracks live audio -> silence reads +0 lines, hiding it.
+
+## Two-device sync acceptance
+
+- TWO-DEVICE LINK SYNC UP: `verify-two-device-sync.js <pi-ip> 600000` PASS at 118.500 bpm (peer retained 100%, 0 rejoins, 0 gaps, bpm spread 0.000, max |phase_err_beats| 0.0010, xruns 0). FAIL thresholds: peer <95% post-acquisition, bpm spread >0.05, |phase_err_beats| >0.03, eff_speed spread >0.005, gaps >10%.
+
+## Soaks and route flap
+
+- Soaks (25 min `df18c36`, 30 min post-`df18c36`): peers=1 every poll, `synced=true`, bpm 118.600, phase_err_beats 0, eff_speed 1.00000. Route flap: 1->0 in ~4 s, unrestored within 45 s or a restart, self-heals ~1 h. ENOMEM at t=218.9 s UNREPRODUCED (pre-fix `0a8760c`: fail=1501 giveup=396 errno=12).
+
+## Link phase trim
+
+- Phase trim applies to `masterPhaseSamples` ONLY (`kLinkPhaseTrimPerSample=0.00005`, clamp `kLinkPhaseTrimMax=0.03`, ZEROED unless `linkVarispeedEngaged && !manualPunchActive`). `masterPhaseBuf` ramps per-sample (never `std::fill()`) at `masterPhaseSlope=linkSpeedRatio+linkPhaseTrim`; `effSpeed = g_manualSpeedMul*linkSpeedRatio` carries TEMPO alone; `masterPhaseSamples` advances at `linkSpeedRatio` ALONE; `resyncCoeff` closes ~42 ms. Tempo must hold `kTempoStableBlocksThreshold = sr/N` blocks.
+
+## Link tempo authority
+
+- `setTempo` rewrites EVERY peer; `imposeTempo(bpm)` unconditioned, only writer of `weOwnTempo`; never gate `linkSpeedRatio` on it. Match tempo by read RATE (`linkSpeedRatio=linkBpm/recordedBpm` > `effSpeed`); `imposeTempo()` republishes in the same call or the finish edge doubles the take. Latches `g_ownedBpm`, re-imposed by `controlTick()` after `kPeerSettleTicks=2` (~400 ms) on join/leave; else a joiner merges its own 120.000 session and `eff_speed` settles 1.0067. `resetTempoAuthority()` clears it.
+
+## Two quantums
+
+- Two quantums: 16 transport (PAIRED: transport anchor, `beatNow()`, 24-PPQN clock), 128 phase CAPTURE (`controlTick()` at `kLinkPhaseQuantumBeats=128.0`; consumers fold `(quantumMicroBeats/1e6)`, never `16.0`). Phase is ABSOLUTE-beat (`phaseAtTime(t,q) == beatAtTime(t) mod q`): folding a 128-beat capture at `rb` is WRONG unless `rb|128`. Capture at loop quantum (`setLoopPhaseQuantumBeats(cmd/recorded_beats)` > `loopPhaseMicroBeats`); fall back to 128 only when absent or != recorded beats.
+
+## Anchors before timeline re-base
+
+- Any anchor taken BEFORE a timeline re-base (`forceBeatAtTime`; creation `audio_thread.cpp:866`, join `:915`) is off by `(-dBeat) mod rb`: invisible for `rb in {1,2,4,8,16}` at `dBeat=-16`, a whole beat off otherwise, ±0.03 trim over ~16 s to recover. FIXED+DEPLOYED `d316e22`: `rebaseSeq` (`link_bridge.cpp`, bumped per applied `forceBeatAtTime`) + `resnapAfterRebasePending` force ONE resnap past the idle-only gate.
+
+## Resnap witness rb=3
+
+- `.gm/resnap-rb3.js 900000`, `recorded_beats=3` (`128 mod 3 = 2` -> a mis-fold reads ~2 beats): shipped `d316e22` max 0.0010 mean 0.0002 (n=483) vs pre-resnap `aloop.fixed` max 0.9880 mean 0.1473 (n=569). Judge the NEXT 1.5 s after the impose (both <=0.011 at first); needs 0->1 WHILE audible (2 of 4 windows caught none). Restore only from CI md5 `e624728ac1aa50ecfad4db4a1b0d3087`.
+
+## Sim mirrors device Link
+
+- Sim mirrors device Link (fixed `75d8b4a`, 17/17 PASS: `requestPhaseImpose` off-thread + `rebaseSeq` bump; pre-500 ms ~1.4 beats by design). Fold coverage `loop-quantum-fold.js` (rb 3/6/30): ~0.48 16-quantum residual is rb-INDEPENDENT trim-chase, not fold error.
+
+## diag-gap limiter
+
+- `[diag-gap]`: 1 s `diagGapAllow()` limiter (was 503 MB at 18.75 KB/s); FIXED + WITNESSED gap_lines=1, fatals=0. `kExpectedPeriodMs` = 1.333 ms, threshold 1.5x = 2.0 ms. Device 113/569 hits at 2.0-3.0 ms, xruns=0, worst 4.4 ms vs 5.33 ms -> no underrun; USB iso jitter (`xhci_hcd` IRQ 29 pinned CPU0).
+
+## Per-partial decay and impact
+
+- Per-partial `modeDecayScale(i)`/`modeAmpBase(i)` (blended like `modeRatio(i)`) give each material its own decay+gain curve. `highFreqDampExponent` stays `1.0*(1-damping)`, NOT `1.934264*(-log(damping))/log(2)` (8.35 collapsed Dance Bass to one partial). `impactSig` (0.6-14 ms by `hardness`) sits OUTSIDE `excEnv`, scaled by `(1-inputAmt)` so `input=1` stays bit-exact.
+
+## collisionDrive normalisation
+
+- `collisionDrive` normalises by `1/driveAmt`, never `1/tanh(driveAmt)` (a +17 dB make-up gain at collision=1, why patches differed ~13 dB). Scaled by `drivePreGain = outLevel*decayLoudnessNorm` and divided back out: the pre-gain signal is ~25x smaller and tanh there is linear. Collision is a compressor: raising it LOWERS peak, crest and first-diff RMS; `verify_musical_controls.py`'s collision=0 identity check strips `collisionDrive(` by paren matching, not a literal signature.
+
+## Waveguide Object stage
+
+- Each voice drives a waveguide Object stage (tuned feedback comb; `body` mix, `polarity` sign, `g = 0.001^(1/(T60*f0))`, peak normalised by `1-g`, 25 Hz highpass kills DC). Positive polarity is bassier (0.8194 vs 0.7996 low-band, note 36).
+
+## Netbooted address and dsp shippability
+
+- The netbooted client's address drifts: the firmware-stage lease was 192.168.137.132 while `cmdline.txt` pins .100, and .100 answered nothing. `/var/lib/misc/dnsmasq.leases` is the authority, not the pinned address. SSH is root/aloop; no `ssh2` in this checkout, so use `SSH_ASKPASS` + `setsid ssh`. A `.dsp` edit is NOT shippable from this host: `build-binary.yml` regenerates only `aloop_pre`/`aloop_post`, `dsp_generated.cpp` is committed and compiled as-is, the pinned faust is 2.85.9 and this host has 2.81.10, which also hits faust's own 120 s SIGALRM (exit 142) on `pitchtracker_ac.dsp`. So the multitranspose-side lead (`lastConvergedNote` carrying the previous note's decision across a note-on, seeded from `targetNote` only at `ba.time == 0`) is UNTESTED, not disproven.
+
+## Upward-shift fold-back refuted
+
+- Upward-shift clicks are NOT fold-back aliasing. `tools/upshift-fold-map/fold_map.py` measured it: over 16 sources x 5 shifts, Pearson r(glitches, out-of-band energy above fs/(2s)) is -0.04 pooled, and every per-column r is negative. It fails both ways: `marimba_low_C2B2` has the least out-of-band energy in the corpus and glitches at every setting; `violin_high_sulE_C7E7` has the most and sits mid-pack. Two facts settle it regardless of r: 7 of 16 sources glitch at +0 where s=1 so folding is impossible by construction, and the count is not monotone in stride (clarinet 35/13/7/2, trumpet_high 30/4/3/2). What the count does track is `peakStep` (r up to +0.45): splice step size, i.e. source transient content and splice placement. Treat "fold-back" as a retired explanation. Both old fixes stay REJECTED: stride-adaptive kernel (+24 32>27); write-side anti-alias (~3 smp at `s=4`, FORBIDDEN).
+
+## Tremolo/AM subharmonic lock
+
+- Tremolo/AM subharmonic lock is NOT an anti-jitter clamp: a bad lock lands on the FIRST completed detection. YIN-style cumulative-mean normalized difference (`kDiffAccept` 0.15/`kDiffStrict` 0.05/`kDiffFallback` 0.50) + parabolic refinement `(c-a)/(2(2b-a-c))`; AM grid (`--am-probe grid=1`, 108 cases): worst 3371.9>425.7 c, mean-of-means 227.44>6.18.
+
+## 8df2e2c above 1000 Hz
+
+- `SnacPeriodTracker` above 1000 Hz: FIXED `8df2e2c`. `MIN_PERIOD` 48 -> 16 (was the only way to see a 45.9-sample period) plus a stricter CMNDF accept below lag 48 (`kDiffAccept` 0.15 instead of `kDiffFallback` 0.50) so the shorter floor cannot read an octave UP. Measured `--trk` mean cents: trumpet_high_C6 1192.3 -> 3.8, flute_high_C7 1900.2 -> 390.4, clarinet 1634.4 -> 745.3, and 1046.5/1318.5/1568/2093 all land within a few cents. Frames within +-60 c of the true note: trumpet_high_C6 and violin_high 0.0 -> 100%, clarinet 0.0 -> 78.3%, piano_high_C7 0.0 -> 20.6%. The 9 EXACT glitch cells are unchanged (0/21/52, 1/3/2, 4/5/5 on the post-`d271dd0` tree; 0/18/47, 1/3/1, 4/6/5 while `fd0e3f04` was present). Low/mid MEDIAN periods are identical; two files move on the frames-within-+-60 c count: oboe_mid_C5B5 96.7 -> 91.9 and marimba_mid_C5B5 98.8 -> 96.0, and oboe's octave-flip rate is the one that moves, 3.3% -> 8.1%. Oboe octave-UP stays 0.0%, which is the point of the gate: bare 16 put 13.7% of its frames an octave UP. Cost, measured over the 34-file corpus: +56 glitches total (1089 -> 1145), concentrated entirely in the 18 high-register/AM/inharmonic files added in `50cdfef5` where the tracker now attempts detection it used to clamp. Do NOT lower `MIN_PERIOD` without the short-lag gate: bare 16/24/12 measured 455/464/464 against 418 on the old corpus. Above 1000 Hz prefer `--pitch` for a quick read, never `--trk`, only because `--trk` needs a known `hz=`.
+
+## Pitch-lock witness and void figures
+
+- Pitch-lock live witness: `tools/loopback-witness/loopback-witness.js --lock <hz|wav> <midiNote> [secs]` plays out of host ch6, injects the keybed note on ch1 at +500 ms (`0x91`, `apc_grid.cpp:786-793` sets `fx/xposeN/note`), captures host ch1 and reports measured f0, cents vs the MIDI note and the 100 ms f0 trajectory for the first 2 s. `shiftTarget = targetNote - heldDetNote` (`effects/home/faust/multitranspose.dsp:88`) means a detection octave error becomes an output octave error one-for-one. ALWAYS `rc-service aloop restart` between lock cases: run back-to-back they contaminate each other (440/45 read -1204.5 cents unrestarted, -6.5 restarted). The figures recorded here earlier (220/45 +1201.4 -> -2.5, 440/45 +2401.4 -> -6.5, 440/57 -> -1202.5, piano C4/45 +1495.0 -> -6.5, piano C4/60 6 -> 10 jumps and 3/21 -> 7/21) were measured with an `estimateF0At` that returned the smallest-NSD lag: on a periodic tone the NSD at 2T/3T/4T is also ~0, so a correct sustained output read at 1/2, 1/3 or 1/4 of the target at random and was scored as an octave error. It now returns the smallest lag that is a LOCAL MINIMUM within 0.02 NSD of the best (verified exact on synthetic 55/110/262 Hz tones with and without harmonics), so those figures are void. Re-measured A/B, `a9509f8f` (bf09be8b) vs `fe3583bd`, restart between every case: 220/45 -2.5 -> -2.5, 440/45 -6.5 -> -2.5, both 0 jumps and 0/21; piano C4/57 three reps hops-octave-off 3,2,3 -> 1,1,3 with real octave excursions 3 -> 0; piano C4/45 two reps 8,7 -> 6,1; piano C4/60 two reps 2,3 -> 2,4. Real octave excursions summed over the 7 paired piano runs: 7 -> 2.
+
+## Pitch-lock lead-in
+
+- Pitch-lock residual is the LEAD-IN, not an octave error: `piano_mid_C4.wav` has a silent ~500 ms pre-roll (rms 6e-4) and its note attack lands exactly where the witness injects the note at +500 ms, and the AC tracker's `energyReady` floor (`env > 1e-6`) keeps it unready through the pre-roll, so no pitch is published until ~35 ms after the attack and the harmony is unpitched for the first 100-300 ms. Most remaining "an octave off" hops are that unpitched lead-in read as the 2000 Hz `minLag` floor.
+
+## extFreqGuardAnchor corroboration
+
+- The `extFreqGuardAnchor` corroboration, at `audio_thread.cpp:1239`: a move past `kJumpMaxRatio` needs 60 blocks (80 ms) of the tracker holding ONE candidate, 120 blocks (160 ms) when it sits within 5 percent of an exact octave, and a reading at the tracker's 60 Hz floor is never latched. The old rule accepted any non-octave jump after 9 blocks (12 ms) and then chased it at 15 percent per block, so a 2x or 3x reading carried the anchor the whole way within ~30 ms. Two variants were REJECTED by measurement: holding the anchor while the tracker reports no pitch makes a wrong value STICKY (piano C4/57 gained 1-2 octave-down excursions per run, because the drop-out that used to clear it no longer does), and `kFreshOnsetConfirmBlocks` 3 -> 30 only bought a longer unpitched lead-in at every note. The tracker already gates its own onset (35 ms hold + a 512-sample stability run), so 4 ms of agreement is not the onset problem.
+
+## Free-transpose pitch independent of tracker
+
+- Free-transpose pitch does NOT depend on the tracked period: `semis` sets the ratio outright, so a tracker octave error corrupts splice alignment, not the output pitch. Proven by a synthetic sweep 55 Hz to 2637 Hz at +12: `achievedSemis` +12.00 +/- 0.03, worst 8 c. An octave JUMP in the audible output can therefore only come from the pitch-LOCK path (`shiftTarget = targetNote - heldDetNote`), never from the free-transpose knob - chase octave complaints there.
+
+## extfreqdet written, four estimates
+
+- `fx/extfreqdet` is now written (`bf09be8b`, `audio_thread.cpp` publishes `extFreqGuardAnchor`, clamped to 1500); the corroboration rule it applies is in the pitch-lock bullet above. Before that it was resolved and never written, so `multitranspose.dsp:141-143` always took its internal branch and the harmony lock ran off the ZERO-CROSSING-RATE estimator `trackPitchHzAndHp` (`multitranspose.dsp:33-44`) while the real AC tracker (`pitchtracker.lv2`, loaded on core 1) was computed, octave-guarded and discarded. Four independent pitch estimates exist (mono SNAC, poly SNAC, LV2 AC, ZCR); the mux at `multitranspose.dsp:141` is the place they can disagree.
+
+## Measurement gates the claim
+
+- Measurement gates the claim, and a small corpus lies. A period-hysteresis gate in `soladSnacOctaver.h` measured 436 -> 418 glitches on the old 16-file corpus and was shipped as `fd0e3f04`; on the 34-file corpus it is 1089 -> 1094 with 25 cells worse against 15 better, and no retune beat it. Reverted as `d271dd0`. Measure on the full corpus before believing a delta.
+
+## AC-tracker timbre shift
+
+- AC-tracker timbre shift (2nd harmonic overtaking f0) is OCTAVE FLICKER, not a lasting swap: coarse pick flip-flops f0/2f0 ~300 ms while `demoteNow` ramps, `confident` stays 1 -> `holdLastGood` never masks it. Fix = `takeNew` also requires `stableRun >= confirmSamples` (512), counting samples where `coarseFreq` moved <6%; worst window 278 c > 4.4 c. Counter MUST read `coarseFreq`, never `refinedNow` (drags the refine tree into `~` recursion).
+
+## SUSTAINGATE and snapGate
+
+- SUSTAINGATE is at the END of the master chain, so master and record are the SAME process: `effects_runtime_pre.dsp:39` is `masterIn = preFilterOut` (no SUSTAINGATE; the hslider moved to `effects_runtime_post.dsp`), which has `audienceGate = SUSTAINGATE : si.smoo : snapGate` and `inputFxOut = (masterWet : dubGateLfoStage)*audienceGate + loopHarmonyWet`. `snapGate` is REQUIRED: float32 `si.smoo` never settles (error amplified 1/(1-0.999)=1000, bounded 9e-5), so bare `si.smoo` left master 2.8e-5 off -> `inputfx_vs_cue`/`record_vs_inputfx` residuals -91 dB, failing the le -120 dB parity rows. Snap thresholds have ~11x margin. Record = `preFilterOut -> delayVerbFxCue -> dubGateLfoStage + loopHarmonyWet`; master = the same through `delayVerbFxMaster * audienceGate`: identical but for the gate. `loopHarmonyWet` is harmonized LOOP audio (`multitranspose.dsp` 2nd out), not harmonized input, so reaching master while the dry record path is muted is NOT a leak. `si.smoo` is a ~21 ms fade, not a hard cut, so chopping a reverb tail does not click. Mixer/passthrough channels are UNGATED: `mixOnlyBuf` (`:1118`) sums into `masterSample`/`cueSample` (`:1343`/`:1344`) OUTSIDE every gate and never enters `fin` -> never reaches `recordTap`. Cue (`filtOut`) carries the record path unconditionally, so shift+sustain is the master/audience gate only. `audio_peak.out` IS cue; `audio_peak.master` IS the gated audience bus.
+
+## ARM anchor
+
+- ARM anchors a take at the master phase it was armed at, NOT a grid node: `rsmNext = ba.if(armEdge, masterPhase, rsmPrev)` (`dsp/loop.dsp:31`); `kFineGridBeats`/`rsmNearestNode` gone (nearest-node anchoring displaced takes ~31 ms). `verify-arm-lineup.js 192.168.137.100 2000 20000 6` (`readpos` vs `master_phase_beats*beatLen`, one reply, despiked, tol 16): off MATERIAL before max 1242.7 mean 783.3 -> after max 3.4 mean 2.7 (stalled floor max 29.1 mean 18.3); off GRID now max 1395.4 mean 1049.8 = INTENDED. Per-loop beat scale `s`: `1/ratioClamped` at `finishEdge`, `1.0` at `armEdge`; read-head rate `s*masterPhaseSlope` -> drift off grid IFF `s != 1`.
+
+## FINISH length
+
+- FINISH length near-cut/far-extend (`pickAnchorGridBeats`: 16/8/4/2/1/0.5/0.25/0.125), CAPPED at 1 phrase: `min(pickAnchorGridBeats(takeLenBeats), max(1, cmd/recorded_beats))`. Overshoot within `cutTolerance = anchor*kAnchorMidpointFrac` (`sqrt(2)-1`) cuts now, else next tier. After: 5.9290->8, 5.7804->8, 1.4233->2, 2.9710->4, 3.9841->4, 1.9921->2. Bounds 64 .. `kMaxLoopSamples` 48000*60. `snappedWrapLen = ceil(finishTakeLen/anchorGridLenNow)*anchorGridLenNow`, `anchorGridLenNow = max(1.0, min(anchorGridBeats*beatLenNow, masterLen))`. `cmd/master_len` fallback must run whenever Link is not the length driver: nested in `if (g_link)` it never ran with NULL Link.
+
+## First take owns tempo
+
+- First (master-establishing) take OWNS tempo: `master_len` stays the raw write index; `deriveTempoQuant(seconds, anchor)` picks the INTEGER beat count 1..128 log-closest to `anchor` in `anchor/2..anchor*2`; the master-establishing branch passes `120.0` LITERALLY, never inherited Link session tempo (session-tempo anchoring: 0.817 s at mesh 73.80 -> 1/73.41 vs 2/146.8). Power-of-2-only errs 1.414x; integer counts land ON ~120 (<=1.09x at >=5 beats): 3.015s->6/119.42, 6.016s->12/119.68. Link-driven length must not pin `looperLen`/`MLB`/`recorded_beats` over an existing take: an 8-beat take folds against a 4-beat grid. Measure grid against `master_len_samples / recorded_beats`, never rounded `link.bpm`.
+
+## Live recorded-beats pin
+
+- Only `MLB` of the 3 recorded-beats pins is live (`dsp/effects_runtime_pre.dsp:20`): `block_size=64` gives `sliceLen` 12544 vs 24960 -> micro-repeat an octave too fast; `looperN/len` + `RECORDEDBEATS` INERT (nothing declares `looperN/len`, `audio_thread.cpp:785`; `beatsSafe` stays 16).
+
+## Varispeed ratio
+
+- `cmd/halfspeed`/`cmd/doublespeed` are APC NOTES 70/71 ch0 (never cc70/cc71) > `g_manualSpeedMul` (0.5/1/2) > `effSpeed`; `loop.dsp` in9 `manualSpeed`, in10 `foldNow` (raw SHIFT `freeXpose`): `manualSafe = max(0.1, abs(manualSpeed))`, `ratioClamped = clamp(effSpeed/manualSafe, 0.1, 8.0)`. Beat lengths use `ratioClamped`, never `speedClamped`: else `finishtarget` stops matching `snappedWrapLen` and the take doubles. `eff_speed` holds 0.5000/2.0000 punched, returns to 1.0000; release returns to the UN-PUNCHED playhead (fixed `2995660`).
+
+## Dry vs SHIFT-resample take punch
+
+- Dry take (`foldNext == 0`) latches `v = manualSafe` at `finishEdge` (1.0 at `armEdge`): `vBaked = v != 1.0`, `speedForTake = v / manualSafe`. SHIFT-resample take (`foldNext == 1`, sticky from `armEdge`) has the punch IN the captured audio (fold tap post-varispeed), read at LIVE punch alone (`vNext` forced 1.0 at `finishEdge`, `vBaked` false); never divide it back out (neutral 440 Hz; `kRateDecim=64` removal flickered `resyncCoeff`).
+
+## Passthrough hiss #4
+
+- Passthrough hiss (#4) is UPSTREAM of `fin`: offline null test (`tools/chain-render/`, `chain-null-test.yml`; float32 floor ≈ -152 dB) nulls piano/marimba/vocal/cello at -151.9 dB, ZERO added delay, master + cue identical; `pitchStage` removal bit-exact; microrepeat/filters/guitar-lofi true bypass; bitcrush.dsp NO true bypass (-113 dB, inaudible). ONLY inharmonic residue: ENGAGED=1 + FORMANT>0. WITNESSED offline (CI `38119023175`, 29 cases / 0 fail; `parity.sh` `engage_*`, `step=ENGAGED:0.0:96000` + `start=192000`): engaged tail -9.75 dB vs never-engaged at lag -129; released tail EXACT on record/inputfx/cue.
+
+## SNAC cap 900 below 60 Hz
+
+commit 8ed5946 body, verbatim
+
+pitch: SNAC tracker sees below 60 Hz, gated
+
+MAX_PERIOD 800 caps f0 at 60 Hz at 48 kHz. piano_low_A1 is A1 at
+55.69 Hz, true period 861.9, outside the range, so the tracker
+never sees it: dsp_cli --trk reports mean 1116.1 cents, worst
+1667.3, and the trace wanders 450-780 with peakTau often 16.
+
+Ceiling raised to 900 (f0 53.3 Hz). A period of 862 leaves 162 of
+the 1024-sample window, 1.19 periods; that is enough, the file
+locks at 59.7 cents mean, 824.6 worst.
+
+LAGS_PER_STEP goes 48 -> 53 in the same commit. The sweep advances
+one step per 64-sample block and must still finish in 17 of them:
+1+17*48 = 817 > 800 and 1+17*53 = 902 > 900, so detection lands on
+the same sample as before. Without it the sweep takes 19 blocks,
+every detection window shifts 128 samples, and 11 of 19 files move
+for timing reasons alone, which hides what the range change does.
+With it, 14 of 19 are identical.
+
+The new lags are gated, mirroring SHORT_LAG_STRICT_PERIOD:
+LONG_LAG_STRICT_PERIOD = 800 is the characterized ceiling, and
+everything that sets a threshold from the curve (rPeak, the global
+CMNDF minimum, the raw-correlation peak) is computed over that
+range only. A lag at or above 800 is reachable only when that range
+shows no periodicity at all (refMin > kDiffAccept) and only through
+a CMNDF minimum below kDiffStrict, never through a raw correlation
+peak. cello_low_sulC_A2 (112.01 Hz, 2x period 857, the one file
+whose octave-down lands inside the new range) is byte-identical:
+no octave-down adoption.
+
+Bare 900 without the gates is a large regression: oboe_mid_C5B5
+376.5 -> 1760.8, vibraphone_mid_C5B5 165.3 -> 1441.0,
+soprano_sax_high_C6 2.8 -> 1233.7, violin_high_sulE_C7E7
+126.3 -> 1799.7.
+
+piano_low_A1 renders at normrms=0.21, cents vs measured input f0:
+  ncc     0.3832 -> 0.5655 (+12), 0.2831 -> 0.5109 (+19),
+          0.2766 -> 0.5136 (+24)
+  splices 294 -> 192, 575 -> 374, 859 -> 564
+  cents   -0.9 / -2.7 / -1.7, was +1.1 / -1.7 / -1.2
+
+Honest counter-number: glitch count on this one file moves the
+other way, 24 -> 27 at +12 and 27 -> 28 at +19, 31 -> 29 at +24.
+Every hit on it is a 0.25-0.31 first difference after normrms=0.21
+scales a peak-0.0757 source about 30x, clustered at t=0.48-0.70 s
+in the base render too, so the count sits on the threshold and a
+large coherence win moves it either way. violin_high_sulE_C7E7
+reads 7 -> 10 and 10 -> 14 glitches the same way, deltas 0.25-0.32.
+
+9 EXACT cells unchanged: vocal_female_vibrato 0/21/52,
+piano_mid_C4 1/3/2, marimba_mid_C5B5 4/5/5.
+
+Zero added latency: still 17 sweep blocks, no buffer, and the gate
+is a comparison over the already-computed CMNDF curve. Cost is 900
+lags per detection instead of 800, +12.5% SNAC work spread over
+the same 17 blocks.
