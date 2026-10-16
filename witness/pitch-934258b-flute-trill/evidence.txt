@@ -1,0 +1,24 @@
+934258b vs 5d298ed2: flute_trill_high_C7 lock, one harness (session mc420tv-sub27)
+
+Tracker: pitchtracker_ac.dsp from git (5d298ed2 = BASE, 934258b = NEW), faust 2.81.10 flags -vec -fun -dfs -vs 32 -nvi -ct 0 -cn ptac, LD_PRELOAD alarm no-op (compile only). drv_wav.c feeds the wav in 4800-sample blocks; trace line = t, out[last sample].
+Trace: trace_base.txt / trace_new.txt. Settled = median of nonzero trace values with t > duration/2 (4.5 s file, t > 2.25 s).
+BASE settled 1079.7483 Hz (18 values, 1067.8 to 1103.9), held note 85 (exact 84.54).
+NEW  settled 2253.3008 Hz (21 values, 1089.2 to 2263.8), held note 85 (same as BASE, fixed rule).
+
+Lock: dsp_cli_const_gen (lock harness), ch0 = flute_trill wav, ch4 = tracker const, ch5 = note 85, ch6 = gate 1, 6 s render.
+Target (held note 85) = 1108.73 Hz.
+  BASE 0.4-1.4 s: 2208.01 Hz, +1192.6 c, ncc 0.9963 (default band)
+  BASE 2.5-4.4 s: 2334.89 Hz, +1289.3 c, ncc 0.9881 (default band, also band 1800-2600)
+  BASE 2.5-4.4 s: 1167.54 Hz, +89.6 c, ncc 0.9947 (band 1000-1500, second estimate)
+  NEW  0.4-1.4 s: 1058.84 Hz, -79.7 c, ncc 0.9971 (default band)
+  NEW  2.5-4.4 s: 1134.12 Hz, +39.2 c, ncc 0.8678 (default band and band 1000-1500; band 1800-2600 negative ncc, no octave-up periodicity)
+
+Octave: BASE estimates disagree (default/1800-2600 band: 2334.89 octave-up; 1000-1500 band: 1167.54 octave-down, higher ncc). Octave NOT confirmed.
+
+Reconciliation with docs/witness/pitch-2093-raw/lock/table.txt (held note 96, target 2093.01):
+  BASE trk 1072.614 -> 4196.48 Hz (+1204.3 c, ncc 0.9700) 0.4-1.4 s; not the table's 2097.46 (+3.7 c).
+  BASE trk 1079.7483 -> 4167.42 (+1192.3 c) 0.4-1.4 s.
+  NEW  trk 2253.3008 -> 1997.98 Hz (-80.4 c, ncc 0.9991) 0.4-1.4 s; reproduces the table's NEW 1998.20 (-80.2 c).
+  So the table's BASE baseline does not reproduce; the NEW result does.
+
+Verdict per fixed rule: INCONCLUSIVE (BASE octave not confirmed). Sensitivity, not a decision: under either BASE octave hypothesis NEW's error vs 1108.73 (+39.2 c) is smaller than BASE's (+89.6 c or +1289.3 c), so no octave hypothesis supports WORSE.
