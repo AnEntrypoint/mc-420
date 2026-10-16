@@ -1,0 +1,31 @@
+granulator tonal control witness, commit 1840701778
+
+Bench: Sampler instantiated standalone (src/dsp/sampler/sampler.h, -I src/dsp/sampler),
+5 s render at 48 kHz / N=64, note 60 vel 127, broadband source into the live ring,
+centroid over the last 3 s (4096-point Hann frames). nonfinite=0 in every run.
+
+toneNorm sweep (grainMs 90, rate 35 Hz, liveMix 0.35):
+  tone  centroid_Hz   rms       peak
+  0.00  444.3         0.024027  0.084839
+  0.10  650.8         0.030849  0.112885
+  0.20  963.2         0.039513  0.153076
+  0.30  1419.7        0.050318  0.213959
+  0.40  2069.3        0.063955  0.296021
+  0.50  2965.4        0.081528  0.376434
+  0.60  4156.8        0.104484  0.529205
+  0.70  5661.5        0.134780  0.650513
+  0.80  7414.0        0.175180  0.754028
+  0.90  9188.9        0.227955  0.911346
+  1.00  11506.9       0.336255  0.983124
+  monotone, 26x span from 444.3 Hz to 11506.9 Hz
+
+Per patch, tone off (1.00) vs tone on:
+  Glass    off 11506.9 Hz | on (0.95) 9962.9 Hz
+  Cloud    off 11528.0 Hz | on (0.38) 1922.6 Hz   [ships at 0.25, ~1100 Hz]
+  Chop     off 11522.5 Hz | on (0.72) 6022.4 Hz
+  Shatter  off 11508.4 Hz | on (0.88) 8854.6 Hz
+  With tone off all four are indistinguishable (~11.5 kHz). With tone on they
+  separate across 5.2x.
+
+Rejected on measurement: single one-pole (only 4499-11507 Hz, never warm) and a
+dedicated knob (all eight LofiFx slots taken).

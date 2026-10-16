@@ -1,0 +1,11 @@
+host=192.168.137.132
+xruns=0
+core_busy=[0,33,0,0]
+latency_bias_samples=327.3
+idle peakOut=0.003700 peakIn=0.003700 polls=7
+dry_key48_granulator_off peakOut=0.002200 peakIn=0.005100 polls=10
+granulator_latched_no_keys peakOut=0.003700 peakIn=0.003700 polls=10
+granulator_note36 peakOut=0.003100 peakIn=0.005300 polls=12
+granulator_note48 peakOut=0.002200 peakIn=0.005300 polls=13
+granulator_note60 peakOut=0.003200 peakIn=0.005100 polls=13
+granulator_unlatched_idle peakOut=0.005300 peakIn=0.005400 polls=8

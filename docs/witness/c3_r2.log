@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=2093.00 Hz sine note=96 expect 2093.00 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  96 ch1 at +500ms
+[loopback-witness] note-off 96 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.000363 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 2092.96 Hz | played 2093.00 Hz
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 697 150 150 150 150 150 150 150 150 60 150 150 150 150 150 150 150 150 150 150 150
+[loopback-witness] octave jumps in first 2s: 3 [100ms 697.4->149.5Hz; 900ms 149.5->59.8Hz; 1000ms 59.8->149.5Hz] of 21 valid hops
+[loopback-witness] hops an octave or more off target: 21/21
+[loopback-witness] LOCK note=96 expect 2093.00 Hz measured 149.55 Hz (score 0.140) -> -4568.3 cents, octaves off -4 OCTAVE ERROR | seg rms 0.000281 silent rms 0.000030 (19.5 dB) peak 0.000811
+[loopback-witness] wrote /config/workspace/mc-420/.gm/witness/c3_r2.wav
+exit=0

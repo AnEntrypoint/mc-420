@@ -1,0 +1,12 @@
+host=192.168.137.132
+mode=granulator
+source=/config/workspace/mc-420/test-audio-corpus/instruments/cello_low_sulC_A2.wav
+scarlett_sink=alsa_output.usb-Focusrite_Scarlett_18i8_USB_F9TY0AQ9602F96-00.analog-surround-71
+xruns=30
+core_busy=[0,33,0,0]
+latency_bias_samples=406.8
+silence_baseline peakOut=0.000100 peakIn=0.000100 polls=10
+tone_playing_dry peakOut=0.000100 peakIn=0.000100 polls=13
+granulator_note36 peakOut=0.000000 peakIn=0.000100 polls=11
+granulator_note48 peakOut=0.000000 peakIn=0.000100 polls=10
+granulator_note60 peakOut=0.000000 peakIn=0.000100 polls=12

@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=/config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav note=45 expect 110.00 Hz, 6s, before in 0 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  45 ch1 at +500ms
+[loopback-witness] note-off 45 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.000088 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 not detected | played /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 265 - 109 110 111 111 112 112 - - 112 112 112 112 113 112 112 112 110 112 112
+[loopback-witness] octave jumps in first 2s: 1 [200ms 264.8->108.5Hz] of 18 valid hops
+[loopback-witness] hops an octave or more off target: 1/18
+[loopback-witness] LOCK note=45 expect 110.00 Hz INVALID (seg rms 0.000042 silent rms 0.000030 2.9 dB over silent, need 10 dB, 18 valid hops): no measurement, excluded from octave count
+[loopback-witness] wrote /config/workspace/mc-420/.gm/witness/c2b_r1.wav
+exit=1
