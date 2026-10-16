@@ -1,0 +1,11 @@
+Lock output, dsp_cli default DSP (MultiKeyTranspose process, 17 inputs), built from tools/dsp-cli/dsp_cli.cpp plus a scratch-only const:<value>:<secs> generator (lock/dsp_cli_const_gen.cpp).
+Inputs: ch0 = source audio; ch4 = tracker value as extFreqDet (constant); ch5 = held note n0; ch6 = gate g0 = 1. Render 6 s; --pitch window 0.4..1.4 s.
+Reference C7 = 2093.005 Hz (MIDI 96); 1000/440 controls reference MIDI 84 = 1046.50 and MIDI 69 = 440.
+
+file               tracker_before  lock_before_Hz  ncc_before  cents_before  tracker_after  lock_after_Hz  ncc_after  cents_after
+flute_high_C7      691.696         3236.89         0.7113      +754.8        2152.629       2088.39        0.9928     -3.8
+glockenspiel_high  706.719         3132.66         0.7357      +698.2        2111.16        2099.06        0.9975     +5.0
+flute_trill_high   1072.614        2097.46         0.9970      +3.7          2253.066       1998.20        0.9991      -80.2   WORSE
+sine_2093          719.399         2010.72         0.6629      -69.4         2091.955       2093.77        0.9998     +0.6
+sine_1000 (84)     999.2358        1047.20         0.9997      +1.2          999.0076       1047.44        0.9997     +1.6
+sine_440 (69)      438.8536        441.10          0.9999      +4.3          438.8536       441.10         0.9999     +4.3
