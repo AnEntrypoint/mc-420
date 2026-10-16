@@ -1,0 +1,7 @@
+# offline lock output pitch (dsp_cli default DSP = MultiKeyTranspose), window 1.0-2.0 s, 2026-10-16T16:37:09Z
+# inputs: dry sine, free=0, formant=0, extFreqDet=step constant, target note n0, gate g0 rises at 0.5 s
+dry=2093 ext=1500 target=96 pitch,/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/lock_2093_ext1500_t96.wav,expect=0.00,measured=2921.36,cents=+0.0,ncc=0.9864,lag=16,window=1.000..2.000,band=932..4698
+dry=2093 ext=1500 target=90 pitch,/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/lock_2093_ext1500_t90.wav,expect=0.00,measured=2065.14,cents=+0.0,ncc=0.9978,lag=23,window=1.000..2.000,band=932..4698
+dry=2093 ext=1500 target=84 pitch,/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/lock_2093_ext1500_t84.wav,expect=0.00,measured=1459.69,cents=+0.0,ncc=0.9998,lag=33,window=1.000..2.000,band=932..4698
+dry=1000 ext=1000 target=84 pitch,/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/lock_1000_ext1000_t84.wav,expect=0.00,measured=1046.52,cents=+0.0,ncc=0.9998,lag=46,window=1.000..2.000,band=445..2244
+dry=2093 ext=2093 target=84 pitch,/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/lock_2093_ext2093_t84.wav,expect=0.00,measured=1045.64,cents=+0.0,ncc=0.9999,lag=46,window=1.000..2.000,band=932..4698
