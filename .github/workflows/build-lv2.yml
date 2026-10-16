@@ -6,12 +6,14 @@ on:
       - 'effects/**'
       - 'dsp/**'
       - 'src/dsp/**'
+      - 'tools/faust-pinned/**'
       - '.github/workflows/build-lv2.yml'
   pull_request:
     paths:
       - 'effects/**'
       - 'dsp/**'
       - 'src/dsp/**'
+      - 'tools/faust-pinned/**'
       - '.github/workflows/build-lv2.yml'
   workflow_dispatch:
 
@@ -407,5 +409,75 @@ jobs:
         with:
           name: delayverb-lv2
           path: effects/delayverb/*.lv2
+          if-no-files-found: error
+          retention-days: 3
+
+  home-fx-lv2-x64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Faust and the LV2 toolchain (native x86_64 target)
+        timeout-minutes: 8
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y faust lv2-dev pkg-config build-essential libboost-dev lilv-utils
+
+      - name: Build the home stack (loop engine + effects) as a native x86_64 LV2
+        timeout-minutes: 25
+        run: |
+          set -e
+          FAUSTLIB=$(dirname "$(ls -f /usr/share/faust/lv2ui.cpp /usr/local/share/faust/lv2ui.cpp 2>/dev/null | tail -1)")
+          mkdir -p /tmp/homestack-x64
+          cp dsp/loop.dsp dsp/aloop.dsp dsp/effects_runtime.dsp /tmp/homestack-x64/
+          cp effects/home/faust/*.dsp effects/home/faust/*.h /tmp/homestack-x64/
+          sed -i 's#effects/home/faust/##g' /tmp/homestack-x64/effects_runtime.dsp
+          sed -i 's#\.\./effects/home/faust/chain\.dsp#chain.dsp#' /tmp/homestack-x64/aloop.dsp
+          cd /tmp/homestack-x64
+          CLSNAME=aloop
+          WORK=/tmp/lv2work-x64
+          mkdir -p "$WORK/$CLSNAME.lv2"
+
+          sh "$GITHUB_WORKSPACE/tools/faust-pinned/compile.sh" faust -i -a "$FAUSTLIB/lv2.cpp" -cn "$CLSNAME" aloop.dsp -o "$WORK/$CLSNAME.cpp"
+
+          CPPFLAGS="-DPLUGIN_URI=\"https://faustlv2.bitbucket.io/$CLSNAME\" -DFAUST_META=1 -DFAUST_MIDICC=1 -DFAUST_MTS=1 -DFAUST_UI=0 -DVOICE_CTRLS=1 -DNVOICES=-1"
+
+          sh "$GITHUB_WORKSPACE/tools/faust-pinned/compile.sh" cxx -DDLLEXT="\".so\"" $CPPFLAGS \
+            -I"$(pwd)" "$WORK/$CLSNAME.cpp" -o "$WORK/$CLSNAME.meta"
+          "$WORK/$CLSNAME.meta" > "$WORK/$CLSNAME.lv2/$CLSNAME.ttl"
+
+          printf '%s\n' \
+            '@prefix doap: <http://usefulinc.com/ns/doap#> .' \
+            '@prefix foaf: <http://xmlns.com/foaf/0.1/> .' \
+            '@prefix lv2:  <http://lv2plug.in/ns/lv2core#> .' \
+            '@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .' \
+            '' \
+            "<https://faustlv2.bitbucket.io/$CLSNAME>" \
+            '    a lv2:Plugin ;' \
+            "    lv2:binary <$CLSNAME.so> ;" \
+            "    rdfs:seeAlso <$CLSNAME.ttl> ." \
+            > "$WORK/$CLSNAME.lv2/manifest.ttl"
+
+          sh "$GITHUB_WORKSPACE/tools/faust-pinned/compile.sh" cxx -shared -DDLLEXT="\".so\"" $CPPFLAGS \
+            -I"$(pwd)" "$WORK/$CLSNAME.cpp" -o "$WORK/$CLSNAME.lv2/$CLSNAME.so"
+          file "$WORK/$CLSNAME.lv2/$CLSNAME.so"
+
+          mkdir -p "$GITHUB_WORKSPACE/effects/home-x64"
+          cp -r "$WORK/$CLSNAME.lv2" "$GITHUB_WORKSPACE/effects/home-x64/"
+
+      - name: Validate the LV2 bundle
+        run: |
+          cd effects/home-x64
+          find . -name '*.ttl' -print
+          if command -v lv2_validate >/dev/null; then
+            lv2_validate $(find . -name 'manifest.ttl') || echo "::warning::lv2_validate reported issues"
+          fi
+
+      - name: Upload home-FX LV2 bundle (x86_64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-fx-lv2-x64
+          path: effects/home-x64/*.lv2
           if-no-files-found: error
           retention-days: 3
