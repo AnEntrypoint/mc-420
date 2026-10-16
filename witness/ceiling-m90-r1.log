@@ -1,0 +1,15 @@
+# restart:   diag_extfreq_trace removed
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=2093.00 Hz sine note=90 expect 1479.98 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  90 ch1 at +500ms
+[loopback-witness] note-off 90 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.000279 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 2092.95 Hz | played 2093.00 Hz
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 2119 4309 4310 4310 4309 4309 4309 4308 4309 4309 4310 4310 4310 4310 4309 4309 4311 4310 4309 4309 4308
+[loopback-witness] octave jumps in first 2s: 1 [100ms 2119.5->4309.4Hz] of 21 valid hops
+[loopback-witness] hops an octave or more off target: 21/21
+[loopback-witness] LOCK note=90 expect 1479.98 Hz measured 4308.89 Hz (score 0.039) -> +1850.1 cents, octaves off 2 OCTAVE ERROR | seg rms 0.000133 silent rms 0.000030 (13.0 dB) peak 0.000299
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
