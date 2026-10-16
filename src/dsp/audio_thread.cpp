@@ -269,15 +269,19 @@ static float grooveGateGain(int mode, double phase01, double ramp01) {
     }
 }
 
-static bool diagGapAllow() {
-    static timespec lastTs{};
-    static bool haveLast = false;
+static bool diagRateAllow(timespec& lastTs, bool& haveLast) {
     timespec nowTs; clock_gettime(CLOCK_MONOTONIC, &nowTs);
     if (!haveLast) { lastTs = nowTs; haveLast = true; return true; }
     double dt = (double)(nowTs.tv_sec - lastTs.tv_sec) + (double)(nowTs.tv_nsec - lastTs.tv_nsec) / 1e9;
     if (dt < 1.0) return false;
     lastTs = nowTs;
     return true;
+}
+
+static bool diagGapAllow() {
+    static timespec lastTs{};
+    static bool haveLast = false;
+    return diagRateAllow(lastTs, haveLast);
 }
 
 static void* worker(void*) {
@@ -322,6 +326,7 @@ static void* worker(void*) {
     std::vector<float> resonodeInBuf((size_t)N, 0.0f);
     std::vector<float> pitchTrackerBuf((size_t)N, 60.0f);
     float extFreqGuardAnchor = 0.0f;
+    float extFreqTraceRaw = 0.0f;
     float extFreqGuardCandidate = 0.0f;
     int extFreqGuardStreakBlocks = 0;
     int extFreqGuardSilenceBlocks = 0;
@@ -1236,6 +1241,7 @@ static void* worker(void*) {
                 std::copy(fin.begin(), fin.end(), pitchTrackerBuf.begin());
                 pitchTrackerFx.process(pitchTrackerBuf.data(), N);
                 float rawFreq = pitchTrackerBuf[N - 1];
+                extFreqTraceRaw = rawFreq;
                 constexpr float kJumpMaxRatio = 1.6817928f;
                 constexpr int kOctaveConfirmBlocks = 60;
                 constexpr int kOctaveHardConfirmBlocks = 120;
@@ -1312,6 +1318,15 @@ static void* worker(void*) {
                 float extHz = extFreqGuardAnchor;
                 if (extHz > kExtFreqDetMaxHz) extHz = kExtFreqDetMaxHz;
                 *extFreqDetZone = extHz;
+                if (g_cfg.diagExtFreqTrace) {
+                    static timespec extTraceLastTs{};
+                    static bool extTraceHave = false;
+                    if (diagRateAllow(extTraceLastTs, extTraceHave)) {
+                        fprintf(stderr, "[diag-extfreq] t=%ld.%03ld raw=%.2f anchor=%.2f zone=%.2f\n",
+                                (long)extTraceLastTs.tv_sec, extTraceLastTs.tv_nsec / 1000000,
+                                extFreqTraceRaw, extFreqGuardAnchor, extHz);
+                    }
+                }
             }
             faustPre.compute(N, fins, preOuts);
             if (g_telem.gateMode > 0) {

@@ -26,6 +26,7 @@ struct AudioConfig {
     std::string pitchTrackerDir = "/effects/pitchtracker";
     std::string delayVerbDir = "/effects/delayverb";
     bool disableCore3Lv2 = false;
+    bool diagExtFreqTrace = false;
     bool stereoOut = false;
 
     bool linkEnabled = true;
