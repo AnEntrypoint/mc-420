@@ -14,7 +14,7 @@ const kApcBtnShift = 0x62;
 const kSustainCC = 64;
 const kScanToneHz = 440;
 const kMinHz = 50;
-const kMaxHz = 4000;
+const kMaxHz = 8000;
 const kMinSilentDb = 10;
 const kNoteOnMs = 500;
 const kWorkDir = path.join(os.tmpdir(), 'loopback-witness');
@@ -537,6 +537,7 @@ function selfTest() {
   const cases = [
     { name: 'periodic 440 Hz sine', samples: sine(440, 0.1), expectHz: 440, ref: silentRef },
     { name: 'periodic 2093 Hz sine (C7)', samples: sine(2093, 0.1), expectHz: 2093, ref: silentRef },
+    { name: 'periodic 4309 Hz sine (above old 4 kHz ceiling)', samples: sine(4309, 0.1), expectHz: 4309, ref: silentRef },
     { name: 'quiet periodic 1000 Hz tone 0.0005 rms over 0.00003 floor', samples: addTo(sine(1000, 0.0005 * Math.SQRT2), floorNoise(4242)), expectHz: 1000, ref: silentRef, expectValid: true },
     { name: 'silence at 0.00003 floor', samples: floorNoise(9001), expectHz: null, ref: silentRef, expectValid: false },
     { name: 'all-zero silence', samples: new Float64Array(n), expectHz: null, ref: silentRef, expectValid: false },
