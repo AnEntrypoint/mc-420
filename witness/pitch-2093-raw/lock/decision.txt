@@ -1,0 +1,39 @@
+pitch-2093 variant search: lock A/B decision (session mc420tv-sub26)
+
+DECISION: NO VARIANT ADMITTED. pitchtracker_ac.dsp unchanged.
+
+Harness
+- Tracker value per file = median of valid trace samples with t >= 1.0 s (traces/trace_<variant>_<name>.txt; new variants traces/trace_c2100_*, c2150_*, c2200_*, c2150_q2_*).
+- Held note n0: explicit for named tones (sine_* = its frequency, flute/glock/piano/crotale/violin C7 names = 96, piano_mid_C4 = 60, piano_low_A1 = 33); all other files = nearest MIDI to the BASE settled tracker value (fixed across variants).
+- Lock render: lock/dsp_cli_const_gen.cpp built with -I tools/dsp-cli; --gen0 source --gen4 const:<trk>:6 --gen5 const:<n0>:6 --gen6 const:1:6 out.wav; then --pitch out.wav from=0.4 to=1.4 hz=<440*2^((n0-69)/12)>.
+- lock/prep.mjs (medians), lock/run.mjs (lock renders), lock/analyze.mjs (gates). lock/lock_results.tsv = every render; lock/analysis.txt = gate report.
+
+Baseline discrepancy (must be resolved before any flute_trill claim)
+- lock/table.txt reports flute_trill_high_C7 base lock 2097.46 Hz (+3.7 c) at tracker 1072.614.
+- This harness does NOT reproduce it: tracker 1068..1225 Hz (all values in the trace) gives 3672..4212 Hz, +973..+1211 c, ncc 0.965..0.999. Base median 1085.37 gives 4145 Hz (+1182.9 c).
+- Reproduced: sine_2093 (2010.84, -69.3 c), flute_high_C7 (3237.3, +755 c).
+- Consequence: the flute_trill baseline is an octave-up lock error in this harness, so the flute_trill gate is measured against a broken baseline.
+
+Gates (per the fixed A/B rule)
+- G1 sine 2093 lock within 2 percent of 2093.005 Hz.
+- G2 sine 1000 and 440 lock unchanged within 0.5 percent of baseline.
+- G3 flute_trill lock not worse than baseline by more than 5 c and ncc not lower.
+- G4 each file changed more than 1 percent in tracker value: |cents| not worse than baseline by more than 5 c.
+
+Variant results (see lock/analysis.txt for per-file rows)
+- p1q4 (refine K=P/4 only): G1 FAIL (sine 2093 2010.8, unchanged); 1 file changed.
+- p1q2 (refine K=P/2 only): G1 FAIL (unchanged); 0 files changed.
+- c2100 (ceiling 2100, base window): G1 FAIL (sine 2093 tracker still 719.4); 3 files changed; no G4 worse.
+- c2150 (ceiling 2150, base window): G1 FAIL (tracker still 719.4); piano_high_C7 worse by 36 c (G4 FAIL).
+- c2150_q2 (ceiling 2150, K=P/2): G1 FAIL (tracker still 719.4); piano_high_C7 worse (G4 FAIL).
+- c2200 (ceiling 2200, base window): G1 FAIL (tracker still 719.4); piano_high_C7 worse (G4 FAIL).
+- p2_2600 (ceiling 2600 only): G1 PASS (2108.1, +12.5 c); G2 PASS; G3 PASS vs broken baseline; G4 FAIL: marimba_mid_C5B5 -175.4 to -182.8 (7.4 c worse), piano_high_C7 -14.9 to +41.2 (56 c worse).
+- p1q2_p2_2600: G1 PASS (2098.2, +4.3 c); G2 PASS; G3 PASS (-17.5 c, ncc 0.9981); G4 FAIL: crotale_high_C7 1211 to 1891 c (680 c worse), marimba_mid_C5B5 7.4 c worse.
+- p1q4_p2_2600: G1 PASS (2093.8, +0.6 c); G2 PASS; G3 PASS (-78.5 c, ncc 0.9992); G4 FAIL: crotale_high_C7 1211.0 to 1217.6 c (6.6 c worse), marimba_mid_C5B5 7.4 c worse.
+- p1q2_p2_4200 and p1q4_p2_4200: G1 PASS, but 8 files worse by more than 5 c (cello, crotale, marimba_low, marimba_mid, sine_220 to 4200, vibraphone, violin_high, violin_low); sine_220 and 9 corpus files driven to the 4200 ceiling. Rejected.
+
+What drives flute_trill (in this harness)
+- The ceiling extension, not the refine window: p1q2 (window only) leaves flute_trill tracker at 1085.4; p2_2600 (ceiling only) moves it to 1989.1; the window-only variant p1q4 moves it to 1118.0 (its lock output is still +1132 c).
+- The refine window alone never moves the sine 2093 tracker; a ceiling above 2093 is needed for the coarse candidate, and the ceiling of 2150 with either window did not lock 2093 (c2150, c2150_q2 both stay at 719.4). The 2600 ceiling is what moves the 2093 sine.
+
+Kept traces: traces/trace_c*.txt and variants/c2100.dsp, c2150.dsp, c2200.dsp, c2150_q2.dsp; sha256 in sha256_variants.txt. Base traces in this rebuild match the repo medians except violin_high_sulE_C7E7 (351.7636 vs 351.7109); their byte hashes do not match sha256.txt for most files, so the repo hash list is from an earlier driver build.
