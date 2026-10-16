@@ -7,9 +7,10 @@ public:
     static const int SNAC_WIN = 1024;
     static const int SNAC_HOP = 2048;
     static const int MIN_PERIOD = 16;
-    static const int MAX_PERIOD = 800;
+    static const int MAX_PERIOD = 900;
     static const int SHORT_LAG_STRICT_PERIOD = 48;
-    static const int LAGS_PER_STEP = 48;
+    static const int LONG_LAG_STRICT_PERIOD = 800;
+    static const int LAGS_PER_STEP = 53;
     static const int BLOCK = 64;
     static constexpr float FIDELITY_THRESH_DEFAULT = 0.30f;
     static constexpr float kFirstPeakRatio = 0.90f;
@@ -208,6 +209,7 @@ private:
         m_snacPhase = SNAC_IDLE;
         m_detectCount++;
         int maxTau = m_snacMaxTau;
+        int refTau = maxTau < LONG_LAG_STRICT_PERIOD ? maxTau : LONG_LAG_STRICT_PERIOD;
         for (int k = 0; k <= maxTau; k++) m_rr[k] = 2.0f * m_r[k] / m_normK[k];
         { float gmax = -1.0f; int gtau = -1;
           for (int kk = MIN_PERIOD; kk < maxTau - 1; kk++) {
@@ -222,8 +224,14 @@ private:
             m_normK[k] = (float)((mean > 1e-12) ? mean : 1e-12);
         }
         for (int k = 1; k <= maxTau; k++) m_r[k] = m_r[k] / m_normK[k];
+        float refMin = 1e9f;
+        int refMinTau = -1;
+        for (int k = MIN_PERIOD; k < refTau - 1; k++) {
+            if (m_r[k] < refMin) { refMin = m_r[k]; refMinTau = k; }
+        }
+        bool longOpen = refMin > kDiffAccept;
         float rPeak = 0.0f;
-        for (int k = MIN_PERIOD; k < maxTau - 1; k++) {
+        for (int k = MIN_PERIOD; k < refTau - 1; k++) {
             if (m_r[k] < m_r[k - 1] && m_r[k] < m_r[k + 1] && m_r[k] < kDiffAccept && m_rr[k] > rPeak)
                 rPeak = m_rr[k];
         }
@@ -231,7 +239,9 @@ private:
         int bestTau = -1;
         float bestVal = 1e9f;
         for (int k = MIN_PERIOD; k < maxTau - 1; k++) {
-            if (m_r[k] < m_r[k - 1] && m_r[k] < m_r[k + 1] && m_r[k] < kDiffAccept && m_rr[k] >= rFloor) {
+            if (k >= LONG_LAG_STRICT_PERIOD && !longOpen) continue;
+            float lim = k >= LONG_LAG_STRICT_PERIOD ? kDiffStrict : kDiffAccept;
+            if (m_r[k] < m_r[k - 1] && m_r[k] < m_r[k + 1] && m_r[k] < lim && m_rr[k] >= rFloor) {
                 bestTau = k;
                 bestVal = m_r[k];
                 break;
@@ -242,18 +252,14 @@ private:
         float qThresh = 1.0f - m_fidelityThresh;
         if (qThresh > kDiffReject) qThresh = kDiffReject;
         if (!fromDiff) {
-            float gmin = 1e9f;
-            int gtau = -1;
-            for (int k = MIN_PERIOD; k < maxTau - 1; k++) {
-                if (m_r[k] < gmin) { gmin = m_r[k]; gtau = k; }
-            }
-            if (gtau >= 0 && gmin < kDiffStrict) {
-                bestTau = gtau;
-                q = gmin;
+            if (refMinTau >= 0 && refMin < kDiffStrict) {
+                bestTau = refMinTau;
+                q = refMin;
                 fromDiff = true;
             } else {
                 float peakBest = -1.0f;
-                for (int k = MIN_PERIOD; k < maxTau - 1; k++) {
+                int peakEnd = longOpen ? maxTau : refTau;
+                for (int k = MIN_PERIOD; k < peakEnd - 1; k++) {
                     if (m_rr[k] > m_rr[k - 1] && m_rr[k] > m_rr[k + 1] && m_rr[k] > m_fidelityThresh && m_rr[k] > peakBest) {
                         peakBest = m_rr[k];
                         bestTau = k;
@@ -269,7 +275,7 @@ private:
                         }
                     }
                 }
-                if (bestTau >= 0 && m_r[bestTau] > (bestTau < SHORT_LAG_STRICT_PERIOD ? kDiffAccept : kDiffFallback)) bestTau = -1;
+                if (bestTau >= 0 && m_r[bestTau] > (bestTau < SHORT_LAG_STRICT_PERIOD ? kDiffAccept : (bestTau >= LONG_LAG_STRICT_PERIOD ? kDiffStrict : kDiffFallback))) bestTau = -1;
                 q = 1.0f - peakBest;
                 qThresh = 1.0f - m_fidelityThresh;
             }
