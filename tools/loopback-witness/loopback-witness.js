@@ -13,6 +13,9 @@ const kTelemPort = 4445;
 const kApcBtnShift = 0x62;
 const kSustainCC = 64;
 const kScanToneHz = 440;
+const kMinHz = 50;
+const kMaxHz = 4000;
+const kMinSegRms = 0.0013;
 const kWorkDir = path.join(os.tmpdir(), 'loopback-witness');
 
 const args = process.argv.slice(2);
@@ -32,10 +35,12 @@ const opts = {
   gate: true,
   scan: false,
   lock: null,
+  selftest: false,
 };
 
 for (let i = 0; i < args.length; i += 1) {
   const a = args[i];
+  if (a === '--selftest') { opts.selftest = true; continue; }
   if (a === '--no-gate') { opts.gate = false; continue; }
   if (a === '--scan') { opts.scan = true; continue; }
   if (a === '--lock') {
@@ -227,13 +232,27 @@ function stats(samples) {
   return { peak, rms };
 }
 
+function refinedHz(scores, minLag, lag, limit, rate) {
+  if (lag - 1 < minLag || lag + 1 > limit) return rate / lag;
+  const i = lag - minLag;
+  const a = scores[i - 1];
+  const c = scores[i + 1];
+  const d = a - 2 * scores[i] + c;
+  if (!(d > 0) || !Number.isFinite(a) || !Number.isFinite(c)) return rate / lag;
+  return rate / (lag + Math.max(-0.5, Math.min(0.5, 0.5 * (a - c) / d)));
+}
+
+function measurable(segRms, validHops) {
+  return validHops > 0 && segRms >= kMinSegRms;
+}
+
 function estimateF0At(samples, rate, start, win) {
   if (start < 0 || start + win >= samples.length) return null;
   let energy = 0;
   for (let j = 0; j < win; j += 1) energy += samples[start + j] * samples[start + j];
   if (energy <= 0) return null;
-  const minLag = Math.floor(rate / 2000);
-  const maxLag = Math.floor(rate / 50);
+  const minLag = Math.floor(rate / kMaxHz);
+  const maxLag = Math.floor(rate / kMinHz);
   const limit = Math.min(maxLag, samples.length - start - win - 1);
   let bestScore = Infinity;
   let bestLag = 0;
@@ -258,14 +277,15 @@ function estimateF0At(samples, rate, start, win) {
     if (score < bestScore) { bestScore = score; bestLag = lag; }
   }
   if (!bestLag || bestScore > 0.75) return null;
+  if (bestLag === minLag || bestLag === limit) return null;
   const submultipleTolerance = 0.02;
   for (let lag = minLag + 1; lag < bestLag; lag += 1) {
     const sc = scores[lag - minLag];
     if (sc > bestScore + submultipleTolerance) continue;
     if (sc > scores[lag - minLag - 1] || sc > scores[lag - minLag + 1]) continue;
-    return { hz: rate / lag, score: sc };
+    return { hz: refinedHz(scores, minLag, lag, limit, rate), score: sc };
   }
-  return { hz: rate / bestLag, score: bestScore };
+  return { hz: refinedHz(scores, minLag, bestLag, limit, rate), score: bestScore };
 }
 
 function estimateF0(samples, rate) {
@@ -438,18 +458,6 @@ async function runLock() {
   const f0 = estimateF0(seg, kRate);
   const segStats = stats(seg);
 
-  console.log(`[loopback-witness] loudest capture channels: ${ranked.slice(0, 3).map((r) => `ch${r.ch} rms ${r.rms.toFixed(6)}`).join(' | ')}`);
-  console.log(`[loopback-witness] input (pre note-on) f0 ${preF0 ? `${preF0.hz.toFixed(2)} Hz` : 'not detected'} | played ${built.inputHz ? `${built.inputHz.toFixed(2)} Hz` : built.label}`);
-  if (!f0) {
-    console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz measured NOT DETECTED (seg rms ${segStats.rms.toFixed(6)} peak ${segStats.peak.toFixed(6)})`);
-    if (opts.out) console.log(`[loopback-witness] wrote ${opts.out}`);
-    process.exitCode = 1;
-    return;
-  }
-  const cents = centsBetween(f0.hz, expectedHz);
-  const octavesOff = Math.round(cents / 1200);
-  console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz measured ${f0.hz.toFixed(2)} Hz (score ${f0.score.toFixed(3)}) -> ${cents >= 0 ? '+' : ''}${cents.toFixed(1)} cents, octaves off ${octavesOff}${Math.abs(octavesOff) >= 1 ? ' OCTAVE ERROR' : ''} | seg rms ${segStats.rms.toFixed(6)} peak ${segStats.peak.toFixed(6)}`);
-
   const trajEnd = Math.min(captured.length - 8192, Math.round((noteOnMs / 1000 + 2.0) * kRate));
   const hopSamples = Math.round(0.1 * kRate);
   const win = 4096;
@@ -459,6 +467,10 @@ async function runLock() {
     traj.push({ ms: Math.round(((s - noteOnMs / 1000 * kRate) / kRate) * 1000), hz: f ? f.hz : null });
   }
   const valid = traj.filter((t) => t.hz !== null);
+  const verdictValid = measurable(segStats.rms, valid.length);
+
+  console.log(`[loopback-witness] loudest capture channels: ${ranked.slice(0, 3).map((r) => `ch${r.ch} rms ${r.rms.toFixed(6)}`).join(' | ')}`);
+  console.log(`[loopback-witness] input (pre note-on) f0 ${preF0 ? `${preF0.hz.toFixed(2)} Hz` : 'not detected'} | played ${built.inputHz ? `${built.inputHz.toFixed(2)} Hz` : built.label}`);
   let jumps = 0;
   const jumpAt = [];
   for (let i = 1; i < valid.length; i += 1) {
@@ -469,10 +481,56 @@ async function runLock() {
   console.log(`[loopback-witness] octave jumps in first 2s: ${jumps}${jumpAt.length ? ` [${jumpAt.join('; ')}]` : ''} of ${valid.length} valid hops`);
   const offOct = valid.filter((t) => Math.abs(Math.round(centsBetween(t.hz, expectedHz) / 1200)) >= 1).length;
   console.log(`[loopback-witness] hops an octave or more off target: ${offOct}/${valid.length}`);
+  if (!verdictValid) {
+    console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz INVALID (seg rms ${segStats.rms.toFixed(6)} floor ${kMinSegRms}, ${valid.length} valid hops): no measurement, excluded from octave count`);
+    if (opts.out) console.log(`[loopback-witness] wrote ${opts.out}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!f0) {
+    console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz measured NOT DETECTED (seg rms ${segStats.rms.toFixed(6)} peak ${segStats.peak.toFixed(6)})`);
+    if (opts.out) console.log(`[loopback-witness] wrote ${opts.out}`);
+    process.exitCode = 1;
+    return;
+  }
+  const cents = centsBetween(f0.hz, expectedHz);
+  const octavesOff = Math.round(cents / 1200);
+  console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz measured ${f0.hz.toFixed(2)} Hz (score ${f0.score.toFixed(3)}) -> ${cents >= 0 ? '+' : ''}${cents.toFixed(1)} cents, octaves off ${octavesOff}${Math.abs(octavesOff) >= 1 ? ' OCTAVE ERROR' : ''} | seg rms ${segStats.rms.toFixed(6)} peak ${segStats.peak.toFixed(6)}`);
   if (opts.out) console.log(`[loopback-witness] wrote ${opts.out}`);
 }
 
+function selfTest() {
+  const n = 3 * kRate;
+  const sine = (hz, amp) => Float64Array.from({ length: n }, (_, i) => amp * Math.sin(2 * Math.PI * hz * i / kRate));
+  let seed = 12345;
+  const noise = Float64Array.from({ length: n }, () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return 0.1 * (seed / 0x7fffffff * 2 - 1);
+  });
+  const cases = [
+    { name: 'periodic 440 Hz sine', samples: sine(440, 0.1), expectHz: 440 },
+    { name: 'periodic 2093 Hz sine (C7)', samples: sine(2093, 0.1), expectHz: 2093 },
+    { name: 'silence', samples: new Float64Array(n), expectHz: null },
+    { name: 'white noise', samples: noise, expectHz: null },
+  ];
+  let failed = 0;
+  for (const c of cases) {
+    const f = estimateF0(c.samples, kRate);
+    const rms = stats(c.samples).rms;
+    const valid = measurable(rms, f ? 1 : 0);
+    const measured = f ? f.hz.toFixed(2) : 'none';
+    let ok;
+    if (c.expectHz === null) ok = !valid;
+    else ok = valid && Math.abs(centsBetween(f.hz, c.expectHz)) < 5;
+    if (!ok) failed += 1;
+    console.log(`[loopback-witness] selftest ${c.name}: measured ${measured} Hz rms ${rms.toFixed(6)} -> ${valid ? 'VALID' : 'INVALID'} ${ok ? 'PASS' : 'FAIL'}`);
+  }
+  console.log(`[loopback-witness] selftest ${failed === 0 ? 'PASS' : 'FAIL'} (${cases.length - failed}/${cases.length})`);
+  return failed === 0 ? 0 : 1;
+}
+
 async function main() {
+  if (opts.selftest) { process.exitCode = selfTest(); return; }
   if (!fs.existsSync(kWorkDir)) fs.mkdirSync(kWorkDir, { recursive: true });
   console.log(`[loopback-witness] host=${opts.host} play=${opts.playCard} ch${opts.playCh}/${opts.playChannels} cap=${opts.capCard} ch${opts.capCh}/${opts.capChannels}`);
 
