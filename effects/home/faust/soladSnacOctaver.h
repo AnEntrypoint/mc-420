@@ -57,8 +57,6 @@ public:
             m_lastGoodPeriodF = kReengageSeedPeriod;
         }
         m_haveGoodPeriod = true;
-        m_periodCandidate = m_lastGoodPeriodF;
-        m_periodCandidateAge = 0;
         m_spliceCooldown = 0;
         m_grainFormant.reset();
         m_grainFormant.setFormantFactor(powf(2.0f, m_formantDepth));
@@ -153,7 +151,8 @@ public:
             double &rdPassive = m_useA ? m_rdB : m_rdA;
 
             if (m_snac->m_periodValid && m_snac->m_periodF >= (float)MIN_PERIOD) {
-                offerDetectedPeriod(m_snac->m_periodF);
+                m_lastGoodPeriodF = m_snac->m_periodF;
+                m_haveGoodPeriod = true;
             }
             double targetLag = upshiftTargetLag();
             double gap = (double)m_wr - rdActive;
@@ -265,38 +264,7 @@ private:
     static constexpr double kSpliceCooldownMinRate = 1.0;
     static constexpr double kSpliceCooldownFloor = 1.0;
     static constexpr double kUpshiftLagPeriods = 1.5;
-    static constexpr float kPeriodPlausibleLo = 0.7492f;
-    static constexpr float kPeriodPlausibleHi = 1.3348f;
-    static constexpr float kPeriodCandidateTol = 0.06f;
-    static constexpr int   kImplausiblePeriodConfirmSamples = 2048;
     static constexpr float kGrainBypassFloor = 1.0e-4f;
-
-    bool periodJumpPlausible(float cand) const {
-        if (!m_haveGoodPeriod || m_lastGoodPeriodF <= 0.0f) return true;
-        float ratio = cand / m_lastGoodPeriodF;
-        return ratio > kPeriodPlausibleLo && ratio < kPeriodPlausibleHi;
-    }
-
-    void offerDetectedPeriod(float cand) {
-        if (!m_haveGoodPeriod || periodJumpPlausible(cand)) {
-            m_lastGoodPeriodF = cand;
-            m_haveGoodPeriod = true;
-            m_periodCandidate = cand;
-            m_periodCandidateAge = 0;
-            return;
-        }
-        if (m_periodCandidate <= 0.0f ||
-            fabsf(cand - m_periodCandidate) > kPeriodCandidateTol * m_periodCandidate) {
-            m_periodCandidate = cand;
-            m_periodCandidateAge = 0;
-            return;
-        }
-        m_periodCandidateAge++;
-        if (m_periodCandidateAge >= kImplausiblePeriodConfirmSamples) {
-            m_lastGoodPeriodF = m_periodCandidate;
-            m_periodCandidateAge = 0;
-        }
-    }
 
     float    m_dl[DL];
     float    m_formantDepth = 0.0f;
@@ -323,8 +291,6 @@ private:
     float    m_targetScale = 1.0f;
     float    m_lastGoodPeriodF = 256.0f;
     bool     m_haveGoodPeriod = false;
-    float    m_periodCandidate = 0.0f;
-    int      m_periodCandidateAge = 0;
     unsigned m_emergencyCount = 0;
     unsigned m_clampCount = 0;
     int      m_spliceCooldown = 0;
