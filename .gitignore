@@ -29,6 +29,14 @@
 .gm/config-source-cache-default*.sync.json
 .gm/.embed-generation*
 .gm/dream-rsi/
+.gm/codesearch-result-*.json
+.gm/mutables/
+.gm/mutables-log.jsonl
+.gm/mutables.absorbed.json
+.gm/prd/
+.gm/prd-log.jsonl
+.gm/prd.absorbed.json
+.gm/pool/
 
 build/
 *.o
