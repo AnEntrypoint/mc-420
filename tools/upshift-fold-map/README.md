@@ -116,3 +116,12 @@ made +24 worse, 32 vs 27; write-side anti-alias adds ~3 samples of latency).
 
 This tool does not touch the audio path. It only reads corpus wavs and drives
 `dsp_cli`; it changes no output sample and adds no latency.
+
+Witness: all 80 renders of the 16 measured sources were produced before the commit
+and again after it with the same `dsp_cli` binary, then md5-compared — 80 of 80
+byte-identical, 0 different.
+
+## Corpus note
+
+Measured when `test-audio-corpus/instruments` held 16 wavs; it has since grown to 34.
+The tool takes whatever `--corpus` contains, so re-running covers all of them.
