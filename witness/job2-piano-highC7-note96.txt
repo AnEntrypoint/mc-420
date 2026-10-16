@@ -1,0 +1,12 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] LOCK source=test-audio-corpus/instruments/piano_high_C7.wav note=96 expect 2093.00 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] note-on  96 ch1 at +500ms
+[loopback-witness] note-off 96 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch10 rms 0.000077 | ch11 rms 0.000077 | ch1 rms 0.000032
+[loopback-witness] input (pre note-on) f0 not detected | played test-audio-corpus/instruments/piano_high_C7.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 2157 - - - - - - - - - - - - - - - - - - - -
+[loopback-witness] octave jumps in first 2s: 0 of 1 valid hops
+[loopback-witness] hops an octave or more off target: 0/1
+[loopback-witness] LOCK note=96 expect 2093.00 Hz INVALID (seg rms 0.000030 floor 0.0013, 1 valid hops): no measurement, excluded from octave count
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav

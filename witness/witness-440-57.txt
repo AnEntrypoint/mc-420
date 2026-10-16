@@ -1,0 +1,80 @@
+=== RESTART 15:59:24Z
+ * status: started
+=== CASE 440 57 6 START 15:59:39Z
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] LOCK source=440.00 Hz sine note=57 expect 220.00 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] note-on  57 ch1 at +500ms
+[loopback-witness] note-off 57 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.001061 | ch10 rms 0.000372 | ch11 rms 0.000372
+[loopback-witness] input (pre note-on) f0 not detected | played 440.00 Hz
+[loopback-witness] LOCK note=57 expect 220.00 Hz measured 2000.00 Hz (score 0.194) -> +3821.3 cents, octaves off 3 OCTAVE ERROR | seg rms 0.001048 peak 0.002370
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): - - - - - - - - - - - - - - - - - - - - -
+[loopback-witness] octave jumps in first 2s: 0 of 0 valid hops
+[loopback-witness] hops an octave or more off target: 0/0
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+=== CASE 440 57 6 EXIT=0 END 15:59:49Z
+=== RESTART 15:59:49Z
+ * status: started
+=== CASE 440 57 6 START 16:00:04Z
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] LOCK source=440.00 Hz sine note=57 expect 220.00 Hz, 6s, before in 0 out 0
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] note-on  57 ch1 at +500ms
+[loopback-witness] note-off 57 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.001690 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 440.37 Hz | played 440.00 Hz
+[loopback-witness] LOCK note=57 expect 220.00 Hz measured 220.18 Hz (score 0.000) -> +1.4 cents, octaves off 0 | seg rms 0.001566 peak 0.002320
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220
+[loopback-witness] octave jumps in first 2s: 0 of 21 valid hops
+[loopback-witness] hops an octave or more off target: 0/21
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+=== CASE 440 57 6 EXIT=0 END 16:00:14Z
+=== RESTART 16:00:14Z
+ * status: started
+=== CASE 440 57 6 START 16:00:29Z
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] LOCK source=440.00 Hz sine note=57 expect 220.00 Hz, 6s, before in 0 out 0
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] note-on  57 ch1 at +500ms
+[loopback-witness] note-off 57 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.001681 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 440.37 Hz | played 440.00 Hz
+[loopback-witness] LOCK note=57 expect 220.00 Hz measured 220.18 Hz (score 0.000) -> +1.4 cents, octaves off 0 | seg rms 0.001560 peak 0.002307
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220
+[loopback-witness] octave jumps in first 2s: 0 of 21 valid hops
+[loopback-witness] hops an octave or more off target: 0/21
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+=== CASE 440 57 6 EXIT=0 END 16:00:39Z
+=== RESTART 16:00:39Z
+ * status: started
+=== CASE 220 45 6 START 16:00:54Z
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] LOCK source=220.00 Hz sine note=45 expect 110.00 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] note-on  45 ch1 at +500ms
+[loopback-witness] note-off 45 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.001789 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 220.18 Hz | played 220.00 Hz
+[loopback-witness] LOCK note=45 expect 110.00 Hz measured 109.84 Hz (score 0.000) -> -2.5 cents, octaves off 0 | seg rms 0.001660 peak 0.002451
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110
+[loopback-witness] octave jumps in first 2s: 0 of 21 valid hops
+[loopback-witness] hops an octave or more off target: 0/21
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+=== CASE 220 45 6 EXIT=0 END 16:01:04Z
+=== RESTART 16:01:04Z
+ * status: started
+=== CASE 440 45 6 START 16:01:19Z
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] LOCK source=440.00 Hz sine note=45 expect 110.00 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] note-on  45 ch1 at +500ms
+[loopback-witness] note-off 45 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.001766 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 440.37 Hz | played 440.00 Hz
+[loopback-witness] LOCK note=45 expect 110.00 Hz measured 109.84 Hz (score 0.000) -> -2.5 cents, octaves off 0 | seg rms 0.001662 peak 0.002457
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110
+[loopback-witness] octave jumps in first 2s: 0 of 21 valid hops
+[loopback-witness] hops an octave or more off target: 0/21
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+=== CASE 440 45 6 EXIT=0 END 16:01:29Z

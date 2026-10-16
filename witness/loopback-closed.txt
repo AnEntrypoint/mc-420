@@ -1,0 +1,22 @@
+loopback closed 2026-10-14, host=192.168.137.132 (Pi), Scarlett on host webtop
+
+Fix applied on host (Scarlett 18i8 3rd Gen, ALSA card 2 via PulseAudio):
+  amixer -c 2 sset "Analogue Output NN" "PCM N"   for N in 1..8
+  amixer -c 2 sset "Line NN Mute" off             for NN in 01..08
+  amixer -c 2 sset 'Speaker Switching' 'Main'
+before: Line 05/06 Mute [on]; Analogue Output 05 = 'Off'; Speaker Switching = 'Off'
+
+Scarlett self-capture (parec multichannel-input, 20ch) while playing:
+  before fix : all channels ~0.00003
+  after  fix : ch04 = 0.8883   ch05 = 0.2961   others ~0.00003
+
+Pi telemetry (udp/4445) while playing:
+  before fix : audio_peak.in = 0.0001 (pinned)   peakOut = 0.0001
+  after  fix : audio_peak.in = 0.2542            peakOut = 0.2643   xruns = 0
+
+Granulator live ring, first note after rc-service aloop restart (no captured material):
+  A_dry_after_fresh_boot      in=0.3615 out=0.3042
+  B_gran_latched_nokey        in=0.1054 out=0.0938
+  C_FIRST_note48_granular     in=0.2627 out=0.2253
+  D_FIRST_note48_granular_2   in=0.3405 out=0.1650
+  E_released                  in=0.2157 out=0.1829

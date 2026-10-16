@@ -1,0 +1,11 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] source /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/silence.wav 48000Hz 4.00s -> +0 semis (1.00000x), play peak 0.0000 rms 0.0000
+[loopback-witness] before: audio_peak.in 0 out 0 xruns 0 sustain_gate 1
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] during (max of 24 polls): audio_peak.in 0.0001 out 0 xruns 0
+[loopback-witness] after: audio_peak.in 0 out 0 xruns 0 sustain_cmd 1 fold 48320
+[loopback-witness] loudest capture channels: ch10 rms 0.000077 | ch11 rms 0.000077 | ch1 rms 0.000030 | ch3 rms 0.000010
+[loopback-witness] capture ch 1: 192000 samples (4.00s) peak 0.000152 rms 0.000030
+[loopback-witness] loop gain 0.00 dB (capture rms vs played rms)
+[loopback-witness] f0 not detected
+[loopback-witness] wrote /config/workspace/mc-420/.gm/witness/cap_silence.wav

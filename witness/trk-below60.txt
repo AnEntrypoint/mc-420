@@ -1,0 +1,4 @@
+# tracker A1 witness, 2026-10-16T15:59:14Z, tree d8d27d9
+trksum,test-audio-corpus/instruments/piano_low_A1.wav,trueHz=55.69,detections=122,valid=105,invalid=17,worst=824.6,mean=59.7
+trksum,test-audio-corpus/instruments/bassoon_low_C2B2.wav,trueHz=65.99,detections=153,valid=152,invalid=1,worst=880.5,mean=190.6
+trksum,test-audio-corpus/instruments/cello_low_sulC_A2.wav,trueHz=112.01,detections=53,valid=52,invalid=1,worst=816.1,mean=46.6

@@ -1,0 +1,64 @@
+=== RESTART 16:01:38Z
+ * status: started
+=== CASE /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav 60 6 START 16:01:53Z
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] LOCK source=/config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav note=60 expect 261.63 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] note-on  60 ch1 at +500ms
+[loopback-witness] note-off 60 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch10 rms 0.000077 | ch11 rms 0.000077 | ch1 rms 0.000077
+[loopback-witness] input (pre note-on) f0 not detected | played /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav
+[loopback-witness] LOCK note=60 expect 261.63 Hz measured 262.30 Hz (score 0.076) -> +4.4 cents, octaves off 0 | seg rms 0.000039 peak 0.000308
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 265 2000 2000 262 262 262 261 265 268 267 267 265 270 262 262 267 265 261 262 268 267
+[loopback-witness] octave jumps in first 2s: 2 [100ms 265.2->2000.0Hz; 300ms 2000.0->262.3Hz] of 21 valid hops
+[loopback-witness] hops an octave or more off target: 2/21
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+=== CASE /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav 60 6 EXIT=0 END 16:02:03Z
+=== RESTART 16:02:03Z
+ * status: started
+=== CASE /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav 60 6 START 16:02:18Z
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] LOCK source=/config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav note=60 expect 261.63 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] note-on  60 ch1 at +500ms
+[loopback-witness] note-off 60 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch10 rms 0.000078 | ch11 rms 0.000078 | ch1 rms 0.000077
+[loopback-witness] input (pre note-on) f0 not detected | played /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav
+[loopback-witness] LOCK note=60 expect 261.63 Hz measured 262.30 Hz (score 0.074) -> +4.4 cents, octaves off 0 | seg rms 0.000039 peak 0.000331
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 265 2000 2000 262 262 262 267 262 264 265 265 264 265 267 268 265 267 268 264 265 132
+[loopback-witness] octave jumps in first 2s: 3 [100ms 265.2->2000.0Hz; 300ms 2000.0->262.3Hz; 2000ms 265.2->131.5Hz] of 21 valid hops
+[loopback-witness] hops an octave or more off target: 3/21
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+=== CASE /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav 60 6 EXIT=0 END 16:02:28Z
+=== RESTART 16:02:28Z
+ * status: started
+=== CASE /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav 45 6 START 16:02:43Z
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] LOCK source=/config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav note=45 expect 110.00 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] note-on  45 ch1 at +500ms
+[loopback-witness] note-off 45 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.000088 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 not detected | played /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav
+[loopback-witness] LOCK note=45 expect 110.00 Hz measured 2000.00 Hz (score 0.167) -> +5021.3 cents, octaves off 4 OCTAVE ERROR | seg rms 0.000041 peak 0.000369
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 264 2000 2000 2000 2000 2000 2000 2000 111 112 110 112 112 112 112 55 112 112 112 112 112
+[loopback-witness] octave jumps in first 2s: 4 [100ms 263.7->2000.0Hz; 800ms 2000.0->110.9Hz; 1500ms 111.6->55.4Hz; 1600ms 55.4->111.9Hz] of 21 valid hops
+[loopback-witness] hops an octave or more off target: 9/21
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+=== CASE /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav 45 6 EXIT=0 END 16:02:53Z
+=== RESTART 16:02:53Z
+ * status: started
+=== CASE /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav 45 6 START 16:03:08Z
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] LOCK source=/config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav note=45 expect 110.00 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] note-on  45 ch1 at +500ms
+[loopback-witness] note-off 45 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.000088 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 not detected | played /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav
+[loopback-witness] LOCK note=45 expect 110.00 Hz measured 110.09 Hz (score 0.073) -> +1.4 cents, octaves off 0 | seg rms 0.000041 peak 0.000345
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 265 2000 110 110 110 111 112 112 112 110 112 111 112 113 112 111 112 112 110 112 112
+[loopback-witness] octave jumps in first 2s: 2 [100ms 265.2->2000.0Hz; 200ms 2000.0->109.8Hz] of 21 valid hops
+[loopback-witness] hops an octave or more off target: 2/21
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+=== CASE /config/workspace/mc-420/test-audio-corpus/instruments/piano_mid_C4.wav 45 6 EXIT=0 END 16:03:18Z

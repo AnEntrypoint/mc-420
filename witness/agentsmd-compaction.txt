@@ -1,0 +1,6 @@
+# AGENTS.md compaction witness 2026-10-16T16:07:05Z
+commit 2280253 on origin/main: 2280253
+29114 AGENTS.md
+24199 docs/measurements-archive.md
+53313 total
+remote AGENTS.md bytes: 29114

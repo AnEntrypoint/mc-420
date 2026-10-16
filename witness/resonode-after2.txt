@@ -1,0 +1,12 @@
+host=192.168.137.132
+telemetry_polls_ok=72
+xruns=0
+alsa_roundtrip_samples=233
+latency_bias_samples=297
+core_busy=[0,38,0,0]
+idle_no_notes peakOut=0.004800 peakIn=0.003100 polls=7
+dry_key48_held_1p5s peakOut=0.002100 peakIn=0.003400 polls=8
+resonode_engaged_no_keys peakOut=0.000000 peakIn=0.003500 polls=7
+resonode_note36_vel127 peakOut=0.250000 peakIn=0.004800 polls=10
+resonode_note48_vel127 peakOut=0.234300 peakIn=0.003400 polls=10
+resonode_note60_vel127 peakOut=0.126300 peakIn=0.004800 polls=10

@@ -1,0 +1,2 @@
+trace: nin=17 nout=2 zones=6
+trace: wav /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/trace/sine2093.wav frames=192000 sr=48000

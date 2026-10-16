@@ -1,0 +1,15 @@
+session mc420tv-sub20: offline harmony-lock trace, 2093 Hz sine, targets 96/90/84
+build: no documented build exists (trace.cpp has no header; build-dsp.ps1 is Windows-only, writes dsp_generated.cpp, builds dsp_cli not trace).
+  plain g++ -O2 -std=c++17 -I effects/home/faust tools/snac-confidence/trace.cpp -lm -lpthread -> EXIT 1: tools/snac-confidence/trace.cpp:48:10: fatal error: dsp_gen.cpp: No such file or directory
+  disclosed workaround (scratch only, no source edit): shim dsp_gen.cpp #including tools/dsp-cli/dsp_generated.cpp; g++ same flags + -I shim -> EXIT 0
+run: ./trace 2 sine2093.wav 2093 <target>  (durS=2, wav 2093 Hz 4 s 48k mono 16-bit, extF0=2093, targetNote=96/90/84)
+window 1.0-2.0 s medians: target 96 heldDetNote 96.00 detHz 2093.00 shift 0 (exp 0); target 90 heldDetNote 96.00 detHz 2093.00 shift -6 (exp -6); target 84 heldDetNote 96.00 detHz 2093.00 shift -12 (exp -12)
+device reference: m96 149.55 Hz, m90 2154.6 Hz, m84 3045.1 Hz (not reproduced offline)
+verdict: offline does NOT reproduce the device failure; device-only path is the evidence. Note trace drives in[4]=2093 exactly (ext freq), so the device's extFreq source is the untested difference.
+ext1500 run (extF0=1500 Hz, same shim build, durS=2): exit codes 0,0,0 for targets 96/90/84.
+window 1.0-2.0 s: heldDetNote=90.233 at all three targets (not 90.25; 1500 Hz is 90.260 in equal temperament, so the lock's note reading is 0.027 st below that); detHz=1500.00
+  target 96: shift 5.767 (target-90.233; target-90.26 = 5.74)
+  target 90: shift -0.233 (-0.26)
+  target 84: shift -6.233 (-6.26)
+outRms identical across targets (~0.1055). trace CSV carries no output pitch, so output Hz is unmeasured offline.
+verdict: the clamp at 1500 Hz selects heldDetNote 90.233 and the applied shift equals target minus that value at all three targets. Whether the shifter output matches the device's 149.55/2154.6/3045.1 Hz is not measured by this trace.
