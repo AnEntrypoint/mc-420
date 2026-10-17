@@ -1,0 +1,24 @@
+== v1 ADMIT=false G1=true G2=true G3=false G4=false
+  sine_2093 2108.110 (0.722%)  sine_1000 d=0.000%  sine_440 d=0.000%
+  crotale lock delta -26.44c  marimba_mid lock delta -7.42c
+   crotale_high_C7 trk 708.76>2136.31 lock 4212.67(1211.0c,ncc 0.6315)>4148.81(1184.5c,ncc 0.9380)
+   cymbal_inharmonic trk 61.22>60.00 lock 137.56(1387.1c,ncc 0.3094)>137.49(1386.2c,ncc 0.3238)
+   flute_high_C7 trk 691.70>2236.14 lock 3237.28(755.0c,ncc 0.7123)>2010.62(-69.5c,ncc 0.9881)
+   flute_trill_high_C7 trk 1085.37>1989.06 lock 4144.96(1182.9c,ncc 0.9729)>2262.97(135.2c,ncc 0.9972)
+   glockenspiel_high_C7 trk 706.69>2039.84 lock 6269.04(1899.2c,ncc 0.7799)>2171.60(63.8c,ncc 0.9971)
+   marimba_mid_C5B5 trk 578.31>591.56 lock 530.75(-175.4c,ncc 0.9885)>528.48(-182.8c,ncc 0.9894)
+   piano_high_C7 trk 709.24>2048.18 lock 2075.12(-14.9c,ncc 0.7688)>2143.42(41.2c,ncc 0.8834)
+   violin_high_sulE_C7E7 trk 351.76>290.91 lock 2083.88(-7.6c,ncc 0.8347)>2078.39(-12.1c,ncc 0.8835)
+  worse>5c: ["marimba_mid_C5B5","piano_high_C7"]
+== v2 ADMIT=false G1=true G2=true G3=false G4=false
+  sine_2093 2094.760 (0.084%)  sine_1000 d=0.000%  sine_440 d=0.000%
+  crotale lock delta 42.10c  marimba_mid lock delta -7.42c
+   crotale_high_C7 trk 708.76>2054.68 lock 4212.67(1211.0c,ncc 0.6315)>4316.38(1253.1c,ncc 0.9619)
+   cymbal_inharmonic trk 61.22>60.00 lock 137.56(1387.1c,ncc 0.3094)>137.49(1386.2c,ncc 0.3238)
+   flute_high_C7 trk 691.70>2161.95 lock 3237.28(755.0c,ncc 0.7123)>2079.46(-11.2c,ncc 0.9920)
+   flute_trill_high_C7 trk 1085.37>2232.39 lock 4144.96(1182.9c,ncc 0.9729)>2016.59(-64.4c,ncc 0.9978)
+   glockenspiel_high_C7 trk 706.69>2106.43 lock 6269.04(1899.2c,ncc 0.7799)>2103.56(8.7c,ncc 0.9977)
+   marimba_mid_C5B5 trk 578.31>591.56 lock 530.75(-175.4c,ncc 0.9885)>528.48(-182.8c,ncc 0.9894)
+   piano_high_C7 trk 709.24>2104.81 lock 2075.12(-14.9c,ncc 0.7688)>2101.30(6.8c,ncc 0.9294)
+   violin_high_sulE_C7E7 trk 351.76>290.91 lock 2083.88(-7.6c,ncc 0.8347)>2078.39(-12.1c,ncc 0.8835)
+  worse>5c: ["crotale_high_C7","marimba_mid_C5B5"]
