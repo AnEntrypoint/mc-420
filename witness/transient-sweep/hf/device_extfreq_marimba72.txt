@@ -1,0 +1,35 @@
+# device published external pitch, marimba_mid_C5B5 held note 72, 6 s, valid run 07:55, binary 9917831613b209c3fc26a5ada919b40c
+# trace key diag_extfreq_trace=1 for this run only; config restored afterwards
+# seconds=32 zero_raw=30
+[diag-extfreq] t=6468.696 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6469.696 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6470.696 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6471.696 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6472.697 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6473.697 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6474.697 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6475.699 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6476.699 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6477.699 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6478.700 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6479.700 raw=526.87 anchor=527.17 zone=527.17
+[diag-extfreq] t=6480.700 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6481.701 raw=562.39 anchor=279.52 zone=279.52
+[diag-extfreq] t=6482.702 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6483.702 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6484.702 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6485.703 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6486.703 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6487.703 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6488.704 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6489.705 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6490.705 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6491.706 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6492.706 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6493.706 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6494.706 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6495.707 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6496.708 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6497.708 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6498.709 raw=0.00 anchor=0.00 zone=0.00
+[diag-extfreq] t=6499.709 raw=0.00 anchor=0.00 zone=0.00
