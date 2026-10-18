@@ -1,0 +1,9 @@
+# HF band check on sweep captures; pure python, stdlib only
+# source-vs-capture band fractions over 0.5-5.5 s, then absolute dB pre (0-0.4 s) vs note (0.5-5.5 s)
+vibraphone_mid_C5B5.wav                                      frames=59  100-1000: 99.5% 1000-3500:  0.5% 3500-8000:  0.0% 8000-20000:  0.0%
+t_vibraphone_mid_C5B5_n72_r1.wav                             frames=59  100-1000: 81.2% 1000-3500: 18.0% 3500-8000:  0.2% 8000-20000:  0.6%
+t_marimba_mid_C5B5_n72_r1.wav                                frames=59  100-1000: 94.5% 1000-3500:  5.2% 3500-8000:  0.1% 8000-20000:  0.2%
+t_vibraphone_mid_C5B5_n72_r1.wav   100-1000 pre -73.7 note -71.0 1000-3500 pre -72.7 note -77.6 3500-8000 pre -71.1 note -96.3 8000-20000 pre -67.3 note -92.4
+t_marimba_mid_C5B5_n72_r1.wav      100-1000 pre -99.0 note -66.9 1000-3500 pre -98.5 note -79.4 3500-8000 pre -96.4 note -97.8 8000-20000 pre -92.5 note -93.8
+t_vibraphone_mid_C5B5_n60_r1.wav   100-1000 pre -73.8 note -69.4 1000-3500 pre -72.7 note -96.7 3500-8000 pre -71.5 note -97.5 8000-20000 pre -67.3 note -93.5
+# caveat: capture start-time alignment vs the LOCK note-on (+500 ms) is NOT verified; pre-note window is an assumption
