@@ -1,0 +1,49 @@
+{
+  "sr": 48000,
+  "source_amp": 0.5,
+  "partials": [
+    {
+      "ratio": 1,
+      "amp": 1,
+      "tau_s": 1.2
+    },
+    {
+      "ratio": 4,
+      "amp": 0.5,
+      "tau_s": 0.6
+    },
+    {
+      "ratio": 10,
+      "amp": 0.25,
+      "tau_s": 0.35
+    }
+  ],
+  "partial_set_note": "commonly quoted marimba 1:4:10 set, not verified against a source",
+  "gain_protocol": "0.00707945784384138 applied by the harness, as for test-audio-corpus",
+  "segments": [
+    {
+      "t0": 0.5,
+      "t1": 3,
+      "f": 523.25,
+      "name": "C5"
+    },
+    {
+      "t0": 3,
+      "t1": 5.5,
+      "f": 587.33,
+      "name": "D5"
+    },
+    {
+      "t0": 5.5,
+      "t1": 8,
+      "f": 698.46,
+      "name": "F5"
+    },
+    {
+      "t0": 8.3,
+      "t1": 10.8,
+      "f": 523.25,
+      "name": "C5b"
+    }
+  ]
+}

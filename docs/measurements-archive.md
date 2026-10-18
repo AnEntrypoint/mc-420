@@ -324,3 +324,11 @@ the same 17 blocks.
 - Input `docs/witness/note-change/note_change_harm.wav`: 12 s, four harmonic partials (1, 0.35, 0.15, 0.08; decay tau 1.2, 0.8, 0.5, 0.3 s), C5, D5 entering during the C5 decay, F5, then C5 after 0.3 s silence. Truth in `note_change_harm.truth.json`.
 - HV and floor 1e-8, identical on this input: within 10 c C5 0.909, D5 1.000, F5 1.000, C5b 0.952; zero fraction 0.000; release 0.1 s; no stale frames.
 - Neither the clean nor the harmonic synthetic reproduces the stale hold seen on real marimba_mid. The next discriminating input needs the real marimba partial ratios (inharmonic bars) and its amplitude envelope, not more harmonic tones.
+## Inharmonic note-change test
+
+- Inputs `docs/witness/note-change/note_change_inharm_freeFreeBeam.wav` (partial ratios 1, 2.756, 5.404, 8.933: uniform free-free beam modes, derived, not measured on a marimba) and `note_change_inharm_quoted1x4x10.wav` (1, 4, 10: commonly quoted marimba set, unverified). Same C5, D5, F5, C5 sequence as the harmonic test. Scores and medians in `inharm_scores.txt`.
+- Free-free set, HV: C5 median 519.69 Hz (-11.8 c), D5 +5.1 c, F5 686.50 Hz (-29.9 c), F5 never within 25 c, so no release. Frames within 10 c: C5 4.5%, F5 0%.
+- Free-free set, floor 1e-8: C5 -8.1 c, D5 +3.7 c, F5 +6.5 c, release 0.7 s, frames within 10 c: C5 77.3%, F5 59.1%.
+- 1-4-10 set, HV: C5 516.22 Hz (-23.4 c), frames within 10 c 0%. Floor 1e-8: C5 -10.4 c, frames within 10 c 45.5%.
+- The D5 and F5 medians stay within 7 c on the 1-4-10 set in both variants, so the bias is partial-dependent, not floor-dependent. The C5 bias is systematic and negative across both sets.
+- Defect, measured: the pitch tracker biases inharmonic spectra by 8 to 30 cents. The floor 1e-8 variant reduces the F5 error and fixes its release on the free-free set but does not remove the C5 bias. Next: find which estimator stage (AC lag pick or refinement) produces the bias, offline, before any DSP change.

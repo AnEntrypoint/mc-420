@@ -1,0 +1,29 @@
+== hv note_change_inharm_freeFreeBeam
+variant hv frames 120
+C5	523.25	frames=22	zero=0.000	within10c=0.045	within25c=1.000	stale_prev=0	release_s=0.300
+D5	587.33	frames=22	zero=0.000	within10c=0.864	within25c=0.909	stale_prev=0	release_s=0.500
+F5	698.46	frames=22	zero=0.000	within10c=0.000	within25c=0.000	stale_prev=0	release_s=NEVER
+C5b	523.25	frames=21	zero=0.000	within10c=0.048	within25c=1.000	stale_prev=0	release_s=0.300
+== hv_floor1e-8 note_change_inharm_freeFreeBeam
+variant hv_floor1e-8 frames 120
+C5	523.25	frames=22	zero=0.000	within10c=0.773	within25c=1.000	stale_prev=0	release_s=0.300
+D5	587.33	frames=22	zero=0.000	within10c=0.864	within25c=0.909	stale_prev=0	release_s=0.500
+F5	698.46	frames=22	zero=0.000	within10c=0.591	within25c=0.818	stale_prev=0	release_s=0.700
+C5b	523.25	frames=21	zero=0.000	within10c=0.810	within25c=1.000	stale_prev=0	release_s=0.300
+== hv note_change_inharm_quoted1x4x10
+variant hv frames 120
+C5	523.25	frames=22	zero=0.000	within10c=0.000	within25c=0.818	stale_prev=0	release_s=0.700
+D5	587.33	frames=22	zero=0.000	within10c=0.955	within25c=1.000	stale_prev=0	release_s=0.100
+F5	698.46	frames=22	zero=0.000	within10c=1.000	within25c=1.000	stale_prev=0	release_s=0.100
+C5b	523.25	frames=21	zero=0.000	within10c=0.000	within25c=0.857	stale_prev=0	release_s=0.700
+== hv_floor1e-8 note_change_inharm_quoted1x4x10
+variant hv_floor1e-8 frames 120
+C5	523.25	frames=22	zero=0.000	within10c=0.455	within25c=0.818	stale_prev=0	release_s=0.700
+D5	587.33	frames=22	zero=0.000	within10c=0.955	within25c=1.000	stale_prev=0	release_s=0.100
+F5	698.46	frames=22	zero=0.000	within10c=1.000	within25c=1.000	stale_prev=0	release_s=0.100
+C5b	523.25	frames=21	zero=0.000	within10c=0.476	within25c=0.857	stale_prev=0	release_s=0.700
+
+note_change_inharm_freeFreeBeam hv: C5 true 523.25 med 519.69 c -11.8 | D5 true 587.33 med 589.08 c 5.1 | F5 true 698.46 med 686.50 c -29.9 | C5b true 523.25 med 519.69 c -11.8
+note_change_inharm_freeFreeBeam hv_floor1e-8: C5 true 523.25 med 520.80 c -8.1 | D5 true 587.33 med 588.60 c 3.7 | F5 true 698.46 med 701.11 c 6.5 | C5b true 523.25 med 520.80 c -8.1
+note_change_inharm_quoted1x4x10 hv: C5 true 523.25 med 516.22 c -23.4 | D5 true 587.33 med 589.68 c 6.9 | F5 true 698.46 med 700.23 c 4.4 | C5b true 523.25 med 516.22 c -23.4
+note_change_inharm_quoted1x4x10 hv_floor1e-8: C5 true 523.25 med 520.12 c -10.4 | D5 true 587.33 med 589.27 c 5.7 | F5 true 698.46 med 700.05 c 3.9 | C5b true 523.25 med 520.12 c -10.4
