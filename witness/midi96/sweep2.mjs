@@ -1,0 +1,6 @@
+import {execFileSync} from "node:child_process";import fs from "node:fs";
+const S=process.argv[2];const nsd="/config/workspace/mc-420/docs/witness/midi96/nsd.mjs";const rows=["kind\tparam\tshift_st\tclamped\tpick_hz\tpick_nsd"];
+const pk=w=>{const t=execFileSync("node",[nsd,w],{encoding:"utf8"});const m=/pick (\{.*?\}|null)/s.exec(t);return m&&m[1]!=="null"?JSON.parse(m[1]):{}};
+for(let s=20;s<=24.01;s+=0.25){const w=S+"/f.wav";const o=execFileSync(S+"/dsp_cli",["--solad","in="+S+"/sine2093.wav","out="+w,"semis="+s,"freq=2093","normrms=0.21"],{encoding:"utf8"});const p=pk(w);rows.push(["solad",s,s,/clamped=(\d+)/.exec(o)[1],p.hz??"none",p.nsd??""].join("\t"));}
+for(let e=520;e<=640;e+=10){const w=S+"/f.wav";execFileSync(S+"/lock",["--gen0","sine:2093:6","--gen4","const:"+e+":6","--gen5","const:96:6","--gen6","const:1:6",w],{stdio:"pipe"});const p=pk(w);rows.push(["lock96_ext",e,(96-(69+12*Math.log2(e/440))).toFixed(2),"",p.hz??"none",p.nsd??""].join("\t"));}
+fs.writeFileSync(S+"/sweep2.tsv",rows.join("\n")+"\n");console.log(rows.join("\n"));

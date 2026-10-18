@@ -1,0 +1,40 @@
+## hypothesis 3: lock (dsp_cli_const_gen.cpp sha256 d5a9c8a7467a558b89fe980e75b3fd5b2c5d06d7497dcdbda1b7dda6b3a3652f) MIDI 96, ext const 719.3
+$ ./lock --gen0 sine:2093:6 --gen4 const:719.3:6 --gen5 const:96:6 --gen6 const:1:6 lock96.wav
+note: this DSP has 17 input(s); 13 channel(s) have no --genN spec and are fed silence
+wrote lock96.wav (288000 samples, 6.000s)
+channel 0:
+wrote lock96.1.wav (288000 samples, 6.000s)
+channel 1:
+samples=288000  duration=6.0000s  sampleRate=48000
+peak=0.2916  rms=0.1727  zeroCrossings=53497  approxFreq=4458.1Hz
+samples=288000  duration=6.0000s  sampleRate=48000
+peak=0.0000  rms=0.0000  zeroCrossings=0  approxFreq=0.0Hz
+[exit 0]
+$ ./lock --pitch lock96.wav from=0.4 to=1.4 minhz=100 maxhz=8000
+pitch,lock96.wav,expect=0.00,measured=2010.84,cents=+0.0,ncc=0.6580,lag=24,window=0.400..1.400,band=100..8000
+[exit 0]
+$ ./lock --pitch lock96.wav from=0.4 to=1.4 minhz=100 maxhz=500
+pitch,lock96.wav,expect=0.00,measured=418.35,cents=+0.0,ncc=0.4427,lag=115,window=0.400..1.400,band=100..500
+[exit 0]
+$ ./lock --pitch lock96.wav from=0.4 to=1.4 minhz=500 maxhz=1500
+pitch,lock96.wav,expect=0.00,measured=730.99,cents=+0.0,ncc=0.6353,lag=66,window=0.400..1.400,band=500..1500
+[exit 0]
+$ ./lock --pitch lock96.wav from=0.4 to=1.4 minhz=1500 maxhz=3000
+pitch,lock96.wav,expect=0.00,measured=2010.84,cents=+0.0,ncc=0.6580,lag=24,window=0.400..1.400,band=1500..3000
+[exit 0]
+$ ./lock --pitch lock96.wav from=0.4 to=1.4 minhz=3000 maxhz=8000
+pitch,lock96.wav,expect=0.00,measured=3026.55,cents=+0.0,ncc=0.2636,lag=16,window=0.400..1.400,band=3000..8000
+[exit 0]
+$ ./lock --pitch lock96.wav from=0.4 to=1.4 minhz=100 maxhz=200
+pitch,lock96.wav,expect=0.00,measured=189.11,cents=+0.0,ncc=0.4694,lag=254,window=0.400..1.400,band=100..200
+[exit 0]
+$ ./lock --pitch lock96.wav from=0.4 to=1.4 minhz=140 maxhz=160
+pitch,lock96.wav,expect=0.00,measured=149.83,cents=+0.0,ncc=0.4408,lag=320,window=0.400..1.400,band=140..160
+[exit 0]
+$ node /config/workspace/mc-420/docs/witness/midi96/spec.mjs lock96.wav
+lock96.wav rms 0.1726 peaks(hz,dB) [[2093.3,0],[5883.5,-11.3],[6575,-14.8],[6279.1,-14.9],[5834.5,-14.9]]
+[exit 0]
+$ node /config/workspace/mc-420/docs/witness/midi96/nsd.mjs lock96.wav
+lock96.wav witness-estimator pick {"lag":24,"hz":2000,"nsd":0.3363} top3 NSD minima [{"lag":24,"hz":2000,"nsd":0.3363},{"lag":66,"hz":727.27,"nsd":0.3742},{"lag":481,"hz":99.79,"nsd":0.4224}]
+[exit 0]
+c28a5614d4a3fe0f382527e1f367c0501ae90e2d46b1aaa8db0c893512a8fb10  lock96.wav
