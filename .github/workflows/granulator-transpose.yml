@@ -1,0 +1,37 @@
+name: granulator-transpose
+
+on:
+  push:
+    paths:
+      - 'tools/granulator-transpose/**'
+      - 'src/dsp/sampler/sampler.h'
+      - '.github/workflows/granulator-transpose.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render-transpose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the harness against sampler.h
+        run: |
+          g++ -O2 -std=c++17 -Wall -Wextra -I src/dsp/sampler \
+            tools/granulator-transpose/render_transpose.cpp -o render_transpose
+
+      - name: Render the transposition cases and measure
+        run: ./render_transpose granulator-transpose.tsv
+
+      - name: Upload the measurements
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: granulator-transpose
+          path: granulator-transpose.tsv
+          if-no-files-found: error
+          retention-days: 14
