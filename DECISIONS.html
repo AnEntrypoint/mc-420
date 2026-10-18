@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d63f0c782deae72448605663bb88452d3bf98018">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=dea38bd9140f2bc26f9515e1b53954cecbf6be17">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -575,7 +575,13 @@ loaded, so ordinary sampler playback is untouched.</p>
     <h2 id="granulator-control-decisions-2026-10-18">Granulator control decisions, 2026-10-18</h2>
   </li>
   <li>Envelope shape: the mapping stays. CI run 39168790090 (artifact granulator-controls, sha a111f9a5) measured a crest change of 1.09 dB between 0.1 and 0.9, under the pre-registered 2.0 dB. The claim that envelope shape changes crest by 2 dB is not supported at the current mapping. Changing the mapping needs its own pre-registration first.</li>
-  <li>Density: the ratio test stays as the metric. The high-rate undercount is recorded as a known limitation: the 40 Hz setting reads 16 peaks per second. An absolute rate check is a follow-up, with its threshold pre-registered before it runs.</li>
+  <li>Density: the ratio test stays as the metric. The high-rate undercount is recorded as a known limitation: the 40 Hz setting reads 16 peaks per second. An absolute rate check is a follow-up, with its threshold pre-registered before it runs.
+    <h2 id="granulator-scan-reverse-and-grain-size-decisions-2026-10-18">Granulator scan, reverse and grain size decisions, 2026-10-18</h2>
+  </li>
+  <li>Source: CI run 39169004538 on 03fd8ede, artifact granulator-scan-reverse-size, sha 34029711. Verified by a separate reader.</li>
+  <li>Scan (0 vs 1.0): PASS, level-change difference 4.78 dB against 3.0.</li>
+  <li>Grain size (20 vs 200 ms): PASS, gap fraction 0.81 to 0.0125, difference 0.80 against 0.25.</li>
+  <li>Reverse (0 vs 1.0): FAIL, RMS ratio 0.90 dB against 2.0 dB (linear 0.0451 to 0.0500). Decision: the reverse mapping stays. Recorded as unsupported at the current mapping, the same treatment as envelope shape. A change needs its own pre-registration.</li>
 </ul>
 
 
