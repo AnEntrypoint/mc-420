@@ -1,0 +1,11 @@
+source gain note rep segrms silentrms dB verdict octave_jumps hops_off_target f0_first2s
+piano_mid_C4 1.0 60 1 0.000059 0.000037 4.1 INVALID 0 0/20 263 flat (not counted)
+piano_mid_C4 2.0 60 1 0.000106 0.000030 11.0 VALID 0 0/20 263 flat, measured 262.58 Hz
+norm3(-3dBFS) 1.0 60 1 0.000192 0.000030 16.2 VALID 0 0/20 263 flat, measured 262.55 Hz
+norm3(-3dBFS) 1.0 60 2 0.000195 0.000030 16.3 VALID 0 0/20 263 flat, measured 262.51 Hz
+norm3(-3dBFS) 1.0 45 1 0.000195 0.000030 16.3 VALID 0 20/20 263 flat, measured 262.52 Hz, expect 110
+norm3(-3dBFS) 1.0 45 2 0.000194 0.000030 16.3 VALID 0 20/20 263 flat, measured 262.53 Hz, expect 110
+sine440 1.0 57 1 0.002892 0.000030 39.7 VALID 0 21/21 440 flat, expect 220
+sine440 1.0 57 2 0.002888 0.000030 39.7 VALID 0 21/21 440 flat, expect 220 (40 s settle after restart)
+control result: the 440 Hz sine at held note 57 comes back at 440 Hz, not 220 Hz. Output equals input: the lock is not shifting on the device build md5 2af0406bf6acd3a0f93edc94df7c3e40 (1274592 B), which is not the stated diagnostic 9917831613b209c3fc26a5ada919b40c.
+piano gain 2.0 is not clipped (source peak 0.188); gain above 1 clips only a hot source.
