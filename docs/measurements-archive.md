@@ -383,3 +383,9 @@ the same 17 blocks.
 - Runaway: cello_low_sulC_A2 (111.8 Hz to 4200.0 Hz, +6277 c) and vocal_male_baritone_scale (172.8 Hz to 4200.0 Hz, +5524 c). The new raw clamp lets low-confidence high candidates settle at the clamp.
 - No gain on piano C7, crotale, glockenspiel or xylophone run: zero pitch at device return, as in base.
 - Not admitted. The candidate needs a confidence gate for candidates above 1500 Hz, so that a high candidate cannot win on voice and cello material. That gate is the next design step.
+## Runaway probe: normalization is not the cause (offline)
+
+- `docs/witness/live-ground-truth/runaway_probe.mjs` and `norm_probe.mjs`: first local maximum above 0.85 over lags 11 to 900, plain 1024-sample window. High-pick fraction (lag under 30): cello 0.5%, vocal_male 4.6%, flute 88.7%, piano C7 77.3%, sax 0%, trumpet 0%, piano C4 1.3%.
+- Geometric normalization (divide by sqrt of both energies): cello 0.9%, vocal_male 5.3%, flute 88.7%, piano C7 80.2%. No change in the runaway picks, so the DSP's one-sided normalization is not the cause.
+- The offline model does not reproduce the DSP runaway. The DSP smooths the correlation with a 0.02 s one-pole (candidates at or above 700 Hz) and checks only the coarse grid, not every lag. Next, model that smoother and grid exactly before any candidate change.
+- The candidate (`pitch-ceiling`) stays unadmitted: cello and vocal_male still run away to the 4200 Hz clamp in the DSP renders.
