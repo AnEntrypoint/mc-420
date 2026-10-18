@@ -481,3 +481,12 @@ Chop 0.128241 / 0.654480, Shatter 0.198451 / 0.647827. Warm (captured first): 0.
 percent, so the ring supplies the same material either way and the cold path now sounds.
 nonfinite=0 in every run, and the branch only fires when the granulator is on and nothing is
 loaded, so ordinary sampler playback is untouched.
+## Decisions, 2026-10-18 (user delegated all decisions)
+
+- Granulator surface: four patches (Glass, Cloud, Chop, Shatter) and three dials stand. Glass and Chop overlap under the pre-registered v1 rule (rate 35.0 vs 32.2 Hz, envelope mean -24.93 vs -24.87 dB, centroid 325.5 vs 327.4 Hz). Recorded as an outcome, with no patch change. Source: CI artifact 39156877282, sha 568f77da.
+- Freeze: the v1 absolute envelope rule (std below 1.0 dB) fails because the 10 ms dB std is dominated by gap windows (percentiles, CI run 39157107149). Freeze steadiness is measured by the v2 relative rule (Freeze p50-p95 no larger than unfrozen Cloud, same run). It passes (3.8884 dB vs 5.2211 dB, artifact 39157263802, sha 6efedab6). The v1 FAIL stands as recorded. v2 is accepted as the Freeze measure, with its stated limitation: it shows freezing adds no level variation, not absolute steadiness.
+- Reboot persistence: deferred until the hold variant passes its corpus gate. It has not passed (not admitted), so no persistence change is made.
+- Stop condition: the stop hook lives outside the repo. This project does not edit it.
+- gm commit-message lint: the fix is in the gm repo. It is not edited from here, and the blocker row stays open.
+- CLI witness: the --json lock records exist (live record .gm/witness/lock-trumpet-59.json). Binary md5 and lockbin sha256 move to plan-provenance-fields.
+- Tracker admission: the deduplicated ceiling candidate (sha 4e8907ac) is admitted only if its CI render (row pitch-ceiling-dedup-render) passes R1 to R4. Otherwise it is rejected, and the reason is recorded here.
