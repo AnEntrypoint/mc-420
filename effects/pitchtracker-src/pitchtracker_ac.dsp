@@ -5,7 +5,7 @@ declare description "Normalized-autocorrelation pitch tracker, packaged as its o
 
 import("stdfaust.lib");
 
-minTrackHz = 50.0;
+minTrackHz = 60.0;
 maxTrackHz = 1500.0;
 corrThresh = 0.85;
 
@@ -25,7 +25,7 @@ corrAtLagTau(x, lag, energyTau) = num / den
 with {
     d = x @ lag;
     pole = ba.tau2pole(energyTau);
-    smoo(sig) = sig : *(1.0-pole) : + ~ *(pole) : *(1.0-pole) : + ~ *(pole);
+    smoo(sig) = sig : *(1.0-pole) : + ~ *(pole);
     num = smoo(x * d);
     den = max(1e-9, smoo(x*x));
 };
@@ -38,7 +38,7 @@ with {
     d = rwtable(delayTableSize, 0.0, w, x, (w + delayTableSize - lagClamped) % delayTableSize);
     energyTau = 0.01;
     pole = ba.tau2pole(energyTau);
-    smoo(sig) = sig : *(1.0-pole) : + ~ *(pole) : *(1.0-pole) : + ~ *(pole);
+    smoo(sig) = sig : *(1.0-pole) : + ~ *(pole);
     num = smoo(x * d);
     den = max(1e-9, smoo(x*x));
 };
@@ -87,12 +87,8 @@ with {
         ba.if(isPeak(c(77.8), c(71.33), c(65.4)), 71.33,
         ba.if(isPeak(c(71.33), c(65.4), c(62.64)), 65.4,
         ba.if(isPeak(c(65.4), c(62.64), c(60.0)), 62.64,
-        ba.if(isPeak(c(62.64), c(60.0), c(57.47)), 60.0,
-        ba.if(isPeak(c(60.0), c(57.47), c(55.05)), 57.47,
-        ba.if(isPeak(c(57.47), c(55.05), c(52.73)), 55.05,
-        ba.if(isPeak(c(55.05), c(52.73), c(50.5)), 52.73,
-        ba.if(c(50.5) >= corrThresh, 50.5,
-        50.5)))))))))))))))))))))))))))))))))))))))))));
+        ba.if(c(60.0) >= corrThresh, 60.0,
+        60.0)))))))))))))))))))))))))))))))))))))));
 };
 
 refineSpreadK = 16;
@@ -139,7 +135,7 @@ with {
     pCoarse = corrPeakAt(x, w, coarseFreq);
     freqH = coarseFreq * 0.5;
     pH = corrPeakAt(x, w, freqH);
-    demoteNow = (freqH >= 60.0) & (pH >= corrThresh) & (pH > pCoarse + subharmDominanceMargin);
+    demoteNow = (freqH >= minTrackHz) & (pH >= corrThresh) & (pH > pCoarse + subharmDominanceMargin);
 };
 
 subharmonicPromote(x, w, coarseFreq, demoteNow) = promotedRatio, promotedConfidence, dominant3, dominant2
