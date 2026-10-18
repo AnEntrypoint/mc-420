@@ -1,0 +1,4 @@
+base pitchtracker_ac.dsp (main) sha256 3f0184ab36e8bb243fdaa9a325736175b1a64f54dbd93719baa658af2cb6bef3 faust rc=0 secs=406
+cand pitchtracker_ac.dsp (168b38c2) sha256 535a08bd2fed27021aed38c10dcb7aa0f2b6e4fe585dc13e231ff1f0028ef910 faust rc=0 secs=510 (ratio 1.256; another agent compiled concurrently on the same host)
+flags: tools/faust-pinned/compile.sh faust -lang c -cn ptac, LD_PRELOAD noalarm.so
+lock binary: dsp_cli_const_gen.cpp sha256 d5a9c8a7467a558b89fe980e75b3fd5b2c5d06d7497dcdbda1b7dda6b3a3652f, g++ -O2 -std=c++17 -I tools/dsp-cli -I effects/home/faust, binary sha256 65709ee7d8192828e13b3a3bbf68e10d924afe8d28a2d05bf633c740274d1230
