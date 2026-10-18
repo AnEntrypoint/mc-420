@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=83ddc14d803fe44e036aa3e90ffc9ca8d18c3883">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d640b7427ab7b9fc6037067fa899d467f69c6158">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -481,7 +481,12 @@ the same 17 blocks.</p>
   <li>Median pitch moves over 5 c with stability loss (<code class="language-plaintext highlighter-rouge">analysis_f8_vs_hv.txt</code>, <code class="language-plaintext highlighter-rouge">analysis_f7_vs_hv.txt</code>): vocal_male -920 c at f8 (-631 c at f7), vocal_melody -286 c (-272 c), vocal_tenor_operatic +303 c, vocal_female -6.8 c, flute_trill +37 c (+30 c), cello stability 0.973 to 0.703 at f8.</li>
   <li>Mechanism, marimba_mid_C5B5: all variants hold one value per note. At 3.4 s HV holds 560.21 Hz to the end of the file. Floor 1e-7 re-acquires 589.81 Hz at 6.0 s where HV keeps 560.21 Hz. The lower floor changes which pitch is acquired at each onset; which value is right is not established without ground truth, so the 5 c frame check cannot decide it.</li>
   <li>Defect class from this: a hold that never releases on a note change (HV at 6.0 s on marimba_mid). Needs a note-change witness with ground-truth note sequences, not medians.</li>
-  <li>Not admitted. Next: per-note scoring against ground truth for the marimba and voice files, then a note-change release rule as a separate variant.</li>
+  <li>Not admitted. Next: per-note scoring against ground truth for the marimba and voice files, then a note-change release rule as a separate variant.
+    <h2 id="note-change-synthetic-test">Note-change synthetic test</h2>
+  </li>
+  <li>Input <code class="language-plaintext highlighter-rouge">docs/witness/note-change/note_change.wav</code>: 12 s, plucked sines at 440, 523.25, 659.26, 392 and 440 Hz, 1 s decay, source amplitude 0.5, device-return gain 0.00707945784384138. Ground truth in <code class="language-plaintext highlighter-rouge">note_change.truth.json</code>; scorer <code class="language-plaintext highlighter-rouge">score.mjs &lt;variant&gt;</code>.</li>
+  <li>HV and floor 1e-8, both: 120 frames (0.1 s each), zero fraction 0.000, within 10 c on every note, release 0.1 s after each change, no stale frames.</li>
+  <li>Clean tones do not reproduce the marimba stale hold (560.21 Hz kept at 6.0 s, <code class="language-plaintext highlighter-rouge">docs/witness/hv-floor/</code>). The stale hold needs the real marimba timbre or decay, so this test is a floor for correctness, not a discriminator between variants.</li>
 </ul>
 
 

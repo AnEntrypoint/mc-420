@@ -1,0 +1,38 @@
+{
+  "sr": 48000,
+  "source_amp": 0.5,
+  "decay_tau_s": 1,
+  "gain_protocol": "0.00707945784384138 applied by the harness, as for test-audio-corpus",
+  "segments": [
+    {
+      "t0": 0.5,
+      "t1": 2.5,
+      "f": 440,
+      "name": "A4"
+    },
+    {
+      "t0": 2.5,
+      "t1": 4.5,
+      "f": 523.25,
+      "name": "C5"
+    },
+    {
+      "t0": 4.5,
+      "t1": 6.5,
+      "f": 659.26,
+      "name": "E5"
+    },
+    {
+      "t0": 6.5,
+      "t1": 8.5,
+      "f": 392,
+      "name": "G4"
+    },
+    {
+      "t0": 9,
+      "t1": 11,
+      "f": 440,
+      "name": "A4b"
+    }
+  ]
+}
