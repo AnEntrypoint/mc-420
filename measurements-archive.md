@@ -363,3 +363,12 @@ the same 17 blocks.
 - Piano C7 (2093 Hz): no stable detection, 3 valid hops, INVALID. Same region as the flute.
 - Piano A1 (55 Hz): 1 valid hop, INVALID. Matches the A1 dropout.
 - Use: the lock path is the product metric. Output error = tracker bias + lock residual, so a live run checks a tracker change end to end, without renders.
+## 2093 Hz root: the tracker ceiling
+
+- Cause: the coarse grid in `pickFundamental` tops out at 1581.12 Hz (lag 30), and `kExtFreqDetMaxHz` clamps at 1500 Hz. Any input above that can only be read at a sub-multiple.
+- Offline (`docs/witness/live-ground-truth/ceiling_sim.mjs`, normalized correlation, first local maximum above 0.85, same frames): with the DSP's lag floor (30), flute C7 reads 1072.9 Hz (-1157 c) and piano C7 reads 1057.9 Hz (-1181 c), both within 25 c on 0 frames. Trumpet A3, soprano sax C6 and piano C4 are unchanged.
+- Lifting the floor to lag 11 (about 4364 Hz): flute C7 reads 2146.1 Hz (+43 c) and piano C7 reads 2112.8 Hz (+16 c, 35% of frames within 25 c). Others unchanged.
+- Live (lock witness, flute C7 target 98): 718 Hz, a third of the true pitch, the same ceiling effect through the coarse grid.
+- Threshold is not the cause: thresholds 0.5 to 0.85 give the same picks (`threshold_sim.mjs`). First-minimum (CMNDF, all lags) gives 2147.6 Hz on the flute, so the true pitch of this corpus file may be about 2147 Hz, sharp of the C7 label.
+- Fix needs more than a constant. Raising the grid also needs the refinement window (`refineFreq`, K=16) scaled to the lag: at lag 11 to 30 a fixed K=16 clamps to L0 = 18 and refines the wrong peak. The clamp in `kExtFreqDetMaxHz` (1500 Hz) would also need lifting, and that clamp was deliberate (`defect-lock-above-1500hz-clamp`).
+- Next: a candidate with the grid extended and a lag-scaled refinement window, rendered on the high-register corpus files (flute_high_C7, piano_high_C7, crotale_high_C7, glockenspiel_high_C7, xylophone_run_C7B7) before any push.

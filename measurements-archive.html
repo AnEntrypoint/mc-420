@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e5f21993db03d635d7ec9520a9e92e9a52a1f7b7">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0785623a08569ba7e17a166473023d52e8195faf">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -530,7 +530,16 @@ the same 17 blocks.</p>
   <li>Flute C7 (source 2093 Hz, target 98 = 2349.32 Hz): measured 718 Hz, -2051 c, OCTAVE ERROR. This is the 2093 Hz root defect on real sound: the tracker lands near a third of the true pitch.</li>
   <li>Piano C7 (2093 Hz): no stable detection, 3 valid hops, INVALID. Same region as the flute.</li>
   <li>Piano A1 (55 Hz): 1 valid hop, INVALID. Matches the A1 dropout.</li>
-  <li>Use: the lock path is the product metric. Output error = tracker bias + lock residual, so a live run checks a tracker change end to end, without renders.</li>
+  <li>Use: the lock path is the product metric. Output error = tracker bias + lock residual, so a live run checks a tracker change end to end, without renders.
+    <h2 id="2093-hz-root-the-tracker-ceiling">2093 Hz root: the tracker ceiling</h2>
+  </li>
+  <li>Cause: the coarse grid in <code class="language-plaintext highlighter-rouge">pickFundamental</code> tops out at 1581.12 Hz (lag 30), and <code class="language-plaintext highlighter-rouge">kExtFreqDetMaxHz</code> clamps at 1500 Hz. Any input above that can only be read at a sub-multiple.</li>
+  <li>Offline (<code class="language-plaintext highlighter-rouge">docs/witness/live-ground-truth/ceiling_sim.mjs</code>, normalized correlation, first local maximum above 0.85, same frames): with the DSP’s lag floor (30), flute C7 reads 1072.9 Hz (-1157 c) and piano C7 reads 1057.9 Hz (-1181 c), both within 25 c on 0 frames. Trumpet A3, soprano sax C6 and piano C4 are unchanged.</li>
+  <li>Lifting the floor to lag 11 (about 4364 Hz): flute C7 reads 2146.1 Hz (+43 c) and piano C7 reads 2112.8 Hz (+16 c, 35% of frames within 25 c). Others unchanged.</li>
+  <li>Live (lock witness, flute C7 target 98): 718 Hz, a third of the true pitch, the same ceiling effect through the coarse grid.</li>
+  <li>Threshold is not the cause: thresholds 0.5 to 0.85 give the same picks (<code class="language-plaintext highlighter-rouge">threshold_sim.mjs</code>). First-minimum (CMNDF, all lags) gives 2147.6 Hz on the flute, so the true pitch of this corpus file may be about 2147 Hz, sharp of the C7 label.</li>
+  <li>Fix needs more than a constant. Raising the grid also needs the refinement window (<code class="language-plaintext highlighter-rouge">refineFreq</code>, K=16) scaled to the lag: at lag 11 to 30 a fixed K=16 clamps to L0 = 18 and refines the wrong peak. The clamp in <code class="language-plaintext highlighter-rouge">kExtFreqDetMaxHz</code> (1500 Hz) would also need lifting, and that clamp was deliberate (<code class="language-plaintext highlighter-rouge">defect-lock-above-1500hz-clamp</code>).</li>
+  <li>Next: a candidate with the grid extended and a lag-scaled refinement window, rendered on the high-register corpus files (flute_high_C7, piano_high_C7, crotale_high_C7, glockenspiel_high_C7, xylophone_run_C7B7) before any push.</li>
 </ul>
 
 
