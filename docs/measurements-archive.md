@@ -372,3 +372,7 @@ the same 17 blocks.
 - Threshold is not the cause: thresholds 0.5 to 0.85 give the same picks (`threshold_sim.mjs`). First-minimum (CMNDF, all lags) gives 2147.6 Hz on the flute, so the true pitch of this corpus file may be about 2147 Hz, sharp of the C7 label.
 - Fix needs more than a constant. Raising the grid also needs the refinement window (`refineFreq`, K=16) scaled to the lag: at lag 11 to 30 a fixed K=16 clamps to L0 = 18 and refines the wrong peak. The clamp in `kExtFreqDetMaxHz` (1500 Hz) would also need lifting, and that clamp was deliberate (`defect-lock-above-1500hz-clamp`).
 - Next: a candidate with the grid extended and a lag-scaled refinement window, rendered on the high-register corpus files (flute_high_C7, piano_high_C7, crotale_high_C7, glockenspiel_high_C7, xylophone_run_C7B7) before any push.
+## Ceiling candidate (staged, not admitted)
+
+- `docs/witness/pitch-ceiling/pitchtracker_ac_ceiling.dsp`: grid extended from 1581 Hz to about 4.3 kHz with 19 new candidates (ratio 1.0545, the grid's existing spacing), each high candidate read through `corrAtLagVarTau` (rwtable taps, tau 0.02), the rawFreq clamp raised to `maxRawHz` = 4200 Hz. Promotion (`reachable2/3`) still uses `maxTrackHz` = 1500 Hz. Parentheses balance; not compiled here.
+- Renders requested from DawDreamer: candidate on the 34 corpus files, the 5 sines and the four synthetic inputs; base on the four synthetic inputs (corpus base is `hv-corpus/base__*.txt`). Admission rule: no moved file worse than 5 cents, no zero-fraction increase, high-register files gain pitch.
