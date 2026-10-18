@@ -1,0 +1,37 @@
+name: granulator-scan-reverse-size
+
+on:
+  push:
+    paths:
+      - 'tools/granulator-controls/render_scan_reverse_size.cpp'
+      - 'src/dsp/sampler/sampler.h'
+      - '.github/workflows/granulator-scan-reverse-size.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render-scan-reverse-size:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the harness against sampler.h
+        run: |
+          g++ -O2 -std=c++17 -Wall -Wextra -I src/dsp/sampler \
+            tools/granulator-controls/render_scan_reverse_size.cpp -o render_scan_reverse_size
+
+      - name: Render the scan, reverse and grain-size cases and measure
+        run: ./render_scan_reverse_size granulator-scan-reverse-size.tsv
+
+      - name: Upload the measurements
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: granulator-scan-reverse-size
+          path: granulator-scan-reverse-size.tsv
+          if-no-files-found: error
+          retention-days: 14
