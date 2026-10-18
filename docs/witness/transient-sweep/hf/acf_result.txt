@@ -1,0 +1,8 @@
+# independent autocorrelation periodicity check (decimated 12 kHz, 100 ms blocks, 0.5 to 5.5 s)
+# r>=0.8 blocks and the median f0 of those blocks; target held note in Hz
+t_marimba_mid_C5B5_n72_r1.wav      target 523.25  blocks=49  r>=0.8: 13 (27%)  median f0 of good blocks 521.74 Hz (-5.0 c)
+t_vibraphone_mid_C5B5_n72_r1.wav   target 523.25  blocks=49  r>=0.8: 12 (24%)  median f0 of good blocks 521.74 Hz (-5.0 c)
+t_vibraphone_mid_C5B5_n60_r1.wav   target 261.63  blocks=49  r>=0.8: 9 (18%)  median f0 of good blocks 260.87 Hz (-5.0 c)
+# SOURCE files (same windows, same measure)
+SOURCE marimba_mid_C5B5.wav       blocks=49 r>=0.8: 49 (100%) median 571.43 Hz
+SOURCE vibraphone_mid_C5B5.wav    blocks=49 r>=0.8: 49 (100%) median 1000.00 Hz
