@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8461bda587fad3380ffbbdaffed973cb4b64e7d4">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=74bad06ca894ceba8c9493f5ddad64b5c318fc13">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -491,7 +491,15 @@ the same 17 blocks.</p>
   </li>
   <li>Input <code class="language-plaintext highlighter-rouge">docs/witness/note-change/note_change_harm.wav</code>: 12 s, four harmonic partials (1, 0.35, 0.15, 0.08; decay tau 1.2, 0.8, 0.5, 0.3 s), C5, D5 entering during the C5 decay, F5, then C5 after 0.3 s silence. Truth in <code class="language-plaintext highlighter-rouge">note_change_harm.truth.json</code>.</li>
   <li>HV and floor 1e-8, identical on this input: within 10 c C5 0.909, D5 1.000, F5 1.000, C5b 0.952; zero fraction 0.000; release 0.1 s; no stale frames.</li>
-  <li>Neither the clean nor the harmonic synthetic reproduces the stale hold seen on real marimba_mid. The next discriminating input needs the real marimba partial ratios (inharmonic bars) and its amplitude envelope, not more harmonic tones.</li>
+  <li>Neither the clean nor the harmonic synthetic reproduces the stale hold seen on real marimba_mid. The next discriminating input needs the real marimba partial ratios (inharmonic bars) and its amplitude envelope, not more harmonic tones.
+    <h2 id="inharmonic-note-change-test">Inharmonic note-change test</h2>
+  </li>
+  <li>Inputs <code class="language-plaintext highlighter-rouge">docs/witness/note-change/note_change_inharm_freeFreeBeam.wav</code> (partial ratios 1, 2.756, 5.404, 8.933: uniform free-free beam modes, derived, not measured on a marimba) and <code class="language-plaintext highlighter-rouge">note_change_inharm_quoted1x4x10.wav</code> (1, 4, 10: commonly quoted marimba set, unverified). Same C5, D5, F5, C5 sequence as the harmonic test. Scores and medians in <code class="language-plaintext highlighter-rouge">inharm_scores.txt</code>.</li>
+  <li>Free-free set, HV: C5 median 519.69 Hz (-11.8 c), D5 +5.1 c, F5 686.50 Hz (-29.9 c), F5 never within 25 c, so no release. Frames within 10 c: C5 4.5%, F5 0%.</li>
+  <li>Free-free set, floor 1e-8: C5 -8.1 c, D5 +3.7 c, F5 +6.5 c, release 0.7 s, frames within 10 c: C5 77.3%, F5 59.1%.</li>
+  <li>1-4-10 set, HV: C5 516.22 Hz (-23.4 c), frames within 10 c 0%. Floor 1e-8: C5 -10.4 c, frames within 10 c 45.5%.</li>
+  <li>The D5 and F5 medians stay within 7 c on the 1-4-10 set in both variants, so the bias is partial-dependent, not floor-dependent. The C5 bias is systematic and negative across both sets.</li>
+  <li>Defect, measured: the pitch tracker biases inharmonic spectra by 8 to 30 cents. The floor 1e-8 variant reduces the F5 error and fixes its release on the free-free set but does not remove the C5 bias. Next: find which estimator stage (AC lag pick or refinement) produces the bias, offline, before any DSP change.</li>
 </ul>
 
 
