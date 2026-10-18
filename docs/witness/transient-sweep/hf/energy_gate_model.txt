@@ -1,0 +1,12 @@
+# energy gate of pitchtracker_ac.dsp reproduced in Python (3 ms one-pole of x^2, 35 ms hold above env > 1e-6)
+# input: marimba_mid_C5B5.wav at full level, and at the device return level (-43 dB, peak -48 dBFS)
+# measured fraction of 0.5 to 6 s where ready = 1:
+#   full level:          ready per second 0.70 0.58 0.53 0.80 0.16 0.19 0.67 0.18 0.42 0.54 (0 to 9 s)
+#   device return level: ready per second 0.05 0.00 0.00 0.10 0.00 0.00 0.00 0.00 0.03 0.00 (0 to 9 s)
+# device trace (device_extfreq_marimba72.txt): published pitch zero in 30 of 32 seconds, consistent with the device return level
+# floor sweep on the device-return note (0.5 to 6 s ready): floor 1e-6 2%, 1e-7 8%, 1e-8 14%; silence (rms 3e-5) 0% at every floor
+# CONCLUSION: the falling-edge clause (holdLastGood: fallingEdge > 0.5 -> 0.0) zeroes the published pitch whenever ready drops,
+# while the note still sounds. Lowering the floor is not sufficient on its own (the marimba tail falls below any floor quickly).
+# CANDIDATE HV (not compiled, not gated): replace the falling-edge zero with a hold of the last accepted value,
+#   heldStep(prev) = ba.if(accept, freqHz, prev); keep accept = ready & confident. Gate on the device-return marimba
+#   and the existing corpus gate before any admission.
