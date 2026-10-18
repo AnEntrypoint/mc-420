@@ -37,6 +37,7 @@ const opts = {
   scan: false,
   lock: null,
   selftest: false,
+  json: '',
 };
 
 for (let i = 0; i < args.length; i += 1) {
@@ -498,6 +499,7 @@ async function runLock() {
   console.log(`[loopback-witness] octave jumps in first 2s: ${jumps}${jumpAt.length ? ` [${jumpAt.join('; ')}]` : ''} of ${valid.length} valid hops`);
   const offOct = valid.filter((t) => Math.abs(Math.round(centsBetween(t.hz, expectedHz) / 1200)) >= 1).length;
   console.log(`[loopback-witness] hops an octave or more off target: ${offOct}/${valid.length}`);
+  writeRecord({ note: lock.note, expectHz: expectedHz, verdict: 'INVALID', lockHz: null, cents: null, octavesOff: null, segRms: segStats.rms, silentRms, validHops: valid.length });
   if (!verdictValid) {
     console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz INVALID (seg rms ${segStats.rms.toFixed(6)} silent rms ${silentRms.toFixed(6)} ${segDb.toFixed(1)} dB over silent, need ${kMinSilentDb} dB, ${valid.length} valid hops): no measurement, excluded from octave count`);
     if (opts.out) console.log(`[loopback-witness] wrote ${opts.out}`);
@@ -505,6 +507,7 @@ async function runLock() {
     return;
   }
   if (!f0) {
+    writeRecord({ note: lock.note, expectHz: expectedHz, verdict: 'NOT_DETECTED', lockHz: null, cents: null, octavesOff: null, segRms: segStats.rms, silentRms, validHops: valid.length });
     console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz measured NOT DETECTED (seg rms ${segStats.rms.toFixed(6)} silent rms ${silentRms.toFixed(6)} peak ${segStats.peak.toFixed(6)})`);
     if (opts.out) console.log(`[loopback-witness] wrote ${opts.out}`);
     process.exitCode = 1;
@@ -514,6 +517,14 @@ async function runLock() {
   const octavesOff = Math.round(cents / 1200);
   console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz measured ${f0.hz.toFixed(2)} Hz (score ${f0.score.toFixed(3)}) -> ${cents >= 0 ? '+' : ''}${cents.toFixed(1)} cents, octaves off ${octavesOff}${Math.abs(octavesOff) >= 1 ? ' OCTAVE ERROR' : ''} | seg rms ${segStats.rms.toFixed(6)} silent rms ${silentRms.toFixed(6)} (${segDb.toFixed(1)} dB) peak ${segStats.peak.toFixed(6)}`);
   if (opts.out) console.log(`[loopback-witness] wrote ${opts.out}`);
+  writeRecord({ note: lock.note, expectHz: expectedHz, verdict: 'MEASURED', lockHz: f0.hz, cents, octavesOff, segRms: segStats.rms, silentRms, validHops: valid.length });
+}
+
+function writeRecord(record) {
+  if (!opts.json) return;
+  const full = { ...record, file: opts.wav || null, host: opts.host, play: opts.playCard, timestamp: new Date().toISOString(), binaryMd5: null, lockbinSha256: null, trackerSha256: null, provenanceNote: 'not captured by this tool' };
+  fs.writeFileSync(opts.json, JSON.stringify(full, null, 2) + String.fromCharCode(10));
+  console.log('[loopback-witness] json ' + opts.json);
 }
 
 function selfTest() {
