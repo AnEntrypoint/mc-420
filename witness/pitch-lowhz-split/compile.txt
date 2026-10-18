@@ -1,0 +1,5 @@
+va faust rc=0 secs=445 sha256 bf3b5297268606aa6146d4d6218a0b428c24e83836c10b6580137dc3a2ed697b
+vs faust rc=0 secs=436 sha256 ecdbd6c68326d5450e1f700969702b225a1154579d4161d06f5064e27423ec4d
+base sha256 3f0184ab36e8bb243fdaa9a325736175b1a64f54dbd93719baa658af2cb6bef3
+va+vs applied in sequence sha256 535a08bd2fed27021aed38c10dcb7aa0f2b6e4fe585dc13e231ff1f0028ef910 == 168b38c: byte match
+base traces reused from docs/witness/pitch-lowhz-168b38c2/traces; lock binary sha256 65709ee7d8192828e13b3a3bbf68e10d924afe8d28a2d05bf633c740274d1230
