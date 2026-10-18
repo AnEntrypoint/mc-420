@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fd1e0f2e7ae789c977bf9c02eeeb29adf583ac82">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=a8156e10db7933aa273e4f704752ca96448ce435">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -341,6 +341,120 @@ piano_mid_C4 1/3/2, marimba_mid_C5B5 4/5/5.</p>
 is a comparison over the already-computed CMNDF curve. Cost is 900
 lags per detection instead of 800, +12.5% SNAC work spread over
 the same 17 blocks.</p>
+
+<h2 id="energy-gate-falling-edge">Energy gate falling edge</h2>
+
+<ul>
+  <li>Device trace (<code class="language-plaintext highlighter-rouge">docs/witness/transient-sweep/hf/device_extfreq_marimba72.txt</code>, binary <code class="language-plaintext highlighter-rouge">9917831613b209c3fc26a5ada919b40c</code>, <code class="language-plaintext highlighter-rouge">diag_extfreq_trace=1</code> for this run only): marimba_mid_C5B5 held note 72, <code class="language-plaintext highlighter-rouge">seconds=32 zero_raw=30</code>, so published pitch was zero in 30 of 32 s. Sample lines: <code class="language-plaintext highlighter-rouge">t=6479.700 raw=526.87 anchor=527.17 zone=527.17</code>, <code class="language-plaintext highlighter-rouge">t=6481.701 raw=562.39 anchor=279.52 zone=279.52</code> (anchor at half the raw reading). Commit <code class="language-plaintext highlighter-rouge">9465b917</code>.</li>
+  <li>Model (<code class="language-plaintext highlighter-rouge">docs/witness/transient-sweep/hf/energy_gate_model.txt</code>, 3 ms one-pole of x squared, 35 ms hold above env &gt; 1e-6, Python reproduction). Ready fraction per second, 0 to 9 s: full level <code class="language-plaintext highlighter-rouge">0.70 0.58 0.53 0.80 0.16 0.19 0.67 0.18 0.42 0.54</code>; device return level <code class="language-plaintext highlighter-rouge">0.05 0.00 0.00 0.10 0.00 0.00 0.00 0.00 0.03 0.00</code>.</li>
+  <li>Floor sweep at device return level (ready 0.5 to 6 s): floor 1e-6 2%, 1e-7 8%, 1e-8 14%; silence (rms 3e-5) 0% at every floor. A lower floor is not sufficient alone: the marimba tail falls below any floor quickly.</li>
+  <li>Mechanism: <code class="language-plaintext highlighter-rouge">holdLastGood</code> <code class="language-plaintext highlighter-rouge">fallingEdge &gt; 0.5 -&gt; 0.0</code> (<code class="language-plaintext highlighter-rouge">fd1e0f2e</code>). A1 excerpt, <code class="language-plaintext highlighter-rouge">docs/witness/a1-dropout/hv_base_marimba_m43.txt</code> vs <code class="language-plaintext highlighter-rouge">hv_hv_marimba_m43.txt</code> (time, published Hz): BASE <code class="language-plaintext highlighter-rouge">0.5000 526.4991</code>, <code class="language-plaintext highlighter-rouge">0.6000 0.0000</code>, <code class="language-plaintext highlighter-rouge">1.2000 0.0000</code>; HV <code class="language-plaintext highlighter-rouge">0.5000 526.4991</code>, <code class="language-plaintext highlighter-rouge">0.6000 526.1238</code>, <code class="language-plaintext highlighter-rouge">1.2000 526.1238</code>.</li>
+</ul>
+
+<h2 id="hold-variant-hv">Hold variant HV</h2>
+
+<ul>
+  <li>Candidate: <code class="language-plaintext highlighter-rouge">heldStep(prev) = ba.if(accept, freqHz, prev);</code> with <code class="language-plaintext highlighter-rouge">accept = ready &amp; confident</code> unchanged. Not in the shipped tree.</li>
+  <li>Device-return marimba, published pitch per block (<code class="language-plaintext highlighter-rouge">61cf7155</code> BASE, <code class="language-plaintext highlighter-rouge">cb2c02c3</code> HV): 56/56 blocks periodic for HV vs 2/56 for BASE.</li>
+  <li>Corpus outputs, one DawDreamer HV process (one compile, then 34 corpus files, then 5 sines): 39 BASE and 39 HV outputs, all non-empty, <code class="language-plaintext highlighter-rouge">hv.done</code> rc=0. Manifest <code class="language-plaintext highlighter-rouge">docs/witness/hv-corpus/sha256.txt</code> (91 lines): full sha256 of the 5 sine wavs, <code class="language-plaintext highlighter-rouge">base.dsp</code> (<code class="language-plaintext highlighter-rouge">3f0184ab...</code>), <code class="language-plaintext highlighter-rouge">hv.dsp</code> (<code class="language-plaintext highlighter-rouge">b48d7282...</code>), the fr5 harness source and binary, <code class="language-plaintext highlighter-rouge">run_gated.sh</code>, and all 78 outputs. Marimba sanity: <code class="language-plaintext highlighter-rouge">base__marimba_mid_C5B5.txt</code> = <code class="language-plaintext highlighter-rouge">c68512d4...</code>, same as the earlier run.</li>
+  <li>Gate NOT yet run. Gate rows (<code class="language-plaintext highlighter-rouge">docs/witness/pitch-lowhz-168b38c2/gate.txt</code> logic, lock binary sha256 <code class="language-plaintext highlighter-rouge">65709ee7...</code>): sine 440 and 1000 within 0.5%; sine 55.69 within 2%; crotale 96 and marimba 74 within 5 cents; no corpus file worse than 5 cents. Admit only if every row passes.</li>
+</ul>
+
+<h2 id="168b38c-revert">168b38c revert</h2>
+
+<ul>
+  <li>Gate (<code class="language-plaintext highlighter-rouge">docs/witness/pitch-lowhz-168b38c2/gate.txt</code>, first 30 lines): G1 sine 440/1000 lock d 0.249%/0.076% PASS; G2 sine 55.69 trk base 60.000 cand 55.691 (err 0.002%) PASS; G3 crotale 0.65 c (4212.67 to 4214.26), marimba_mid -7.03 c (530.75 to 528.60) FAIL.</li>
+  <li>Cells that moved (trk base to cand, lock d cents): flute_high_C7 691.70 to 698.91, -16.32; marimba_mid_C5B5 578.31 to 590.83, -7.03; cymbal_inharmonic 61.22 to 1000.00, -0.63; piano_low_A1 0.00 to 55.28, 0.00; tamtam_inharmonic 82.62 to 83.53, 0.00.</li>
+  <li>Split (<code class="language-plaintext highlighter-rouge">docs/witness/pitch-lowhz-split/gate_va.txt</code>, <code class="language-plaintext highlighter-rouge">gate_vs.txt</code>): both halves FAIL (<code class="language-plaintext highlighter-rouge">87d84970</code>). Reverted in <code class="language-plaintext highlighter-rouge">87ea7898</code>.</li>
+</ul>
+
+<h2 id="2093-root-stage">2093 root stage</h2>
+
+<ul>
+  <li>Tracker publishes 719 Hz for a 2093 Hz input (<code class="language-plaintext highlighter-rouge">docs/witness/stage-hunt-719/</code>). Offline, the lock output follows <code class="language-plaintext highlighter-rouge">dry*f(target)/ext</code> (<code class="language-plaintext highlighter-rouge">fb38a93d</code>).</li>
+  <li>Candidate 934258b passes the sine and fails the crotale/marimba 5-cent gate: NOT admitted (<code class="language-plaintext highlighter-rouge">1f70fb25</code>, <code class="language-plaintext highlighter-rouge">b8c03682</code>; sources <code class="language-plaintext highlighter-rouge">docs/witness/pitch-2093-raw/lock-sub30/</code>).</li>
+  <li>Its flute trill regression came from the wrong held note (nearest MIDI to the tracker, not the true 96): an octave-error fix. Corrected A/B in <code class="language-plaintext highlighter-rouge">docs/witness/pitch-934258b-flute-trill/</code> (<code class="language-plaintext highlighter-rouge">f30be9b5</code>).</li>
+</ul>
+
+<h2 id="a1-window">A1 window</h2>
+
+<ul>
+  <li>SNAC via <code class="language-plaintext highlighter-rouge">dsp_cli --trk</code> reads 59.7 cents mean on piano_low_A1 (55 Hz) after the MAX_PERIOD 900 change. The 59.7 figure is SNAC, not AC.</li>
+  <li>AC tracker silent on A1 at baseline (<code class="language-plaintext highlighter-rouge">docs/witness/a1-dropout/old_a1.txt</code>, <code class="language-plaintext highlighter-rouge">af81b224</code>).</li>
+  <li>Low-grid half (VA, <code class="language-plaintext highlighter-rouge">docs/witness/a1-dropout/va_a1.txt</code>, <code class="language-plaintext highlighter-rouge">3ffcf5ec</code>): energy gate open from 0.6 s, confidence stays closed until 6.2 s.</li>
+</ul>
+
+<h2 id="lock-periodicity">Lock periodicity</h2>
+
+<ul>
+  <li>Offline (<code class="language-plaintext highlighter-rouge">docs/witness/transient-sweep/hf/offline_lock_periodicity.txt</code>, <code class="language-plaintext highlighter-rouge">9658a504</code>): 98-100% of blocks periodic with a constant ext pitch.</li>
+  <li>Device sweep captures (<code class="language-plaintext highlighter-rouge">7a9ee998</code>, per-block spread <code class="language-plaintext highlighter-rouge">b53d14f8</code>): 18-27% periodic.</li>
+</ul>
+
+<h2 id="transient-sweep">Transient sweep</h2>
+
+<ul>
+  <li>52 cases, 12 controls, octave-error rule (<code class="language-plaintext highlighter-rouge">docs/witness/transient-sweep/results.txt</code>, <code class="language-plaintext highlighter-rouge">3b4b0a0c</code>, <code class="language-plaintext highlighter-rouge">ff18b70d</code>).</li>
+  <li>HF band check (<code class="language-plaintext highlighter-rouge">hf_check.py</code>, <code class="language-plaintext highlighter-rouge">result-corrected.txt</code>, <code class="language-plaintext highlighter-rouge">445f4bf3</code>, <code class="language-plaintext highlighter-rouge">69af8d7b</code>). The first pass used an attack-including baseline; its 25 dB below baseline claim is RETRACTED. Corrected: pre-attack silence 0-0.3 s, note window 0.5-5.5 s. Example, <code class="language-plaintext highlighter-rouge">t_marimba_mid_C5B5_n72_r1.wav</code>: 3500-8000 Hz pre -96.5 note -97.8 dB; 1000-3500 Hz pre -99.0 note -79.4 dB.</li>
+  <li>Capture timing: source onset 0.00-0.02 s in the source appears at 0.38-0.44 s in the capture.</li>
+</ul>
+
+<h2 id="midi-96-witness">MIDI 96 witness</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">docs/witness/midi96/</code> (<code class="language-plaintext highlighter-rouge">6e052c1b</code>): the shifter saturates above +16 st; 149.55 Hz not reproduced at +18.5 st.</li>
+  <li>Device shift still unread: needs <code class="language-plaintext highlighter-rouge">shiftamountdiag</code> and <code class="language-plaintext highlighter-rouge">helddetnotediag</code> reads.</li>
+</ul>
+
+<h2 id="witness-validity">Witness validity</h2>
+
+<ul>
+  <li>A capture counts only when its segment RMS is &gt;=10 dB over a same-run silent control (<code class="language-plaintext highlighter-rouge">tools/loopback-witness/loopback-witness.js</code>). Unmeasurable captures are INVALID (<code class="language-plaintext highlighter-rouge">4e5a2e1e</code>). Search ceiling 8 kHz (<code class="language-plaintext highlighter-rouge">b1bebcdc</code>). Floor relative to silence (<code class="language-plaintext highlighter-rouge">09381015</code>). <code class="language-plaintext highlighter-rouge">--selftest</code> 7/7 (<code class="language-plaintext highlighter-rouge">docs/witness/loopback-witness-selftest.txt</code>).</li>
+</ul>
+
+<h2 id="live-witness-channels">Live witness channels</h2>
+
+<ul>
+  <li>Host card 0 (Scarlett 18i8): 8ch playback, 20ch capture, 48k S32_LE. Play channel index 6 (<code class="language-plaintext highlighter-rouge">Line Out 07</code> = Headphones 2 L, the only one reaching the client AIR 192 ch-2 in). Capture index 1 (<code class="language-plaintext highlighter-rouge">PCM 02</code> = <code class="language-plaintext highlighter-rouge">Analogue 2</code>). <code class="language-plaintext highlighter-rouge">--scan</code> re-locates both.</li>
+  <li>Return level ~-43 dB against the played level. f0 locks: piano C4 reads 263.7 Hz, +12 semis reads 527.5 Hz.</li>
+  <li>DawDreamer offline gain for the same return level: 10^(-43/20) = 0.00707945784384138.</li>
+</ul>
+
+<h2 id="compile-memory-and-ci">Compile memory and CI</h2>
+
+<ul>
+  <li>VP10/VP15/VP20 (per-call tau variants) compiles ran 4.4 GB and restarted the host; killed by pid. VQ3 (<code class="language-plaintext highlighter-rouge">docs/witness/pitch-lowhz-period/vq3.dsp</code>) proposed, not compiled.</li>
+  <li><code class="language-plaintext highlighter-rouge">pitchtracker_ac.dsp</code> CI faust compile: ~7-16 min per run. Local faust 2.81.10 vs CI pinned 2.85.9. <code class="language-plaintext highlighter-rouge">tools/faust-pinned/</code> (<code class="language-plaintext highlighter-rouge">e1e51513</code>) holds <code class="language-plaintext highlighter-rouge">noalarm.c</code>, a local-only shim for the 120 s SIGALRM.</li>
+  <li>x64 <code class="language-plaintext highlighter-rouge">home-fx-lv2-x64</code> target added in <code class="language-plaintext highlighter-rouge">bad5ecb</code>. Open CI plans: faust compile cache keyed by .dsp hash (<code class="language-plaintext highlighter-rouge">plan-ci-faust-cache</code>), docs-only build skip (<code class="language-plaintext highlighter-rouge">plan-ci-docs-only-skip</code>).</li>
+</ul>
+
+<h2 id="device-binaries">Device binaries</h2>
+
+<ul>
+  <li>Stock binary md5 <code class="language-plaintext highlighter-rouge">2af0406bf6acd3a0f93edc94df7c3e40</code>. Last pitch witnesses: CI <code class="language-plaintext highlighter-rouge">9917831613b209c3fc26a5ada919b40c</code> hot-deployed to <code class="language-plaintext highlighter-rouge">/opt/aloop/aloop</code>.</li>
+  <li>Netboot root is tmpfs: a power cycle restores the stock binary and drops every deploy, including the rollback copy (<code class="language-plaintext highlighter-rouge">d2b58671</code>). Persistence deferred until the HV gate picks a build (PRD <code class="language-plaintext highlighter-rouge">decision-reboot-persistence</code>).</li>
+</ul>
+
+<h2 id="hold-erase-self-heal">Hold-erase self-heal</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kHoldEraseMs = 1000</code> (<code class="language-plaintext highlighter-rouge">apc_grid.h:19</code>): hold-erase clears <code class="language-plaintext highlighter-rouge">m_looperHasContent</code>. <code class="language-plaintext highlighter-rouge">!anyHasContent &amp;&amp; m_masterLenSamples != 0</code> self-heal zeroes <code class="language-plaintext highlighter-rouge">cmd/master_len</code>, <code class="language-plaintext highlighter-rouge">cmd/recorded_bpm</code>, <code class="language-plaintext highlighter-rouge">cmd/recorded_beats</code> and runs <code class="language-plaintext highlighter-rouge">resetTempoAuthority()</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">loop.dsp</code> writes <code class="language-plaintext highlighter-rouge">wlenNext</code> only at FINISH, so <code class="language-plaintext highlighter-rouge">wraplen&gt;1</code> is NOT proof of content (<code class="language-plaintext highlighter-rouge">m_looperWrapLenStaleAfterWipe</code>).</li>
+</ul>
+
+<h2 id="dsp-cli-usage">dsp-cli usage</h2>
+
+<ul>
+  <li>Clean-tree before/after: <code class="language-plaintext highlighter-rouge">git archive HEAD effects/home/faust | tar -x -C /tmp/basesrc --strip-components=3</code>, then build with <code class="language-plaintext highlighter-rouge">-I /tmp/basesrc</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">--solad freq=</code> is REPORT-ONLY: output is byte-identical across values; it sets only <code class="language-plaintext highlighter-rouge">expect</code>. Pass the true source f0 or <code class="language-plaintext highlighter-rouge">cents</code>/<code class="language-plaintext highlighter-rouge">achievedSemis</code> mean nothing.</li>
+  <li><code class="language-plaintext highlighter-rouge">--pitch</code> latched onto 3844 Hz for a 132 Hz PSOLA render: pass <code class="language-plaintext highlighter-rouge">minhz</code>/<code class="language-plaintext highlighter-rouge">maxhz</code> around the expected value.</li>
+</ul>
+
+<h2 id="diag-extfreq-trace">Diag extfreq trace</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">diag_extfreq_trace=1</code> (<code class="language-plaintext highlighter-rouge">0ca2d8e</code>) prints <code class="language-plaintext highlighter-rouge">[diag-extfreq] t raw anchor zone</code> at 1 line/s. Off by default: set it for one run, then restore the config.</li>
+</ul>
 
 
       </section>

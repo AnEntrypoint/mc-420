@@ -202,3 +202,87 @@ Zero added latency: still 17 sweep blocks, no buffer, and the gate
 is a comparison over the already-computed CMNDF curve. Cost is 900
 lags per detection instead of 800, +12.5% SNAC work spread over
 the same 17 blocks.
+
+## Energy gate falling edge
+
+- Device trace (`docs/witness/transient-sweep/hf/device_extfreq_marimba72.txt`, binary `9917831613b209c3fc26a5ada919b40c`, `diag_extfreq_trace=1` for this run only): marimba_mid_C5B5 held note 72, `seconds=32 zero_raw=30`, so published pitch was zero in 30 of 32 s. Sample lines: `t=6479.700 raw=526.87 anchor=527.17 zone=527.17`, `t=6481.701 raw=562.39 anchor=279.52 zone=279.52` (anchor at half the raw reading). Commit `9465b917`.
+- Model (`docs/witness/transient-sweep/hf/energy_gate_model.txt`, 3 ms one-pole of x squared, 35 ms hold above env > 1e-6, Python reproduction). Ready fraction per second, 0 to 9 s: full level `0.70 0.58 0.53 0.80 0.16 0.19 0.67 0.18 0.42 0.54`; device return level `0.05 0.00 0.00 0.10 0.00 0.00 0.00 0.00 0.03 0.00`.
+- Floor sweep at device return level (ready 0.5 to 6 s): floor 1e-6 2%, 1e-7 8%, 1e-8 14%; silence (rms 3e-5) 0% at every floor. A lower floor is not sufficient alone: the marimba tail falls below any floor quickly.
+- Mechanism: `holdLastGood` `fallingEdge > 0.5 -> 0.0` (`fd1e0f2e`). A1 excerpt, `docs/witness/a1-dropout/hv_base_marimba_m43.txt` vs `hv_hv_marimba_m43.txt` (time, published Hz): BASE `0.5000 526.4991`, `0.6000 0.0000`, `1.2000 0.0000`; HV `0.5000 526.4991`, `0.6000 526.1238`, `1.2000 526.1238`.
+
+## Hold variant HV
+
+- Candidate: `heldStep(prev) = ba.if(accept, freqHz, prev);` with `accept = ready & confident` unchanged. Not in the shipped tree.
+- Device-return marimba, published pitch per block (`61cf7155` BASE, `cb2c02c3` HV): 56/56 blocks periodic for HV vs 2/56 for BASE.
+- Corpus outputs, one DawDreamer HV process (one compile, then 34 corpus files, then 5 sines): 39 BASE and 39 HV outputs, all non-empty, `hv.done` rc=0. Manifest `docs/witness/hv-corpus/sha256.txt` (91 lines): full sha256 of the 5 sine wavs, `base.dsp` (`3f0184ab...`), `hv.dsp` (`b48d7282...`), the fr5 harness source and binary, `run_gated.sh`, and all 78 outputs. Marimba sanity: `base__marimba_mid_C5B5.txt` = `c68512d4...`, same as the earlier run.
+- Gate NOT yet run. Gate rows (`docs/witness/pitch-lowhz-168b38c2/gate.txt` logic, lock binary sha256 `65709ee7...`): sine 440 and 1000 within 0.5%; sine 55.69 within 2%; crotale 96 and marimba 74 within 5 cents; no corpus file worse than 5 cents. Admit only if every row passes.
+
+## 168b38c revert
+
+- Gate (`docs/witness/pitch-lowhz-168b38c2/gate.txt`, first 30 lines): G1 sine 440/1000 lock d 0.249%/0.076% PASS; G2 sine 55.69 trk base 60.000 cand 55.691 (err 0.002%) PASS; G3 crotale 0.65 c (4212.67 to 4214.26), marimba_mid -7.03 c (530.75 to 528.60) FAIL.
+- Cells that moved (trk base to cand, lock d cents): flute_high_C7 691.70 to 698.91, -16.32; marimba_mid_C5B5 578.31 to 590.83, -7.03; cymbal_inharmonic 61.22 to 1000.00, -0.63; piano_low_A1 0.00 to 55.28, 0.00; tamtam_inharmonic 82.62 to 83.53, 0.00.
+- Split (`docs/witness/pitch-lowhz-split/gate_va.txt`, `gate_vs.txt`): both halves FAIL (`87d84970`). Reverted in `87ea7898`.
+
+## 2093 root stage
+
+- Tracker publishes 719 Hz for a 2093 Hz input (`docs/witness/stage-hunt-719/`). Offline, the lock output follows `dry*f(target)/ext` (`fb38a93d`).
+- Candidate 934258b passes the sine and fails the crotale/marimba 5-cent gate: NOT admitted (`1f70fb25`, `b8c03682`; sources `docs/witness/pitch-2093-raw/lock-sub30/`).
+- Its flute trill regression came from the wrong held note (nearest MIDI to the tracker, not the true 96): an octave-error fix. Corrected A/B in `docs/witness/pitch-934258b-flute-trill/` (`f30be9b5`).
+
+## A1 window
+
+- SNAC via `dsp_cli --trk` reads 59.7 cents mean on piano_low_A1 (55 Hz) after the MAX_PERIOD 900 change. The 59.7 figure is SNAC, not AC.
+- AC tracker silent on A1 at baseline (`docs/witness/a1-dropout/old_a1.txt`, `af81b224`).
+- Low-grid half (VA, `docs/witness/a1-dropout/va_a1.txt`, `3ffcf5ec`): energy gate open from 0.6 s, confidence stays closed until 6.2 s.
+
+## Lock periodicity
+
+- Offline (`docs/witness/transient-sweep/hf/offline_lock_periodicity.txt`, `9658a504`): 98-100% of blocks periodic with a constant ext pitch.
+- Device sweep captures (`7a9ee998`, per-block spread `b53d14f8`): 18-27% periodic.
+
+## Transient sweep
+
+- 52 cases, 12 controls, octave-error rule (`docs/witness/transient-sweep/results.txt`, `3b4b0a0c`, `ff18b70d`).
+- HF band check (`hf_check.py`, `result-corrected.txt`, `445f4bf3`, `69af8d7b`). The first pass used an attack-including baseline; its 25 dB below baseline claim is RETRACTED. Corrected: pre-attack silence 0-0.3 s, note window 0.5-5.5 s. Example, `t_marimba_mid_C5B5_n72_r1.wav`: 3500-8000 Hz pre -96.5 note -97.8 dB; 1000-3500 Hz pre -99.0 note -79.4 dB.
+- Capture timing: source onset 0.00-0.02 s in the source appears at 0.38-0.44 s in the capture.
+
+## MIDI 96 witness
+
+- `docs/witness/midi96/` (`6e052c1b`): the shifter saturates above +16 st; 149.55 Hz not reproduced at +18.5 st.
+- Device shift still unread: needs `shiftamountdiag` and `helddetnotediag` reads.
+
+## Witness validity
+
+- A capture counts only when its segment RMS is >=10 dB over a same-run silent control (`tools/loopback-witness/loopback-witness.js`). Unmeasurable captures are INVALID (`4e5a2e1e`). Search ceiling 8 kHz (`b1bebcdc`). Floor relative to silence (`09381015`). `--selftest` 7/7 (`docs/witness/loopback-witness-selftest.txt`).
+
+## Live witness channels
+
+- Host card 0 (Scarlett 18i8): 8ch playback, 20ch capture, 48k S32_LE. Play channel index 6 (`Line Out 07` = Headphones 2 L, the only one reaching the client AIR 192 ch-2 in). Capture index 1 (`PCM 02` = `Analogue 2`). `--scan` re-locates both.
+- Return level ~-43 dB against the played level. f0 locks: piano C4 reads 263.7 Hz, +12 semis reads 527.5 Hz.
+- DawDreamer offline gain for the same return level: 10^(-43/20) = 0.00707945784384138.
+
+## Compile memory and CI
+
+- VP10/VP15/VP20 (per-call tau variants) compiles ran 4.4 GB and restarted the host; killed by pid. VQ3 (`docs/witness/pitch-lowhz-period/vq3.dsp`) proposed, not compiled.
+- `pitchtracker_ac.dsp` CI faust compile: ~7-16 min per run. Local faust 2.81.10 vs CI pinned 2.85.9. `tools/faust-pinned/` (`e1e51513`) holds `noalarm.c`, a local-only shim for the 120 s SIGALRM.
+- x64 `home-fx-lv2-x64` target added in `bad5ecb`. Open CI plans: faust compile cache keyed by .dsp hash (`plan-ci-faust-cache`), docs-only build skip (`plan-ci-docs-only-skip`).
+
+## Device binaries
+
+- Stock binary md5 `2af0406bf6acd3a0f93edc94df7c3e40`. Last pitch witnesses: CI `9917831613b209c3fc26a5ada919b40c` hot-deployed to `/opt/aloop/aloop`.
+- Netboot root is tmpfs: a power cycle restores the stock binary and drops every deploy, including the rollback copy (`d2b58671`). Persistence deferred until the HV gate picks a build (PRD `decision-reboot-persistence`).
+
+## Hold-erase self-heal
+
+- `kHoldEraseMs = 1000` (`apc_grid.h:19`): hold-erase clears `m_looperHasContent`. `!anyHasContent && m_masterLenSamples != 0` self-heal zeroes `cmd/master_len`, `cmd/recorded_bpm`, `cmd/recorded_beats` and runs `resetTempoAuthority()`.
+- `loop.dsp` writes `wlenNext` only at FINISH, so `wraplen>1` is NOT proof of content (`m_looperWrapLenStaleAfterWipe`).
+
+## dsp-cli usage
+
+- Clean-tree before/after: `git archive HEAD effects/home/faust | tar -x -C /tmp/basesrc --strip-components=3`, then build with `-I /tmp/basesrc`.
+- `--solad freq=` is REPORT-ONLY: output is byte-identical across values; it sets only `expect`. Pass the true source f0 or `cents`/`achievedSemis` mean nothing.
+- `--pitch` latched onto 3844 Hz for a 132 Hz PSOLA render: pass `minhz`/`maxhz` around the expected value.
+
+## Diag extfreq trace
+
+- `diag_extfreq_trace=1` (`0ca2d8e`) prints `[diag-extfreq] t raw anchor zone` at 1 line/s. Off by default: set it for one run, then restore the config.
