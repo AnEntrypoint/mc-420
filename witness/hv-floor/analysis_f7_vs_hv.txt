@@ -1,0 +1,43 @@
+name	hv_zero	f8_zero	hv_stab	f8_stab	hv_med	f8_med	cents	flag
+balloon_pop_transient	1.000	1.000	NA	NA	0.00	0.00	NA	
+bassoon_low_C2B2	1.000	0.703	NA	1.000	0.00	78.23	NA	
+bells_glock_run_C6B6	1.000	0.000	NA	1.000	0.00	1117.87	NA	
+cello_low_sulC_A2	0.000	0.000	0.973	0.811	110.84	109.99	-13.34	MOVED>5c STAB_DOWN
+clarinet_high_C6B6	0.165	0.154	0.987	0.974	1024.62	1027.55	4.93	
+crotale_high_C7	1.000	1.000	NA	NA	0.00	0.00	NA	
+cymbal_inharmonic	1.000	1.000	NA	NA	0.00	0.00	NA	
+flute_high_C7	0.000	0.000	0.923	0.923	691.70	691.70	0.00	
+flute_trill_high_C7	0.000	0.000	0.686	0.543	1079.10	1098.17	30.33	MOVED>5c STAB_DOWN
+glockenspiel_high_C7	1.000	1.000	NA	NA	0.00	0.00	NA	
+guitar_pluck_C4B4	1.000	0.571	NA	0.750	0.00	292.25	NA	
+marimba_low_C2B2	1.000	0.000	NA	0.978	0.00	61.38	NA	
+marimba_mid_C5B5	0.000	0.000	0.978	0.967	560.21	560.55	1.06	
+marimba_roll_AM_C5B5	0.000	0.000	0.800	0.657	560.76	560.65	-0.35	STAB_DOWN
+noise_rms1e-4	1.000	1.000	NA	NA	0.00	0.00	NA	
+noise_rms3e-5	1.000	1.000	NA	NA	0.00	0.00	NA	
+oboe_mid_C5B5	1.000	0.407	NA	0.981	0.00	277.72	NA	
+piano_high_C7	1.000	1.000	NA	NA	0.00	0.00	NA	
+piano_low_A1	1.000	1.000	NA	NA	0.00	0.00	NA	
+piano_mid_C4	1.000	0.000	NA	1.000	0.00	261.53	NA	
+sine_1000	0.000	0.000	1.000	1.000	999.24	999.24	0.00	
+sine_110	0.000	0.000	1.000	1.000	108.83	108.83	0.00	
+sine_220	0.000	0.000	1.000	1.000	218.78	218.78	0.00	
+sine_440	0.000	0.000	1.000	1.000	438.85	438.85	0.00	
+sine_55.69	0.000	0.000	1.000	1.000	60.00	60.00	0.00	
+soprano_sax_high_C6	0.000	0.000	0.917	0.875	1028.70	1028.70	0.00	
+tamtam_inharmonic	1.000	0.139	NA	1.000	0.00	82.62	NA	
+trumpet_high_C6	1.000	0.000	NA	0.879	0.00	1005.62	NA	
+trumpet_low_A3	1.000	1.000	NA	NA	0.00	0.00	NA	
+tuba_run_C2B2	1.000	1.000	NA	NA	0.00	0.00	NA	
+vibraphone_mid_C5B5	1.000	0.000	NA	0.978	0.00	560.68	NA	
+violin_high_sulE_C7E7	1.000	0.000	NA	0.989	0.00	1118.25	NA	
+violin_low_sulG_G3B3	1.000	0.000	NA	0.967	0.00	196.85	NA	
+vocal_female_vibrato	0.000	0.000	0.753	0.353	204.39	203.59	-6.82	MOVED>5c STAB_DOWN
+vocal_male_baritone_scale	0.297	0.153	0.844	0.570	152.93	106.19	-631.35	MOVED>5c STAB_DOWN
+vocal_melody_twinkle_CC0	0.000	0.000	1.000	0.571	203.01	173.49	-271.99	MOVED>5c STAB_DOWN
+vocal_soprano_range_PD	0.000	0.000	0.690	0.690	882.43	882.43	0.00	
+vocal_tenor_operatic_PD	0.306	0.000	0.917	0.686	115.38	137.46	303.06	MOVED>5c STAB_DOWN
+vocal_tenor_range_PD	0.000	0.000	0.731	0.731	440.37	440.37	0.00	
+xylophone_roll_AM_C6B6	1.000	0.000	NA	0.829	0.00	1500.00	NA	
+xylophone_run_C7B7	1.000	0.361	NA	1.000	0.00	1500.00	NA	
+FLAGS ["cello_low_sulC_A2 MOVED>5c STAB_DOWN","flute_trill_high_C7 MOVED>5c STAB_DOWN","marimba_roll_AM_C5B5 STAB_DOWN","vocal_female_vibrato MOVED>5c STAB_DOWN","vocal_male_baritone_scale MOVED>5c STAB_DOWN","vocal_melody_twinkle_CC0 MOVED>5c STAB_DOWN","vocal_tenor_operatic_PD MOVED>5c STAB_DOWN"]

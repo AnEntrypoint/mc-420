@@ -303,3 +303,14 @@ the same 17 blocks.
 - Clarinet hold-variant stable fraction is 0.987 vs BASE 1.000 (`docs/witness/hv-corpus/zero_fraction.txt`): the one stability regression in the corpus.
 - Variants for the floor sweep: `docs/witness/hv-floor/` (hv.dsp, hv_floor1e-7.dsp, hv_floor1e-8.dsp). Renders requested from the DawDreamer session; results not yet in.
 - Device SSH: the netboot root is tmpfs, so the host key changes on every boot; ssh needs `-o UserKnownHostsFile=/dev/null` for the aloop device, not an edit of known_hosts.
+## Energy floor sweep
+
+- Renders (`docs/witness/hv-floor/`, DawDreamer fr6, one compile per variant, device-return gain 0.00707945784384138; sines and noise unscaled). Variants: hv (hold only), hv_floor1e-7 and hv_floor1e-8 (the aboveFloor line changed only). Sha256 manifest `sha256.txt`.
+- Block-weighted, t >= 1.0 s, 1828 corpus blocks: zero fraction hv 67.29%, floor 1e-7 28.28%, floor 1e-8 10.78%. Stable fraction (nonzero, within 5 c of previous block): 28.28%, 59.90%, 74.18%.
+- Noise controls (rms 3e-5 and 1e-4, 91 blocks each): published-pitch fraction 0.00% for all three variants. The lower floor does not trigger on idle-level noise.
+- Sines: zero fraction 0.00% everywhere. Medians 55.69 Hz gives 60.0000 Hz in all variants (the 60 Hz tracker floor); 110, 220, 440, 1000 Hz read 108.83, 218.78, 438.85, 999.24 Hz unchanged.
+- Per file against hv, frames both publish, within 5 c (`analysis_frames.txt`): marimba_mid 68% (f7 and f8), vocal_male 5%, vocal_melody 0%, vocal_female 37%, cello 24%, clarinet 59% (f7) and 49% (f8), vocal_tenor_operatic 68%, flute_high 100%, soprano_sax 96%, tenor_range 100%.
+- Median pitch moves over 5 c with stability loss (`analysis_f8_vs_hv.txt`, `analysis_f7_vs_hv.txt`): vocal_male -920 c at f8 (-631 c at f7), vocal_melody -286 c (-272 c), vocal_tenor_operatic +303 c, vocal_female -6.8 c, flute_trill +37 c (+30 c), cello stability 0.973 to 0.703 at f8.
+- Mechanism, marimba_mid_C5B5: all variants hold one value per note. At 3.4 s HV holds 560.21 Hz to the end of the file. Floor 1e-7 re-acquires 589.81 Hz at 6.0 s where HV keeps 560.21 Hz. The lower floor changes which pitch is acquired at each onset; which value is right is not established without ground truth, so the 5 c frame check cannot decide it.
+- Defect class from this: a hold that never releases on a note change (HV at 6.0 s on marimba_mid). Needs a note-change witness with ground-truth note sequences, not medians.
+- Not admitted. Next: per-note scoring against ground truth for the marimba and voice files, then a note-change release rule as a separate variant.

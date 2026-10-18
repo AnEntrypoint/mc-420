@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=ddde2d54c0420c3049a0f5c76bb4738208b3da08">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=83ddc14d803fe44e036aa3e90ffc9ca8d18c3883">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -470,7 +470,18 @@ the same 17 blocks.</p>
   <li>Model caveat: vocal_melody_twinkle_CC0 is the one file the offline model gets wrong: ready 0.000 at floor 1e-6, yet its hold-variant render publishes (zero fraction 0.000). The render is the witness.</li>
   <li>Clarinet hold-variant stable fraction is 0.987 vs BASE 1.000 (<code class="language-plaintext highlighter-rouge">docs/witness/hv-corpus/zero_fraction.txt</code>): the one stability regression in the corpus.</li>
   <li>Variants for the floor sweep: <code class="language-plaintext highlighter-rouge">docs/witness/hv-floor/</code> (hv.dsp, hv_floor1e-7.dsp, hv_floor1e-8.dsp). Renders requested from the DawDreamer session; results not yet in.</li>
-  <li>Device SSH: the netboot root is tmpfs, so the host key changes on every boot; ssh needs <code class="language-plaintext highlighter-rouge">-o UserKnownHostsFile=/dev/null</code> for the aloop device, not an edit of known_hosts.</li>
+  <li>Device SSH: the netboot root is tmpfs, so the host key changes on every boot; ssh needs <code class="language-plaintext highlighter-rouge">-o UserKnownHostsFile=/dev/null</code> for the aloop device, not an edit of known_hosts.
+    <h2 id="energy-floor-sweep">Energy floor sweep</h2>
+  </li>
+  <li>Renders (<code class="language-plaintext highlighter-rouge">docs/witness/hv-floor/</code>, DawDreamer fr6, one compile per variant, device-return gain 0.00707945784384138; sines and noise unscaled). Variants: hv (hold only), hv_floor1e-7 and hv_floor1e-8 (the aboveFloor line changed only). Sha256 manifest <code class="language-plaintext highlighter-rouge">sha256.txt</code>.</li>
+  <li>Block-weighted, t &gt;= 1.0 s, 1828 corpus blocks: zero fraction hv 67.29%, floor 1e-7 28.28%, floor 1e-8 10.78%. Stable fraction (nonzero, within 5 c of previous block): 28.28%, 59.90%, 74.18%.</li>
+  <li>Noise controls (rms 3e-5 and 1e-4, 91 blocks each): published-pitch fraction 0.00% for all three variants. The lower floor does not trigger on idle-level noise.</li>
+  <li>Sines: zero fraction 0.00% everywhere. Medians 55.69 Hz gives 60.0000 Hz in all variants (the 60 Hz tracker floor); 110, 220, 440, 1000 Hz read 108.83, 218.78, 438.85, 999.24 Hz unchanged.</li>
+  <li>Per file against hv, frames both publish, within 5 c (<code class="language-plaintext highlighter-rouge">analysis_frames.txt</code>): marimba_mid 68% (f7 and f8), vocal_male 5%, vocal_melody 0%, vocal_female 37%, cello 24%, clarinet 59% (f7) and 49% (f8), vocal_tenor_operatic 68%, flute_high 100%, soprano_sax 96%, tenor_range 100%.</li>
+  <li>Median pitch moves over 5 c with stability loss (<code class="language-plaintext highlighter-rouge">analysis_f8_vs_hv.txt</code>, <code class="language-plaintext highlighter-rouge">analysis_f7_vs_hv.txt</code>): vocal_male -920 c at f8 (-631 c at f7), vocal_melody -286 c (-272 c), vocal_tenor_operatic +303 c, vocal_female -6.8 c, flute_trill +37 c (+30 c), cello stability 0.973 to 0.703 at f8.</li>
+  <li>Mechanism, marimba_mid_C5B5: all variants hold one value per note. At 3.4 s HV holds 560.21 Hz to the end of the file. Floor 1e-7 re-acquires 589.81 Hz at 6.0 s where HV keeps 560.21 Hz. The lower floor changes which pitch is acquired at each onset; which value is right is not established without ground truth, so the 5 c frame check cannot decide it.</li>
+  <li>Defect class from this: a hold that never releases on a note change (HV at 6.0 s on marimba_mid). Needs a note-change witness with ground-truth note sequences, not medians.</li>
+  <li>Not admitted. Next: per-note scoring against ground truth for the marimba and voice files, then a note-change release rule as a separate variant.</li>
 </ul>
 
 
