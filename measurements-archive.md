@@ -319,3 +319,8 @@ the same 17 blocks.
 - Input `docs/witness/note-change/note_change.wav`: 12 s, plucked sines at 440, 523.25, 659.26, 392 and 440 Hz, 1 s decay, source amplitude 0.5, device-return gain 0.00707945784384138. Ground truth in `note_change.truth.json`; scorer `score.mjs <variant>`.
 - HV and floor 1e-8, both: 120 frames (0.1 s each), zero fraction 0.000, within 10 c on every note, release 0.1 s after each change, no stale frames.
 - Clean tones do not reproduce the marimba stale hold (560.21 Hz kept at 6.0 s, `docs/witness/hv-floor/`). The stale hold needs the real marimba timbre or decay, so this test is a floor for correctness, not a discriminator between variants.
+## Harmonic note-change test
+
+- Input `docs/witness/note-change/note_change_harm.wav`: 12 s, four harmonic partials (1, 0.35, 0.15, 0.08; decay tau 1.2, 0.8, 0.5, 0.3 s), C5, D5 entering during the C5 decay, F5, then C5 after 0.3 s silence. Truth in `note_change_harm.truth.json`.
+- HV and floor 1e-8, identical on this input: within 10 c C5 0.909, D5 1.000, F5 1.000, C5b 0.952; zero fraction 0.000; release 0.1 s; no stale frames.
+- Neither the clean nor the harmonic synthetic reproduces the stale hold seen on real marimba_mid. The next discriminating input needs the real marimba partial ratios (inharmonic bars) and its amplitude envelope, not more harmonic tones.

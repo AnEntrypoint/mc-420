@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d640b7427ab7b9fc6037067fa899d467f69c6158">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8461bda587fad3380ffbbdaffed973cb4b64e7d4">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -486,7 +486,12 @@ the same 17 blocks.</p>
   </li>
   <li>Input <code class="language-plaintext highlighter-rouge">docs/witness/note-change/note_change.wav</code>: 12 s, plucked sines at 440, 523.25, 659.26, 392 and 440 Hz, 1 s decay, source amplitude 0.5, device-return gain 0.00707945784384138. Ground truth in <code class="language-plaintext highlighter-rouge">note_change.truth.json</code>; scorer <code class="language-plaintext highlighter-rouge">score.mjs &lt;variant&gt;</code>.</li>
   <li>HV and floor 1e-8, both: 120 frames (0.1 s each), zero fraction 0.000, within 10 c on every note, release 0.1 s after each change, no stale frames.</li>
-  <li>Clean tones do not reproduce the marimba stale hold (560.21 Hz kept at 6.0 s, <code class="language-plaintext highlighter-rouge">docs/witness/hv-floor/</code>). The stale hold needs the real marimba timbre or decay, so this test is a floor for correctness, not a discriminator between variants.</li>
+  <li>Clean tones do not reproduce the marimba stale hold (560.21 Hz kept at 6.0 s, <code class="language-plaintext highlighter-rouge">docs/witness/hv-floor/</code>). The stale hold needs the real marimba timbre or decay, so this test is a floor for correctness, not a discriminator between variants.
+    <h2 id="harmonic-note-change-test">Harmonic note-change test</h2>
+  </li>
+  <li>Input <code class="language-plaintext highlighter-rouge">docs/witness/note-change/note_change_harm.wav</code>: 12 s, four harmonic partials (1, 0.35, 0.15, 0.08; decay tau 1.2, 0.8, 0.5, 0.3 s), C5, D5 entering during the C5 decay, F5, then C5 after 0.3 s silence. Truth in <code class="language-plaintext highlighter-rouge">note_change_harm.truth.json</code>.</li>
+  <li>HV and floor 1e-8, identical on this input: within 10 c C5 0.909, D5 1.000, F5 1.000, C5b 0.952; zero fraction 0.000; release 0.1 s; no stale frames.</li>
+  <li>Neither the clean nor the harmonic synthetic reproduces the stale hold seen on real marimba_mid. The next discriminating input needs the real marimba partial ratios (inharmonic bars) and its amplitude envelope, not more harmonic tones.</li>
 </ul>
 
 

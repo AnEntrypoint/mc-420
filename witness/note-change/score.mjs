@@ -1,9 +1,10 @@
 import fs from "node:fs";
 const DIR = new URL(".", import.meta.url).pathname;
-const truth = JSON.parse(fs.readFileSync(DIR + "note_change.truth.json", "utf8"));
+const CASE = process.argv[3] || "note_change";
+const truth = JSON.parse(fs.readFileSync(DIR + CASE + ".truth.json", "utf8"));
 const variant = process.argv[2];
 const rows = [];
-for (const line of fs.readFileSync(DIR + variant + "__note_change.txt", "utf8").split("\n")) {
+for (const line of fs.readFileSync(DIR + variant + "__" + CASE + ".txt", "utf8").split("\n")) {
   const p = line.trim().split(/\s+/);
   if (p.length < 2) continue;
   const t = +p[0], hz = +p[1];
