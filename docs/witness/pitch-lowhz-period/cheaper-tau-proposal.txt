@@ -1,0 +1,38 @@
+PITCH LOWHZ PERIOD: cheaper tau form (proposal, NOT compiled, NOT admitted)
+
+STATUS
+- No VP10, VP15 or VP20 compile has finished. No gate result exists for any VP variant.
+- VP10 first run: faust started about 09:20Z. Killed by the coordinator at about 17 min, rc=143, secs=1051.
+- VP15 and VP20 attempts ended rc=143 after 12 s and 8 s. The coordinator sent SIGTERM to those pids; these were coordinator kills, not an outside signal.
+- The agent then launched one VP10 retry before the stop instruction reached it, without coordinator sign-off. The coordinator killed it (wrapper sh pid 182534, faust pid 182538). The agent has no faust process running.
+- Variant sources (not committed): scratchpad lowhz/var/vp10.dsp sha256 30e98fc506d06ffd56cef13f1d74398942740cf46c602477884a74d58a2d77a2, vp15.dsp 2e12e7622cd6c24244470e8c5a3e54eb4e1c164186775683b9755a39f1280cd0, vp20.dsp 2c76633b5cdc2abf03eb1a1c1179e65f102db250b728215686e46cdff8d7bdd4. Each differs from va.dsp (bf3b5297...) only in the tauFor and corrAtLagVar tau lines.
+
+MEMORY GROWTH, VP10 FIRST RUN
+- One sample logged: at 16 min 12 s elapsed, faust RSS 4,159,740 KB (4.16 GB). Host at that moment: used 6592 MB, free 549 MB, available 1339 MB.
+- No RSS sample was logged in the first minutes, so the start value and the growth rate are unknown.
+- Coordinator reports 4.4 GB resident and 1.1 GB available at the kill.
+
+LIKELY CAUSE (not measured)
+- tauFor: each c(f) call site passes a literal frequency, so the nested ba.if is constant-folded. Unlikely to be the cost.
+- corrAtLagVar: VA uses a constant pole. The VP variants make the pole a signal, ba.tau2pole(max(0.01, K*lag/SR)), where lag is runtime. corrAtLagVar is instantiated at about 15 call sites (refineFreq, corrPeakAt, corrRawAt). Each instance now carries an exp per sample and a variable-coefficient feedback recursion (+ ~ *(pole)) whose coefficient depends on coarseFreq. Expansion multiplies per instance. This is the probable cause.
+
+PROPOSED CHEAPER FORM (all poles compile-time constants; no per-sample exp; no signal-valued recursion coefficient)
+- corrAtLagVar selects one of three precomputed poles by lag band:
+    pole = ba.if(lagClamped <= ma.SR/100.0, P_A, ba.if(lagClamped <= ma.SR/50.0, P_B, P_C));
+    P_A = ba.tau2pole(0.01)          (band f >= 100 Hz: identical to main)
+    P_B = ba.tau2pole(K/70.0)        (band 50 <= f < 100 Hz)
+    P_C = ba.tau2pole(K/35.0)        (band f < 50 Hz)
+- Constants (tau in seconds):
+    K=1.0: P_B 0.014286, P_C 0.028571
+    K=1.5: P_B 0.021429, P_C 0.042857
+    K=2.0: P_B 0.028571, P_C 0.057143
+- Caveat: inside each band P_B and P_C are exact only at their representative frequency. The whole low grid (50.5 to 62.64 Hz) falls in band B, so the 55.69 Hz sine is smoothed with tau K/70, not K/55.69. This is a different variant from the spec and would be named VPB, not VP10/15/20.
+- Exact-band alternative, if the approximation is too coarse: one constant per low-grid candidate (50.5, 52.73, 55.05, 57.47, 60, 62.64) with tau K/f, chosen by lag window, plus 0.01 for f >= 100 Hz. Still constant, no exp, but a 7-way ba.if chain per Var instance. Check codegen cost before any compile of it.
+- corrAtLagTau keeps the VA tauFor (0.01 for 100 to 700 Hz, 0.02 at or above 700 Hz, unchanged). Its literal call sites already fold any K/f term, so this part of the cheap form matches the VP files.
+
+EXPECTED COST
+- corrAtLagVar gains two comparisons and a three-way select of constant signals per call. No exp per sample, no new recursion coefficient.
+- Compile-time risk is the number of Var instances, not the arithmetic. Compile one variant alone after the VA run finishes, and record rc, secs and peak RSS.
+
+NOT DONE
+- No compile, no gate, no commit, no admission. The effects/pitchtracker-src/pitchtracker_ac.dsp on main is unchanged.
