@@ -1,0 +1,37 @@
+name: granulator-controls
+
+on:
+  push:
+    paths:
+      - 'tools/granulator-controls/**'
+      - 'src/dsp/sampler/sampler.h'
+      - '.github/workflows/granulator-controls.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the harness against sampler.h
+        run: |
+          g++ -O2 -std=c++17 -Wall -Wextra -I src/dsp/sampler \
+            tools/granulator-controls/render_controls.cpp -o render_controls
+
+      - name: Render the control cases and measure
+        run: ./render_controls granulator-controls.tsv
+
+      - name: Upload the measurements
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: granulator-controls
+          path: granulator-controls.tsv
+          if-no-files-found: error
+          retention-days: 14
