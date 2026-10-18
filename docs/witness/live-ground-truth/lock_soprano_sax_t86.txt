@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=test-audio-corpus/instruments/soprano_sax_high_C6.wav note=86 expect 1174.66 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  86 ch1 at +500ms
+[loopback-witness] note-off 86 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.001006 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 1056.54 Hz | played test-audio-corpus/instruments/soprano_sax_high_C6.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 1125 1146 1145 1162 1203 1203 1200 1197 1196 1195 1195 1195 1196 1197 1199 1199 1199 1195 1198 1201 1200
+[loopback-witness] octave jumps in first 2s: 0 of 21 valid hops
+[loopback-witness] hops an octave or more off target: 0/21
+[loopback-witness] LOCK note=86 expect 1174.66 Hz measured 1198.74 Hz (score 0.001) -> +35.1 cents, octaves off 0 | seg rms 0.000911 silent rms 0.000030 (29.7 dB) peak 0.001670
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+rc=0

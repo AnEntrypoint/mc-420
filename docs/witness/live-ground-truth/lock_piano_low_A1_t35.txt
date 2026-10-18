@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=test-audio-corpus/instruments/piano_low_A1.wav note=35 expect 61.74 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  35 ch1 at +500ms
+[loopback-witness] note-off 35 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.000086 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 not detected | played test-audio-corpus/instruments/piano_low_A1.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): - - - - - - - - - - - - - 6977 - - - - - - -
+[loopback-witness] octave jumps in first 2s: 0 of 1 valid hops
+[loopback-witness] hops an octave or more off target: 1/1
+[loopback-witness] LOCK note=35 expect 61.74 Hz INVALID (seg rms 0.000071 silent rms 0.000030 7.5 dB over silent, need 10 dB, 1 valid hops): no measurement, excluded from octave count
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+rc=1

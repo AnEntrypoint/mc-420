@@ -352,3 +352,14 @@ the same 17 blocks.
 - Model `docs/witness/note-change/combined_sim.mjs`: wide K=16 pass for the start, then per-block one-sample hill-climb on the three taps. Harmonic and 1-4-10 inputs sit at -5 to -7 cents from starts within 1.5 semitones and from most farther starts. Some starts still lock a sub-multiple: -700 to -717 cents on F5 and D5, from 440, 508 and 587 Hz starts.
 - The sub-multiple lock is the failure that matters. The plain CMNDF avoids it because it takes the first minimum below threshold, not the largest correlation. A YIN-style first-minimum search would need about a dozen variable-lag taps, which is the Faust codegen-cliff risk recorded in AGENTS.md.
 - Next step, not started: a dedicated tracker design with a first-minimum search, costed in taps and CI compile time, rendered on all four synthetic inputs and the corpus before any push.
+## Live ground truth on the Focusrite loop
+
+- Path: play a corpus wav out of host ch6 into the device's AIR 192 ch-2 input, shift+sustain latched, capture the device output on ch1. Raw outputs in `docs/witness/live-ground-truth/`. Witness `--lock <wav> <target> 6 --gain 1`.
+- Gain matters. At the default 0.5, piano_mid_C4 captured at 2.4 dB over silence (INVALID). At 1.0 the same file gives 5.9 dB and stable hops.
+- Trumpet A3 (source 220 Hz, target 59 = 246.94 Hz): measured 246.03 Hz, -6.4 c, 0 octave errors, valid at 15.1 dB.
+- Soprano sax C6 (target 86 = 1174.66 Hz): measured 1198.74 Hz, +35.1 c, 0 octave errors, valid at 29.7 dB. Offline the tracker reads about 1029 Hz on this file, 30 c below its C6, and the lock shift follows that reading. The live error is the tracker bias carried to the output.
+- Piano C4 (target 62 = 293.66 Hz): 19 valid hops at 294 to 298 Hz, about +6 c median. Whole-segment validity INVALID (5.9 dB), but the trajectory is consistent.
+- Flute C7 (source 2093 Hz, target 98 = 2349.32 Hz): measured 718 Hz, -2051 c, OCTAVE ERROR. This is the 2093 Hz root defect on real sound: the tracker lands near a third of the true pitch.
+- Piano C7 (2093 Hz): no stable detection, 3 valid hops, INVALID. Same region as the flute.
+- Piano A1 (55 Hz): 1 valid hop, INVALID. Matches the A1 dropout.
+- Use: the lock path is the product metric. Output error = tracker bias + lock residual, so a live run checks a tracker change end to end, without renders.
