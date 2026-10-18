@@ -68,8 +68,15 @@ int main(int argc, char** argv) {
     const std::string outdir = argv[3];
     const std::string tag = argv[4];
 
+    std::vector<const char*> flags;
+    const char* libDir = std::getenv("FAUST_LIBRARY_DIR");
+    if (libDir != nullptr) {
+        flags.push_back("-I");
+        flags.push_back(libDir);
+    }
     std::string err;
-    llvm_dsp_factory* fac = createDSPFactoryFromFile(dspPath.c_str(), 0, nullptr, "", err, -1);
+    llvm_dsp_factory* fac = createDSPFactoryFromFile(dspPath.c_str(), static_cast<int>(flags.size()),
+                                                     flags.data(), "", err, -1);
     if (!fac) fail("compile failed: " + err);
 
     for (int a = 5; a < argc; a++) {

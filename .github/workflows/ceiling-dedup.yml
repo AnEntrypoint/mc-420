@@ -39,8 +39,8 @@ jobs:
           set -e
           curl -fL "https://github.com/grame-cncm/faust/archive/refs/tags/${FAUST_VERSION}.tar.gz" -o faust-src.tar.gz
           mkdir -p faust-src
-          tar -xzf faust-src.tar.gz -C faust-src --wildcards '*/architecture/*'
-          ls faust-src
+          tar -xzf faust-src.tar.gz -C faust-src --wildcards '*/architecture/*' '*/libraries/*'
+          ls faust-src/faust-${FAUST_VERSION}
 
       - name: Build the renderer against the pinned libfaust
         run: |
@@ -58,6 +58,7 @@ jobs:
         run: |
           set -e
           mkdir -p out
+          export FAUST_LIBRARY_DIR="$(pwd)/faust-src/faust-${FAUST_VERSION}/libraries"
           ./render_candidate docs/witness/pitch-ceiling/pitchtracker_ac_ceiling_dedup.dsp "$GAIN" out dedup \
             test-audio-corpus/instruments/*.wav \
             sines/sine_*.wav \
