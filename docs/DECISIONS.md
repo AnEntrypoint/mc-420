@@ -503,3 +503,7 @@ loaded, so ordinary sampler playback is untouched.
 - R4 (no 4200 Hz clamp on cello or vocal_male): PASS.
 - Verdict: rejected under the pre-registered rules. The flute move is the intended correction (wrong register to the first-minimum reference near 2147 Hz), but R1 counts it as a failure, and the threshold is not changed after the run.
 - Follow-up: a revised candidate needs its own pre-registration, written before any render. It must exempt the 2093 Hz register correction explicitly, and it must move the high-register files (R3), not only flute.
+## Granulator control decisions, 2026-10-18
+
+- Envelope shape: the mapping stays. CI run 39168790090 (artifact granulator-controls, sha a111f9a5) measured a crest change of 1.09 dB between 0.1 and 0.9, under the pre-registered 2.0 dB. The claim that envelope shape changes crest by 2 dB is not supported at the current mapping. Changing the mapping needs its own pre-registration first.
+- Density: the ratio test stays as the metric. The high-rate undercount is recorded as a known limitation: the 40 Hz setting reads 16 peaks per second. An absolute rate check is a follow-up, with its threshold pre-registered before it runs.
