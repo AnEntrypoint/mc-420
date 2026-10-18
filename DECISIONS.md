@@ -513,3 +513,8 @@ loaded, so ordinary sampler playback is untouched.
 - Scan (0 vs 1.0): PASS, level-change difference 4.78 dB against 3.0.
 - Grain size (20 vs 200 ms): PASS, gap fraction 0.81 to 0.0125, difference 0.80 against 0.25.
 - Reverse (0 vs 1.0): FAIL, RMS ratio 0.90 dB against 2.0 dB (linear 0.0451 to 0.0500). Decision: the reverse mapping stays. Recorded as unsupported at the current mapping, the same treatment as envelope shape. A change needs its own pre-registration.
+## Starting point for the v3 tracker design, 2026-10-18
+
+- The silent high-register files in the dedup candidate (piano_high_C7, crotale_high_C7, glockenspiel_high_C7, xylophone_run_C7B7) are not a grid problem. Their energy envelopes sit below the absolute 1e-6 floor of energyReady: piano_high_C7 p99 5.3e-8, crotale 1.4e-6, glockenspiel 1.0e-7, xylophone_run 3.4e-7 (docs/witness/hv-corpus/energy_ready_device_return.txt).
+- Lowering the floor to 1e-8 was rejected: it changes frames already published on voice and marimba files (hv-floor analysis). So the v3 design must replace the absolute floor with a gate that does not move already-published frames.
+- v3 is not yet pre-registered. Its gate and its thresholds are written on tracker-ceiling-v3-prereg before any render.
