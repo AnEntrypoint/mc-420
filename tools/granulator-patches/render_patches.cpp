@@ -121,7 +121,7 @@ void loadChord(aloop::Sampler& s) {
     if (!s.chromaticLoaded()) fail("held chord did not load into the sampler");
 }
 
-void centroidStats(const std::vector<double>& y, double& mean, double& cv) {
+void centroidStats(const std::string& name, const std::vector<double>& y, double& mean, double& cv) {
     std::vector<double> cents;
     std::vector<std::complex<double>> a(kFftN);
     for (size_t start = 0; start + kFftN <= y.size(); start += kFftN / 2) {
@@ -138,7 +138,7 @@ void centroidStats(const std::vector<double>& y, double& mean, double& cv) {
         }
         if (den > 1e-18) cents.push_back(num / den);
     }
-    if (cents.empty()) fail("empty figure: no spectral energy in the measured window");
+    if (cents.empty()) fail("empty figure: no spectral energy in the measured window for " + name);
     mean = 0.0;
     for (double c : cents) mean += c;
     mean /= static_cast<double>(cents.size());
@@ -211,7 +211,7 @@ Metrics renderPatch(const Patch& p) {
     m.grainRateHz = peaks / (static_cast<double>(w.size()) / kSR);
     m.envMeanDb = envMean;
     m.envStdDb = std::sqrt(envVar);
-    centroidStats(w, m.centroidMeanHz, m.centroidCv);
+    centroidStats(p.name, w, m.centroidMeanHz, m.centroidCv);
 
     const double vals[] = {m.grainRateHz, m.envMeanDb, m.envStdDb, m.centroidMeanHz, m.centroidCv};
     for (double v : vals) {
