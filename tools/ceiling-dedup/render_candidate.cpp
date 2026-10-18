@@ -62,13 +62,13 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "usage: render_candidate <dsp> <gain> <outdir> <tag> <wav>...\n");
         return 2;
     }
-    const std::string dsp = argv[1];
+    const std::string dspPath = argv[1];
     const float gain = static_cast<float>(std::atof(argv[2]));
     const std::string outdir = argv[3];
     const std::string tag = argv[4];
 
     std::string err;
-    llvm_dsp_factory* fac = createDSPFactoryFromFile(dsp.c_str(), 0, nullptr, "", err, -1);
+    llvm_dsp_factory* fac = createDSPFactoryFromFile(dspPath.c_str(), 0, nullptr, "", err, -1);
     if (!fac) fail("compile failed: " + err);
 
     for (int a = 5; a < argc; a++) {
