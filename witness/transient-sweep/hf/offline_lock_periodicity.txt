@@ -1,0 +1,8 @@
+# offline lock, constant external pitch 523.25 Hz, held note 84, gate on at 0.5 s; periodicity r>=0.8 over 0.5 to 5.5 s
+# binary: docs/witness/pitch-2093-raw/lock/dsp_cli_const_gen.cpp built locally (sha 65709ee7...)
+# NOTE: pitch values from best_pitch are unreliable here (it selects long-lag multiples on pure tones); only the periodic fraction is used
+lk_sine.wav      pure 523.25 Hz sine dry      periodic 49/49 (100%)
+lk_marimba.wav   marimba_mid_C5B5 dry source  periodic 48/49 (98%)
+# device captures of the same held note (t_marimba_mid_C5B5_n72_r1, t_vibraphone_mid_C5B5_n72_r1): periodic 27% and 24%
+# conclusion: with a constant external pitch the lock DSP is periodic; the device output loses periodicity, so the
+# published external pitch or the return path varies during the note. Working hypothesis is now the external pitch.
