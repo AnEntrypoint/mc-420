@@ -1,0 +1,6 @@
+# CORRECTED: pre-attack baseline 0-0.3 s (silence); note window 0.5-5.5 s
+# captures start about 0.4 s before the source attack (source onset 0.00-0.02 s; capture onset 0.38-0.44 s)
+# level dB per band (pre = silence floor, note = sustained note window)
+t_vibraphone_mid_C5B5_n72_r1.wav  100-1000 pre-100.0 note -71.0 1000-3500 pre -98.2 note -77.6 3500-8000 pre -96.4 note -96.3 8000-20000 pre -92.6 note -92.4
+t_vibraphone_mid_C5B5_n60_r1.wav  100-1000 pre -99.5 note -69.4 1000-3500 pre -98.2 note -96.7 3500-8000 pre -96.7 note -97.5 8000-20000 pre -92.3 note -93.5
+t_marimba_mid_C5B5_n72_r1.wav     100-1000 pre -98.8 note -66.9 1000-3500 pre -99.0 note -79.4 3500-8000 pre -96.5 note -97.8 8000-20000 pre -92.6 note -93.8
