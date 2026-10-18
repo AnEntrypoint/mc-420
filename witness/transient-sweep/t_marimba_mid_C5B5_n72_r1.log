@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/ts/marimba_mid_C5B5.wav note=72 expect 523.25 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  72 ch1 at +500ms
+[loopback-witness] note-off 72 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.000561 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 7041.85 Hz | played /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/ts/marimba_mid_C5B5.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 528 525 525 525 523 522 - - 6881 - - - - - - - - 6775 - - 4046
+[loopback-witness] octave jumps in first 2s: 2 [800ms 521.8->6881.5Hz; 2000ms 6774.9->4046.4Hz] of 9 valid hops
+[loopback-witness] hops an octave or more off target: 3/9
+[loopback-witness] LOCK note=72 expect 523.25 Hz measured NOT DETECTED (seg rms 0.000391 silent rms 0.000030 peak 0.004271)
+[loopback-witness] wrote /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/tslogs/t_marimba_mid_C5B5_n72_r1.wav
+exit=1

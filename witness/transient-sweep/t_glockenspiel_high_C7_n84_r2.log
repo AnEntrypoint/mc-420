@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/ts/glockenspiel_high_C7.wav note=84 expect 1046.50 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  84 ch1 at +500ms
+[loopback-witness] note-off 84 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch10 rms 0.000077 | ch11 rms 0.000077 | ch1 rms 0.000068
+[loopback-witness] input (pre note-on) f0 2115.86 Hz | played /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/ts/glockenspiel_high_C7.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 1045 3163 3115 3140 3141 3137 3146 3138 3095 3143 3141 3132 3154 3084 3109 3175 3235 3127 3037 3095 3220
+[loopback-witness] octave jumps in first 2s: 1 [100ms 1045.4->3162.9Hz] of 21 valid hops
+[loopback-witness] hops an octave or more off target: 20/21
+[loopback-witness] LOCK note=84 expect 1046.50 Hz INVALID (seg rms 0.000041 silent rms 0.000030 2.9 dB over silent, need 10 dB, 21 valid hops): no measurement, excluded from octave count
+[loopback-witness] wrote /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/tslogs/t_glockenspiel_high_C7_n84_r2.wav
+exit=1

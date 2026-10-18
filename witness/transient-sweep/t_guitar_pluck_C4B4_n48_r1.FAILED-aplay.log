@@ -1,0 +1,7 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/ts/guitar_pluck_C4B4.wav note=48 expect 130.81 Hz, 6s, before in 0 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] error: aplay -q -D plughw:0,0 -t raw -c 8 -f S32_LE -r 48000 /tmp/loopback-witness/lock-play.raw exited 1: aplay: set_params:1364: Broken configuration for this PCM: no configurations available
+exit=1
