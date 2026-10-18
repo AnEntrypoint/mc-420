@@ -5,6 +5,7 @@ on:
     paths:
       - 'tools/granulator-patches/**'
       - 'src/dsp/sampler/sampler.h'
+      - 'src/control/apc_grid.cpp'
       - '.github/workflows/granulator-patches.yml'
   workflow_dispatch:
 
@@ -24,8 +25,11 @@ jobs:
           g++ -O2 -std=c++17 -Wall -Wextra -I src/dsp/sampler \
             tools/granulator-patches/render_patches.cpp -o render_patches
 
+      - name: Generate the patch table from kGranPatches
+        run: python3 tools/granulator-patches/generate_patches.py src/control/apc_grid.cpp patches.tsv
+
       - name: Render the held chord for each patch and measure
-        run: ./render_patches tools/granulator-patches/patches.tsv granulator-patches.tsv
+        run: ./render_patches patches.tsv granulator-patches.tsv
 
       - name: Upload the measurements
         if: success()
