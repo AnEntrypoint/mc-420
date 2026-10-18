@@ -493,3 +493,13 @@ loaded, so ordinary sampler playback is untouched.
 ## Correction, 2026-10-18
 
 - plan-provenance-fields was closed with commit 2e630eca (the summariser) as its delivering commit, in error. The delivering commit is 4092c099 (the tool change that fills the four provenance fields). The resolver can't repair a closed row, so this line is the record. The witness (.gm/witness/lock-trumpet-59-prov.json) and its evidence are correct.
+## Tracker candidate rejected, 2026-10-18
+
+- Candidate: docs/witness/pitch-ceiling/pitchtracker_ac_ceiling_dedup.dsp (sha 4e8907ac). Base: effects/pitchtracker-src/pitchtracker_ac.dsp (sha 3f0184ab, unchanged).
+- CI run 39166365939 on e1fa5b89, artifact ceiling-dedup, dedup-summary.tsv sha 3245dbd3. Verified by a separate reader.
+- R1 (no file moves over 5 cents): FAIL. flute_high_C7 +2031 cents (691.7 to 2236.1 Hz), flute_trill_high_C7 +1071 cents.
+- R2 (zero fraction not up): PASS on all 43 files.
+- R3 (high-register files gain pitch): FAIL. Crotale, glockenspiel, piano C7 and xylophone run publish nothing in base or candidate. Flute does not gain.
+- R4 (no 4200 Hz clamp on cello or vocal_male): PASS.
+- Verdict: rejected under the pre-registered rules. The flute move is the intended correction (wrong register to the first-minimum reference near 2147 Hz), but R1 counts it as a failure, and the threshold is not changed after the run.
+- Follow-up: a revised candidate needs its own pre-registration, written before any render. It must exempt the 2093 Hz register correction explicitly, and it must move the high-register files (R3), not only flute.
