@@ -332,3 +332,11 @@ the same 17 blocks.
 - 1-4-10 set, HV: C5 516.22 Hz (-23.4 c), frames within 10 c 0%. Floor 1e-8: C5 -10.4 c, frames within 10 c 45.5%.
 - The D5 and F5 medians stay within 7 c on the 1-4-10 set in both variants, so the bias is partial-dependent, not floor-dependent. The C5 bias is systematic and negative across both sets.
 - Defect, measured: the pitch tracker biases inharmonic spectra by 8 to 30 cents. The floor 1e-8 variant reduces the F5 error and fixes its release on the free-free set but does not remove the C5 bias. Next: find which estimator stage (AC lag pick or refinement) produces the bias, offline, before any DSP change.
+## Refinement start sensitivity
+
+- Offline models of the tracker stages on the synthetic inputs (`docs/witness/note-change/refine_sim.mjs`, `refine_from_grid.mjs`, `refine_two_pass.mjs`, `cmndf_check.mjs`). Models use the DSP's one-pole correlation (10 ms) and three-point refinement; the coarse stage is replaced by a fixed start.
+- Plain CMNDF, clean input, per segment: 0.1 c on the harmonic and 1-4-10 inputs, -16 c on the free-free input. The -16 c is the period-method limit for non-integer partial ratios; the 1-4-10 input has an exact period, so the DSP's -23 c there (HV) is not that limit.
+- Refinement with an ideal start (true lag): K=1 gives -0.2 c, K=16 gives -2.4 c on 1-4-10. The refinement spread alone is not the cause.
+- Start sensitivity, 1-4-10 input, C5: from 508.21 Hz (-50 c, the grid point below C5) K=16 gives -10.5 c; from 587.0 Hz (+199 c) K=16 gives -40.7 c and K=4 gives +132 c. The grid near C5 has no point at 523.25 Hz and steps of 1.5 to 2.5 semitones, so the coarse start is off by up to 200 c.
+- Two-pass (K=16, then K=1): helps some starts (C5 from 508.21: -10.8 to -2.8 c) and not others (C5 from 587.0: -42.4 to -23.7 c). From 440.0 Hz the wide pass locks a sub-multiple on D5: -735.7 c one-pass and -721.8 c two-pass. A second pass is not a fix.
+- Conclusion: the refinement's accuracy depends on the coarse start, and the wide window can lock a wrong peak. The fix is in the coarse-to-refine path (grid density, octave check, or a refinement that cannot lock a sub-multiple), not a second refinement pass. Any change needs DSP renders against all four inputs before admission.
