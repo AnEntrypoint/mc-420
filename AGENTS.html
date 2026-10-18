@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop - current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=4be341afdf52b64bb4492d402d3192c8d9f32057">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=ddde2d54c0420c3049a0f5c76bb4738208b3da08">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -198,7 +198,7 @@
 
 <ul>
   <li>Device zero-pitch: <code class="language-plaintext highlighter-rouge">holdLastGood</code> zeroes the published pitch on the energy gate’s falling edge while the note still sounds at device return level (-43 dB). Marimba n72 read 0 for 30 of 32 s. (numbers: docs/measurements-archive.md#energy-gate-falling-edge)</li>
-  <li>HOLD VARIANT <code class="language-plaintext highlighter-rouge">heldStep(prev) = ba.if(accept, freqHz, prev)</code>: 56/56 periodic blocks vs 2/56 BASE on the device-return marimba. NOT admitted: the 168b38c gate is the wrong test (absolute 55.69 Hz; medians hide dropouts). Admission needs full-level HV renders and a regression rule. (numbers: docs/measurements-archive.md#hold-variant-hv)</li>
+  <li>HOLD VARIANT <code class="language-plaintext highlighter-rouge">heldStep(prev) = ba.if(accept, freqHz, prev)</code>: never worse on zero fraction across 34 files (13 better; clarinet stable 1.000 to 0.987). Zero-pitch root: <code class="language-plaintext highlighter-rouge">aboveFloor = env &gt; 1e-6</code> (about -60 dBFS) never opens in the offline model for 22 files; 21 stay silent under HV. Floor 1e-7/1e-8 renders pending (<code class="language-plaintext highlighter-rouge">docs/witness/hv-floor/</code>). NOT admitted. (numbers: docs/measurements-archive.md#energy-floor-root-cause)</li>
   <li>168b38c (sub-60 Hz tracker) REVERTED <code class="language-plaintext highlighter-rouge">87ea7898</code>: marimba_mid_C5B5 -7.03 c fails the gate; both split halves fail alone. 934258b (2093 Hz root) NOT admitted. (numbers: docs/measurements-archive.md#168b38c-revert)</li>
   <li>A1 (<code class="language-plaintext highlighter-rouge">piano_low_A1</code>, 55 Hz): AC silent at baseline; the energy gate opens at 0.6 s but confidence stays closed until 6.2 s. (numbers: docs/measurements-archive.md#a1-window)</li>
   <li>Offline lock output is 98-100% periodic; device sweep captures are 18-27%. (numbers: docs/measurements-archive.md#lock-periodicity)</li>

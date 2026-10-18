@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=4be341afdf52b64bb4492d402d3192c8d9f32057">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=ddde2d54c0420c3049a0f5c76bb4738208b3da08">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -461,7 +461,16 @@ the same 17 blocks.</p>
   <li>G3: crotale_high_C7 has no nonzero block after 1 s in BASE (NaN); marimba_mid_C5B5 moves 0.36 c. G4: 2 files moved (clarinet_high_C6B6, vocal_male_baritone_scale), none worse than 5 c. DECISION FAIL is not a verdict on HV.</li>
   <li>Files with no nonzero block after 1 s: BASE 23 of 34, HV 21 of 34. HV newly publishes vocal_melody_twinkle_CC0 (median 203.01 Hz) and vocal_tenor_operatic_PD (median 115.38 Hz).</li>
   <li>The median of nonzero blocks ignores zero blocks, so it cannot show dropouts. A valid HV gate needs per-file zero fraction and periodic fraction, plus full-level HV renders (none exist yet; the BASE full-level table is in <code class="language-plaintext highlighter-rouge">lowhz/out</code>).</li>
-  <li>Admission rule for HV: no sine, crotale or marimba change above 5 cents; no moved file worse than 5 cents; zero fraction not higher than BASE on any file; device-return marimba stays periodic. The 168b38c rule (absolute 55.69 Hz accuracy) does not apply.</li>
+  <li>Admission rule for HV: no sine, crotale or marimba change above 5 cents; no moved file worse than 5 cents; zero fraction not higher than BASE on any file; device-return marimba stays periodic. The 168b38c rule (absolute 55.69 Hz accuracy) does not apply.
+    <h2 id="energy-floor-root-cause">Energy floor root cause</h2>
+  </li>
+  <li>Offline energy gate at device-return level (<code class="language-plaintext highlighter-rouge">docs/witness/hv-corpus/energy_ready_device_return.txt</code>; corpus wav times 0.00707945784384138, env = 3 ms one-pole of x squared, ready after 35 ms above the floor, window 1-6 s). Ready fraction at floor 1e-6 is 0.000 for 22 files: balloon_pop_transient, bassoon_low_C2B2, bells_glock_run_C6B6, crotale_high_C7, cymbal_inharmonic, glockenspiel_high_C7, guitar_pluck_C4B4, marimba_low_C2B2, oboe_mid_C5B5, piano_high_C7, piano_low_A1, piano_mid_C4, tamtam_inharmonic, trumpet_high_C6, trumpet_low_A3, tuba_run_C2B2, vibraphone_mid_C5B5, violin_high_sulE_C7E7, violin_low_sulG_G3B3, vocal_melody_twinkle_CC0, xylophone_roll_AM_C6B6, xylophone_run_C7B7.</li>
+  <li>Their envelope p99 is below the floor: piano_low_A1 2.66e-8, balloon_pop_transient 2.52e-9, trumpet_low_A3 1.48e-7, vibraphone_mid_C5B5 2.49e-7, violin_high 2.01e-7, xylophone_run 3.43e-7, marimba_low 2.92e-7. Peak at return level -49 to -65 dBFS (piano_low_A1 -65.4).</li>
+  <li>Idle AIR 192 input: telemetry <code class="language-plaintext highlighter-rouge">audio_peak.in</code> 0.0001 (about -80 dBFS). Floor 1e-8 leaves about 10 dB margin above idle, 1e-7 about 20 dB. Of the 21 files still silent under HV, floor 1e-8 gives 16 some ready time; balloon_pop_transient, crotale_high_C7, piano_high_C7, piano_low_A1 and violin_low_sulG_G3B3 stay at zero even at 1e-8. Idle noise has not been measured at the device by envelope, so the floor choice is unvalidated.</li>
+  <li>Model caveat: vocal_melody_twinkle_CC0 is the one file the offline model gets wrong: ready 0.000 at floor 1e-6, yet its hold-variant render publishes (zero fraction 0.000). The render is the witness.</li>
+  <li>Clarinet hold-variant stable fraction is 0.987 vs BASE 1.000 (<code class="language-plaintext highlighter-rouge">docs/witness/hv-corpus/zero_fraction.txt</code>): the one stability regression in the corpus.</li>
+  <li>Variants for the floor sweep: <code class="language-plaintext highlighter-rouge">docs/witness/hv-floor/</code> (hv.dsp, hv_floor1e-7.dsp, hv_floor1e-8.dsp). Renders requested from the DawDreamer session; results not yet in.</li>
+  <li>Device SSH: the netboot root is tmpfs, so the host key changes on every boot; ssh needs <code class="language-plaintext highlighter-rouge">-o UserKnownHostsFile=/dev/null</code> for the aloop device, not an edit of known_hosts.</li>
 </ul>
 
 
