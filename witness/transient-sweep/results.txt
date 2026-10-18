@@ -1,0 +1,261 @@
+transient-sweep: valid-gated device lock, 13 sources x 2 notes x 2 reps (52 cases), 12 controls
+Device: aloop, /opt/aloop/aloop md5 9917831613b209c3fc26a5ada919b40c (CI 39110450942, sha 168b38c2) at start and at end; one boot (uptime consistent with no reboot across the run).
+Method: tools/loopback-witness/loopback-witness.js --lock <normalised wav> <held note> 6 --gain 1; rc-service aloop restart and 12 s wait before every case; sustain latch read before the first case.
+Sources: test-audio-corpus/instruments/*.wav normalised with the docs/witness/piano-valid/norm.js method (note part peak -3 dBFS, pre-roll untouched) into the scratchpad only; the corpus was not modified.
+Held notes: TRUE pitch (first note for runs and scales) as target, plus one note 12 semitones away. balloon_pop_transient has no pitch, so 60 and 48 are arbitrary.
+Validity: segment rms at least 10 dB over the same-run silent control (from the LOCK line). INVALID = under 10 dB. Harness-flagged INVALID with 33.9 dB (no pitch hop) is reported as VALID(no pitch).
+Octave error (rule fixed before the run): VALID and (settled f0 at least 1150 cents off target, or at least 3 post-lock hops at least 1150 cents off). Post-lock = hops after the first pitched hop (onset-to-lock point).
+Exact octave = off-target hop within 50 cents of an integer octave multiple of the held note; anything else off target is classed gross.
+Controls: all 12 PASS (within 10 cents of 220.00 Hz, 40.2 dB over silence). No block is unreliable.
+Run notes: t_guitar_pluck_C4B4_n48_r1 first attempt failed in playback (aplay set_params, no lock line); its log is kept as ...FAILED-aplay.log and excluded. The re-run is counted, with a control before and after (c_redo11_after).
+Captured wavs are not committed (scratchpad tslogs/*.wav).
+
+CONTROLS (440 Hz sine, held note 57, expect 220.00 Hz, pass = within 10 cents and VALID):
+  c_start1 219.87 Hz -1c 40.2dB PASS
+  c_start2 219.89 Hz -0.9c 40.3dB PASS
+  c_after6 219.92 Hz -0.6c 40.2dB PASS
+  c_after12 219.77 Hz -1.8c 40.2dB PASS
+  c_redo11_after 219.73 Hz -2.1c 40.2dB PASS
+  c_after18 219.87 Hz -1c 40.2dB PASS
+  c_after24 219.86 Hz -1.1c 40.2dB PASS
+  c_after30 219.83 Hz -1.3c 40.2dB PASS
+  c_after36 219.77 Hz -1.8c 40.2dB PASS
+  c_after42 219.75 Hz -2c 40.2dB PASS
+  c_after48 219.82 Hz -1.4c 40.2dB PASS
+  c_end 219.91 Hz -0.7c 40.2dB PASS
+
+CASES (verdict VALID = segment >=10 dB over same-run silent control; INVALID cases are not counted):
+  t_marimba_mid_C5B5_n72_r1 | marimba_mid_C5B5 target n72 523.25Hz | 22.3dB VALID | NOT DETECTED | onset 0ms | post-lock off: 3 (oct1 0, oct2+ 0, gross 3) | settledOff false | jumps2s 2 | OCTAVE-ERROR YES
+  t_marimba_mid_C5B5_n72_r2 | marimba_mid_C5B5 target n72 523.25Hz | 22.1dB VALID | NOT DETECTED | onset 0ms | post-lock off: 4 (oct1 0, oct2+ 0, gross 4) | settledOff false | jumps2s 1 | OCTAVE-ERROR YES
+  t_marimba_mid_C5B5_n60_r1 | marimba_mid_C5B5 distant n60 261.63Hz | 21.0dB VALID | NOT DETECTED | onset 100ms | post-lock off: 1 (oct1 0, oct2+ 0, gross 1) | settledOff false | jumps2s 1 | OCTAVE-ERROR no
+  t_marimba_mid_C5B5_n60_r2 | marimba_mid_C5B5 distant n60 261.63Hz | 21.4dB VALID | NOT DETECTED | onset 100ms | post-lock off: 4 (oct1 0, oct2+ 0, gross 4) | settledOff false | jumps2s 1 | OCTAVE-ERROR YES
+  t_vibraphone_mid_C5B5_n72_r1 | vibraphone_mid_C5B5 target n72 523.25Hz | 20.0dB VALID | NOT DETECTED | onset 0ms | post-lock off: 5 (oct1 0, oct2+ 0, gross 5) | settledOff false | jumps2s 1 | OCTAVE-ERROR YES
+  t_vibraphone_mid_C5B5_n72_r2 | vibraphone_mid_C5B5 target n72 523.25Hz | 20.0dB VALID | NOT DETECTED | onset 0ms | post-lock off: 10 (oct1 0, oct2+ 0, gross 10) | settledOff false | jumps2s 1 | OCTAVE-ERROR YES
+  t_vibraphone_mid_C5B5_n60_r1 | vibraphone_mid_C5B5 distant n60 261.63Hz | 20.1dB VALID | 265.83Hz +27.6c | onset 0ms | post-lock off: 9 (oct1 0, oct2+ 0, gross 9) | settledOff false | jumps2s 3 | OCTAVE-ERROR YES
+  t_vibraphone_mid_C5B5_n60_r2 | vibraphone_mid_C5B5 distant n60 261.63Hz | 22.3dB VALID | NOT DETECTED | onset 0ms | post-lock off: 11 (oct1 0, oct2+ 0, gross 11) | settledOff false | jumps2s 2 | OCTAVE-ERROR YES
+  t_guitar_pluck_C4B4_n60_r1 | guitar_pluck_C4B4 target n60 261.63Hz | 25.5dB VALID | 261.51Hz -0.8c | onset 0ms | post-lock off: 9 (oct1 0, oct2+ 0, gross 9) | settledOff false | jumps2s 1 | OCTAVE-ERROR YES
+  t_guitar_pluck_C4B4_n60_r2 | guitar_pluck_C4B4 target n60 261.63Hz | 25.7dB VALID | 261.28Hz -2.3c | onset 200ms | post-lock off: 7 (oct1 0, oct2+ 0, gross 7) | settledOff false | jumps2s 2 | OCTAVE-ERROR YES
+  t_guitar_pluck_C4B4_n48_r1 | guitar_pluck_C4B4 distant n48 130.81Hz | 25.9dB VALID | NOT DETECTED | onset 0ms | post-lock off: 10 (oct1 0, oct2+ 0, gross 10) | settledOff false | jumps2s 1 | OCTAVE-ERROR YES
+  t_guitar_pluck_C4B4_n48_r2 | guitar_pluck_C4B4 distant n48 130.81Hz | 25.8dB VALID | NOT DETECTED | onset 0ms | post-lock off: 7 (oct1 0, oct2+ 0, gross 7) | settledOff false | jumps2s 1 | OCTAVE-ERROR YES
+  t_xylophone_run_C7B7_n96_r1 | xylophone_run_C7B7 target n96 2093.00Hz | 4.4dB INVALID | NOT DETECTED | onset 100ms | post-lock off: 6 (oct1 0, oct2+ 0, gross 6) | settledOff false | jumps2s 2 | OCTAVE-ERROR no
+  t_xylophone_run_C7B7_n96_r2 | xylophone_run_C7B7 target n96 2093.00Hz | 4.4dB INVALID | NOT DETECTED | onset 300ms | post-lock off: 8 (oct1 1, oct2+ 0, gross 7) | settledOff false | jumps2s 3 | OCTAVE-ERROR no
+  t_xylophone_run_C7B7_n84_r1 | xylophone_run_C7B7 distant n84 1046.50Hz | 4.4dB INVALID | NOT DETECTED | onset 100ms | post-lock off: 8 (oct1 0, oct2+ 0, gross 8) | settledOff false | jumps2s 1 | OCTAVE-ERROR no
+  t_xylophone_run_C7B7_n84_r2 | xylophone_run_C7B7 distant n84 1046.50Hz | 4.4dB INVALID | NOT DETECTED | onset 100ms | post-lock off: 8 (oct1 0, oct2+ 0, gross 8) | settledOff false | jumps2s 2 | OCTAVE-ERROR no
+  t_glockenspiel_high_C7_n96_r1 | glockenspiel_high_C7 target n96 2093.00Hz | 1.1dB INVALID | NOT DETECTED | onset 0ms | post-lock off: 1 (oct1 0, oct2+ 0, gross 1) | settledOff false | jumps2s 2 | OCTAVE-ERROR no
+  t_glockenspiel_high_C7_n96_r2 | glockenspiel_high_C7 target n96 2093.00Hz | 1.1dB INVALID | NOT DETECTED | onset 0ms | post-lock off: 3 (oct1 0, oct2+ 0, gross 3) | settledOff false | jumps2s 3 | OCTAVE-ERROR no
+  t_glockenspiel_high_C7_n84_r1 | glockenspiel_high_C7 distant n84 1046.50Hz | 2.1dB INVALID | NOT DETECTED | onset 0ms | post-lock off: 17 (oct1 0, oct2+ 0, gross 17) | settledOff false | jumps2s 1 | OCTAVE-ERROR no
+  t_glockenspiel_high_C7_n84_r2 | glockenspiel_high_C7 distant n84 1046.50Hz | 2.7dB INVALID | NOT DETECTED | onset 0ms | post-lock off: 20 (oct1 0, oct2+ 0, gross 20) | settledOff false | jumps2s 1 | OCTAVE-ERROR no
+  t_crotale_high_C7_n96_r1 | crotale_high_C7 target n96 2093.00Hz | 2.3dB INVALID | NOT DETECTED | onset 0ms | post-lock off: 9 (oct1 0, oct2+ 0, gross 9) | settledOff false | jumps2s 3 | OCTAVE-ERROR no
+  t_crotale_high_C7_n96_r2 | crotale_high_C7 target n96 2093.00Hz | 2.3dB INVALID | NOT DETECTED | onset 0ms | post-lock off: 12 (oct1 0, oct2+ 0, gross 12) | settledOff false | jumps2s 2 | OCTAVE-ERROR no
+  t_crotale_high_C7_n84_r1 | crotale_high_C7 distant n84 1046.50Hz | 4.1dB INVALID | NOT DETECTED | onset 0ms | post-lock off: 13 (oct1 0, oct2+ 0, gross 13) | settledOff false | jumps2s 2 | OCTAVE-ERROR no
+  t_crotale_high_C7_n84_r2 | crotale_high_C7 distant n84 1046.50Hz | 3.9dB INVALID | NOT DETECTED | onset 0ms | post-lock off: 10 (oct1 0, oct2+ 0, gross 10) | settledOff false | jumps2s 1 | OCTAVE-ERROR no
+  t_balloon_pop_transient_n60_r1 | balloon_pop_transient target n60 261.63Hz | 6.3dB INVALID | NOT DETECTED | onset none | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_balloon_pop_transient_n60_r2 | balloon_pop_transient target n60 261.63Hz | 6.3dB INVALID | NOT DETECTED | onset 2000ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_balloon_pop_transient_n48_r1 | balloon_pop_transient distant n48 130.81Hz | 6.3dB INVALID | NOT DETECTED | onset 900ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_balloon_pop_transient_n48_r2 | balloon_pop_transient distant n48 130.81Hz | 7.2dB INVALID | NOT DETECTED | onset none | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_trumpet_low_A3_n57_r1 | trumpet_low_A3 target n57 220.00Hz | 26.7dB VALID | 219.31Hz -5.4c | onset 0ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_trumpet_low_A3_n57_r2 | trumpet_low_A3 target n57 220.00Hz | 26.7dB VALID | 219.32Hz -5.3c | onset 0ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_trumpet_low_A3_n45_r1 | trumpet_low_A3 distant n45 110.00Hz | 30.3dB VALID | 109.32Hz -10.8c | onset 100ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_trumpet_low_A3_n45_r2 | trumpet_low_A3 distant n45 110.00Hz | 30.3dB VALID | 109.31Hz -10.9c | onset 0ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_violin_low_sulG_G3B3_n55_r1 | violin_low_sulG_G3B3 target n55 196.00Hz | 16.7dB VALID | 195.44Hz -4.9c | onset 0ms | post-lock off: 1 (oct1 0, oct2+ 0, gross 1) | settledOff false | jumps2s 1 | OCTAVE-ERROR no
+  t_violin_low_sulG_G3B3_n55_r2 | violin_low_sulG_G3B3 target n55 196.00Hz | 16.6dB VALID | 195.45Hz -4.8c | onset 0ms | post-lock off: 2 (oct1 0, oct2+ 0, gross 2) | settledOff false | jumps2s 1 | OCTAVE-ERROR no
+  t_violin_low_sulG_G3B3_n43_r1 | violin_low_sulG_G3B3 distant n43 98.00Hz | 16.9dB VALID | NOT DETECTED | onset 100ms | post-lock off: 5 (oct1 0, oct2+ 0, gross 5) | settledOff false | jumps2s 1 | OCTAVE-ERROR YES
+  t_violin_low_sulG_G3B3_n43_r2 | violin_low_sulG_G3B3 distant n43 98.00Hz | 17.0dB VALID | NOT DETECTED | onset 100ms | post-lock off: 5 (oct1 0, oct2+ 0, gross 5) | settledOff false | jumps2s 1 | OCTAVE-ERROR YES
+  t_cello_low_sulC_A2_n45_r1 | cello_low_sulC_A2 target n45 110.00Hz | 35.4dB VALID | 110.00Hz -0.1c | onset 100ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_cello_low_sulC_A2_n45_r2 | cello_low_sulC_A2 target n45 110.00Hz | 35.4dB VALID | 110.00Hz +0c | onset 100ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_cello_low_sulC_A2_n57_r1 | cello_low_sulC_A2 distant n57 220.00Hz | 34.5dB VALID | 220.17Hz +1.4c | onset 100ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_cello_low_sulC_A2_n57_r2 | cello_low_sulC_A2 distant n57 220.00Hz | 34.5dB VALID | 220.03Hz +0.3c | onset 100ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_bassoon_low_C2B2_n36_r1 | bassoon_low_C2B2 target n36 65.41Hz | 32.3dB VALID | 69.32Hz +100.7c | onset 100ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_bassoon_low_C2B2_n36_r2 | bassoon_low_C2B2 target n36 65.41Hz | 32.3dB VALID | 69.33Hz +100.8c | onset 100ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_bassoon_low_C2B2_n48_r1 | bassoon_low_C2B2 distant n48 130.81Hz | 30.0dB VALID | 138.54Hz +99.4c | onset 100ms | post-lock off: 1 (oct1 1, oct2+ 0, gross 0) | settledOff false | jumps2s 2 | OCTAVE-ERROR no
+  t_bassoon_low_C2B2_n48_r2 | bassoon_low_C2B2 distant n48 130.81Hz | 29.7dB VALID | 138.44Hz +98.1c | onset 100ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_vocal_male_baritone_scale_n41_r1 | vocal_male_baritone_scale target n41 87.31Hz | 34.5dB VALID | NOT DETECTED | onset 700ms | post-lock off: 1 (oct1 0, oct2+ 0, gross 1) | settledOff false | jumps2s 1 | OCTAVE-ERROR no
+  t_vocal_male_baritone_scale_n41_r2 | vocal_male_baritone_scale target n41 87.31Hz | 34.6dB VALID | NOT DETECTED | onset 800ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_vocal_male_baritone_scale_n53_r1 | vocal_male_baritone_scale distant n53 174.61Hz | 33.9dB VALID(no pitch) | NOT DETECTED | onset none | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_vocal_male_baritone_scale_n53_r2 | vocal_male_baritone_scale distant n53 174.61Hz | 33.8dB VALID | 176.18Hz +15.5c | onset 700ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_vocal_female_vibrato_n61_r1 | vocal_female_vibrato target n61 277.18Hz | 28.8dB VALID | 276.66Hz -3.2c | onset 300ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_vocal_female_vibrato_n61_r2 | vocal_female_vibrato target n61 277.18Hz | 29.1dB VALID | 276.46Hz -4.5c | onset 300ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_vocal_female_vibrato_n49_r1 | vocal_female_vibrato distant n49 138.59Hz | 31.0dB VALID | NOT DETECTED | onset 1700ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 0 | OCTAVE-ERROR no
+  t_vocal_female_vibrato_n49_r2 | vocal_female_vibrato distant n49 138.59Hz | 30.9dB VALID | NOT DETECTED | onset 100ms | post-lock off: 0 (oct1 0, oct2+ 0, gross 0) | settledOff false | jumps2s 1 | OCTAVE-ERROR no
+
+OCTAVE ERRORS (VALID and settled f0 >=1150 cents off target, or >=3 post-lock hops >=1150 cents off):
+  t_marimba_mid_C5B5_n72_r1
+  t_marimba_mid_C5B5_n72_r2
+  t_marimba_mid_C5B5_n60_r2
+  t_vibraphone_mid_C5B5_n72_r1
+  t_vibraphone_mid_C5B5_n72_r2
+  t_vibraphone_mid_C5B5_n60_r1
+  t_vibraphone_mid_C5B5_n60_r2
+  t_guitar_pluck_C4B4_n60_r1
+  t_guitar_pluck_C4B4_n60_r2
+  t_guitar_pluck_C4B4_n48_r1
+  t_guitar_pluck_C4B4_n48_r2
+  t_violin_low_sulG_G3B3_n43_r1
+  t_violin_low_sulG_G3B3_n43_r2
+
+CONTROL FAILURES: none
+
+TRAJECTORIES
+t_marimba_mid_C5B5_n72_r1
+  trajectory 0-2000ms (100ms hops): 528 525 525 525 523 522 - - 6881 - - - - - - - - 6775 - - 4046
+  seg 22.3 dB; 
+t_marimba_mid_C5B5_n72_r2
+  trajectory 0-2000ms (100ms hops): 529 525 525 525 526 538 - - 6765 - 6678 - 6682 - - - - - - - 5308
+  seg 22.1 dB; 
+t_marimba_mid_C5B5_n60_r1
+  trajectory 0-2000ms (100ms hops): - 262 262 263 262 - - 6828 - - - - - - - - - - - - -
+  seg 21.0 dB; 
+t_marimba_mid_C5B5_n60_r2
+  trajectory 0-2000ms (100ms hops): - 261 262 262 262 - 6538 6578 - 6482 - - - 6631 - - - - - - -
+  seg 21.4 dB; 
+t_vibraphone_mid_C5B5_n72_r1
+  trajectory 0-2000ms (100ms hops): 526 - 524 - 6150 - - - 6133 - - - 7005 - 6967 - - - - 6812 -
+  seg 20.0 dB; 
+t_vibraphone_mid_C5B5_n72_r2
+  trajectory 0-2000ms (100ms hops): 526 - 528 6081 - 6746 5445 6952 7222 - 5999 - - - 7063 6882 - 5877 7214 - -
+  seg 20.0 dB; 
+t_vibraphone_mid_C5B5_n60_r1
+  trajectory 0-2000ms (100ms hops): 528 - 266 - - - 5979 6595 6111 - 5943 7350 - - 6045 4423 - 6861 6913 - -
+  seg 20.1 dB; 
+t_vibraphone_mid_C5B5_n60_r2
+  trajectory 0-2000ms (100ms hops): 529 - 265 6025 5186 6251 6665 - 6948 - 6011 6480 - - 6333 - 7083 6987 - 6658 -
+  seg 22.3 dB; 
+t_guitar_pluck_C4B4_n60_r1
+  trajectory 0-2000ms (100ms hops): 7014 7373 6054 6153 - - - 6939 6052 - 5941 6425 - 6895 6636 - - - 263 261 261
+  seg 25.5 dB; 
+t_guitar_pluck_C4B4_n60_r2
+  trajectory 0-2000ms (100ms hops): - - 6670 7342 7136 5307 6012 4773 6857 6769 - - - - - - - - 261 261 261
+  seg 25.7 dB; 
+t_guitar_pluck_C4B4_n48_r1
+  trajectory 0-2000ms (100ms hops): 5194 6359 7229 6386 5660 7063 5409 5542 6533 6310 7008 - - - - - - - 130 130 130
+  seg 25.9 dB; 
+t_guitar_pluck_C4B4_n48_r2
+  trajectory 0-2000ms (100ms hops): 6734 7220 - - 5615 5850 - 5335 - 4877 5423 - - - 6380 - - - 130 130 130
+  seg 25.8 dB; 
+t_xylophone_run_C7B7_n96_r1
+  trajectory 0-2000ms (100ms hops): - 5946 - 5463 - - - - 4812 - 6607 6204 4793 - 7103 - - 2495 2676 - -
+  seg 4.4 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_xylophone_run_C7B7_n96_r2
+  trajectory 0-2000ms (100ms hops): - - - 6520 - - - - 6477 6217 6806 4286 6854 6851 6775 5856 - 2494 3013 - -
+  seg 4.4 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_xylophone_run_C7B7_n84_r1
+  trajectory 0-2000ms (100ms hops): - 6779 - 5294 - - - - - - 5008 - 4821 6754 7109 5180 - 2495 3112 - -
+  seg 4.4 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_xylophone_run_C7B7_n84_r2
+  trajectory 0-2000ms (100ms hops): - 7366 - 6096 - - - - 6187 - - 7074 6196 - 4780 4874 - 499 2951 - -
+  seg 4.4 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_glockenspiel_high_C7_n96_r1
+  trajectory 0-2000ms (100ms hops): 703 422 - - 2105 - - - - - - - - - - - - - - - -
+  seg 1.1 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_glockenspiel_high_C7_n96_r2
+  trajectory 0-2000ms (100ms hops): 2109 - - 6260 - - - 141 - - - - - - - - - 6964 - - -
+  seg 1.1 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_glockenspiel_high_C7_n84_r1
+  trajectory 0-2000ms (100ms hops): 1057 3145 3136 3111 3154 3131 3138 3154 3130 3189 3171 3166 3181 3155 3080 3173 - 3119 - 3093 -
+  seg 2.1 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_glockenspiel_high_C7_n84_r2
+  trajectory 0-2000ms (100ms hops): 1045 3163 3115 3140 3141 3137 3146 3138 3095 3143 3141 3132 3154 3084 3109 3175 3235 3127 3037 3095 3220
+  seg 2.7 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_crotale_high_C7_n96_r1
+  trajectory 0-2000ms (100ms hops): 2129 6881 5595 - - - - 6945 7011 5845 5887 3694 - - - - 6057 5298 - 6805 -
+  seg 2.3 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_crotale_high_C7_n96_r2
+  trajectory 0-2000ms (100ms hops): 2128 6660 6523 5307 - - - 5498 6903 4895 7095 6829 - 6927 6635 - - - - 5918 6686
+  seg 2.3 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_crotale_high_C7_n84_r1
+  trajectory 0-2000ms (100ms hops): 3294 3221 3194 6569 - 4837 - 6970 6288 6945 6147 - 6812 - 6016 - - 6320 7271 - 7244
+  seg 4.1 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_crotale_high_C7_n84_r2
+  trajectory 0-2000ms (100ms hops): 423 3181 3060 4320 - 5789 - - - - 5387 - - 5415 6183 6149 - 6849 - - 5698
+  seg 3.9 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_balloon_pop_transient_n60_r1
+  trajectory 0-2000ms (100ms hops): - - - - - - - - - - - - - - - - - - - - -
+  seg 6.3 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_balloon_pop_transient_n60_r2
+  trajectory 0-2000ms (100ms hops): - - - - - - - - - - - - - - - - - - - - 6202
+  seg 6.3 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_balloon_pop_transient_n48_r1
+  trajectory 0-2000ms (100ms hops): - - - - - - - - - 6993 - - - - - - - - - - -
+  seg 6.3 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_balloon_pop_transient_n48_r2
+  trajectory 0-2000ms (100ms hops): - - - - - - - - - - - - - - - - - - - - -
+  seg 7.2 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_trumpet_low_A3_n57_r1
+  trajectory 0-2000ms (100ms hops): 219 219 219 219 218 218 219 218 218 218 218 218 218 218 218 218 218 218 218 218 218
+  seg 26.7 dB; 
+t_trumpet_low_A3_n57_r2
+  trajectory 0-2000ms (100ms hops): 219 219 219 219 218 218 219 218 218 218 218 218 218 218 218 218 218 218 218 218 218
+  seg 26.7 dB; 
+t_trumpet_low_A3_n45_r1
+  trajectory 0-2000ms (100ms hops): - 110 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109
+  seg 30.3 dB; 
+t_trumpet_low_A3_n45_r2
+  trajectory 0-2000ms (100ms hops): 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109
+  seg 30.3 dB; 
+t_violin_low_sulG_G3B3_n55_r1
+  trajectory 0-2000ms (100ms hops): 197 196 196 196 195 195 196 196 196 - 196 - - - - - 6992 - - - -
+  seg 16.7 dB; 
+t_violin_low_sulG_G3B3_n55_r2
+  trajectory 0-2000ms (100ms hops): 197 196 196 196 195 195 196 196 196 - 196 - - - 7362 - - - - 7229 -
+  seg 16.6 dB; 
+t_violin_low_sulG_G3B3_n43_r1
+  trajectory 0-2000ms (100ms hops): - 98 98 98 97 - - - - - - - - - 7347 - 6863 - 7248 6492 6583
+  seg 16.9 dB; 
+t_violin_low_sulG_G3B3_n43_r2
+  trajectory 0-2000ms (100ms hops): - 98 98 98 97 - - - - - - - - 6984 7208 - 7043 7311 - 5277 -
+  seg 17.0 dB; 
+t_cello_low_sulC_A2_n45_r1
+  trajectory 0-2000ms (100ms hops): - 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110
+  seg 35.4 dB; 
+t_cello_low_sulC_A2_n45_r2
+  trajectory 0-2000ms (100ms hops): - 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110 110
+  seg 35.4 dB; 
+t_cello_low_sulC_A2_n57_r1
+  trajectory 0-2000ms (100ms hops): - 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220
+  seg 34.5 dB; 
+t_cello_low_sulC_A2_n57_r2
+  trajectory 0-2000ms (100ms hops): - 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220 220
+  seg 34.5 dB; 
+t_bassoon_low_C2B2_n36_r1
+  trajectory 0-2000ms (100ms hops): - 65 65 66 65 65 65 65 65 65 65 65 65 65 65 65 65 65 66 - -
+  seg 32.3 dB; 
+t_bassoon_low_C2B2_n36_r2
+  trajectory 0-2000ms (100ms hops): - 65 65 66 65 65 65 65 65 65 65 65 65 65 65 65 65 65 66 - -
+  seg 32.3 dB; 
+t_bassoon_low_C2B2_n48_r1
+  trajectory 0-2000ms (100ms hops): - 131 131 131 131 131 131 131 65 131 131 131 131 131 - 131 131 - 131 130 135
+  seg 30.0 dB; 
+t_bassoon_low_C2B2_n48_r2
+  trajectory 0-2000ms (100ms hops): - 131 131 131 131 131 131 131 131 131 131 131 131 131 131 131 131 131 - 131 135
+  seg 29.7 dB; 
+t_vocal_male_baritone_scale_n41_r1
+  trajectory 0-2000ms (100ms hops): - - - - - - - 5183 - 7336 - - - - - - - - - - -
+  seg 34.5 dB; 
+t_vocal_male_baritone_scale_n41_r2
+  trajectory 0-2000ms (100ms hops): - - - - - - - - 7213 - - - - - - - - - - - -
+  seg 34.6 dB; 
+t_vocal_male_baritone_scale_n53_r1
+  trajectory 0-2000ms (100ms hops): - - - - - - - - - - - - - - - - - - - - -
+  seg 33.9 dB; harness flagged INVALID (no pitch hops or no measurement)
+t_vocal_male_baritone_scale_n53_r2
+  trajectory 0-2000ms (100ms hops): - - - - - - - 6589 - - - - - - - - - - - - -
+  seg 33.8 dB; 
+t_vocal_female_vibrato_n61_r1
+  trajectory 0-2000ms (100ms hops): - - - 279 270 280 274 280 272 279 273 280 272 277 277 276 276 277 278 277 278
+  seg 28.8 dB; 
+t_vocal_female_vibrato_n61_r2
+  trajectory 0-2000ms (100ms hops): - - - 279 270 280 274 280 272 279 273 280 272 277 277 276 276 277 278 277 278
+  seg 29.1 dB; 
+t_vocal_female_vibrato_n49_r1
+  trajectory 0-2000ms (100ms hops): - - - - - - - - - - - - - - - - - 139 140 138 139
+  seg 31.0 dB; 
+t_vocal_female_vibrato_n49_r2
+  trajectory 0-2000ms (100ms hops): - 274 - 142 - - - - - - - - - - - - - 138 140 139 139
+  seg 30.9 dB; 
+FINDINGS
+- Settled f0 is never an octave error. Every valid case with a measured f0 is within 28 cents of target (largest: vibraphone n60 r1 +27.6, vocal male n53 r2 +15.5), except bassoon C2 (both reps, +100 cents) and bassoon n48 (both reps, +98 to +99 cents): a semitone sharp, not an octave.
+- The 13 rule flags (VALID, at least 3 post-lock hops off target): marimba n72 r1, r2, n60 r2; vibraphone n72 r1, r2, n60 r1, r2; guitar n60 r1, r2, n48 r1, r2; violin n43 r1, r2. Every flagged hop is a gross reading, not an octave multiple of the target.
+- Off-target hops in valid cases: 105. 101 of them sit at 3.5-8 kHz (median 6.6 kHz, p90 7.2 kHz), roughly 4-5 octaves above the held note. The rule counts them, but they look like high-band tracker readings mid-note (inference, not separately verified).
+- Exact octave-multiple hops in valid cases (4): vibraphone n60 r1 and r2 each show the source pitch (528-529 Hz, C5) at 0 ms, one octave above the held C4, before the shift takes over (265-266 Hz at 200 ms). Vocal female n49 r2 shows 274 Hz at 100 ms (source about 277 Hz, held 138.6 Hz) before 142 Hz at 300 ms. Bassoon n48 r1 has one hop at 65 Hz (800 ms) inside a 131 Hz hold. The first two are onset-transient octave errors. The rule only counts post-lock hops, so it does not flag them.
+- Balloon pop: all 4 cases INVALID (6-7 dB over silence), so no pitch is counted.
+- Xylophone and glockenspiel at C7: 1-4.5 dB over silence, so INVALID (not counted). Crotale: 2-4 dB, INVALID.
