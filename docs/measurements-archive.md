@@ -376,3 +376,10 @@ the same 17 blocks.
 
 - `docs/witness/pitch-ceiling/pitchtracker_ac_ceiling.dsp`: grid extended from 1581 Hz to about 4.3 kHz with 19 new candidates (ratio 1.0545, the grid's existing spacing), each high candidate read through `corrAtLagVarTau` (rwtable taps, tau 0.02), the rawFreq clamp raised to `maxRawHz` = 4200 Hz. Promotion (`reachable2/3`) still uses `maxTrackHz` = 1500 Hz. Parentheses balance; not compiled here.
 - Renders requested from DawDreamer: candidate on the 34 corpus files, the 5 sines and the four synthetic inputs; base on the four synthetic inputs (corpus base is `hv-corpus/base__*.txt`). Admission rule: no moved file worse than 5 cents, no zero-fraction increase, high-register files gain pitch.
+## Ceiling candidate result (not admitted)
+
+- Renders (`docs/witness/pitch-ceiling/`, comparison `compare_vs_base.txt`): candidate against base on the 34 corpus files, device-return gain.
+- Flute C7: median 691.7 Hz to 2236.1 Hz. The first-minimum estimate gave 2148 Hz, so this is a large improvement but about +70 cents off it. Flute trill: 1074.8 Hz to 1995.5 Hz.
+- Runaway: cello_low_sulC_A2 (111.8 Hz to 4200.0 Hz, +6277 c) and vocal_male_baritone_scale (172.8 Hz to 4200.0 Hz, +5524 c). The new raw clamp lets low-confidence high candidates settle at the clamp.
+- No gain on piano C7, crotale, glockenspiel or xylophone run: zero pitch at device return, as in base.
+- Not admitted. The candidate needs a confidence gate for candidates above 1500 Hz, so that a high candidate cannot win on voice and cello material. That gate is the next design step.
