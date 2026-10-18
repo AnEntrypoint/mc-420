@@ -1,0 +1,31 @@
+## hypothesis 1: free engine +18.5 st on 2093 Hz sine (dsp_cli built from tools/dsp-cli/dsp_cli.cpp at HEAD)
+$ ./dsp_cli --solad in=sine2093.wav out=solad_0.wav semis=0 freq=2093 normrms=0.21
+solad,freq=2093.00,semis=+0.00,scale=1.0000,expect=2093.00,measured=2092.96,cents=-0.0,achievedSemis=-0.00,splices=0,emergency=0,clamped=0,effRate=1.0000,gapMin=65,gapMean=64.0,gapMax=65,stepHits=0,stepNear=0,peakStep=0.1365,rms=0.3535,stepPerK=0
+[exit 0]
+$ ./dsp_cli --pitch solad_0.wav from=0.5 to=2.5 minhz=100 maxhz=8000 hz=2093
+pitch,solad_0.wav,expect=2093.00,measured=2092.96,cents=-0.0,ncc=0.9998,lag=23,window=0.500..2.500,band=100..8000
+[exit 0]
+$ ./dsp_cli --solad in=sine2093.wav out=solad_12.wav semis=12 freq=2093 normrms=0.21
+solad,freq=2093.00,semis=+12.00,scale=2.0000,expect=4186.00,measured=4188.35,cents=+1.0,achievedSemis=+12.01,splices=3073,emergency=0,clamped=52463,effRate=2.0000,gapMin=11,gapMean=78.9,gapMax=2410,stepHits=81157,stepNear=81118,peakStep=0.2776,rms=0.3537,stepPerK=626
+[exit 0]
+$ ./dsp_cli --pitch solad_12.wav from=0.5 to=2.5 minhz=100 maxhz=8000 hz=2093
+pitch,solad_12.wav,expect=2093.00,measured=4188.35,cents=+1201.0,ncc=0.9681,lag=11,window=0.500..2.500,band=100..8000
+[exit 0]
+$ ./dsp_cli --solad in=sine2093.wav out=solad_18.5.wav semis=18.5 freq=2093 normrms=0.21
+solad,freq=2093.00,semis=+18.50,scale=2.9113,expect=6093.36,measured=2105.73,cents=-1839.5,achievedSemis=+0.10,splices=4392,emergency=0,clamped=142778,effRate=2.9113,gapMin=11,gapMean=57.8,gapMax=2706,stepHits=54359,stepNear=54359,peakStep=0.3893,rms=0.2916,stepPerK=419
+[exit 0]
+$ ./dsp_cli --pitch solad_18.5.wav from=0.5 to=2.5 minhz=100 maxhz=8000 hz=2093
+pitch,solad_18.5.wav,expect=2093.00,measured=2011.00,cents=-69.2,ncc=0.6439,lag=24,window=0.500..2.500,band=100..8000
+[exit 0]
+$ node /config/workspace/mc-420/docs/witness/midi96/spec.mjs solad_0.wav solad_12.wav solad_18.5.wav
+solad_0.wav rms 0.2100 peaks(hz,dB) [[2093.3,0],[6279.1,-88.6],[10464.8,-93],[14650.6,-97.3],[18837.2,-98.4]]
+solad_12.wav rms 0.2100 peaks(hz,dB) [[4188,0],[4009.3,-67.8],[2096.2,-67.9],[1.5,-68.4],[10472.2,-68.6]]
+solad_18.5.wav rms 0.2099 peaks(hz,dB) [[2093.3,0],[6595.5,-12.7],[5824.2,-12.8],[5863.8,-13],[3589.6,-15.5]]
+[exit 0]
+$ node /config/workspace/mc-420/docs/witness/midi96/nsd.mjs solad_0.wav solad_12.wav solad_18.5.wav
+solad_0.wav witness-estimator pick {"lag":23,"hz":2086.96,"nsd":0.0002,"via":"submultiple-walk"} top3 NSD minima [{"lag":344,"hz":139.53,"nsd":0},{"lag":688,"hz":69.77,"nsd":0},{"lag":711,"hz":67.51,"nsd":0.0001}]
+solad_12.wav witness-estimator pick {"lag":23,"hz":2086.96,"nsd":0.0009,"via":"submultiple-walk"} top3 NSD minima [{"lag":149,"hz":322.15,"nsd":0},{"lag":298,"hz":161.07,"nsd":0},{"lag":447,"hz":107.38,"nsd":0.0001}]
+solad_18.5.wav witness-estimator pick {"lag":24,"hz":2000,"nsd":0.3412} top3 NSD minima [{"lag":24,"hz":2000,"nsd":0.3412},{"lag":66,"hz":727.27,"nsd":0.4007},{"lag":138,"hz":347.83,"nsd":0.4977}]
+[exit 0]
+03aaddde66ed724e1181d52faa9b24fe64232f4bf819b015d2a5364f7c79ad0b  sine2093.wav
+a9fe89d69dec9a434d0599c835c7cb752543fc1f4ac643383a010c6b971c4895  solad_18.5.wav

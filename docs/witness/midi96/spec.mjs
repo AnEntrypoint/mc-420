@@ -1,0 +1,8 @@
+import fs from "node:fs";
+function fft(re,im){const n=re.length;for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]];}}
+for(let len=2;len<=n;len<<=1){const a=-2*Math.PI/len;for(let i=0;i<n;i+=len)for(let k=0;k<len/2;k++){const c=Math.cos(a*k),s=Math.sin(a*k);const x=i+k,y=x+len/2;const tr=re[y]*c-im[y]*s,ti=re[y]*s+im[y]*c;re[y]=re[x]-tr;im[y]=im[x]-ti;re[x]+=tr;im[x]+=ti;}}}
+for(const f of process.argv.slice(2)){const b=fs.readFileSync(f);let p=12,fmt,data;while(p<b.length){const id=b.toString("ascii",p,p+4),sz=b.readUInt32LE(p+4);if(id==="fmt ")fmt={ch:b.readUInt16LE(p+10),sr:b.readUInt32LE(p+12),bits:b.readUInt16LE(p+22),tag:b.readUInt16LE(p+8)};if(id==="data"){data=b.subarray(p+8,p+8+sz);}p+=8+sz+(sz&1);}
+const bps=fmt.bits/8,n=Math.floor(data.length/bps/fmt.ch);const x=[];for(let i=0;i<n;i++){const o=i*fmt.ch*bps;x.push(fmt.tag===3?data.readFloatLE(o):bps===2?data.readInt16LE(o)/32768:data.readInt32LE(o)/2147483648);}
+const s0=Math.floor(0.5*fmt.sr),s1=Math.min(n,Math.floor(2.5*fmt.sr));const N=1<<Math.floor(Math.log2(s1-s0));const re=new Float64Array(N),im=new Float64Array(N);let e=0;for(let i=0;i<N;i++){const w=0.5-0.5*Math.cos(2*Math.PI*i/N);re[i]=x[s0+i]*w;e+=x[s0+i]**2;}
+fft(re,im);const m=[];for(let k=1;k<N/2;k++)m.push(Math.hypot(re[k],im[k]));const mx=Math.max(...m);const pk=[];const mm=m.slice();for(let q=0;q<5;q++){let bi=0;for(let k=0;k<mm.length;k++)if(mm[k]>mm[bi])bi=k;pk.push([+((bi+1)*fmt.sr/N).toFixed(1),+(20*Math.log10(m[bi]/mx)).toFixed(1)]);for(let k=Math.max(0,bi-30);k<Math.min(mm.length,bi+30);k++)mm[k]=0;}
+console.log(f.split("/").pop(),"rms",Math.sqrt(e/N).toFixed(4),"peaks(hz,dB)",JSON.stringify(pk));}
