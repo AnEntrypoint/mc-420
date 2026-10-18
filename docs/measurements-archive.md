@@ -340,3 +340,9 @@ the same 17 blocks.
 - Start sensitivity, 1-4-10 input, C5: from 508.21 Hz (-50 c, the grid point below C5) K=16 gives -10.5 c; from 587.0 Hz (+199 c) K=16 gives -40.7 c and K=4 gives +132 c. The grid near C5 has no point at 523.25 Hz and steps of 1.5 to 2.5 semitones, so the coarse start is off by up to 200 c.
 - Two-pass (K=16, then K=1): helps some starts (C5 from 508.21: -10.8 to -2.8 c) and not others (C5 from 587.0: -42.4 to -23.7 c). From 440.0 Hz the wide pass locks a sub-multiple on D5: -735.7 c one-pass and -721.8 c two-pass. A second pass is not a fix.
 - Conclusion: the refinement's accuracy depends on the coarse start, and the wide window can lock a wrong peak. The fix is in the coarse-to-refine path (grid density, octave check, or a refinement that cannot lock a sub-multiple), not a second refinement pass. Any change needs DSP renders against all four inputs before admission.
+## Per-block hill-climb refinement
+
+- Model `docs/witness/note-change/hill_climb_sim.mjs`: streaming, one lag step per 64-sample block toward the 3-point correlation vertex, using the same three taps (L-1, L, L+1) and 10 ms smoothing as the DSP. No wide window.
+- Starts within about 1 semitone of the true pitch (523, 508, 587 Hz for C5): harmonic and 1-4-10 within 0.3 c, free-free -20.6 c (the period limit, as in the CMNDF check).
+- Starts 3 or more semitones away fail: 440 Hz (-300 c) gives -702 c (a sub-multiple lock), 641 Hz (+351 c) gives +1202 c on the harmonic input. The climb follows a correlation ridge into the wrong peak.
+- Consequence: the coarse grid near C5 (steps of 1.5 to 2.5 semitones, no point at 523.25 Hz) is the binding limit. A climb fixes the bias only if the grid is denser. A denser grid adds coarse taps, which is the codegen-cliff risk in the Faust notes; compile time must be measured in CI before any change.
