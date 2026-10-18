@@ -1,3 +1,4 @@
+#include <faust/dsp/dsp.h>
 #include <faust/dsp/llvm-dsp.h>
 #include <faust/gui/meta.h>
 
