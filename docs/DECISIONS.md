@@ -490,3 +490,6 @@ loaded, so ordinary sampler playback is untouched.
 - gm commit-message lint: the fix is in the gm repo. It is not edited from here, and the blocker row stays open.
 - CLI witness: the --json lock records exist (live record .gm/witness/lock-trumpet-59.json). Binary md5 and lockbin sha256 move to plan-provenance-fields.
 - Tracker admission: the deduplicated ceiling candidate (sha 4e8907ac) is admitted only if its CI render (row pitch-ceiling-dedup-render) passes R1 to R4. Otherwise it is rejected, and the reason is recorded here.
+## Correction, 2026-10-18
+
+- plan-provenance-fields was closed with commit 2e630eca (the summariser) as its delivering commit, in error. The delivering commit is 4092c099 (the tool change that fills the four provenance fields). The resolver can't repair a closed row, so this line is the record. The witness (.gm/witness/lock-trumpet-59-prov.json) and its evidence are correct.
