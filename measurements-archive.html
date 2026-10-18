@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0785623a08569ba7e17a166473023d52e8195faf">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e80c16051ae75d4f0aac5ff0a0ab763aa3f4bfd6">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -539,7 +539,11 @@ the same 17 blocks.</p>
   <li>Live (lock witness, flute C7 target 98): 718 Hz, a third of the true pitch, the same ceiling effect through the coarse grid.</li>
   <li>Threshold is not the cause: thresholds 0.5 to 0.85 give the same picks (<code class="language-plaintext highlighter-rouge">threshold_sim.mjs</code>). First-minimum (CMNDF, all lags) gives 2147.6 Hz on the flute, so the true pitch of this corpus file may be about 2147 Hz, sharp of the C7 label.</li>
   <li>Fix needs more than a constant. Raising the grid also needs the refinement window (<code class="language-plaintext highlighter-rouge">refineFreq</code>, K=16) scaled to the lag: at lag 11 to 30 a fixed K=16 clamps to L0 = 18 and refines the wrong peak. The clamp in <code class="language-plaintext highlighter-rouge">kExtFreqDetMaxHz</code> (1500 Hz) would also need lifting, and that clamp was deliberate (<code class="language-plaintext highlighter-rouge">defect-lock-above-1500hz-clamp</code>).</li>
-  <li>Next: a candidate with the grid extended and a lag-scaled refinement window, rendered on the high-register corpus files (flute_high_C7, piano_high_C7, crotale_high_C7, glockenspiel_high_C7, xylophone_run_C7B7) before any push.</li>
+  <li>Next: a candidate with the grid extended and a lag-scaled refinement window, rendered on the high-register corpus files (flute_high_C7, piano_high_C7, crotale_high_C7, glockenspiel_high_C7, xylophone_run_C7B7) before any push.
+    <h2 id="ceiling-candidate-staged-not-admitted">Ceiling candidate (staged, not admitted)</h2>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">docs/witness/pitch-ceiling/pitchtracker_ac_ceiling.dsp</code>: grid extended from 1581 Hz to about 4.3 kHz with 19 new candidates (ratio 1.0545, the grid’s existing spacing), each high candidate read through <code class="language-plaintext highlighter-rouge">corrAtLagVarTau</code> (rwtable taps, tau 0.02), the rawFreq clamp raised to <code class="language-plaintext highlighter-rouge">maxRawHz</code> = 4200 Hz. Promotion (<code class="language-plaintext highlighter-rouge">reachable2/3</code>) still uses <code class="language-plaintext highlighter-rouge">maxTrackHz</code> = 1500 Hz. Parentheses balance; not compiled here.</li>
+  <li>Renders requested from DawDreamer: candidate on the 34 corpus files, the 5 sines and the four synthetic inputs; base on the four synthetic inputs (corpus base is <code class="language-plaintext highlighter-rouge">hv-corpus/base__*.txt</code>). Admission rule: no moved file worse than 5 cents, no zero-fraction increase, high-register files gain pitch.</li>
 </ul>
 
 
