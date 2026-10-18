@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8ca8b5651ea32442cfeb1a3daa159251093456a7">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=7d3c6fdfc7f3444892569f1209ae92a9fd3d092e">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -550,7 +550,13 @@ the same 17 blocks.</p>
   <li>Flute C7: median 691.7 Hz to 2236.1 Hz. The first-minimum estimate gave 2148 Hz, so this is a large improvement but about +70 cents off it. Flute trill: 1074.8 Hz to 1995.5 Hz.</li>
   <li>Runaway: cello_low_sulC_A2 (111.8 Hz to 4200.0 Hz, +6277 c) and vocal_male_baritone_scale (172.8 Hz to 4200.0 Hz, +5524 c). The new raw clamp lets low-confidence high candidates settle at the clamp.</li>
   <li>No gain on piano C7, crotale, glockenspiel or xylophone run: zero pitch at device return, as in base.</li>
-  <li>Not admitted. The candidate needs a confidence gate for candidates above 1500 Hz, so that a high candidate cannot win on voice and cello material. That gate is the next design step.</li>
+  <li>Not admitted. The candidate needs a confidence gate for candidates above 1500 Hz, so that a high candidate cannot win on voice and cello material. That gate is the next design step.
+    <h2 id="runaway-probe-normalization-is-not-the-cause-offline">Runaway probe: normalization is not the cause (offline)</h2>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">docs/witness/live-ground-truth/runaway_probe.mjs</code> and <code class="language-plaintext highlighter-rouge">norm_probe.mjs</code>: first local maximum above 0.85 over lags 11 to 900, plain 1024-sample window. High-pick fraction (lag under 30): cello 0.5%, vocal_male 4.6%, flute 88.7%, piano C7 77.3%, sax 0%, trumpet 0%, piano C4 1.3%.</li>
+  <li>Geometric normalization (divide by sqrt of both energies): cello 0.9%, vocal_male 5.3%, flute 88.7%, piano C7 80.2%. No change in the runaway picks, so the DSP’s one-sided normalization is not the cause.</li>
+  <li>The offline model does not reproduce the DSP runaway. The DSP smooths the correlation with a 0.02 s one-pole (candidates at or above 700 Hz) and checks only the coarse grid, not every lag. Next, model that smoother and grid exactly before any candidate change.</li>
+  <li>The candidate (<code class="language-plaintext highlighter-rouge">pitch-ceiling</code>) stays unadmitted: cello and vocal_male still run away to the 4200 Hz clamp in the DSP renders.</li>
 </ul>
 
 
