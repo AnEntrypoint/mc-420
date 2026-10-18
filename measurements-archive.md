@@ -215,7 +215,7 @@ the same 17 blocks.
 - Candidate: `heldStep(prev) = ba.if(accept, freqHz, prev);` with `accept = ready & confident` unchanged. Not in the shipped tree.
 - Device-return marimba, published pitch per block (`61cf7155` BASE, `cb2c02c3` HV): 56/56 blocks periodic for HV vs 2/56 for BASE.
 - Corpus outputs, one DawDreamer HV process (one compile, then 34 corpus files, then 5 sines): 39 BASE and 39 HV outputs, all non-empty, `hv.done` rc=0. Manifest `docs/witness/hv-corpus/sha256.txt` (91 lines): full sha256 of the 5 sine wavs, `base.dsp` (`3f0184ab...`), `hv.dsp` (`b48d7282...`), the fr5 harness source and binary, `run_gated.sh`, and all 78 outputs. Marimba sanity: `base__marimba_mid_C5B5.txt` = `c68512d4...`, same as the earlier run.
-- Gate NOT yet run. Gate rows (`docs/witness/pitch-lowhz-168b38c2/gate.txt` logic, lock binary sha256 `65709ee7...`): sine 440 and 1000 within 0.5%; sine 55.69 within 2%; crotale 96 and marimba 74 within 5 cents; no corpus file worse than 5 cents. Admit only if every row passes.
+- Gate run and NOT valid for HV: see #hold-variant-gate-run. The 168b38c rule (absolute 55.69 Hz accuracy) is the wrong test.
 
 ## 168b38c revert
 
@@ -286,3 +286,11 @@ the same 17 blocks.
 ## Diag extfreq trace
 
 - `diag_extfreq_trace=1` (`0ca2d8e`) prints `[diag-extfreq] t raw anchor zone` at 1 line/s. Off by default: set it for one run, then restore the config.
+## Hold variant gate run
+
+- Scratch run (`lowhz/lk`, the 168b38c `run.mjs` and `gate.mjs` on a BASE vs HV table, medians of nonzero blocks after 1 s, from `docs/witness/hv-corpus/`). The 168b38c table and results are kept as `table_168b38c.tsv`, `lock_results_168b38c.tsv`, `gate_168b38c.txt`.
+- Sines 440 and 1000: identical BASE vs HV (0.000%). sine_55.69: BASE and HV both read 60.000 Hz (the sub-60 Hz floor), so G2 fails for both and measures the 168b38c gap, not HV.
+- G3: crotale_high_C7 has no nonzero block after 1 s in BASE (NaN); marimba_mid_C5B5 moves 0.36 c. G4: 2 files moved (clarinet_high_C6B6, vocal_male_baritone_scale), none worse than 5 c. DECISION FAIL is not a verdict on HV.
+- Files with no nonzero block after 1 s: BASE 23 of 34, HV 21 of 34. HV newly publishes vocal_melody_twinkle_CC0 (median 203.01 Hz) and vocal_tenor_operatic_PD (median 115.38 Hz).
+- The median of nonzero blocks ignores zero blocks, so it cannot show dropouts. A valid HV gate needs per-file zero fraction and periodic fraction, plus full-level HV renders (none exist yet; the BASE full-level table is in `lowhz/out`).
+- Admission rule for HV: no sine, crotale or marimba change above 5 cents; no moved file worse than 5 cents; zero fraction not higher than BASE on any file; device-return marimba stays periodic. The 168b38c rule (absolute 55.69 Hz accuracy) does not apply.

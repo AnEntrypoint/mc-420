@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=a8156e10db7933aa273e4f704752ca96448ce435">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=4be341afdf52b64bb4492d402d3192c8d9f32057">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -357,7 +357,7 @@ the same 17 blocks.</p>
   <li>Candidate: <code class="language-plaintext highlighter-rouge">heldStep(prev) = ba.if(accept, freqHz, prev);</code> with <code class="language-plaintext highlighter-rouge">accept = ready &amp; confident</code> unchanged. Not in the shipped tree.</li>
   <li>Device-return marimba, published pitch per block (<code class="language-plaintext highlighter-rouge">61cf7155</code> BASE, <code class="language-plaintext highlighter-rouge">cb2c02c3</code> HV): 56/56 blocks periodic for HV vs 2/56 for BASE.</li>
   <li>Corpus outputs, one DawDreamer HV process (one compile, then 34 corpus files, then 5 sines): 39 BASE and 39 HV outputs, all non-empty, <code class="language-plaintext highlighter-rouge">hv.done</code> rc=0. Manifest <code class="language-plaintext highlighter-rouge">docs/witness/hv-corpus/sha256.txt</code> (91 lines): full sha256 of the 5 sine wavs, <code class="language-plaintext highlighter-rouge">base.dsp</code> (<code class="language-plaintext highlighter-rouge">3f0184ab...</code>), <code class="language-plaintext highlighter-rouge">hv.dsp</code> (<code class="language-plaintext highlighter-rouge">b48d7282...</code>), the fr5 harness source and binary, <code class="language-plaintext highlighter-rouge">run_gated.sh</code>, and all 78 outputs. Marimba sanity: <code class="language-plaintext highlighter-rouge">base__marimba_mid_C5B5.txt</code> = <code class="language-plaintext highlighter-rouge">c68512d4...</code>, same as the earlier run.</li>
-  <li>Gate NOT yet run. Gate rows (<code class="language-plaintext highlighter-rouge">docs/witness/pitch-lowhz-168b38c2/gate.txt</code> logic, lock binary sha256 <code class="language-plaintext highlighter-rouge">65709ee7...</code>): sine 440 and 1000 within 0.5%; sine 55.69 within 2%; crotale 96 and marimba 74 within 5 cents; no corpus file worse than 5 cents. Admit only if every row passes.</li>
+  <li>Gate run and NOT valid for HV: see #hold-variant-gate-run. The 168b38c rule (absolute 55.69 Hz accuracy) is the wrong test.</li>
 </ul>
 
 <h2 id="168b38c-revert">168b38c revert</h2>
@@ -453,7 +453,15 @@ the same 17 blocks.</p>
 <h2 id="diag-extfreq-trace">Diag extfreq trace</h2>
 
 <ul>
-  <li><code class="language-plaintext highlighter-rouge">diag_extfreq_trace=1</code> (<code class="language-plaintext highlighter-rouge">0ca2d8e</code>) prints <code class="language-plaintext highlighter-rouge">[diag-extfreq] t raw anchor zone</code> at 1 line/s. Off by default: set it for one run, then restore the config.</li>
+  <li><code class="language-plaintext highlighter-rouge">diag_extfreq_trace=1</code> (<code class="language-plaintext highlighter-rouge">0ca2d8e</code>) prints <code class="language-plaintext highlighter-rouge">[diag-extfreq] t raw anchor zone</code> at 1 line/s. Off by default: set it for one run, then restore the config.
+    <h2 id="hold-variant-gate-run">Hold variant gate run</h2>
+  </li>
+  <li>Scratch run (<code class="language-plaintext highlighter-rouge">lowhz/lk</code>, the 168b38c <code class="language-plaintext highlighter-rouge">run.mjs</code> and <code class="language-plaintext highlighter-rouge">gate.mjs</code> on a BASE vs HV table, medians of nonzero blocks after 1 s, from <code class="language-plaintext highlighter-rouge">docs/witness/hv-corpus/</code>). The 168b38c table and results are kept as <code class="language-plaintext highlighter-rouge">table_168b38c.tsv</code>, <code class="language-plaintext highlighter-rouge">lock_results_168b38c.tsv</code>, <code class="language-plaintext highlighter-rouge">gate_168b38c.txt</code>.</li>
+  <li>Sines 440 and 1000: identical BASE vs HV (0.000%). sine_55.69: BASE and HV both read 60.000 Hz (the sub-60 Hz floor), so G2 fails for both and measures the 168b38c gap, not HV.</li>
+  <li>G3: crotale_high_C7 has no nonzero block after 1 s in BASE (NaN); marimba_mid_C5B5 moves 0.36 c. G4: 2 files moved (clarinet_high_C6B6, vocal_male_baritone_scale), none worse than 5 c. DECISION FAIL is not a verdict on HV.</li>
+  <li>Files with no nonzero block after 1 s: BASE 23 of 34, HV 21 of 34. HV newly publishes vocal_melody_twinkle_CC0 (median 203.01 Hz) and vocal_tenor_operatic_PD (median 115.38 Hz).</li>
+  <li>The median of nonzero blocks ignores zero blocks, so it cannot show dropouts. A valid HV gate needs per-file zero fraction and periodic fraction, plus full-level HV renders (none exist yet; the BASE full-level table is in <code class="language-plaintext highlighter-rouge">lowhz/out</code>).</li>
+  <li>Admission rule for HV: no sine, crotale or marimba change above 5 cents; no moved file worse than 5 cents; zero fraction not higher than BASE on any file; device-return marimba stays periodic. The 168b38c rule (absolute 55.69 Hz accuracy) does not apply.</li>
 </ul>
 
 

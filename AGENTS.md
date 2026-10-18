@@ -110,7 +110,7 @@ Real Pi 4 `192.168.137.100` root/aloop; Pi 3B+ netboots from host. BEHAVIOR clon
 ## Pitch witness and open pitch defects
 
 - Device zero-pitch: `holdLastGood` zeroes the published pitch on the energy gate's falling edge while the note still sounds at device return level (-43 dB). Marimba n72 read 0 for 30 of 32 s. (numbers: docs/measurements-archive.md#energy-gate-falling-edge)
-- HOLD VARIANT `heldStep(prev) = ba.if(accept, freqHz, prev)`: 56/56 periodic blocks vs 2/56 BASE on the device-return marimba. NOT admitted: gate not run (outputs in `docs/witness/hv-corpus/`). Gate: sines 440/1000 within 0.5%, 55.69 within 2%, crotale 96 and marimba 74 within 5 cents, no file over 5 cents. (numbers: docs/measurements-archive.md#hold-variant-hv)
+- HOLD VARIANT `heldStep(prev) = ba.if(accept, freqHz, prev)`: 56/56 periodic blocks vs 2/56 BASE on the device-return marimba. NOT admitted: the 168b38c gate is the wrong test (absolute 55.69 Hz; medians hide dropouts). Admission needs full-level HV renders and a regression rule. (numbers: docs/measurements-archive.md#hold-variant-hv)
 - 168b38c (sub-60 Hz tracker) REVERTED `87ea7898`: marimba_mid_C5B5 -7.03 c fails the gate; both split halves fail alone. 934258b (2093 Hz root) NOT admitted. (numbers: docs/measurements-archive.md#168b38c-revert)
 - A1 (`piano_low_A1`, 55 Hz): AC silent at baseline; the energy gate opens at 0.6 s but confidence stays closed until 6.2 s. (numbers: docs/measurements-archive.md#a1-window)
 - Offline lock output is 98-100% periodic; device sweep captures are 18-27%. (numbers: docs/measurements-archive.md#lock-periodicity)
