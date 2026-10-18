@@ -522,7 +522,7 @@ async function runLock() {
 
 function writeRecord(record) {
   if (!opts.json) return;
-  const full = { ...record, file: opts.wav || null, host: opts.host, play: opts.playCard, timestamp: new Date().toISOString(), binaryMd5: null, lockbinSha256: null, trackerSha256: null, provenanceNote: 'not captured by this tool' };
+  const full = { ...record, file: (opts.lock && opts.lock.source) || opts.wav || null, host: opts.host, play: opts.playCard, timestamp: new Date().toISOString(), binaryMd5: null, lockbinSha256: null, trackerSha256: null, provenanceNote: 'not captured by this tool' };
   fs.writeFileSync(opts.json, JSON.stringify(full, null, 2) + String.fromCharCode(10));
   console.log('[loopback-witness] json ' + opts.json);
 }
