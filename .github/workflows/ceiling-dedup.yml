@@ -1,0 +1,81 @@
+name: ceiling-dedup
+
+on:
+  push:
+    paths:
+      - 'tools/ceiling-dedup/**'
+      - 'docs/witness/pitch-ceiling/pitchtracker_ac_ceiling_dedup.dsp'
+      - 'effects/pitchtracker-src/pitchtracker_ac.dsp'
+      - '.github/workflows/ceiling-dedup.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render-dedup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      FAUST_VERSION: "2.85.9"
+      GAIN: "0.00707945784384138"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: sudo apt-get install -y libncurses-dev unzip
+
+      - name: Fetch the pinned libfaust release
+        run: |
+          set -e
+          curl -fL "https://github.com/grame-cncm/faust/releases/download/${FAUST_VERSION}/libfaust-ubuntu-x86_64.zip" -o libfaust.zip
+          mkdir -p faust-lib
+          unzip -o libfaust.zip -d faust-lib
+          ls -la faust-lib/lib
+
+      - name: Fetch the pinned faust headers
+        run: |
+          set -e
+          curl -fL "https://github.com/grame-cncm/faust/archive/refs/tags/${FAUST_VERSION}.tar.gz" -o faust-src.tar.gz
+          mkdir -p faust-src
+          tar -xzf faust-src.tar.gz -C faust-src --wildcards '*/architecture/*'
+          ls faust-src
+
+      - name: Build the renderer against the pinned libfaust
+        run: |
+          set -e
+          ARCH_DIR=$(ls -d faust-src/faust-${FAUST_VERSION}/architecture)
+          g++ -O2 -std=c++17 -Wall -Wextra -I "$ARCH_DIR" \
+            tools/ceiling-dedup/render_candidate.cpp \
+            faust-lib/lib/libfaustwithllvm.a -lz -lpthread -ldl -lm -ltinfo \
+            -o render_candidate
+
+      - name: Generate the five sine inputs and check their hashes
+        run: python3 tools/ceiling-dedup/make_sines.py sines
+
+      - name: Render the candidate in one process
+        run: |
+          set -e
+          mkdir -p out
+          ./render_candidate docs/witness/pitch-ceiling/pitchtracker_ac_ceiling_dedup.dsp "$GAIN" out dedup \
+            test-audio-corpus/instruments/*.wav \
+            sines/sine_*.wav \
+            docs/witness/note-change/note_change.wav \
+            docs/witness/note-change/note_change_harm.wav \
+            docs/witness/note-change/note_change_inharm_freeFreeBeam.wav \
+            docs/witness/note-change/note_change_inharm_quoted1x4x10.wav
+
+      - name: Compare against the committed base outputs
+        run: python3 tools/ceiling-dedup/compare.py out dedup-summary.tsv
+
+      - name: Upload the summary and the renders
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ceiling-dedup
+          path: |
+            dedup-summary.tsv
+            out/
+          if-no-files-found: error
+          retention-days: 14
