@@ -41,6 +41,8 @@ struct Metrics {
     double envStdDb;
     double centroidMeanHz;
     double centroidCv;
+    double p50p95Db;
+    double linRmsCv;
 };
 
 [[noreturn]] void fail(const std::string& why) {
@@ -225,6 +227,8 @@ Metrics renderPatch(const Patch& p) {
 
     Metrics m{};
     m.name = p.name;
+    m.p50p95Db = sortedDb[(n * 19) / 20] - sortedDb[n / 2];
+    m.linRmsCv = std::sqrt(linVar) / linMean;
     m.grainRateHz = peaks / (static_cast<double>(w.size()) / kSR);
     m.envMeanDb = envMean;
     m.envStdDb = std::sqrt(envVar);
@@ -266,7 +270,7 @@ int main(int argc, char** argv) {
     std::ofstream out(argv[2]);
     if (!out) fail(std::string("cannot write ") + argv[2]);
     out << "name\tgrain_rate_hz\tenv_mean_db\tenv_std_db\tcentroid_mean_hz\tcentroid_cv"
-           "\tdistinct_from_all\tfreeze_static\n";
+           "\tdistinct_from_all\tfreeze_static\tp50_p95_db\tlin_rms_cv\n";
     for (size_t i = 0; i < all.size(); i++) {
         bool distinctFromAll = true;
         for (size_t j = 0; j < all.size(); j++) {
@@ -279,9 +283,22 @@ int main(int argc, char** argv) {
         out << all[i].name << '\t' << all[i].grainRateHz << '\t' << all[i].envMeanDb << '\t'
             << all[i].envStdDb << '\t' << all[i].centroidMeanHz << '\t' << all[i].centroidCv
             << '\t' << (distinctFromAll ? "yes" : "no") << '\t'
-            << (isFreeze ? (frozenOk ? "yes" : "no") : "-") << '\n';
+            << (isFreeze ? (frozenOk ? "yes" : "no") : "-") << '\t'
+            << all[i].p50p95Db << '\t' << all[i].linRmsCv << '\n';
     }
     out << "VERDICT\t" << (allPass ? "PASS" : "FAIL") << '\n';
+
+    const Metrics* freezeM = nullptr;
+    const Metrics* cloudM = nullptr;
+    for (const Metrics& m : all) {
+        if (m.name == "Freeze") freezeM = &m;
+        if (m.name == "Cloud") cloudM = &m;
+    }
+    if (freezeM == nullptr || cloudM == nullptr) fail("v2 needs both Freeze and Cloud rows");
+    const bool v2Pass = freezeM->p50p95Db <= cloudM->p50p95Db;
+    out << "V2_FREEZE_RELATIVE\t" << (v2Pass ? "PASS" : "FAIL") << '\n';
+    std::printf("granulator-patches: V2_FREEZE_RELATIVE %s (Freeze %.3f dB, Cloud %.3f dB)\n",
+                v2Pass ? "PASS" : "FAIL", freezeM->p50p95Db, cloudM->p50p95Db);
     std::printf("granulator-patches: VERDICT %s\n", allPass ? "PASS" : "FAIL");
     return 0;
 }
