@@ -1,0 +1,20 @@
+# Voice-path profile, reported by the DawDreamer session (not reproduced here)
+
+Provenance: measured by a peer session on an aarch64 Pi-class host, one core (taskset -c 3), 48 kHz, steady_clock, 6 GB address-space cap, Faust 2.81.10, pinned flags. A second compile ran on another core during the runs, so absolute numbers carry noise. Files are in that session's scratchpad (not committed); hashes below are as reported.
+
+ITEM 3, multitranspose.dsp process(), 512-sample blocks (10.667 ms budget), 220 Hz sine, extFreqDet=220, p50 block time:
+- 0 held voices: 339-346 us (3.2%); FFI stubbed 172 us (1.6%)
+- 1 held voice: 375-378 us (3.5%); stubbed 170 us (1.6%)
+- 6 held voices: 537-588 us (5.0-5.5%); stubbed 165 us (1.5%)
+- 55 Hz input: 0 voices 388 us (3.6%), 6 voices 554 us (5.2%)
+- Idle voices cost about 60% of six voices. voiceActive only mutes the output (output peak 0.000 with 0 voices). SnacPeriodTracker tick() and confidence() run every sample regardless of gates; six active voices add about 235 us (engines plus formant).
+
+ITEM 5, audio_thread.cpp per-block bookkeeping (lines 1128-1165 fold/latency, 1245-1315 guard, 61 telemetry stores), same loop bodies copied verbatim, stubbed params and zones, 2,000,000 iterations:
+- fold: 224-232 ns/block at N=64 up to 1533-1626 at N=512 (about 3 ns per sample, 0.015-0.017% of a core)
+- guard: 38-47 ns/block, fixed (0.0004-0.003%)
+- 61 telemetry stores: 50-57 ns/block, fixed
+- all three together about 0.02% of a core: negligible
+
+CONCLUSION: the only cost worth a look is the always-on tracker and confidence call when no voice is held (about 1.6 points of a core at 220 Hz). Any change there must leave the lock output unchanged and add no latency; the SNAC sweep bound (MAX_PERIOD 900, LAGS_PER_STEP 53) must not be cut.
+
+Reported hashes (sha256): mt_vec.hpp d939cab339b0513990c5de2cffee2698cafed1642953d859a62784811d7c83e2; bench.cpp d6bc45e5f19f61b20e869d3193cf2a6d6e3c3b697c99031ee91defe590eb56d1; stub/pitch_poly_ffi.h efb953ab092938e553283c82233e8c41a7d0fae6f8ad79f7084c0ffe4200c746; bench_vec 3ab1a88554a8284680fdc9acd3daae6dde5cfe9cec2db7f3f8f510c420ee5ab1; bench_stub 148dd790e7d2865f2bc17129c3922372ca9722bb7820c6b5542da7f0e04c23fc; h.cpp bd8b499ac785bb21e33d041d75a364dd5c137c60c79e30d1e031147cbc7ee95b; guard_body_inner.inc 34a76777c24604e72050cee2e07bed77e1b7b119b4d9ede6ecba8924a84a3531; fold_body_inner.inc 6e7973390e0b04e328aff164c489977628c62a956f57157798d69add2b58c178; multitranspose.dsp 79a7523f9f7c3c8e334dd589cecf6c951501ee7f53339a786e523eaf112314b0; audio_thread.cpp 103b71c04df0268f55aef7dff4005347f4af475fea5a608ada019b873012e4c2.
