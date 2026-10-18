@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e80c16051ae75d4f0aac5ff0a0ab763aa3f4bfd6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8ca8b5651ea32442cfeb1a3daa159251093456a7">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -543,7 +543,14 @@ the same 17 blocks.</p>
     <h2 id="ceiling-candidate-staged-not-admitted">Ceiling candidate (staged, not admitted)</h2>
   </li>
   <li><code class="language-plaintext highlighter-rouge">docs/witness/pitch-ceiling/pitchtracker_ac_ceiling.dsp</code>: grid extended from 1581 Hz to about 4.3 kHz with 19 new candidates (ratio 1.0545, the grid’s existing spacing), each high candidate read through <code class="language-plaintext highlighter-rouge">corrAtLagVarTau</code> (rwtable taps, tau 0.02), the rawFreq clamp raised to <code class="language-plaintext highlighter-rouge">maxRawHz</code> = 4200 Hz. Promotion (<code class="language-plaintext highlighter-rouge">reachable2/3</code>) still uses <code class="language-plaintext highlighter-rouge">maxTrackHz</code> = 1500 Hz. Parentheses balance; not compiled here.</li>
-  <li>Renders requested from DawDreamer: candidate on the 34 corpus files, the 5 sines and the four synthetic inputs; base on the four synthetic inputs (corpus base is <code class="language-plaintext highlighter-rouge">hv-corpus/base__*.txt</code>). Admission rule: no moved file worse than 5 cents, no zero-fraction increase, high-register files gain pitch.</li>
+  <li>Renders requested from DawDreamer: candidate on the 34 corpus files, the 5 sines and the four synthetic inputs; base on the four synthetic inputs (corpus base is <code class="language-plaintext highlighter-rouge">hv-corpus/base__*.txt</code>). Admission rule: no moved file worse than 5 cents, no zero-fraction increase, high-register files gain pitch.
+    <h2 id="ceiling-candidate-result-not-admitted">Ceiling candidate result (not admitted)</h2>
+  </li>
+  <li>Renders (<code class="language-plaintext highlighter-rouge">docs/witness/pitch-ceiling/</code>, comparison <code class="language-plaintext highlighter-rouge">compare_vs_base.txt</code>): candidate against base on the 34 corpus files, device-return gain.</li>
+  <li>Flute C7: median 691.7 Hz to 2236.1 Hz. The first-minimum estimate gave 2148 Hz, so this is a large improvement but about +70 cents off it. Flute trill: 1074.8 Hz to 1995.5 Hz.</li>
+  <li>Runaway: cello_low_sulC_A2 (111.8 Hz to 4200.0 Hz, +6277 c) and vocal_male_baritone_scale (172.8 Hz to 4200.0 Hz, +5524 c). The new raw clamp lets low-confidence high candidates settle at the clamp.</li>
+  <li>No gain on piano C7, crotale, glockenspiel or xylophone run: zero pitch at device return, as in base.</li>
+  <li>Not admitted. The candidate needs a confidence gate for candidates above 1500 Hz, so that a high candidate cannot win on voice and cello material. That gate is the next design step.</li>
 </ul>
 
 
