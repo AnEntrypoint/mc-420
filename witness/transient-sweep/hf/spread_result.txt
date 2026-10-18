@@ -1,0 +1,7 @@
+# per-block pitch spread, 100 ms blocks, 0.5 to 5.5 s, relative to the 523.25 Hz held note (cents)
+# periodic = normalised correlation >= 0.8 (acf_check.py, 12 kHz decimation)
+t_marimba_mid_C5B5_n72_r1.wav      periodic n=13 p10 -1803.6 p50  -5.0 p90  -5.0 | unperiodic n=36 p10 -2976.7 p50 -149.4 p90 +982.7
+t_vibraphone_mid_C5B5_n72_r1.wav   periodic n=12 p10  -217.3 p50  -5.0 p90 +854.4 | unperiodic n=37 p10 -1881.7 p50 +518.3 p90 +1121.3
+# note-change clustering (source onsets, capture delay 0.4 s, +-150 ms)
+marimba_mid_C5B5.wav      changes=6 periodic near 20% (n=15) far 29% (n=34)
+vibraphone_mid_C5B5.wav   changes=8 periodic near 25% (n=20) far 24% (n=29)
