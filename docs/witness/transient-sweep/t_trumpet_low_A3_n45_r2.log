@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/ts/trumpet_low_A3.wav note=45 expect 110.00 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  45 ch1 at +500ms
+[loopback-witness] note-off 45 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.001004 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 218.90 Hz | played /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/ts/trumpet_low_A3.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109 109
+[loopback-witness] octave jumps in first 2s: 0 of 21 valid hops
+[loopback-witness] hops an octave or more off target: 0/21
+[loopback-witness] LOCK note=45 expect 110.00 Hz measured 109.31 Hz (score 0.002) -> -10.9 cents, octaves off 0 | seg rms 0.000979 silent rms 0.000030 (30.3 dB) peak 0.003889
+[loopback-witness] wrote /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/tslogs/t_trumpet_low_A3_n45_r2.wav
+exit=0

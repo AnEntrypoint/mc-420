@@ -1,0 +1,9 @@
+[loopback-witness] selftest periodic 440 Hz sine: measured 440.00 Hz rms 0.070711 -> VALID PASS
+[loopback-witness] selftest periodic 2093 Hz sine (C7): measured 2092.96 Hz rms 0.070711 -> VALID PASS
+[loopback-witness] selftest periodic 4309 Hz sine (above old 4 kHz ceiling): measured 4310.33 Hz rms 0.070711 -> VALID PASS
+[loopback-witness] selftest quiet periodic 1000 Hz tone 0.0005 rms over 0.00003 floor: measured 1000.07 Hz rms 0.000501 -> VALID PASS
+[loopback-witness] selftest silence at 0.00003 floor: measured none Hz rms 0.000030 -> INVALID PASS
+[loopback-witness] selftest all-zero silence: measured none Hz rms 0.000000 -> INVALID PASS
+[loopback-witness] selftest white noise: measured none Hz rms 0.058024 -> INVALID PASS
+[loopback-witness] selftest PASS (7/7)
+exit=0

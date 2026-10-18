@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/ts/crotale_high_C7.wav note=96 expect 2093.00 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  96 ch1 at +500ms
+[loopback-witness] note-off 96 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch10 rms 0.000077 | ch11 rms 0.000077 | ch1 rms 0.000052
+[loopback-witness] input (pre note-on) f0 1056.20 Hz | played /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/ts/crotale_high_C7.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 2128 6660 6523 5307 - - - 5498 6903 4895 7095 6829 - 6927 6635 - - - - 5918 6686
+[loopback-witness] octave jumps in first 2s: 2 [100ms 2128.4->6660.3Hz; 1000ms 4894.6->7095.3Hz] of 13 valid hops
+[loopback-witness] hops an octave or more off target: 12/13
+[loopback-witness] LOCK note=96 expect 2093.00 Hz INVALID (seg rms 0.000039 silent rms 0.000030 2.4 dB over silent, need 10 dB, 13 valid hops): no measurement, excluded from octave count
+[loopback-witness] wrote /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/tslogs/t_crotale_high_C7_n96_r2.wav
+exit=1
