@@ -15,6 +15,7 @@ namespace {
 constexpr int kSR = 48000;
 constexpr int kBlock = 480;
 constexpr int kHeldFrames = 5 * kSR;
+constexpr int kSnapshotFrames = 3 * kSR;
 constexpr int kEnvWin = 480;
 constexpr int kFftN = 16384;
 constexpr double kPi = 3.14159265358979323846;
@@ -54,7 +55,7 @@ std::vector<Patch> readPatches(const char* path) {
     std::string line;
     std::getline(in, line);
     while (std::getline(in, line)) {
-        if (line.empty() || line[0] == '#') continue;
+        if (line.empty()) continue;
         std::istringstream ss(line);
         Patch p{};
         int freezeFlag = 0;
@@ -96,20 +97,23 @@ void fft(std::vector<std::complex<double>>& a) {
     }
 }
 
-void loadChord(aloop::Sampler& s) {
-    const int frames = 3 * kSR;
+void chordBlock(int pos, std::vector<int>& out) {
     const double freqs[3] = {261.63, 329.63, 392.00};
+    for (int i = 0; i < kBlock; i++) {
+        const double t = static_cast<double>(pos + i) / kSR;
+        double v = 0.0;
+        for (double f : freqs) v += std::sin(2.0 * kPi * f * t);
+        out[i] = static_cast<int>(0.1 * 32767.0 * v);
+    }
+}
+
+void loadChord(aloop::Sampler& s) {
     std::vector<int> scratch(kBlock, 0);
+    std::vector<int> in(kBlock);
     s.pushEvent(aloop::Sampler::EV_REC_START, -1, 0);
     s.renderInto(scratch.data(), kBlock);
-    std::vector<int> in(kBlock);
-    for (int pos = 0; pos < frames; pos += kBlock) {
-        for (int i = 0; i < kBlock; i++) {
-            const double t = static_cast<double>(pos + i) / kSR;
-            double v = 0.0;
-            for (double f : freqs) v += std::sin(2.0 * kPi * f * t);
-            in[i] = static_cast<int>(0.1 * 32767.0 * v);
-        }
+    for (int pos = 0; pos < kSnapshotFrames; pos += kBlock) {
+        chordBlock(pos, in);
         s.captureBlock(in.data(), kBlock);
     }
     s.pushEvent(aloop::Sampler::EV_REC_STOP, -1, 0);
@@ -134,7 +138,7 @@ void centroidStats(const std::vector<double>& y, double& mean, double& cv) {
         }
         if (den > 1e-18) cents.push_back(num / den);
     }
-    if (cents.empty()) fail("empty figure: no spectral energy in the render");
+    if (cents.empty()) fail("empty figure: no spectral energy in the measured window");
     mean = 0.0;
     for (double c : cents) mean += c;
     mean /= static_cast<double>(cents.size());
@@ -150,27 +154,45 @@ Metrics renderPatch(const Patch& p) {
     s.setGranulatorEnabled(true);
     s.setGrainPatch(p.grainMs, p.grainRateHz, p.pitchSprayCents, p.posJitterMs, p.scanRate,
                     p.reverseProb, p.envShape, p.liveMix, p.toneNorm);
-    s.setGrainFreeze(p.freeze ? 1.0f : 0.0f);
+    s.setGrainFreeze(0.0f);
     s.setGrainTransposeCents(p.transposeCents);
     s.setGrainPitchQuantize(p.quantize);
     s.pushEvent(aloop::Sampler::EV_NOTE_ON, 60, 127);
 
+    const int freezeAt = p.freeze ? kSnapshotFrames : kHeldFrames;
+    bool frozen = false;
     std::vector<double> y(kHeldFrames, 0.0);
     std::vector<int> buf(kBlock, 0);
+    std::vector<int> in(kBlock, 0);
     for (int pos = 0; pos < kHeldFrames; pos += kBlock) {
+        if (!frozen && pos >= freezeAt) {
+            s.setGrainFreeze(1.0f);
+            frozen = true;
+        }
+        if (!frozen) {
+            chordBlock(pos, in);
+            s.feedLiveGrainSource(in.data(), kBlock);
+        }
         std::fill(buf.begin(), buf.end(), 0);
         s.renderInto(buf.data(), kBlock);
         for (int i = 0; i < kBlock; i++) y[pos + i] = buf[i] / 32768.0;
     }
 
+    const size_t winStart = p.freeze ? static_cast<size_t>(freezeAt) : 0;
+    const std::vector<double> w(y.begin() + static_cast<long>(winStart), y.end());
+    double sq = 0.0;
+    for (double v : w) sq += v * v;
+    std::fprintf(stderr, "granulator-patches: %s rms %.8f over %zu frames\n", p.name.c_str(),
+                 std::sqrt(sq / static_cast<double>(w.size())), w.size());
+
     std::vector<double> envDb;
-    for (int start = 0; start + kEnvWin <= kHeldFrames; start += kEnvWin) {
+    for (size_t start = 0; start + kEnvWin <= w.size(); start += kEnvWin) {
         double ss = 0.0;
-        for (int i = 0; i < kEnvWin; i++) ss += y[start + i] * y[start + i];
+        for (int i = 0; i < kEnvWin; i++) ss += w[start + i] * w[start + i];
         const double rms = std::sqrt(ss / kEnvWin);
         envDb.push_back(20.0 * std::log10(std::max(rms, 1e-9)));
     }
-    if (envDb.empty()) fail("empty figure: no envelope windows");
+    if (envDb.empty()) fail("empty figure: no envelope windows for patch " + p.name);
 
     double envMean = 0.0;
     for (double d : envDb) envMean += d;
@@ -186,10 +208,10 @@ Metrics renderPatch(const Patch& p) {
 
     Metrics m{};
     m.name = p.name;
-    m.grainRateHz = peaks / (kHeldFrames / static_cast<double>(kSR));
+    m.grainRateHz = peaks / (static_cast<double>(w.size()) / kSR);
     m.envMeanDb = envMean;
     m.envStdDb = std::sqrt(envVar);
-    centroidStats(y, m.centroidMeanHz, m.centroidCv);
+    centroidStats(w, m.centroidMeanHz, m.centroidCv);
 
     const double vals[] = {m.grainRateHz, m.envMeanDb, m.envStdDb, m.centroidMeanHz, m.centroidCv};
     for (double v : vals) {
