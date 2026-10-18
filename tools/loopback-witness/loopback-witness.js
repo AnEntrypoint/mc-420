@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const fs = require('fs');
+const crypto = require('crypto');
 const net = require('net');
 const dgram = require('dgram');
 const os = require('os');
@@ -38,6 +39,7 @@ const opts = {
   lock: null,
   selftest: false,
   json: '',
+  'binary-md5': '',
 };
 
 for (let i = 0; i < args.length; i += 1) {
@@ -522,7 +524,9 @@ async function runLock() {
 
 function writeRecord(record) {
   if (!opts.json) return;
-  const full = { ...record, file: (opts.lock && opts.lock.source) || opts.wav || null, host: opts.host, play: opts.playCard, timestamp: new Date().toISOString(), binaryMd5: null, lockbinSha256: null, trackerSha256: null, provenanceNote: 'not captured by this tool' };
+  const sha256 = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+  const trackerSource = path.join(__dirname, '..', '..', 'effects', 'pitchtracker-src', 'pitchtracker_ac.dsp');
+  const full = { ...record, file: (opts.lock && opts.lock.source) || opts.wav || null, host: opts.host, play: opts.playCard, timestamp: new Date().toISOString(), binaryMd5: opts['binary-md5'] || null, lockbinSha256: sha256(__filename), trackerSha256: sha256(trackerSource), provenanceNote: 'lockbinSha256 is this witness script; trackerSha256 is the repo tracker source, not a device build hash; binaryMd5 is the device aloop binary, passed by --binary-md5' };
   fs.writeFileSync(opts.json, JSON.stringify(full, null, 2) + String.fromCharCode(10));
   console.log('[loopback-witness] json ' + opts.json);
 }
