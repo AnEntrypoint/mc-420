@@ -186,13 +186,30 @@ Metrics renderPatch(const Patch& p) {
                  std::sqrt(sq / static_cast<double>(w.size())), w.size());
 
     std::vector<double> envDb;
+    std::vector<double> envLin;
     for (size_t start = 0; start + kEnvWin <= w.size(); start += kEnvWin) {
         double ss = 0.0;
         for (int i = 0; i < kEnvWin; i++) ss += w[start + i] * w[start + i];
         const double rms = std::sqrt(ss / kEnvWin);
+        envLin.push_back(rms);
         envDb.push_back(20.0 * std::log10(std::max(rms, 1e-9)));
     }
     if (envDb.empty()) fail("empty figure: no envelope windows for patch " + p.name);
+
+    std::vector<double> sortedDb = envDb;
+    std::sort(sortedDb.begin(), sortedDb.end());
+    const size_t n = sortedDb.size();
+    double linMean = 0.0;
+    for (double v : envLin) linMean += v;
+    linMean /= static_cast<double>(n);
+    double linVar = 0.0;
+    for (double v : envLin) linVar += (v - linMean) * (v - linMean);
+    linVar /= static_cast<double>(n);
+    std::fprintf(stderr,
+                 "granulator-patches: %s envelope dB min %.2f p5 %.2f p50 %.2f p95 %.2f max %.2f; "
+                 "linear RMS cv %.4f over %zu windows\n",
+                 p.name.c_str(), sortedDb.front(), sortedDb[n / 20], sortedDb[n / 2],
+                 sortedDb[(n * 19) / 20], sortedDb.back(), std::sqrt(linVar) / linMean, n);
 
     double envMean = 0.0;
     for (double d : envDb) envMean += d;
