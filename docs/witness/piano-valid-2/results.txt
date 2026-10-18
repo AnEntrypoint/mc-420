@@ -1,0 +1,7 @@
+binary: CI run 39110450942 (build-binary, sha 168b38c2) aloop-aarch64-musl, md5 9917831613b209c3fc26a5ada919b40c, sha256 cd0c2ebcb8ac6810c95e2b7e4a3490396bd84ffd3ac6d9244d908d201f93baef, 1340376 B
+device before: /opt/aloop/aloop md5 2af0406bf6acd3a0f93edc94df7c3e40 (1274592 B); rollback /opt/aloop/aloop.prev-stock-2af0406b (tmpfs root, lost on reboot)
+device after: md5 9917831613b209c3fc26a5ada919b40c; LV2 bundles untouched (pitchtracker.so md5 c2af71e04880ca2fb25f4cb2c68250ab, ttl 0a71f6ef7ed0bda800a63bedf4856e95)
+selftest 7/7 PASS
+control sine440 note57 expect 220: r1 219.92 Hz -0.6c, 21/21 hops at 220, silent margin 40.3 dB VALID; r2 219.89 Hz -0.9c, 20/20 hops at 220, 40.3 dB VALID -> PASS
+piano norm3 note60 expect 261.63: r1 262.18 Hz +3.7c 16.3 dB VALID; r2 262.26 Hz +4.2c 16.5 dB VALID; octave jumps 0, off-target 0/18 each; first 3 hops undetected (lead-in), then 262-263
+piano norm3 note45 expect 110.00: r1 109.97 Hz -0.5c 17.3 dB VALID; r2 109.89 Hz -1.7c 17.3 dB VALID; octave jumps 0, off-target 0/18 each; first 3 hops undetected, then 110 flat
