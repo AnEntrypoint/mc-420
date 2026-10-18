@@ -346,3 +346,9 @@ the same 17 blocks.
 - Starts within about 1 semitone of the true pitch (523, 508, 587 Hz for C5): harmonic and 1-4-10 within 0.3 c, free-free -20.6 c (the period limit, as in the CMNDF check).
 - Starts 3 or more semitones away fail: 440 Hz (-300 c) gives -702 c (a sub-multiple lock), 641 Hz (+351 c) gives +1202 c on the harmonic input. The climb follows a correlation ridge into the wrong peak.
 - Consequence: the coarse grid near C5 (steps of 1.5 to 2.5 semitones, no point at 523.25 Hz) is the binding limit. A climb fixes the bias only if the grid is denser. A denser grid adds coarse taps, which is the codegen-cliff risk in the Faust notes; compile time must be measured in CI before any change.
+## Combined refinement decision
+
+- Decision (delegated, 2026-10-18): no pitch-tracker change is pushed. A candidate must pass the offline model before any DSP edit, and none does.
+- Model `docs/witness/note-change/combined_sim.mjs`: wide K=16 pass for the start, then per-block one-sample hill-climb on the three taps. Harmonic and 1-4-10 inputs sit at -5 to -7 cents from starts within 1.5 semitones and from most farther starts. Some starts still lock a sub-multiple: -700 to -717 cents on F5 and D5, from 440, 508 and 587 Hz starts.
+- The sub-multiple lock is the failure that matters. The plain CMNDF avoids it because it takes the first minimum below threshold, not the largest correlation. A YIN-style first-minimum search would need about a dozen variable-lag taps, which is the Faust codegen-cliff risk recorded in AGENTS.md.
+- Next step, not started: a dedicated tracker design with a first-minimum search, costed in taps and CI compile time, rendered on all four synthetic inputs and the corpus before any push.
