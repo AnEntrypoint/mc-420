@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 90
     env:
       FAUST_VERSION: "2.85.9"
+      FAUST_LIBRARIES_SHA: "78a72d4998dec43e20492ef9b78d1a785b3dc864"
       GAIN: "0.00707945784384138"
     steps:
       - uses: actions/checkout@v4
@@ -39,8 +40,16 @@ jobs:
           set -e
           curl -fL "https://github.com/grame-cncm/faust/archive/refs/tags/${FAUST_VERSION}.tar.gz" -o faust-src.tar.gz
           mkdir -p faust-src
-          tar -xzf faust-src.tar.gz -C faust-src --wildcards '*/architecture/*' '*/libraries/*'
+          tar -xzf faust-src.tar.gz -C faust-src --wildcards '*/architecture/*'
           ls faust-src/faust-${FAUST_VERSION}
+
+      - name: Fetch the Faust standard library at the pinned commit
+        run: |
+          set -e
+          curl -fL "https://github.com/grame-cncm/faustlibraries/archive/${FAUST_LIBRARIES_SHA}.tar.gz" -o faustlibraries.tar.gz
+          mkdir -p faust-libs
+          tar -xzf faustlibraries.tar.gz -C faust-libs --strip-components=1
+          ls faust-libs/stdfaust.lib
 
       - name: Build the renderer against the pinned libfaust
         run: |
@@ -58,7 +67,7 @@ jobs:
         run: |
           set -e
           mkdir -p out
-          export FAUST_LIBRARY_DIR="$(pwd)/faust-src/faust-${FAUST_VERSION}/libraries"
+          export FAUST_LIBRARY_DIR="$(pwd)/faust-libs"
           ./render_candidate docs/witness/pitch-ceiling/pitchtracker_ac_ceiling_dedup.dsp "$GAIN" out dedup \
             test-audio-corpus/instruments/*.wav \
             sines/sine_*.wav \
