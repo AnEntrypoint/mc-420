@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=/tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/piano_C4_norm3.wav note=45 expect 110.00 Hz, 6s, before in 0.0001 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  45 ch1 at +500ms
+[loopback-witness] note-off 45 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.000542 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 not detected | played /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/piano_C4_norm3.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): - 263 263 263 263 263 263 263 263 263 263 263 263 263 263 263 262 262 262 262 262
+[loopback-witness] octave jumps in first 2s: 0 of 20 valid hops
+[loopback-witness] hops an octave or more off target: 20/20
+[loopback-witness] LOCK note=45 expect 110.00 Hz measured 262.53 Hz (score 0.002) -> +1505.9 cents, octaves off 1 OCTAVE ERROR | seg rms 0.000194 silent rms 0.000030 (16.3 dB) peak 0.002041
+[loopback-witness] wrote /tmp/claude-1000/-config-workspace-mc-420/552e4f18-f9c8-4f76-973c-a987b5ca102c/scratchpad/logs/n45_g1_r2.wav
+exit=0
