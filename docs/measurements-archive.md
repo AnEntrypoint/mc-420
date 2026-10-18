@@ -389,3 +389,10 @@ the same 17 blocks.
 - Geometric normalization (divide by sqrt of both energies): cello 0.9%, vocal_male 5.3%, flute 88.7%, piano C7 80.2%. No change in the runaway picks, so the DSP's one-sided normalization is not the cause.
 - The offline model does not reproduce the DSP runaway. The DSP smooths the correlation with a 0.02 s one-pole (candidates at or above 700 Hz) and checks only the coarse grid, not every lag. Next, model that smoother and grid exactly before any candidate change.
 - The candidate (`pitch-ceiling`) stays unadmitted: cello and vocal_male still run away to the 4200 Hz clamp in the DSP renders.
+## Latency ledger (partial, means-transpose-latency-floor)
+
+- Lock path: `lockDelayMs = 80.0` (`effects/home/faust/multitranspose.dsp:70`), `lockDelaySamples = 3840` (`:71`), consumed by `inLockWarmup = sinceAttack < lockDelaySamples` (`:80`). This gates the lock voice during its first 80 ms after an attack. It is the largest fixed term on the lock path, and it is the lead-in that the lock witnesses measure (about 0.3 s of unpitched output on piano C4).
+- Release hold: `engageReleaseHoldS = 0.06` (`multitranspose.dsp:68`, used at `:106`). A counter for the engaged state, not a signal delay.
+- Block: `block_size = 64` (`config/aloop.conf`); ALSA period 64, buffer 256, start threshold 64 (AGENTS, Audio thread and ALSA).
+- Telemetry: `latency_bias_samples` read 323.3 at idle (device status, 2026-10-18), `alsa_roundtrip_samples` 259.3, `latency_trim_samples` 0.0.
+- Not yet in the ledger: the ENGAGED pitch stage's 128-sample constant (`soladSnacOctaver.h`, with its line), the `DUBFX_BS` block, and the trim applied when the shift stage disengages. Reconciling `latency_bias_samples` 323.3 against these pieces needs a device run and is open on the row.
