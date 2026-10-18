@@ -507,3 +507,9 @@ loaded, so ordinary sampler playback is untouched.
 
 - Envelope shape: the mapping stays. CI run 39168790090 (artifact granulator-controls, sha a111f9a5) measured a crest change of 1.09 dB between 0.1 and 0.9, under the pre-registered 2.0 dB. The claim that envelope shape changes crest by 2 dB is not supported at the current mapping. Changing the mapping needs its own pre-registration first.
 - Density: the ratio test stays as the metric. The high-rate undercount is recorded as a known limitation: the 40 Hz setting reads 16 peaks per second. An absolute rate check is a follow-up, with its threshold pre-registered before it runs.
+## Granulator scan, reverse and grain size decisions, 2026-10-18
+
+- Source: CI run 39169004538 on 03fd8ede, artifact granulator-scan-reverse-size, sha 34029711. Verified by a separate reader.
+- Scan (0 vs 1.0): PASS, level-change difference 4.78 dB against 3.0.
+- Grain size (20 vs 200 ms): PASS, gap fraction 0.81 to 0.0125, difference 0.80 against 0.25.
+- Reverse (0 vs 1.0): FAIL, RMS ratio 0.90 dB against 2.0 dB (linear 0.0451 to 0.0500). Decision: the reverse mapping stays. Recorded as unsupported at the current mapping, the same treatment as envelope shape. A change needs its own pre-registration.
