@@ -37,6 +37,7 @@
 .gm/prd-log.jsonl
 .gm/prd.absorbed.json
 .gm/pool/
+.gm/lean-walk/
 
 build/
 *.o
