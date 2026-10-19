@@ -1,0 +1,27 @@
+name: witness-summary
+
+on:
+  push:
+    paths:
+      - tools/witness-summary/**
+      - .github/workflows/witness-summary.yml
+  workflow_dispatch:
+
+jobs:
+  summarise:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Syntax
+        run: node --check tools/witness-summary/summarise.mjs
+      - name: NOT DETECTED keeps its own verdict
+        run: |
+          printf '%s\n' '[loopback-witness] LOCK note=60 expect 261.63 Hz measured NOT DETECTED (seg rms 0.012000 silent rms 0.000100 peak 0.030000)' > "$RUNNER_TEMP/nd.txt"
+          node tools/witness-summary/summarise.mjs --json "$RUNNER_TEMP/nd.txt" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);if(r.verdict!=="NOT_DETECTED"){console.error("verdict "+r.verdict);process.exit(1)}console.log("verdict "+r.verdict)})'
+      - name: INVALID keeps its own verdict
+        run: |
+          printf '%s\n' '[loopback-witness] LOCK note=62 expect 293.66 Hz INVALID (seg rms 0.000100 silent rms 0.000090 0.9 dB over silent, need 10 dB, 3 valid hops): no measurement' > "$RUNNER_TEMP/inv.txt"
+          node tools/witness-summary/summarise.mjs --json "$RUNNER_TEMP/inv.txt" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);if(r.verdict!=="INVALID"){console.error("verdict "+r.verdict);process.exit(1)}console.log("verdict "+r.verdict)})'
