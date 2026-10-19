@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Summarises loopback-witness text logs, one record per file.
-// Reads existing text output only. A field the log does not carry is null.
 import fs from "node:fs";
 import path from "node:path";
 
@@ -42,10 +40,10 @@ function parse(file) {
       const sil = /silent rms ([\d.]+)/.exec(line);
       if (seg) rec.seg_rms = num(seg[1]);
       if (sil) rec.silent_rms = num(sil[1]);
-    } else if ((m = /LOCK note=(\d+) expect ([\d.]+) Hz (\S+)(.*)$/.exec(line))) {
+    } else if ((m = /LOCK note=(\d+) expect ([\d.]+) Hz (?:measured )?(NOT DETECTED|\S+)(.*)$/.exec(line))) {
       rec.note = num(m[1]);
       rec.expect_hz = num(m[2]);
-      rec.verdict = m[3];
+      rec.verdict = m[3].replace(" ", "_");
       const rest = m[4];
       const seg = /seg rms ([\d.]+)/.exec(rest);
       const sil = /silent rms ([\d.]+)/.exec(rest);
