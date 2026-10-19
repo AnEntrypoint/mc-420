@@ -542,3 +542,9 @@ Kept open, with the blocker:
 - Vocoder and transpose latency and corpus rows: means-vocoder-formant-quality, means-transpose-latency-floor (ledger partial, device reconciliation open), means-transpose-corpus-breadth (no sources added).
 - CI speed: plan-ci-faust-cache (a real CI optimisation, not started).
 - gm repo: gm-commit-refusals-message-lint and its blocker, gm-lean-walk-evidence-missing (both need a gm-repo change and deploy approval).
+## Tracker goal deferred, 2026-10-19 (decided under the user's delegation)
+
+- Decision: the tracker goal (goal-transpose-vocoder-predictable and its tracker, lock, transient, vocoder and transpose rows) is deferred for this scope, not fixed. No admitted design exists. Two v3 energy-gate candidates were rejected (2e369582, cf6ab6cc), and the dedup candidate was rejected (3a64f838).
+- Evidence on record: the 2093 Hz ceiling cause, the duplicate-lag grid runaway, the attack junk on guitar, vibraphone and violin (8be5b398), the high-register silence as an energy-floor issue, and the live witness with its validity gate.
+- Reopen when: a gate exists that opens the high-register files (piano C7, crotale, glockenspiel, xylophone run) without moving voice and marimba frames, measured on the same table before any render.
+- Not deferred: the gm fixes and the CI cache are done (rs-plugkit fe36570d, build-lv2 0403d1a9).
