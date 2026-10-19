@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=2e369582a3d54b97f40df70cb4948f1c55324c63">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=cf6ab6cc7767f2114227827b0e5396594568f581">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -592,7 +592,13 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Candidate: ready = (env &gt; 1e-6 held 35 ms) OR (env &gt; 1e-8 held 35 ms). Only adds readiness where the current gate is off. Model: docs/witness/pitch-ceiling/v3_gate_energy_model.mjs.</li>
   <li>Fraction of time ready (current to candidate): piano_high_C7 0.000 to 0.021, crotale 0.000 to 0.062, glockenspiel 0.000 to 0.199, xylophone_run 0.000 to 0.012.</li>
   <li>Voice and marimba frames change: cello 0.041 to 0.607 (changed 0.566), vocal_male 0.041 to 0.645 (0.604), vocal_female 0.262 to 0.873 (0.611), marimba_roll 0.211 to 0.749 (0.538), marimba_mid 0.018 to 0.142 (0.124).</li>
-  <li>Rejected: the candidate changes readiness on voice and marimba files far beyond what the regression rule allows, for little gain on the high-register files. The next candidate must add a confidence requirement to the low-level path, and it must be measured on the same table before any render.</li>
+  <li>Rejected: the candidate changes readiness on voice and marimba files far beyond what the regression rule allows, for little gain on the high-register files. The next candidate must add a confidence requirement to the low-level path, and it must be measured on the same table before any render.
+    <h2 id="v3-gate-second-candidate-rejected-energy-plus-coarse-confidence-2026-10-19">v3 gate, second candidate rejected (energy plus coarse confidence), 2026-10-19</h2>
+  </li>
+  <li>Candidate: ready = current OR (env &gt; 1e-8 held 35 ms AND the coarse grid has a local maximum at or above 0.85). Model: docs/witness/pitch-ceiling/v3_gate_confidence_model.mjs.</li>
+  <li>High-register gain (current to candidate): piano_high_C7 0.000 to 0.021, crotale 0.000 to 0.062, glockenspiel 0.000 to 0.199, xylophone_run 0.000 to 0.013.</li>
+  <li>Voice and marimba change still large: cello changed 0.556, vocal_male 0.410, vocal_female 0.391, marimba_roll 0.481, marimba_mid 0.124.</li>
+  <li>Rejected. The coarse confidence test passes on voice material too often to protect those frames. A discriminator other than energy and the coarse correlation is needed, and none is found yet.</li>
 </ul>
 
 

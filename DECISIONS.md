@@ -524,3 +524,9 @@ loaded, so ordinary sampler playback is untouched.
 - Fraction of time ready (current to candidate): piano_high_C7 0.000 to 0.021, crotale 0.000 to 0.062, glockenspiel 0.000 to 0.199, xylophone_run 0.000 to 0.012.
 - Voice and marimba frames change: cello 0.041 to 0.607 (changed 0.566), vocal_male 0.041 to 0.645 (0.604), vocal_female 0.262 to 0.873 (0.611), marimba_roll 0.211 to 0.749 (0.538), marimba_mid 0.018 to 0.142 (0.124).
 - Rejected: the candidate changes readiness on voice and marimba files far beyond what the regression rule allows, for little gain on the high-register files. The next candidate must add a confidence requirement to the low-level path, and it must be measured on the same table before any render.
+## v3 gate, second candidate rejected (energy plus coarse confidence), 2026-10-19
+
+- Candidate: ready = current OR (env > 1e-8 held 35 ms AND the coarse grid has a local maximum at or above 0.85). Model: docs/witness/pitch-ceiling/v3_gate_confidence_model.mjs.
+- High-register gain (current to candidate): piano_high_C7 0.000 to 0.021, crotale 0.000 to 0.062, glockenspiel 0.000 to 0.199, xylophone_run 0.000 to 0.013.
+- Voice and marimba change still large: cello changed 0.556, vocal_male 0.410, vocal_female 0.391, marimba_roll 0.481, marimba_mid 0.124.
+- Rejected. The coarse confidence test passes on voice material too often to protect those frames. A discriminator other than energy and the coarse correlation is needed, and none is found yet.
