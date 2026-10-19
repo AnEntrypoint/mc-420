@@ -57,7 +57,7 @@ function parse(file) {
       if (cents) rec.cents = num(cents[1]);
     } else if ((m = /trajectory .*: (.+)$/.exec(line))) {
       rec.trajectory = m[1].trim().split(/\s+/).map((t) => (t === "-" ? null : Number(t)));
-    } else if ((m = /octave jumps in first 2s: (\d+) of (\d+) valid hops/.exec(line))) {
+    } else if ((m = /octave jumps in first 2s: (\d+)(?: \[[^\]]*\])? of (\d+) valid hops/.exec(line))) {
       rec.octave_jumps = num(m[1]);
       rec.valid_hops = num(m[2]);
     } else if ((m = /^exit=(\d+)/.exec(line))) {
