@@ -518,3 +518,9 @@ loaded, so ordinary sampler playback is untouched.
 - The silent high-register files in the dedup candidate (piano_high_C7, crotale_high_C7, glockenspiel_high_C7, xylophone_run_C7B7) are not a grid problem. Their energy envelopes sit below the absolute 1e-6 floor of energyReady: piano_high_C7 p99 5.3e-8, crotale 1.4e-6, glockenspiel 1.0e-7, xylophone_run 3.4e-7 (docs/witness/hv-corpus/energy_ready_device_return.txt).
 - Lowering the floor to 1e-8 was rejected: it changes frames already published on voice and marimba files (hv-floor analysis). So the v3 design must replace the absolute floor with a gate that does not move already-published frames.
 - v3 is not yet pre-registered. Its gate and its thresholds are written on tracker-ceiling-v3-prereg before any render.
+## v3 gate, first candidate rejected (energy only), 2026-10-19
+
+- Candidate: ready = (env > 1e-6 held 35 ms) OR (env > 1e-8 held 35 ms). Only adds readiness where the current gate is off. Model: docs/witness/pitch-ceiling/v3_gate_energy_model.mjs.
+- Fraction of time ready (current to candidate): piano_high_C7 0.000 to 0.021, crotale 0.000 to 0.062, glockenspiel 0.000 to 0.199, xylophone_run 0.000 to 0.012.
+- Voice and marimba frames change: cello 0.041 to 0.607 (changed 0.566), vocal_male 0.041 to 0.645 (0.604), vocal_female 0.262 to 0.873 (0.611), marimba_roll 0.211 to 0.749 (0.538), marimba_mid 0.018 to 0.142 (0.124).
+- Rejected: the candidate changes readiness on voice and marimba files far beyond what the regression rule allows, for little gain on the high-register files. The next candidate must add a confidence requirement to the low-level path, and it must be measured on the same table before any render.
