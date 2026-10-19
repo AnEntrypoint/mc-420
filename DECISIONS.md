@@ -530,3 +530,15 @@ loaded, so ordinary sampler playback is untouched.
 - High-register gain (current to candidate): piano_high_C7 0.000 to 0.021, crotale 0.000 to 0.062, glockenspiel 0.000 to 0.199, xylophone_run 0.000 to 0.013.
 - Voice and marimba change still large: cello changed 0.556, vocal_male 0.410, vocal_female 0.391, marimba_roll 0.481, marimba_mid 0.124.
 - Rejected. The coarse confidence test passes on voice material too often to protect those frames. A discriminator other than energy and the coarse correlation is needed, and none is found yet.
+## Triage of open rows, 2026-10-19
+
+Closed:
+- plan-dawdreamer-harness-commit: superseded. Renders now run as committed CI jobs (tools/ceiling-dedup, tools/granulator-patches, tools/granulator-controls, tools/granulator-transpose). Witness: dedup-summary artifact 39166365939, sha 3245dbd3.
+- resonode-stereo-width: out of scope for the transpose and vocoder goal. Deferred as a product feature, not a defect.
+
+Kept open, with the blocker:
+- Tracker design (blocked on the v3 energy gate, two candidates rejected): goal-transpose-vocoder-predictable, defect-lock-above-1500hz-clamp, defect-lock-output-periodicity, defect-transpose-a1-splice-residual, defect-transient-onset-and-gross-errors, means-ac-tracker-octave-flip, plan-variant-v3-gate, plan-lowhz-smoothing-sweep, plan-defect-piano-lowbass-ac-silent, plan-crotale-window-sensitivity, plan-defect-midi96-instability, plan-lock-lead-in-latency, tracker-ceiling-v3-prereg, pitch-ceiling-dedup-render.
+- Measurement not yet valid or not run: plan-piano-transient-measurement (piano note window below the 10 dB validity rule), plan-transient-source-sweep (live witness on more sources, not run), plan-profile-voice-path (peer measured, not reproduced here).
+- Vocoder and transpose latency and corpus rows: means-vocoder-formant-quality, means-transpose-latency-floor (ledger partial, device reconciliation open), means-transpose-corpus-breadth (no sources added).
+- CI speed: plan-ci-faust-cache (a real CI optimisation, not started).
+- gm repo: gm-commit-refusals-message-lint and its blocker, gm-lean-walk-evidence-missing (both need a gm-repo change and deploy approval).
