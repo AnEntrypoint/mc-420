@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=test-audio-corpus/instruments/vibraphone_mid_C5B5.wav note=74 expect 587.33 Hz, 6s, before in 0 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  74 ch1 at +500ms
+[loopback-witness] note-off 74 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.000138 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 528.32 Hz | played test-audio-corpus/instruments/vibraphone_mid_C5B5.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 530 529 - 6167 - - - - - 6814 - 7135 - - 6769 - - - - - -
+[loopback-witness] octave jumps in first 2s: 1 [300ms 529.1->6167.3Hz] of 6 valid hops
+[loopback-witness] hops an octave or more off target: 4/6
+[loopback-witness] LOCK note=74 expect 587.33 Hz INVALID (seg rms 0.000093 silent rms 0.000030 9.9 dB over silent, need 10 dB, 6 valid hops): no measurement, excluded from octave count
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+rc=1
