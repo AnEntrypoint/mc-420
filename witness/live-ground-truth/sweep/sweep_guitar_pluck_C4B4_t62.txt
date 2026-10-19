@@ -1,0 +1,15 @@
+[loopback-witness] host=192.168.137.132 play=plughw:0,0 ch6/8 cap=plughw:0,0 ch1/20
+[loopback-witness] gate: sustain_cmd 0 -> 1 (latched by SHIFT+sustain)
+[loopback-witness] silent control (same run, 6s, no playback) seg rms 0.000030
+[loopback-witness] LOCK source=test-audio-corpus/instruments/guitar_pluck_C4B4.wav note=62 expect 293.66 Hz, 6s, before in 0 out 0
+[loopback-witness] gate: sustain_cmd 1 -> 1 (already latched)
+[loopback-witness] note-on  62 ch1 at +500ms
+[loopback-witness] note-off 62 ch1 at +5750ms
+[loopback-witness] loudest capture channels: ch1 rms 0.000408 | ch10 rms 0.000077 | ch11 rms 0.000077
+[loopback-witness] input (pre note-on) f0 not detected | played test-audio-corpus/instruments/guitar_pluck_C4B4.wav
+[loopback-witness] trajectory 0-2000ms after note-on (100ms hops): 6654 4404 5788 5343 6904 - 6243 - 6591 4702 - 7049 - - 6054 - - 293 293 292 292
+[loopback-witness] octave jumps in first 2s: 3 [100ms 6653.8->4403.9Hz; 1100ms 4701.8->7048.7Hz; 1700ms 6054.4->292.5Hz] of 14 valid hops
+[loopback-witness] hops an octave or more off target: 10/14
+[loopback-witness] LOCK note=62 expect 293.66 Hz measured 292.37 Hz (score 0.025) -> -7.6 cents, octaves off 0 | seg rms 0.000443 silent rms 0.000030 (23.4 dB) peak 0.003625
+[loopback-witness] wrote /tmp/loopback-witness/capture.wav
+rc=0
