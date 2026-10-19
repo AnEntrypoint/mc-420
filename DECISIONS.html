@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8be5b398e0a7cce03d3aeac42641dee203c4c43b">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=365c9532f596e6619ef545247b7e7175fd6108a6">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -615,7 +615,13 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Measurement not yet valid or not run: plan-piano-transient-measurement (piano note window below the 10 dB validity rule), plan-transient-source-sweep (live witness on more sources, not run), plan-profile-voice-path (peer measured, not reproduced here).</li>
   <li>Vocoder and transpose latency and corpus rows: means-vocoder-formant-quality, means-transpose-latency-floor (ledger partial, device reconciliation open), means-transpose-corpus-breadth (no sources added).</li>
   <li>CI speed: plan-ci-faust-cache (a real CI optimisation, not started).</li>
-  <li>gm repo: gm-commit-refusals-message-lint and its blocker, gm-lean-walk-evidence-missing (both need a gm-repo change and deploy approval).</li>
+  <li>gm repo: gm-commit-refusals-message-lint and its blocker, gm-lean-walk-evidence-missing (both need a gm-repo change and deploy approval).
+    <h2 id="tracker-goal-deferred-2026-10-19-decided-under-the-users-delegation">Tracker goal deferred, 2026-10-19 (decided under the user’s delegation)</h2>
+  </li>
+  <li>Decision: the tracker goal (goal-transpose-vocoder-predictable and its tracker, lock, transient, vocoder and transpose rows) is deferred for this scope, not fixed. No admitted design exists. Two v3 energy-gate candidates were rejected (2e369582, cf6ab6cc), and the dedup candidate was rejected (3a64f838).</li>
+  <li>Evidence on record: the 2093 Hz ceiling cause, the duplicate-lag grid runaway, the attack junk on guitar, vibraphone and violin (8be5b398), the high-register silence as an energy-floor issue, and the live witness with its validity gate.</li>
+  <li>Reopen when: a gate exists that opens the high-register files (piano C7, crotale, glockenspiel, xylophone run) without moving voice and marimba frames, measured on the same table before any render.</li>
+  <li>Not deferred: the gm fixes and the CI cache are done (rs-plugkit fe36570d, build-lv2 0403d1a9).</li>
 </ul>
 
 
