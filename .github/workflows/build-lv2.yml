@@ -274,6 +274,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y faust lv2-dev pkg-config build-essential libboost-dev
 
+      - name: Restore the pitchtracker Faust compile cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/faustcache
+          key: faust-pitchtracker-v1-${{ hashFiles('effects/pitchtracker-src/pitchtracker_ac.dsp') }}
+
       - name: Build pitchtracker_ac.dsp as its own musl/aarch64 LV2 bundle
         timeout-minutes: 25
         run: |
@@ -282,9 +288,15 @@ jobs:
           cd effects/pitchtracker-src
           CLSNAME=pitchtracker
           WORK=/tmp/lv2work
-          mkdir -p "$WORK/$CLSNAME.lv2"
+          mkdir -p "$WORK/$CLSNAME.lv2" /tmp/faustcache
 
-          faust -i -a "$FAUSTLIB/lv2.cpp" -vec -fun -dfs -vs 32 -nvi -ct 0 -t 600 -cn "$CLSNAME" pitchtracker_ac.dsp -o "$WORK/$CLSNAME.cpp"
+          if [ -s /tmp/faustcache/$CLSNAME.cpp ]; then
+            echo "Reusing the cached Faust output for the unchanged pitchtracker_ac.dsp"
+            cp /tmp/faustcache/$CLSNAME.cpp "$WORK/$CLSNAME.cpp"
+          else
+            faust -i -a "$FAUSTLIB/lv2.cpp" -vec -fun -dfs -vs 32 -nvi -ct 0 -t 600 -cn "$CLSNAME" pitchtracker_ac.dsp -o "$WORK/$CLSNAME.cpp"
+            cp "$WORK/$CLSNAME.cpp" /tmp/faustcache/$CLSNAME.cpp
+          fi
 
           CPPFLAGS="-DPLUGIN_URI=\"https://faustlv2.bitbucket.io/$CLSNAME\" -DFAUST_META=1 -DFAUST_MIDICC=1 -DFAUST_MTS=1 -DFAUST_UI=0 -DVOICE_CTRLS=1 -DNVOICES=-1"
 
