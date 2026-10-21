@@ -19,7 +19,7 @@ xHp(x) = fi.highpass(1, 20.0, x);
 lagFor(freqHz) = int(ma.SR / freqHz);
 
 tauFor(freqHz) = ba.if(freqHz >= 700.0, 0.02,
-                  0.03);
+                  0.01);
 
 corrAtLagTau(x, lag, energyTau) = num / den
 with {
@@ -36,7 +36,7 @@ corrAtLagVar(x, w, lagSig) = num / den
 with {
     lagClamped = lagSig : max(1) : min(delayMaxLag);
     d = rwtable(delayTableSize, 0.0, w, x, (w + delayTableSize - lagClamped) % delayTableSize);
-    energyTau = 0.03;
+    energyTau = 0.01;
     pole = ba.tau2pole(energyTau);
     smoo(sig) = sig : *(1.0-pole) : + ~ *(pole);
     num = smoo(x * d);
