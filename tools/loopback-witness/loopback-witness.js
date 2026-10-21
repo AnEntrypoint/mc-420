@@ -287,6 +287,13 @@ function estimateF0At(samples, rate, start, win) {
     scores[lag - minLag] = den > 0 ? score : Infinity;
     if (score < bestScore) { bestScore = score; bestLag = lag; }
   }
+  let rise = 1;
+  while (rise + 1 < scores.length && scores[rise + 1] >= scores[rise]) rise += 1;
+  bestScore = Infinity;
+  bestLag = 0;
+  for (let i = rise; i < scores.length; i += 1) {
+    if (scores[i] < bestScore) { bestScore = scores[i]; bestLag = minLag + i; }
+  }
   if (!bestLag || bestScore > 0.75) return null;
   if (bestLag === minLag || bestLag === limit) return null;
   const submultipleTolerance = 0.02;
@@ -554,6 +561,7 @@ function selfTest() {
     { name: 'periodic 2093 Hz sine (C7)', samples: sine(2093, 0.1), expectHz: 2093, ref: silentRef },
     { name: 'periodic 4309 Hz sine (above old 4 kHz ceiling)', samples: sine(4309, 0.1), expectHz: 4309, ref: silentRef },
     { name: 'quiet periodic 1000 Hz tone 0.0005 rms over 0.00003 floor', samples: addTo(sine(1000, 0.0005 * Math.SQRT2), floorNoise(4242)), expectHz: 1000, ref: silentRef, expectValid: true },
+    { name: 'decaying 65.41 Hz tone, 0.9 s decay (C2, low-lag AMDF trap)', samples: Float64Array.from({ length: n }, (_, i) => 0.05 * Math.exp(-(i / kRate) / 0.9) * Math.sin(2 * Math.PI * 65.41 * i / kRate)), expectHz: 65.41, ref: silentRef, expectValid: true },
     { name: 'silence at 0.00003 floor', samples: floorNoise(9001), expectHz: null, ref: silentRef, expectValid: false },
     { name: 'all-zero silence', samples: new Float64Array(n), expectHz: null, ref: silentRef, expectValid: false },
     { name: 'white noise', samples: noise, expectHz: null, ref: silentRef, expectValid: false },
