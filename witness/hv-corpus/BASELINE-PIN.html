@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Baseline pin | aloop</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Baseline pin" />
+<meta property="og:locale" content="en_US" />
+<link rel="canonical" href="https://anentrypoint.github.io/mc-420/witness/hv-corpus/BASELINE-PIN.html" />
+<meta property="og:url" content="https://anentrypoint.github.io/mc-420/witness/hv-corpus/BASELINE-PIN.html" />
+<meta property="og:site_name" content="aloop" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Baseline pin" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","headline":"Baseline pin","url":"https://anentrypoint.github.io/mc-420/witness/hv-corpus/BASELINE-PIN.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=905be774104ef1a98ba242eaae0ce052bb21675c">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/mc-420/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1><a href="https://anentrypoint.github.io/mc-420/">aloop</a></h1>
+
+        
+
+        <p></p>
+
+        
+        <p class="view"><a href="https://github.com/AnEntrypoint/mc-420">View the Project on GitHub <small>AnEntrypoint/mc-420</small></a></p>
+        
+
+        
+
+        
+      </header>
+      <section>
+
+      <h1 id="baseline-pin">Baseline pin</h1>
+
+<p>The committed baseline renders in this directory (<code class="language-plaintext highlighter-rouge">base__*.txt</code>,
+<code class="language-plaintext highlighter-rouge">sine_*.base.txt</code>, and the matching set under
+<code class="language-plaintext highlighter-rouge">docs/witness/pitch-ceiling/</code>) are anchored to</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pitchtracker_ac.dsp sha256 3f0184ab36e8bb243fdaa9a325736175b1a64f54dbd93719baa658af2cb6bef3
+</code></pre></div></div>
+
+<p>That anchor is deliberate and is not silently refreshed when the tracker
+on <code class="language-plaintext highlighter-rouge">main</code> moves. The tracker on <code class="language-plaintext highlighter-rouge">main</code> has since changed (it is
+<code class="language-plaintext highlighter-rouge">8c4e78f84f84344d4a4861d510eb887879f759536c35f6b7633e21ef6f48ab78</code> at
+the time of writing), and these renders are still the <code class="language-plaintext highlighter-rouge">3f0184ab</code> ones.</p>
+
+<h2 id="why-the-pin-is-not-refreshed">Why the pin is not refreshed</h2>
+
+<p>The ceiling-dedup rules R1-R4 are pre-registered against the
+<code class="language-plaintext highlighter-rouge">3f0184ab</code> baseline, and the candidate they rejected was judged under
+that pre-registration. Re-rendering the baseline now and re-running the
+comparison would re-judge an already-rejected candidate against a
+tracker it was never registered against. That is post-hoc
+goalpost-moving, the same failure this project already recorded for
+<code class="language-plaintext highlighter-rouge">granulator-freeze-static-metric-v2</code>, whose metric was chosen after its
+percentiles were seen.</p>
+
+<h2 id="what-follows-from-the-pin">What follows from the pin</h2>
+
+<ul>
+  <li>Any <strong>new</strong> tracker candidate must pre-register against the <strong>current</strong>
+tracker, with a fresh baseline render. This pin does not license
+reusing these numbers for a new candidate.</li>
+  <li>The <code class="language-plaintext highlighter-rouge">ceiling-dedup</code> workflow compares the live tracker hash against
+this anchor. On mismatch it writes a <code class="language-plaintext highlighter-rouge">STALE BASELINE</code> row instead of a
+verdict and issues no clean verdict, so a stale baseline can never be
+read as a fresh measurement.</li>
+  <li>The hold-variant traces under <code class="language-plaintext highlighter-rouge">docs/witness/hv-floor/</code> come from the
+same <code class="language-plaintext highlighter-rouge">3f0184ab</code> era and are covered by the same pin.</li>
+</ul>
+
+
+      </section>
+      <footer>
+        
+        <p>This project is maintained by <a href="https://github.com/AnEntrypoint">AnEntrypoint</a></p>
+        
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="/mc-420/assets/js/scale.fix.js"></script>
+  </body>
+</html>
