@@ -363,6 +363,8 @@ the same 17 blocks.
 - Piano C7 (2093 Hz): no stable detection, 3 valid hops, INVALID. Same region as the flute.
 - Piano A1 (55 Hz): 1 valid hop, INVALID. Matches the A1 dropout.
 - Use: the lock path is the product metric. Output error = tracker bias + lock residual, so a live run checks a tracker change end to end, without renders.
+- Shipped-build validation over this loop (commit `9edb2e06`, pitchtracker `.so` md5 `5b97057`, aloop `9917831`): self-test 8/8 first. Round trip 259-266 samples (5.40-5.55 ms), inside the ~7 ms ceiling. Shifted targets prove the device is in the path, not a host self-loop: marimba C2 -> target 48 (130.81 Hz) read 130.76 Hz (-0.7 c) and trumpet A3 -> target 59 (246.94 Hz) read 246.07 Hz (-6.1 c, matching the -6.4 c archived above). Piano C4 level-matched to the marimba file's RMS (gain 1.59) -> target 60 read 262.25 Hz (+4.1 c) valid at 11.7 dB; at the file's own level it is INVALID at 8 dB, under the 10 dB rule.
+- Run-to-run spread is the honest residual: marimba C2 -> target 36 (unshifted) read +18.4, +12.4, -20.8, -33.9, -18.8 c over five 4 s runs, and -52.1 c on one 6 s run, so the whole-segment verdict crosses the 50 c gate intermittently. Hop-level analysis of three kept captures says the sustained pitch is much better than that single number: median +5.0, +2.4, -0.3 c with 86-89% of voiced hops within 50 c. The whole-segment estimate picks one loud window and drifts; the witness now prints the hop-level median alongside it and the verdict semantics are unchanged.
 ## 2093 Hz root: the tracker ceiling
 
 - Cause: the coarse grid in `pickFundamental` tops out at 1581.12 Hz (lag 30), and `kExtFreqDetMaxHz` clamps at 1500 Hz. Any input above that can only be read at a sub-multiple.
