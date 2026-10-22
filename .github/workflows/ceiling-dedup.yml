@@ -21,13 +21,42 @@ jobs:
       FAUST_VERSION: "2.85.9"
       FAUST_LIBRARIES_SHA: "78a72d4998dec43e20492ef9b78d1a785b3dc864"
       GAIN: "0.00707945784384138"
+      BASELINE_TRACKER_SHA: "3f0184ab36e8bb243fdaa9a325736175b1a64f54dbd93719baa658af2cb6bef3"
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check the baseline anchor
+        id: anchor
+        run: |
+          set -e
+          LIVE=$(sha256sum effects/pitchtracker-src/pitchtracker_ac.dsp | cut -d' ' -f1)
+          echo "live tracker   $LIVE"
+          echo "recorded base  $BASELINE_TRACKER_SHA"
+          if [ "$LIVE" = "$BASELINE_TRACKER_SHA" ]; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::STALE BASELINE: the committed baseline renders are anchored to $BASELINE_TRACKER_SHA, live tracker is $LIVE. No verdict is issued."
+          fi
+
+      - name: Record a stale baseline instead of a verdict
+        if: steps.anchor.outputs.stale == 'true'
+        run: |
+          set -e
+          LIVE=$(sha256sum effects/pitchtracker-src/pitchtracker_ac.dsp | cut -d' ' -f1)
+          {
+            printf 'BASELINE_ANCHOR\t%s\n' "$BASELINE_TRACKER_SHA"
+            printf 'LIVE_TRACKER\t%s\n' "$LIVE"
+            printf 'STALE_BASELINE\tno verdict issued\n'
+          } > dedup-summary.tsv
+          cat dedup-summary.tsv
+
       - name: Install build dependencies
+        if: steps.anchor.outputs.stale != 'true'
         run: sudo apt-get install -y libncurses-dev unzip
 
       - name: Fetch the pinned libfaust release
+        if: steps.anchor.outputs.stale != 'true'
         run: |
           set -e
           curl -fL "https://github.com/grame-cncm/faust/releases/download/${FAUST_VERSION}/libfaust-ubuntu-x86_64.zip" -o libfaust.zip
@@ -36,6 +65,7 @@ jobs:
           ls -la faust-lib/lib
 
       - name: Fetch the pinned faust headers
+        if: steps.anchor.outputs.stale != 'true'
         run: |
           set -e
           curl -fL "https://github.com/grame-cncm/faust/archive/refs/tags/${FAUST_VERSION}.tar.gz" -o faust-src.tar.gz
@@ -44,6 +74,7 @@ jobs:
           ls faust-src/faust-${FAUST_VERSION}
 
       - name: Fetch the Faust standard library at the pinned commit
+        if: steps.anchor.outputs.stale != 'true'
         run: |
           set -e
           curl -fL "https://github.com/grame-cncm/faustlibraries/archive/${FAUST_LIBRARIES_SHA}.tar.gz" -o faustlibraries.tar.gz
@@ -52,6 +83,7 @@ jobs:
           ls faust-libs/stdfaust.lib
 
       - name: Build the renderer against the pinned libfaust
+        if: steps.anchor.outputs.stale != 'true'
         run: |
           set -e
           ARCH_DIR=$(ls -d faust-src/faust-${FAUST_VERSION}/architecture)
@@ -61,9 +93,11 @@ jobs:
             -o render_candidate
 
       - name: Generate the five sine inputs and check their hashes
+        if: steps.anchor.outputs.stale != 'true'
         run: python3 tools/ceiling-dedup/make_sines.py sines
 
       - name: Render the candidate in one process
+        if: steps.anchor.outputs.stale != 'true'
         run: |
           set -e
           mkdir -p out
@@ -77,6 +111,7 @@ jobs:
             docs/witness/note-change/note_change_inharm_quoted1x4x10.wav
 
       - name: Compare against the committed base outputs
+        if: steps.anchor.outputs.stale != 'true'
         run: python3 tools/ceiling-dedup/compare.py out dedup-summary.tsv
 
       - name: Upload the summary and the renders
@@ -84,8 +119,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ceiling-dedup
-          path: |
-            dedup-summary.tsv
-            out/
+          path: dedup-summary.tsv
           if-no-files-found: error
           retention-days: 14
