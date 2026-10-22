@@ -508,6 +508,12 @@ async function runLock() {
   console.log(`[loopback-witness] octave jumps in first 2s: ${jumps}${jumpAt.length ? ` [${jumpAt.join('; ')}]` : ''} of ${valid.length} valid hops`);
   const offOct = valid.filter((t) => Math.abs(Math.round(centsBetween(t.hz, expectedHz) / 1200)) >= 1).length;
   console.log(`[loopback-witness] hops an octave or more off target: ${offOct}/${valid.length}`);
+  const hopCents = valid.map((t) => centsBetween(t.hz, expectedHz)).sort((a, b) => a - b);
+  const hopMedian = hopCents.length ? hopCents[Math.floor(hopCents.length / 2)] : null;
+  const hopWithin = hopCents.length ? (100 * hopCents.filter((c) => Math.abs(c) <= 50).length) / hopCents.length : null;
+  if (hopMedian !== null) {
+    console.log(`[loopback-witness] hop-level median ${hopMedian >= 0 ? '+' : ''}${hopMedian.toFixed(1)} cents over ${hopCents.length} valid hops, ${hopWithin.toFixed(0)}% within 50 cents (robust; the whole-segment estimate below is a single window and drifts)`);
+  }
   writeRecord({ note: lock.note, expectHz: expectedHz, verdict: 'INVALID', lockHz: null, cents: null, octavesOff: null, segRms: segStats.rms, silentRms, validHops: valid.length });
   if (!verdictValid) {
     console.log(`[loopback-witness] LOCK note=${lock.note} expect ${expectedHz.toFixed(2)} Hz INVALID (seg rms ${segStats.rms.toFixed(6)} silent rms ${silentRms.toFixed(6)} ${segDb.toFixed(1)} dB over silent, need ${kMinSilentDb} dB, ${valid.length} valid hops): no measurement, excluded from octave count`);
