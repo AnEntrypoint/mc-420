@@ -422,3 +422,47 @@ the same 17 blocks.
 - Vibraphone C5 (target 74, 587.33 Hz): INVALID at 9.9 dB over silence. It publishes 530 Hz, then 6.1 to 7.1 kHz junk after the attack.
 - Violin C7 (target 98, 2349.32 Hz): INVALID at 6.1 dB. It settles near 2080 Hz for most of the note, and the same 6 to 7 kHz attack junk appears.
 - Reading: the attack-junk defect is not piano-specific. It appears on guitar, vibraphone and violin. The validity rule rejects vibraphone and violin at this level, so their pitch numbers are not measurements.
+
+## Shipped builds
+
+- `ffaa83d`: 1274080 B, md5 `170f0ee76b1ff9390a0a6f56354c5f43`, CI `38130094189` (audience gate snapped). `d316e22` (1273936 B) is the `/opt/aloop/aloop.prev-inputroute`-era baseline. Input-routing build `0947f3a`+`9cdcae0`: 1274544 B, md5 `27d9a864a69bc204425b2226e0c97b47`, CI `38123683795`; control WITNESSED, audio still blocked on clean ingress.
+
+## Effect parity
+
+- Effect parity (#3), fixed `a9ae078`, deployed; CI `38117216623`: 24 cases, 21 gated, 0 fail. `record_vs_cue` is exact, and the regress rows catch the un-fix.
+
+## Host build limits
+
+- This host: no cmake, no X11/GL/freetype/alsa headers, uid 1000 so no apt, so a clean-install check is a CI job, never a local run. A Linux clean install on ubuntu-latest additionally needed the GL development packages, plus freetype via `CPATH`.
+
+## ENGAGED latch
+
+- `engagedZone` written 1.0 and never cleared left the pitch stage engaged for process life after one mod-wheel touch: a permanent 128-sample (2.667 ms) latency plus an open FORMANT hiss path. Fixed `76350bd`; the else-branch costs one 128-sample discontinuity at disengage.
+
+## Latency bias
+
+- `latency_bias_samples = N + roundTripEst + trim`, from `capDelay + playDelay + N` averaged over 4 s (never a fast EMA). Resample (SHIFT) bias is derived: `round(D_dry*(1-f) + (2*blockSize + L_chain)*f)`, `f` = mean `combinedFold` over the take, `L_chain = 128*engagedFraction + 128*shiftFraction`.
+
+## Lock shift applied once
+
+- REFUTED `5e36cfa1` (row `lock-shift-applied-twice`, status stale, witness `.gm/witness/lock-shift-twice.txt`): the lock shift is applied exactly once. A 440.00 Hz sine locked to note 84 reads +0.1 c and to note 82 reads +0.4 c, where a doubled shift would read +1500 c and +1200 c. The claimed extra +4.5 to +4.9 c is source detuning: the pre-note-on f0 gives soprano_sax_high_C6 +16.6 c and trumpet_high_C6 +11.5 c against the 1046.50 Hz target, and a pure 1046.50 Hz sine locked to note 84 reads +33.2 c, so the live detector is -33.2 c at C6 and the lock carries that single tracker bias to the output one for one. The earlier attribution of mid-high error to a doubled shift (`246c9d9f`, `fac8896f`) is dead; the fix belongs in the tracker.
+
+## Corpus pitch reference (labels are not ground truth)
+
+- `.gm/witness/corpus-pitch-reference.txt` (`4acd1333`) records a measured spectral peak per swept file with harmonic margins; score against it, not the filename note. Files whose peak is nowhere near their label include `bassoon_low_C2B2` (label 65.41, peak 486.70, +3474.5 c), `tuba_run_C2B2` (65.41 / 496.50, +3509.1 c), `trumpet_low_A3` (220.00 / 1091.84, +2773.4 c) and `violin_low_sulG_G3B3` (196.00 / 394.71, +1211.9 c). Per-window medians (`11ab5e91`): sax 1052.13, trumpet 1048.63, clarinet 1049.63, cello 111.50 (+23.4 c against its label, mostly label error), vibraphone 590.81; oboe reads a partial. C6 labels are sound (+2 to +8 c); C5 reads 114 c low, so C5 numbers need their reference named. Output error against the target equals source/detected, so all live error is detector bias.
+
+## Confidence gates
+
+- `confidenceGate = 0.85` (`multitranspose.dsp`) gates re-tracking only; `kContGate = 0.50` (`snacPeriodTracker.h`) gates whether `confidence()` reports it. `updateContinuity` uses window `min(2p+128, SNAC_WIN)` and the best r over ±6%: `confidence()` >=0.50 on 96.3% of real-audio blocks with a good lock.
+
+## Refine spread is lag-proportional
+
+- `dfd4871a`: a 3-point parabola fitted at +-K around a lag sitting d samples off the true period returns a vertex biased by about d*(1 - x*cot(x)) with x = pi*K/period, so the bias grows as (K/period)^2. The old fixed +-16-sample window spanned about 70% of a period at C6, where the period is 46 samples. Measured offline (pinned flags, 64-sample blocks, 34-file corpus, gain 1.0, median of voiced frames from t>=1s, scored against each file's own measured spectral peak): soprano_sax_high_C6 -34.2 -> -3.2 c, clarinet_high_C6B6 -36.2 -> -0.5 c, trumpet_high_C6 -73.4 -> -6.8 c, cello_low_sulC_A2 -0.4 -> -0.4 c.
+
+## Granulator live-ring witness
+
+- Fresh-boot granulator test (`.gm/witness` via /tmp/gran3.js): A_dry in=0.3615 out=0.3042; B_gran_latched_nokey in=0.1054 out=0.0938; C_FIRST_note48_granular in=0.2627 out=0.2253; D_FIRST_note48_granular_2 in=0.3405 out=0.1650; E_released in=0.2157 out=0.1829. Loop health: Pi audio_peak.in 0.0001 -> 0.2542, peakOut -> 0.2643; Scarlett input capture ch04 = 0.8883, ch05 = 0.2961 against a ~0.00003 noise floor before the fix. Netboot reachability check on the same run: lease e4:5f:01:53:f0:ef at 192.168.137.132; ping, tcp/22 and tcp/9401 all answer; udp/4445 telemetry returns live JSON with xruns=0.
+
+## Witness metrics: hop-level median
+
+- `1da2e1a3`: the whole-segment estimate picks one loud window and drifts - marimba C2 against target 36 (unshifted) read +18.4, +12.4, -20.8, -33.9, -18.8 c over five 4 s runs and -52.1 c on one 6 s run - so judge a run by the hop-level median instead: +5.0, +2.4, -0.3 c with 86-89% of voiced hops within 50 c on three kept captures. `tools/witness-summary` parses the loopback logs; it records `NOT_DETECTED` as its own verdict (`c4fe3b08`), parses the octave-jump list (`fbbb6bc5`), and CI checks it on every push (`187fb6ab`).
