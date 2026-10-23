@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Corpus pitch reference","url":"https://anentrypoint.github.io/mc-420/witness/corpus-pitch-reference.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=ed7a44be919206a5e3dfbe2e635c9e70be940cfc">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d38508e7d1607e938a8ddf647572fb559ffa0764">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -157,6 +157,53 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
 files against the filename note charges the tracker for reference error it did not make. The C6
 files and <code class="language-plaintext highlighter-rouge">piano_mid_C4</code> are within about 5 c and can be scored against the label.</p>
 
+<p><code class="language-plaintext highlighter-rouge">marimba_mid_C5B5</code> is a PHRASE, not one note: four struck notes separated by about 46 dB of
+silence, rising chromatically. Measured here with 0.25 s Goertzel windows over all 10 s:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>note</th>
+      <th>onset</th>
+      <th>sustained peak</th>
+      <th>vs previous note</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>528.3 Hz</td>
+      <td>0.25 s</td>
+      <td>0.144 rms</td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td>558.9 Hz</td>
+      <td>3.23 s</td>
+      <td>0.180 rms</td>
+      <td>+99.6 c</td>
+    </tr>
+    <tr>
+      <td>590.4 Hz</td>
+      <td>5.75 s</td>
+      <td>0.051 rms</td>
+      <td>+95.4 c</td>
+    </tr>
+    <tr>
+      <td>628.8 Hz</td>
+      <td>8.50 s</td>
+      <td>0.129 rms</td>
+      <td>+109.3 c</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Its 559.64 entry above is the dominant pitch of that run, which happens to be the second note, so
+it is still a real fundamental - but a gate that holds one key across the run and reports a single
+whole-segment estimate is measuring the run, not a pitch. Against 558.94 the tracker reads -1.1 c
+(median over voiced windows, <code class="language-plaintext highlighter-rouge">.gm/witness/marimba-c5b5-detector-pick-and-lag.txt</code>), while the same
+6 s hold reports 548.43 Hz, +81.4 c against the 523.25 label. Score this file per note, or not at
+all.</p>
+
 <h2 id="not-reliable---do-not-score-against-the-filename-label">Not reliable - do not score against the filename label</h2>
 
 <p>The measured peak is a partial or phrase content, or the harmonic margin is too weak to call it the
@@ -207,6 +254,9 @@ fundamental. Each needs a better measurement before it is used as a ground-truth
 
 <p>Files whose names contain <code class="language-plaintext highlighter-rouge">_run_</code> or <code class="language-plaintext highlighter-rouge">_scale_</code> are phrases rather than single notes, and a
 highest-average-power method reports a dominant pitch for them, not the note a gate asks about.
+A <code class="language-plaintext highlighter-rouge">&lt;note&gt;&lt;octave&gt;&lt;note2&gt;&lt;octave2&gt;</code> range name is not proof of a single note either:
+<code class="language-plaintext highlighter-rouge">marimba_mid_C5B5</code> carries that shape and is a four-note run (see the note above), so measure any
+range-named file before using it as a single-note target.
 <code class="language-plaintext highlighter-rouge">vibraphone_mid_C5B5</code> had only 3 voiced windows here, so treat it as usable but soft.</p>
 
 <h2 id="rule">Rule</h2>

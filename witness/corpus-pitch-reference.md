@@ -32,6 +32,23 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
 files against the filename note charges the tracker for reference error it did not make. The C6
 files and `piano_mid_C4` are within about 5 c and can be scored against the label.
 
+`marimba_mid_C5B5` is a PHRASE, not one note: four struck notes separated by about 46 dB of
+silence, rising chromatically. Measured here with 0.25 s Goertzel windows over all 10 s:
+
+| note | onset | sustained peak | vs previous note |
+|---|---|---|---|
+| 528.3 Hz | 0.25 s | 0.144 rms | - |
+| 558.9 Hz | 3.23 s | 0.180 rms | +99.6 c |
+| 590.4 Hz | 5.75 s | 0.051 rms | +95.4 c |
+| 628.8 Hz | 8.50 s | 0.129 rms | +109.3 c |
+
+Its 559.64 entry above is the dominant pitch of that run, which happens to be the second note, so
+it is still a real fundamental - but a gate that holds one key across the run and reports a single
+whole-segment estimate is measuring the run, not a pitch. Against 558.94 the tracker reads -1.1 c
+(median over voiced windows, `.gm/witness/marimba-c5b5-detector-pick-and-lag.txt`), while the same
+6 s hold reports 548.43 Hz, +81.4 c against the 523.25 label. Score this file per note, or not at
+all.
+
 ## Not reliable - do not score against the filename label
 
 The measured peak is a partial or phrase content, or the harmonic margin is too weak to call it the
@@ -47,6 +64,9 @@ fundamental. Each needs a better measurement before it is used as a ground-truth
 
 Files whose names contain `_run_` or `_scale_` are phrases rather than single notes, and a
 highest-average-power method reports a dominant pitch for them, not the note a gate asks about.
+A `<note><octave><note2><octave2>` range name is not proof of a single note either:
+`marimba_mid_C5B5` carries that shape and is a four-note run (see the note above), so measure any
+range-named file before using it as a single-note target.
 `vibraphone_mid_C5B5` had only 3 voiced windows here, so treat it as usable but soft.
 
 ## Rule
