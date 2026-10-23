@@ -6,6 +6,9 @@ on:
       - 'effects/home/faust/multitranspose.dsp'
       - 'effects/pitchtracker-src/**'
       - 'test/pitch-tracker-transient/**'
+      - 'effects/home/faust/soladSnacOctaver.h'
+      - 'effects/home/faust/grainFormant.h'
+      - 'tools/formant-lab/**'
       - 'tools/dsp-cli/dsp_cli.cpp'
       - 'tools/dsp-cli/dsp_generated.cpp'
       - 'tools/corpus-pitch-metric/**'
@@ -37,6 +40,21 @@ jobs:
           g++ -O2 -std=c++17 -I tools/dsp-cli -I effects/home/faust \
             -o dsp_cli tools/dsp-cli/dsp_cli.cpp -lm
           ./dsp_cli --list-zones
+
+      - name: ensure audio corpus
+        run: |
+          if [ ! -f test-audio-corpus/instruments/piano_mid_C4.wav ]; then
+            python3 tools/chain-render/make_corpus.py test-audio-corpus/instruments
+          fi
+
+      - name: Build the formant meter
+        run: g++ -O2 -std=c++17 -o formant_meter tools/formant-lab/formant_meter.cpp -lm
+
+      - name: Measure the vocoder/formant layer over the corpus
+        run: |
+          python3 tools/formant-lab/measure-formant.py \
+            --dsp-cli ./dsp_cli --meter ./formant_meter \
+            --enforce authority,am,see,ripple,lmedian
 
       - name: Run interval-harmonizer onset accuracy check
         run: python3 test/pitch-tracker-transient/verify_highoctave_transient.py

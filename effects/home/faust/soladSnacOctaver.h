@@ -208,14 +208,22 @@ public:
                 m_grainFormant.suspend();
             }
             float fmNow = m_grainFormant.factorNow();
-            float dev = fmNow > 1.0f ? (fmNow - 1.0f) : (1.0f - fmNow);
+            float octNow = fmNow > 0.0f ? log2f(fmNow) : 0.0f;
+            float octScale = m_scale > 0.0f ? log2f(m_scale) : 0.0f;
+            float octWanted = octNow - octScale;
+            float dev = octNow < 0.0f ? -octNow : octNow;
+            float octWantedAbs = octWanted < 0.0f ? -octWanted : octWanted;
+            if (octWantedAbs < dev) dev = octWantedAbs;
             float mixTgt = dev <= kFormantDeadbandBlock
                            ? 0.0f
                            : (kFormantMixCap * (dev - kFormantDeadbandBlock) / (1.0f - kFormantDeadbandBlock));
             if (mixTgt > kFormantMixCap) mixTgt = kFormantMixCap;
             m_grainMixTarget = mixTgt;
             m_grainMix += (mixTgt - m_grainMix) * kFormantGlideInvSamples;
-            out[i] = y * (1.0f - m_grainMix) + gOut * m_grainMix;
+            float mix = m_grainMix;
+            float dryGain = 1.0f - mix;
+            float norm = 1.0f / sqrtf(dryGain * dryGain + mix * mix);
+            out[i] = (y * dryGain + gOut * mix) * norm;
 
             double adv = (double)m_scale + m_gapBias;
             m_rdA += adv;
