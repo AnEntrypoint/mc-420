@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=888ccaf4cbc0192ccbef982bd9310d10bf3eee0d">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=279f0b3c5d6639c21ae80086a5efdd35735a55d6">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -678,6 +678,35 @@ the same 17 blocks.</p>
 
 <ul>
   <li><code class="language-plaintext highlighter-rouge">1da2e1a3</code>: the whole-segment estimate picks one loud window and drifts - marimba C2 against target 36 (unshifted) read +18.4, +12.4, -20.8, -33.9, -18.8 c over five 4 s runs and -52.1 c on one 6 s run - so judge a run by the hop-level median instead: +5.0, +2.4, -0.3 c with 86-89% of voiced hops within 50 c on three kept captures. <code class="language-plaintext highlighter-rouge">tools/witness-summary</code> parses the loopback logs; it records <code class="language-plaintext highlighter-rouge">NOT_DETECTED</code> as its own verdict (<code class="language-plaintext highlighter-rouge">c4fe3b08</code>), parses the octave-jump list (<code class="language-plaintext highlighter-rouge">fbbb6bc5</code>), and CI checks it on every push (<code class="language-plaintext highlighter-rouge">187fb6ab</code>).</li>
+</ul>
+
+<h2 id="vocoder-and-formant-layer">Vocoder and formant layer</h2>
+
+<ul>
+  <li>Surface: <code class="language-plaintext highlighter-rouge">GrainFormant</code> (<code class="language-plaintext highlighter-rouge">effects/home/faust/grainFormant.h</code>) is the ONLY vocoder/formant layer;
+<code class="language-plaintext highlighter-rouge">soladSnacOctaver.h:88</code> maps <code class="language-plaintext highlighter-rouge">FORMANT</code> (octaves, -3..3) to <code class="language-plaintext highlighter-rouge">setFormantFactor(powf(2,d))</code>, clamped
+0.5..2, and mixes dry/grain at <code class="language-plaintext highlighter-rouge">kFormantMixCap=0.6</code>. No second pitch estimate exists for it: it
+reads <code class="language-plaintext highlighter-rouge">m_lastGoodPeriodF</code> from the same SNAC tracker as the transpose.</li>
+  <li>Measured with <code class="language-plaintext highlighter-rouge">tools/formant-lab/</code> (<code class="language-plaintext highlighter-rouge">measure-formant.py</code> drives <code class="language-plaintext highlighter-rouge">dsp_cli --solad</code>,
+<code class="language-plaintext highlighter-rouge">formant_meter.cpp</code> reads wavs): 34 corpus files x semis {-12, 0, +12} x dial {-1, 0, +1}, steady
+middle 60%, ENV = log2(centroid/dry centroid), ECS(d) = ENV(d)-ENV(0).</li>
+  <li>Before -&gt; after (median over 204 cases): |ECS(-1)| 0.079 -&gt; 0.504 oct; |ECS(+1)| 0.717 -&gt; 0.713;
+SEE |ECS(d)-d| 0.896 -&gt; 0.437 oct; |L| = |20log10(rms(d)/rms(0))| 2.72 -&gt; 0.37 dB median and
+9.45 -&gt; 4.12 dB worst; dAM +0.06 -&gt; +0.00 dB; dRIPPLE -1.89 -&gt; -0.26 dB.</li>
+  <li>Fixes: (1) mix now tracks the OCTAVE deviation <code class="language-plaintext highlighter-rouge">log2(fm)</code>, not the linear <code class="language-plaintext highlighter-rouge">|fm-1|</code>, so the dial is
+symmetric (before, -1 got 0.29 mix against +1’s 0.60); (2) equal-power dry/grain normalisation
+<code class="language-plaintext highlighter-rouge">1/sqrt((1-mix)^2+mix^2)</code> (the two paths are phase-incoherent whenever fm != 1, so a linear
+crossfade dipped ~2.8 dB); (3) mix is additionally bounded by <code class="language-plaintext highlighter-rouge">|log2(fm)-log2(scale)|</code>, so the
+layer is not blended in where its envelope already matches the dry path (dial -1 at -12 semis,
+dial +1 at +12 semis: now exactly 0.000 oct and 0.00 dB). Zero added latency; identical at fm=1.</li>
+  <li>PRE-REGISTERED GATE M1 monotonicity is DEGENERATE and unmeetable as written: the ideal
+displacement is <code class="language-plaintext highlighter-rouge">d - semis/12</code>, which is 0 for 68 of 204 cases (semis=-12/dial=-1 and
+semis=+12/dial=+1), where the correct answer has no sign. Over the 136 non-degenerate cases
+monotonicity is 0.971 (was 0.784 before, over the same 136).</li>
+  <li>OPEN: worst-case |L| 4.12 dB (gate 3.0) on soprano_sax_high_C6 and clarinet_high_C6B6 at dial -1.
+The grain layer’s own gain there is ~0.34, i.e. grains emitted at a tracked period that is not one
+source period cancel at the hop – a TRACKER defect leaking into the layer, not a mix-math defect.
+Not masked with a wet-path AGC: that would restore the RMS while leaving the cancellation.</li>
 </ul>
 
 

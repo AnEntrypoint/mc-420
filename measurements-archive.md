@@ -477,3 +477,31 @@ the same 17 blocks.
 ## Witness metrics: hop-level median
 
 - `1da2e1a3`: the whole-segment estimate picks one loud window and drifts - marimba C2 against target 36 (unshifted) read +18.4, +12.4, -20.8, -33.9, -18.8 c over five 4 s runs and -52.1 c on one 6 s run - so judge a run by the hop-level median instead: +5.0, +2.4, -0.3 c with 86-89% of voiced hops within 50 c on three kept captures. `tools/witness-summary` parses the loopback logs; it records `NOT_DETECTED` as its own verdict (`c4fe3b08`), parses the octave-jump list (`fbbb6bc5`), and CI checks it on every push (`187fb6ab`).
+
+
+## Vocoder and formant layer
+
+- Surface: `GrainFormant` (`effects/home/faust/grainFormant.h`) is the ONLY vocoder/formant layer;
+  `soladSnacOctaver.h:88` maps `FORMANT` (octaves, -3..3) to `setFormantFactor(powf(2,d))`, clamped
+  0.5..2, and mixes dry/grain at `kFormantMixCap=0.6`. No second pitch estimate exists for it: it
+  reads `m_lastGoodPeriodF` from the same SNAC tracker as the transpose.
+- Measured with `tools/formant-lab/` (`measure-formant.py` drives `dsp_cli --solad`,
+  `formant_meter.cpp` reads wavs): 34 corpus files x semis {-12, 0, +12} x dial {-1, 0, +1}, steady
+  middle 60%, ENV = log2(centroid/dry centroid), ECS(d) = ENV(d)-ENV(0).
+- Before -> after (median over 204 cases): |ECS(-1)| 0.079 -> 0.504 oct; |ECS(+1)| 0.717 -> 0.713;
+  SEE |ECS(d)-d| 0.896 -> 0.437 oct; |L| = |20log10(rms(d)/rms(0))| 2.72 -> 0.37 dB median and
+  9.45 -> 4.12 dB worst; dAM +0.06 -> +0.00 dB; dRIPPLE -1.89 -> -0.26 dB.
+- Fixes: (1) mix now tracks the OCTAVE deviation `log2(fm)`, not the linear `|fm-1|`, so the dial is
+  symmetric (before, -1 got 0.29 mix against +1's 0.60); (2) equal-power dry/grain normalisation
+  `1/sqrt((1-mix)^2+mix^2)` (the two paths are phase-incoherent whenever fm != 1, so a linear
+  crossfade dipped ~2.8 dB); (3) mix is additionally bounded by `|log2(fm)-log2(scale)|`, so the
+  layer is not blended in where its envelope already matches the dry path (dial -1 at -12 semis,
+  dial +1 at +12 semis: now exactly 0.000 oct and 0.00 dB). Zero added latency; identical at fm=1.
+- PRE-REGISTERED GATE M1 monotonicity is DEGENERATE and unmeetable as written: the ideal
+  displacement is `d - semis/12`, which is 0 for 68 of 204 cases (semis=-12/dial=-1 and
+  semis=+12/dial=+1), where the correct answer has no sign. Over the 136 non-degenerate cases
+  monotonicity is 0.971 (was 0.784 before, over the same 136).
+- OPEN: worst-case |L| 4.12 dB (gate 3.0) on soprano_sax_high_C6 and clarinet_high_C6B6 at dial -1.
+  The grain layer's own gain there is ~0.34, i.e. grains emitted at a tracked period that is not one
+  source period cancel at the hop -- a TRACKER defect leaking into the layer, not a mix-math defect.
+  Not masked with a wet-path AGC: that would restore the RMS while leaving the cancellation.
