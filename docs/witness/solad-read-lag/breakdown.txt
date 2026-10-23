@@ -1,0 +1,68 @@
+Latency breakdown, measured offline 2026-10-23. Device unavailable, so every
+number here is either device telemetry already recorded in
+docs/measurements-archive.md#latency-bias or an offline dsp_cli render.
+Row: latency-solad-read-lag
+
+IDLE BIAS (device status 2026-10-18, recorded in the archive)
+  latency_bias_samples 323.3 = 6.74 ms
+  = N 64 + alsa_roundtrip_samples 259.3 + latency_trim_samples 0.0
+  src/dsp/audio_thread.cpp:1459  roundTripNow = capDelay + playDelay + N
+  src/dsp/audio_thread.cpp:1474  latencyBiasSamples = N + roundTripEst + trim
+  ALSA: period 64, buffer_size period*4 (src/dsp/audio_thread.cpp:553),
+        start_threshold = avail_min = period (src/dsp/audio_thread.cpp:560-561)
+  259.3 of the 323.3 samples is ALSA/USB. Nothing in it is reachable offline.
+
+ENGAGED FREE-TRANSPOSE STAGE (the constant on top, AGENTS.md "128 smp engaged")
+  64 = DUBFX_BS block buffering, effects/home/faust/pitch_ffi.h:24;
+       dubfx_pitch_tick emits outBuf one 64-sample block late (pitch_ffi.h:35-43)
+  64 = SOLA read lag, INITIAL_READ_OFFSET_DEFAULT
+       effects/home/faust/soladSnacOctaver.h:251; read head sits at
+       m_wr - offset (soladSnacOctaver.h:145-146 and :487)
+  derived: engaged latency = 63 + gap, so 127 at gap 64. gap is the only knob
+  once the block size is fixed.
+
+OFFLINE PROXY: --solad gapMean (tools/dsp-cli/dsp_cli.cpp:894), 34 corpus
+files x semis {0, +7, -5}, normrms=0.21, glitches at threshold=0.25 minGapMs=5.
+  baseline  semis=0   gapMean 64.00    splices 0  emergency 0  clamped 0
+  baseline  semis=+7  gapMean 301.82   emergency 0  clamped 9317254
+  baseline  semis=-5  gapMean 3351.66  emergency 0  clamped 0
+  baseline glitches, all 102 renders: 667
+
+CANDIDATES MEASURED (block_size, ALSA period and ALSA buffer_size untouched)
+  INITIAL_READ_OFFSET_DEFAULT 64 -> 48
+    semis=0 gapMean 48.00, glitches 662 (total lower)
+    post-warmup regressions on 5 files: flute_trill_high_C7|+7 6->7,
+    glockenspiel_high_C7|-5 1->2, marimba_low_C2B2|-5 0->1,
+    marimba_mid_C5B5|-5 0->1, violin_high_sulE_C7E7|+7 12->13
+    clamped up on 33 files at semis=+7. FAIL R2 and R3.
+  INITIAL_READ_OFFSET_DEFAULT 64 -> 32
+    semis=0 gapMean 32.00, glitches 673
+    post-warmup regressions on 4 files: flute_trill_high_C7|+7 6->7,
+    bells_glock_run_C6B6|+7 1->2, tuba_run_C2B2|-5 42->43,
+    xylophone_roll_AM_C6B6|-5 16->19
+    clamped up on 33 files at semis=+7. FAIL R2 and R3.
+  kUpshiftLagPeriods 1.5 -> 1.0 (soladSnacOctaver.h:256)
+    semis=+7 gapMean 301.82 -> 22.81, a genuine 279-sample cut, but
+    clamped 9317254 -> 17564843 and achieved pitch collapses on 27 files
+    (bassoon_low_C2B2 729.57 -> 487.44 Hz, i.e. the unshifted value). The cut
+    is bought by destroying the shift. FAIL R4. REJECTED.
+
+WARMUP-BOUNDARY ARTIFACT, excluded from the regression lists above
+  The first post-warmup output is a step from exact silence at sample 1024
+  = m_warmup = SNAC_WIN (soladSnacOctaver.h:22). It is present in every
+  variant including the baseline; offsets 48 and 32 each trip the 0.25
+  threshold on one file where 64 does not. Counts above exclude glitches
+  before sample 1264 (1024 + minGap 240).
+
+WHY DUBFX_BS IS NOT THE KNOB
+  The SNAC sweep steps on BLOCK=64 (snacPeriodTracker.h:14, :68-69) and
+  soladSnacOctaver.h:116 calls stepSchedule(n) once per processBlock, so a
+  32-sample chunk double-steps the sweep. AGENTS.md: step MUST stay
+  block-aligned (m_sinceBlock==0).
+
+NEXT DEVICE-GATED CANDIDATE, not shipped
+  ALSA buffer_size period*4 -> period*2 (src/dsp/audio_thread.cpp:553). If
+  playDelay tracks buffer - period this is worth up to about 128 samples of
+  roundTripEst, far more than anything on the DSP side. It cannot be witnessed
+  without the Pi and the failure mode is xruns, so it stays unshipped and is
+  recorded here for a device run.
