@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=dfd4871a80b6d6bdd96db60a5e14dcbe8e9b10ea">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=59e9ea2d08e55988e598f6e0c6229d6aa22b3233">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -99,6 +99,20 @@
       </tbody>
     </table>
   </li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>Joint runs with the esp-idf-link session (ESP32 D1 R32 as STA on <code class="language-plaintext highlighter-rouge">ticker</code>, 192.168.4.10, gw 192.168.4.1). Post-acquisition means t &gt; +60 s from a cold boot, because opening the ESP’s USB console resets the board, so ~43 s of boot-and-acquire is not a link failure. Window 07:20:52Z-07:30:52Z: 600 samples, retention 100%, bpm spread 0.0000, max</td>
+          <td>phase_err_beats</td>
+          <td>0.0000, eff_speed spread 0.00000, zero drops; my independent 488-sample capture of the same window agreed on every term. Window 07:35:28Z-08:06:08Z: 1798 samples, retention 99.7%, one drop at 08:01:29Z recovering in 5387 ms - operator-induced, my tracker lane running <code class="language-plaintext highlighter-rouge">rc-service aloop restart</code> to install commit <code class="language-plaintext highlighter-rouge">dfd4871a80</code>. The ESP’s <code class="language-plaintext highlighter-rouge">peerloss:</code> line at that transition read flag=1 ap=0 ap_sta=0 ip=192.168.4.10 rssi=-33 chan=6 igmp(ok=53 fail=0), so Wi-Fi and IP were healthy and only the Link session died.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>~1% ICMP loss on the mesh is NOT a fault. Pi (192.168.4.1) to ESP (192.168.4.10) at 1 Hz: 17 losses of 1765 in one window, 5 of 563 in another, while Link retention stayed 100% and peers stayed 1. The Link session rides through brief loss, so the bar for “IP path down” is far worse than a few missed pings.</li>
+  <li>Discriminator for any future peer drop: run ICMP and a 20812 poll from the Pi together. A datagram of 1-64 bytes to 192.168.4.10:20812 gets a JSON reply (link, peers, bpm, beat, phase, quantum, metro) and cannot perturb Link; its only side effect is holding the ESP’s LCLK at 50 Hz and TTMP at 10 Hz for 15 s. ICMP alive with peers:0 means session state died on a healthy IP path; both dead means the IP path. In a frozen window the ESP beat counter was monotonic (0 decreases over 388 samples), which is how an unexplained ESP reboot would appear.</li>
+  <li>The Pi’s clock is unset, about 926 days behind the host. Pi-side logs carry Pi epoch: align with that offset, and set the clock only in a gap between windows with an aloop restart after, since a ~926-day step on a running PREEMPT_RT audio process would itself perturb a run.</li>
 </ul>
 
 <h2 id="soaks-and-route-flap">Soaks and route flap</h2>
