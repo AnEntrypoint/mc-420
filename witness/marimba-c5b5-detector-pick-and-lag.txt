@@ -1,0 +1,105 @@
+row: marimba-c5b5-detector-83c-low
+verdict: PREMISE REFUTED, row left OPEN. The AC tracker does not sit 83 c
+  low on this file. Measured against 558.94 Hz it is -1.1 c (median over
+  voiced windows); the pick is right and the refinement is right. The 83 c
+  belongs to the measurement, not to the detector, and no detector change
+  closes it.
+references used: 558.94 Hz (docs/witness/corpus-pitch-reference.md), checked
+  here by Goertzel on the file itself = 559.10 Hz over 0.3-4.0 s and
+  558.95 Hz over 1.0-5.0 s. Every cents figure below is against 558.94.
+
+1. THE FILE IS A FOUR-NOTE CHROMATIC RUN, NOT ONE NOTE
+   Per-0.25 s Goertzel on test-audio-corpus/instruments/marimba_mid_C5B5.wav
+   (10.0 s, 48 kHz mono):
+     528.3 Hz  onset ~0.25 s  peak window rms 0.144   (+16.6 c vs C5 523.25)
+     558.9 Hz  onset ~3.23 s  peak window rms 0.180
+     590.4 Hz  onset ~5.75 s  peak window rms 0.051
+     628.8 Hz  onset ~8.50 s  peak window rms 0.129
+   Between notes the file sits at rms 0.0002 (-46 dB under the notes).
+   Step ratios +99.6 c, +95.4 c, +109.3 c: a chromatic ascending run.
+   The label "C5" is one note of four, and 558.94 is the second.
+
+2. THE PICK AND THE REFINEMENT ARE BOTH CORRECT AT 558.94
+   Faithful per-sample re-implementation of
+   effects/pitchtracker-src/pitchtracker_ac.dsp (20 Hz one-pole highpass,
+   the 40-candidate grid with tauFor, refineSpreadK, corrPeakAt demote,
+   corrRawAt promote, confirmSamples hold, energyReady/holdLastGood) run on
+   the file, compared against per-window Goertzel ground truth:
+     note 2 (558.9 Hz):  coarse pick 587.0 -> lagFor = int(48000/587) = 81
+                         K = refineSpreadK(81) = int(0.1*81+0.5) = 8
+                         taps 73 / 81 / 89, cLo 0.6020 cMid 0.9514 cHi 0.9845
+                         vertex lag 85.84 -> 559.19 Hz
+                         true period 48000/558.94 = 85.88 samples, so the
+                         chosen lag is 0.04 samples (-0.8 c) off
+                         median over voiced windows -1.1 c (n=6, p10 -3.2,
+                         p90 +2.9): range -5.8 .. +1.6 c
+     note 1 (528.3 Hz):  pick 508.21 -> lag 94, K=9, vertex lag 90.8-91.1
+                         vs true 90.86: -5.4 .. +2.9 c
+     note 3 (590.4 Hz):  pick 587.0 -> lag 81, K=8, vertex lag 81.15-81.82
+                         vs true 81.30: -10.9 .. +1.0 c
+   A neighbour pick is not happening: 587.0 is the nearest grid point above
+   558.94 (the one below, 508.21, reads 0.763 at lag 94 against 0.946 at
+   lag 81), and the refinement carries the pick from lag 81 to 85.84, i.e.
+   onto the true period. The demote test does not fire at 558.94:
+   corrPeakAt(293.5) = 0.802 < corrThresh 0.85.
+
+3. CORRELATION AT THE TRUE LAG
+   Long-window normalized autocorrelation, 1.0-5.0 s window:
+     lag 81 (the picked grid lag, 592.6 Hz) 0.94647
+     lag 85                                 0.99323  <- argmax
+     lag 86 (nearest integer to 85.88)      0.98966
+     lag 89                                 0.94280
+     lag 94 (the next grid point down)      0.76275
+   The tracker's own 10 ms one-pole estimator reads 0.9514 at lag 81 and
+   0.9845 at lag 89, so cHi > cMid and the parabola vertex is pushed to
+   85.84. The estimator is on the peak, not off it.
+
+4. THE DEVICE TRACE ALREADY AGREES
+   .gm/witness/tracker-marimba-c5-anchor-not-tracker.txt step 2 records
+   live [diag-extfreq] raw=559.21 anchor=558.63 and raw=586.55:
+     559.21 vs 558.94 = +0.8 c   586.55 vs 590.35 = -11.1 c
+   and this row's own description states the device raw trace spans
+   528.46-560.09, which is note 1 (528.3) and note 2 (558.9) read
+   correctly. 533.3 Hz appears nowhere in any tracker output.
+
+5. WHERE THE 83 c ACTUALLY COMES FROM
+   tools/loopback-witness/loopback-witness.js holds one keybed note for
+   5.25 s and reports ONE number: estimateF0(settleSegment(captured,
+   noteOnMs)), a single whole-segment estimate over ~5.5 s (line 484, 531).
+   That window covers note 1 and note 2 of the run. The lock holds note 1's
+   interval (72 - 72.16 = -0.16 semitones) through note 2's re-acquisition:
+   energyReady needs 1680 samples (35 ms) above floor and the coarse pick
+   then needs ~30 ms to settle, so note 2's first ~68 ms passes through at
+   558.94 * 2^(-0.16/12) = 553.85 Hz. That first 68 ms is the mallet attack
+   and carries more energy (env 0.12) than the whole 0.7 s that follows
+   (env 0.0525 -> 0.0027), so it dominates the single estimate:
+     measured 548.43 / 548.21 / 545.96 Hz, predicted 553.85 Hz = -17 c
+   The 83 c is therefore a run-average artifact of a multi-note file read
+   with a single-segment estimator, not a detector bias.
+
+6. WHY NO DETECTOR CHANGE CLOSES IT
+   - coarse grid: the pick is already correct (step 2); the user froze it.
+   - demote margin: the demote never fires on this file (step 2); frozen.
+   - refineSpreadK: at L=81 K=8 and the vertex lands 0.04 samples off the
+     true period; changing K moves a -1.1 c residual, and dfd4871a80 must
+     not regress the C6/A2/A3 set.
+   - onsetHoldMs 35.0: this is the only detector knob in the path, and it
+     buys at most ~25 ms of the ~68 ms unshifted attack. It exists to stop
+     a fresh onset reading a spurious high-octave or floor candidate
+     (documented in the tracker's own description) and lowering it trades
+     a documented octave-lock failure for ~25 ms.
+   Re-acquisition cannot reach a few ms: corrAtLagTau's estimator is a
+   10 ms one-pole and 20 ms at >=575 Hz, which is the floor on any onset
+   lock. No change here moves 548.43 to the 538.9 Hz the acceptance needs
+   (50 c over 523.25) without one of those regressions.
+
+7. BLOCKING FACT
+   The acceptance criterion cannot be met on this file by any detector
+   change: marimba_mid_C5B5 is a four-note chromatic run and the witness's
+   single whole-segment estimator is not a valid measurement of a run. The
+   residual is downstream of pitchtracker_ac.dsp, in the lock's behaviour
+   across a run (multitranspose.dsp smoothedDetNote/heldDetNote, and the
+   confOk gate at line 92), which this row forbids touching. Do not trade
+   the verified refineSpreadK or the demote margin for it.
+
+8. sha256 of this file: SEE .gm/witness/SHA256SUMS.txt
