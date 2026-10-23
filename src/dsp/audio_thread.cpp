@@ -326,6 +326,7 @@ static void* worker(void*) {
     std::vector<float> resonodeInBuf((size_t)N, 0.0f);
     std::vector<float> pitchTrackerBuf((size_t)N, 60.0f);
     float extFreqGuardAnchor = 0.0f;
+    float extFreqGuardPrevAnchor = 0.0f;
     float extFreqTraceRaw = 0.0f;
     float extFreqGuardCandidate = 0.0f;
     int extFreqGuardStreakBlocks = 0;
@@ -1248,6 +1249,7 @@ static void* worker(void*) {
                 constexpr float kOctaveToleranceRatio = 1.05f;
                 constexpr int kSilenceResetBlocks = 40;
                 constexpr int kFreshOnsetConfirmBlocks = 3;
+                constexpr float kFreshOnsetOctaveHalfRatio = 0.70710678f;
                 constexpr float kTrackerFloorHz = 60.0f;
                 constexpr float kTrackerFloorMarginHz = 0.5f;
                 bool rawAtTrackerFloor = rawFreq > 0.0f &&
@@ -1276,7 +1278,15 @@ static void* worker(void*) {
                             extFreqGuardCandidate = rawFreq;
                             extFreqGuardStreakBlocks = 1;
                         }
-                        if (extFreqGuardStreakBlocks >= kFreshOnsetConfirmBlocks) {
+                        int requiredStreak = kFreshOnsetConfirmBlocks;
+                        if (extFreqGuardPrevAnchor > 0.0f) {
+                            float prevAnchorRatio = rawFreq / extFreqGuardPrevAnchor;
+                            bool octaveJumpVsPrevAnchor =
+                                prevAnchorRatio < kFreshOnsetOctaveHalfRatio ||
+                                prevAnchorRatio > 1.0f / kFreshOnsetOctaveHalfRatio;
+                            if (octaveJumpVsPrevAnchor) requiredStreak = kOctaveHardConfirmBlocks;
+                        }
+                        if (extFreqGuardStreakBlocks >= requiredStreak) {
                             extFreqGuardAnchor = rawFreq;
                             extFreqGuardCandidate = 0.0f;
                             extFreqGuardStreakBlocks = 0;
@@ -1313,6 +1323,7 @@ static void* worker(void*) {
                         }
                     }
                 }
+                if (extFreqGuardAnchor > 0.0f) extFreqGuardPrevAnchor = extFreqGuardAnchor;
             }
             if (extFreqDetZone) {
                 float extHz = extFreqGuardAnchor;
