@@ -327,6 +327,9 @@ static void* worker(void*) {
     std::vector<float> pitchTrackerBuf((size_t)N, 60.0f);
     float extFreqGuardAnchor = 0.0f;
     float extFreqGuardPrevAnchor = 0.0f;
+    constexpr int kKnownPitchSlots = 8;
+    float extFreqGuardKnownHz[kKnownPitchSlots] = {};
+    int extFreqGuardKnownNext = 0;
     float extFreqTraceRaw = 0.0f;
     float extFreqGuardCandidate = 0.0f;
     int extFreqGuardStreakBlocks = 0;
@@ -1250,6 +1253,18 @@ static void* worker(void*) {
                 constexpr int kSilenceResetBlocks = 40;
                 constexpr int kFreshOnsetConfirmBlocks = 3;
                 constexpr float kFreshOnsetOctaveHalfRatio = 0.70710678f;
+                constexpr float kKnownPitchRatio = 1.05f;
+                auto rememberPitch = [&](float hz) {
+                    if (hz <= 0.0f) return;
+                    for (int slot = 0; slot < kKnownPitchSlots; slot++) {
+                        float knownHz = extFreqGuardKnownHz[slot];
+                        if (knownHz <= 0.0f) continue;
+                        float knownRatio = hz / knownHz;
+                        if (knownRatio < kKnownPitchRatio && knownRatio > 1.0f / kKnownPitchRatio) return;
+                    }
+                    extFreqGuardKnownHz[extFreqGuardKnownNext] = hz;
+                    extFreqGuardKnownNext = (extFreqGuardKnownNext + 1) % kKnownPitchSlots;
+                };
                 constexpr float kTrackerFloorHz = 60.0f;
                 constexpr float kTrackerFloorMarginHz = 0.5f;
                 bool rawAtTrackerFloor = rawFreq > 0.0f &&
@@ -1284,12 +1299,23 @@ static void* worker(void*) {
                             bool octaveJumpVsPrevAnchor =
                                 prevAnchorRatio < kFreshOnsetOctaveHalfRatio ||
                                 prevAnchorRatio > 1.0f / kFreshOnsetOctaveHalfRatio;
-                            if (octaveJumpVsPrevAnchor) requiredStreak = kOctaveHardConfirmBlocks;
+                            if (octaveJumpVsPrevAnchor) {
+                                bool knownPitch = false;
+                                for (int slot = 0; slot < kKnownPitchSlots && !knownPitch; slot++) {
+                                    float knownHz = extFreqGuardKnownHz[slot];
+                                    if (knownHz <= 0.0f) continue;
+                                    float knownRatio = rawFreq / knownHz;
+                                    knownPitch = knownRatio < kKnownPitchRatio &&
+                                                 knownRatio > 1.0f / kKnownPitchRatio;
+                                }
+                                if (!knownPitch) requiredStreak = kOctaveHardConfirmBlocks;
+                            }
                         }
                         if (extFreqGuardStreakBlocks >= requiredStreak) {
                             extFreqGuardAnchor = rawFreq;
                             extFreqGuardCandidate = 0.0f;
                             extFreqGuardStreakBlocks = 0;
+                            rememberPitch(rawFreq);
                         }
                     } else {
                         bool plausibleVsAnchor = rawFreq < extFreqGuardAnchor * kJumpMaxRatio &&
@@ -1299,6 +1325,7 @@ static void* worker(void*) {
                             extFreqGuardAnchor = extFreqGuardAnchor * (1.0f - kAnchorSmoothCoeff) + rawFreq * kAnchorSmoothCoeff;
                             extFreqGuardCandidate = 0.0f;
                             extFreqGuardStreakBlocks = 0;
+                            rememberPitch(rawFreq);
                         } else {
                             bool candidatePlausible = extFreqGuardCandidate > 0.0f &&
                                 rawFreq < extFreqGuardCandidate * kJumpMaxRatio && rawFreq > extFreqGuardCandidate / kJumpMaxRatio;
