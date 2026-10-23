@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Corpus pitch reference | aloop</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Corpus pitch reference" />
+<meta property="og:locale" content="en_US" />
+<link rel="canonical" href="https://anentrypoint.github.io/mc-420/witness/corpus-pitch-reference.html" />
+<meta property="og:url" content="https://anentrypoint.github.io/mc-420/witness/corpus-pitch-reference.html" />
+<meta property="og:site_name" content="aloop" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Corpus pitch reference" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","headline":"Corpus pitch reference","url":"https://anentrypoint.github.io/mc-420/witness/corpus-pitch-reference.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=4acd13333361026842a3903a3cd554c73bb88c9b">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/mc-420/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1><a href="https://anentrypoint.github.io/mc-420/">aloop</a></h1>
+
+        
+
+        <p></p>
+
+        
+        <p class="view"><a href="https://github.com/AnEntrypoint/mc-420">View the Project on GitHub <small>AnEntrypoint/mc-420</small></a></p>
+        
+
+        
+
+        
+      </header>
+      <section>
+
+      <h1 id="corpus-pitch-reference">Corpus pitch reference</h1>
+
+<p>Measured peaks for the files the pitch gate uses. A filename-derived note is NOT evidence of a
+file’s pitch; measure before using one as a target.</p>
+
+<h2 id="method">Method</h2>
+
+<p>48 kHz mono wav, 16384-sample Goertzel windows, non-overlapping, first 6 s, power summed across
+windows, peak picked on a log-spaced grid from 40 Hz to 4000 Hz at 0.5 percent steps (about 8.6 c
+resolution). Sub-multiple test: if the power at peak/2, peak/3 or peak/4 is within 12 dB of the
+peak, the lower frequency is taken instead. <code class="language-plaintext highlighter-rouge">h2</code> and <code class="language-plaintext highlighter-rouge">h3</code> are the second and third harmonic margins
+in dB below the chosen peak - a large negative margin means the peak really is the fundamental.</p>
+
+<p>Witness: <code class="language-plaintext highlighter-rouge">.gm/witness/corpus-pitch-reference.txt</code>. Cross-checked against an independent
+power-averaged FFT with Hann windows at 50 percent overlap and parabolic interpolation (the two
+agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 vs 111.6).</p>
+
+<h2 id="reliable---peak-is-the-fundamental">Reliable - peak is the fundamental</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>file</th>
+      <th>filename note</th>
+      <th>measured peak</th>
+      <th>vs label</th>
+      <th>h2</th>
+      <th>h3</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>piano_mid_C4</td>
+      <td>C4 261.63</td>
+      <td>262.22</td>
+      <td>+3.9 c</td>
+      <td>-6.7</td>
+      <td>-22.0</td>
+    </tr>
+    <tr>
+      <td>marimba_low_C2B2</td>
+      <td>C2 65.41</td>
+      <td>65.21</td>
+      <td>-5.2 c</td>
+      <td>-37.0</td>
+      <td>-40.6</td>
+    </tr>
+    <tr>
+      <td>cello_low_sulC_A2</td>
+      <td>A2 110.00</td>
+      <td>111.76</td>
+      <td>+27.4 c</td>
+      <td>-2.4</td>
+      <td>-8.7</td>
+    </tr>
+    <tr>
+      <td>trumpet_high_C6</td>
+      <td>C6 1046.50</td>
+      <td>1049.13</td>
+      <td>+4.3 c</td>
+      <td>-7.3</td>
+      <td>-11.5</td>
+    </tr>
+    <tr>
+      <td>soprano_sax_high_C6</td>
+      <td>C6 1046.50</td>
+      <td>1049.13</td>
+      <td>+4.3 c</td>
+      <td>-16.7</td>
+      <td>-25.4</td>
+    </tr>
+    <tr>
+      <td>clarinet_high_C6B6</td>
+      <td>C6 1046.50</td>
+      <td>1049.13</td>
+      <td>+4.3 c</td>
+      <td>-22.9</td>
+      <td>-17.5</td>
+    </tr>
+    <tr>
+      <td>vibraphone_mid_C5B5</td>
+      <td>C5 523.25</td>
+      <td>527.13</td>
+      <td>+12.8 c</td>
+      <td>-28.5</td>
+      <td>-39.0</td>
+    </tr>
+    <tr>
+      <td>marimba_mid_C5B5</td>
+      <td>C5 523.25</td>
+      <td>559.64</td>
+      <td>+116.4 c</td>
+      <td>-42.1</td>
+      <td>-39.9</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><code class="language-plaintext highlighter-rouge">cello_low_sulC_A2</code> and <code class="language-plaintext highlighter-rouge">marimba_mid_C5B5</code> sit 27 c and 116 c above their labels, so scoring those
+files against the filename note charges the tracker for reference error it did not make. The C6
+files and <code class="language-plaintext highlighter-rouge">piano_mid_C4</code> are within about 5 c and can be scored against the label.</p>
+
+<h2 id="not-reliable---do-not-score-against-the-filename-label">Not reliable - do not score against the filename label</h2>
+
+<p>The measured peak is a partial or phrase content, or the harmonic margin is too weak to call it the
+fundamental. Each needs a better measurement before it is used as a ground-truth target.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>file</th>
+      <th>measured peak</th>
+      <th>vs label</th>
+      <th>why it is not reliable</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>bassoon_low_C2B2</td>
+      <td>486.70</td>
+      <td>+3474.5 c</td>
+      <td>peak is a high partial, not the C2 fundamental</td>
+    </tr>
+    <tr>
+      <td>tuba_run_C2B2</td>
+      <td>496.50</td>
+      <td>+3509.1 c</td>
+      <td><code class="language-plaintext highlighter-rouge">_run_</code> is a phrase, and 496.5 is not its fundamental</td>
+    </tr>
+    <tr>
+      <td>trumpet_low_A3</td>
+      <td>1091.84</td>
+      <td>+2773.4 c</td>
+      <td>about 5x the label; a partial</td>
+    </tr>
+    <tr>
+      <td>violin_low_sulG_G3B3</td>
+      <td>394.71</td>
+      <td>+1211.9 c</td>
+      <td>about 2x the label; second harmonic dominating</td>
+    </tr>
+    <tr>
+      <td>oboe_mid_C5B5</td>
+      <td>556.85</td>
+      <td>+107.8 c</td>
+      <td>h2 is +0.2 dB, so fundamental and 2nd harmonic tie</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Files whose names contain <code class="language-plaintext highlighter-rouge">_run_</code> or <code class="language-plaintext highlighter-rouge">_scale_</code> are phrases rather than single notes, and a
+highest-average-power method reports a dominant pitch for them, not the note a gate asks about.
+<code class="language-plaintext highlighter-rouge">vibraphone_mid_C5B5</code> had only 3 voiced windows here, so treat it as usable but soft.</p>
+
+<h2 id="rule">Rule</h2>
+
+<p>A gate that scores pitch against a target note must either use a measured peak from this table, or
+record the measurement it used with the run. Do not take the note from the filename.</p>
+
+
+      </section>
+      <footer>
+        
+        <p>This project is maintained by <a href="https://github.com/AnEntrypoint">AnEntrypoint</a></p>
+        
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="/mc-420/assets/js/scale.fix.js"></script>
+  </body>
+</html>
