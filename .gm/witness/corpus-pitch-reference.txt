@@ -1,0 +1,13 @@
+piano_mid_C4             label   261.63 | peak   262.22 | +3.9 c | h2 -6.7 h3 -22.0 | windows 11
+marimba_low_C2B2         label    65.41 | peak    65.21 | -5.2 c | h2 -37.0 h3 -40.6 | windows 13
+bassoon_low_C2B2         label    65.41 | peak   486.70 | +3474.5 c | h2 -37.4 h3 -42.0 | windows 17
+tuba_run_C2B2            label    65.41 | peak   496.50 | +3509.1 c | h2 -12.8 h3 -15.3 | windows 9
+trumpet_low_A3           label   220.00 | peak  1091.84 | +2773.4 c | h2 -11.4 h3 -24.8 | windows 12
+violin_low_sulG_G3B3     label   196.00 | peak   394.71 | +1211.9 c | h2 -13.6 h3 -23.6 | windows 17
+cello_low_sulC_A2        label   110.00 | peak   111.76 | +27.4 c | h2 -2.4 h3 -8.7 | windows 10
+trumpet_high_C6          label  1046.50 | peak  1049.13 | +4.3 c | h2 -7.3 h3 -11.5 | windows 12
+soprano_sax_high_C6      label  1046.50 | peak  1049.13 | +4.3 c | h2 -16.7 h3 -25.4 | windows 9
+clarinet_high_C6B6       label  1046.50 | peak  1049.13 | +4.3 c | h2 -22.9 h3 -17.5 | windows 7
+oboe_mid_C5B5            label   523.25 | peak   556.85 | +107.8 c | h2 0.2 h3 -10.8 | windows 11
+vibraphone_mid_C5B5      label   523.25 | peak   527.13 | +12.8 c | h2 -28.5 h3 -39.0 | windows 3
+marimba_mid_C5B5         label   523.25 | peak   559.64 | +116.4 c | h2 -42.1 h3 -39.9 | windows 8
