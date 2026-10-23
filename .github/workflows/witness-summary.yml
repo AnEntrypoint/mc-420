@@ -29,3 +29,9 @@ jobs:
         run: |
           printf '%s\n' '[loopback-witness] octave jumps in first 2s: 2 [t=300ms 500ms] of 20 valid hops' > "$RUNNER_TEMP/jumps.txt"
           node tools/witness-summary/summarise.mjs --json "$RUNNER_TEMP/jumps.txt" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);if(r.octave_jumps!==2||r.valid_hops!==20){console.error(JSON.stringify(r));process.exit(1)}console.log("octave_jumps "+r.octave_jumps)})'
+      - name: A one-sample phase spike is not a persistent excursion
+        run: |
+          printf '%s\n' '1792768968000 1 true 120 0 1' '1792768969000 1 true 120 0 1' '1792768970000 1 true 120 0.151 1' '1792768971000 1 true 120 0 1' > "$RUNNER_TEMP/spike.txt"
+          printf '%s\n' '1792768968000 1 true 120 0 1' '1792768969000 1 true 120 0.151 1' '1792768970000 1 true 120 0.160 1' '1792768971000 1 true 120 0 1' > "$RUNNER_TEMP/run2.txt"
+          node tools/witness-summary/summarise.mjs --json "$RUNNER_TEMP/spike.txt" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);if(r.phase_err_max!==0.151||r.phase_err_persistent!==0){console.error(JSON.stringify(r));process.exit(1)}console.log("spike max "+r.phase_err_max+" persistent "+r.phase_err_persistent)})'
+          node tools/witness-summary/summarise.mjs --json "$RUNNER_TEMP/run2.txt" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);if(r.phase_err_max!==0.16||r.phase_err_persistent!==1){console.error(JSON.stringify(r));process.exit(1)}console.log("run max "+r.phase_err_max+" persistent "+r.phase_err_persistent)})'

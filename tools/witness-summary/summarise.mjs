@@ -14,10 +14,13 @@ const num = (s) => (s === undefined ? null : Number(s));
 
 function parse(file) {
   const rec = {
+    file: path.basename(file), host: null,
     file: path.basename(file), host: null, play: null, source: null, note: null,
     expect_hz: null, lock_hz: null, cents: null, octaves_off: null, verdict: null, seg_rms: null,
     silent_rms: null, valid_hops: null, octave_jumps: null, trajectory: null, exit: null,
+    phase_err_max: null, phase_err_persistent: null, phase_samples: null,
   };
+  const phaseSamples = [];
   for (const line of fs.readFileSync(file, "utf8").split("\n")) {
     let m;
     if ((m = /^\[loopback-witness\] host=(\S+) play=(\S+)/.exec(line))) {
@@ -57,12 +60,35 @@ function parse(file) {
       if (cents) rec.cents = num(cents[1]);
     } else if ((m = /trajectory .*: (.+)$/.exec(line))) {
       rec.trajectory = m[1].trim().split(/\s+/).map((t) => (t === "-" ? null : Number(t)));
+    } else if ((m = /^(\d{13})\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+\S+)*\s*$/.exec(line))) {
+      const pe = Number(m[5]);
+      if (Number.isFinite(pe)) phaseSamples.push(pe);
     } else if ((m = /octave jumps in first 2s: (\d+)(?: \[[^\]]*\])? of (\d+) valid hops/.exec(line))) {
       rec.octave_jumps = num(m[1]);
       rec.valid_hops = num(m[2]);
     } else if ((m = /^exit=(\d+)/.exec(line))) {
       rec.exit = num(m[1]);
     }
+  }
+  if (phaseSamples.length) {
+    const thr = 0.03;
+    let maxAbs = 0;
+    let runs = 0;
+    let runLen = 0;
+    for (const pe of phaseSamples) {
+      const a = Math.abs(pe);
+      if (a > maxAbs) maxAbs = a;
+      if (a > thr) {
+        runLen += 1;
+      } else {
+        if (runLen >= 2) runs += 1;
+        runLen = 0;
+      }
+    }
+    if (runLen >= 2) runs += 1;
+    rec.phase_samples = phaseSamples.length;
+    rec.phase_err_max = maxAbs;
+    rec.phase_err_persistent = runs;
   }
   return rec;
 }
@@ -72,7 +98,8 @@ if (json) {
   for (const r of records) console.log(JSON.stringify(r));
 } else {
   const cols = ["file", "host", "play", "note", "expect_hz", "lock_hz", "cents", "octaves_off",
-    "verdict", "seg_rms", "silent_rms", "valid_hops", "octave_jumps", "exit"];
+    "verdict", "seg_rms", "silent_rms", "valid_hops", "octave_jumps", "phase_err_max",
+    "phase_err_persistent", "exit"];
   console.log(cols.join("\t"));
   for (const r of records) console.log(cols.map((c) => (r[c] === null ? "-" : r[c])).join("\t"));
 }
