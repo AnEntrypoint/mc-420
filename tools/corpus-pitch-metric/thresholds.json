@@ -1,0 +1,8 @@
+{
+  "_source": "min_scored_files 7 = the reliable rows of docs/witness/corpus-pitch-reference.md minus the one row that table marks as a phrase (marimba_mid_C5B5). octave_cents_tolerance 50 = half a semitone. max_median_regression_cents 8.6 = one step of the reference table's own peak grid (0.5 percent steps at about 8.6 c), so a candidate may not move a file's median further than the reference itself can resolve. max_regressed_files 0 = any file that moves by more than that is a regression. No absolute median or p90 limit is set on purpose: whole-file medians on this corpus are dominated by the onset and decay-tail octave errors that docs/witness/corpus-pitch-reference.md and PRD defect-transient-onset-and-gross-errors already record as open, so any absolute limit picked today would be a number fitted to a run rather than a limit derived from evidence.",
+  "_note": "Edit this file only for a reason that predates a run. Every report records thresholds_sha256, and --baseline refuses to diff against a run taken under different thresholds, a different reference table or a different --semis.",
+  "min_scored_files": 7,
+  "octave_cents_tolerance": 50.0,
+  "max_median_regression_cents": 8.6,
+  "max_regressed_files": 0
+}

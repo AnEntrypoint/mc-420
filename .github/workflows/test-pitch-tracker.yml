@@ -8,6 +8,8 @@ on:
       - 'test/pitch-tracker-transient/**'
       - 'tools/dsp-cli/dsp_cli.cpp'
       - 'tools/dsp-cli/dsp_generated.cpp'
+      - 'tools/corpus-pitch-metric/**'
+      - 'docs/witness/corpus-pitch-reference.md'
       - '.github/workflows/test-pitch-tracker.yml'
   workflow_dispatch:
 
@@ -50,6 +52,51 @@ jobs:
 
       - name: Run voice-as-bass diagnostic (non-blocking)
         run: python3 test/pitch-tracker-transient/verify_voice_as_bass.py
+
+  corpus-pitch-metric:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build dsp_cli from the committed Faust codegen
+        run: g++ -O2 -std=c++17 -I tools/dsp-cli -I effects/home/faust -o dsp_cli tools/dsp-cli/dsp_cli.cpp -lm -lpthread
+
+      - name: Without thresholds no number is printed
+        run: |
+          set +e
+          out=$(node tools/corpus-pitch-metric/measure.mjs --corpus test-audio-corpus/instruments --dsp-cli "$PWD/dsp_cli" 2>&1)
+          rc=$?
+          set -e
+          if [ "$rc" -ne 2 ]; then printf '%s\n' "$out"; exit 1; fi
+          if printf '%s' "$out" | grep -Eq '[0-9]+\.[0-9]+'; then
+            printf '%s\n' "$out"
+            echo "a measurement was printed before thresholds were supplied"
+            exit 1
+          fi
+          echo "refused with exit 2 and no measurement printed"
+
+      - name: Measure the corpus against its measured peaks
+        run: |
+          node tools/corpus-pitch-metric/measure.mjs \
+            --corpus test-audio-corpus/instruments \
+            --dsp-cli "$PWD/dsp_cli" \
+            --thresholds tools/corpus-pitch-metric/thresholds.json \
+            --baseline tools/corpus-pitch-metric/baseline.json \
+            --out corpus-pitch-metric.json
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: corpus-pitch-metric
+          path: corpus-pitch-metric.json
+          if-no-files-found: error
+          retention-days: 14
 
   pitchtracker-native:
     runs-on: ubuntu-latest

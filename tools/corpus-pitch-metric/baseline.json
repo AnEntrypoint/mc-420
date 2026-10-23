@@ -1,0 +1,311 @@
+{
+  "tool": "corpus-pitch-metric",
+  "metric_version": 1,
+  "generated_utc": "2026-10-23T16:32:01.574Z",
+  "reference": {
+    "path": "docs/witness/corpus-pitch-reference.md",
+    "sha256": "ad031786122d266d78bb340236e0fde2f85a0705a057da5f9a1cf7d08296a186",
+    "reliable_rows": 8,
+    "not_reliable_rows": 5
+  },
+  "corpus_dir": "test-audio-corpus/instruments",
+  "dsp_cli": "/tmp/dsp_cli",
+  "semis": 0,
+  "include_phrase": false,
+  "thresholds": {
+    "min_scored_files": 7,
+    "octave_cents_tolerance": 50,
+    "max_median_regression_cents": 8.6,
+    "max_regressed_files": 0
+  },
+  "thresholds_sha256": "7ae0d7213d6e547573bd725c9240b75db9dcfa5da308495de447b7b85aec0d7d",
+  "octave_cents_tolerance": 50,
+  "files": [
+    {
+      "file": "cello_low_sulC_A2",
+      "reference_peak_hz": 111.76,
+      "reference_hz": 111.76,
+      "label_hz": 110,
+      "label_peak_error_cents": 27.5,
+      "seconds": 4.682,
+      "frames": 53,
+      "voiced_frames": 52,
+      "median_abs_cents": 5.7,
+      "p10_abs_cents": 1.1,
+      "p90_abs_cents": 44.2,
+      "octave_errors": 0,
+      "phrase": false,
+      "gated": true,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "file": "clarinet_high_C6B6",
+      "reference_peak_hz": 1049.13,
+      "reference_hz": 1049.13,
+      "label_hz": 1046.5,
+      "label_peak_error_cents": 4.3,
+      "seconds": 10,
+      "frames": 125,
+      "voiced_frames": 69,
+      "median_abs_cents": 89.1,
+      "p10_abs_cents": 1.2,
+      "p90_abs_cents": 221.6,
+      "octave_errors": 2,
+      "phrase": false,
+      "gated": true,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "file": "marimba_low_C2B2",
+      "reference_peak_hz": 65.21,
+      "reference_hz": 65.21,
+      "label_hz": 65.41,
+      "label_peak_error_cents": -5.3,
+      "seconds": 10,
+      "frames": 154,
+      "voiced_frames": 114,
+      "median_abs_cents": 147.4,
+      "p10_abs_cents": 24.9,
+      "p90_abs_cents": 1883.4,
+      "octave_errors": 1,
+      "phrase": false,
+      "gated": true,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "file": "marimba_mid_C5B5",
+      "reference_peak_hz": 559.64,
+      "reference_hz": 559.64,
+      "label_hz": 523.25,
+      "label_peak_error_cents": 116.4,
+      "seconds": 10,
+      "frames": 152,
+      "voiced_frames": 69,
+      "median_abs_cents": 95.8,
+      "p10_abs_cents": 2,
+      "p90_abs_cents": 203.5,
+      "octave_errors": 0,
+      "phrase": true,
+      "gated": false,
+      "verdict": "NOT GATED",
+      "failures": []
+    },
+    {
+      "file": "piano_mid_C4",
+      "reference_peak_hz": 262.22,
+      "reference_hz": 262.22,
+      "label_hz": 261.63,
+      "label_peak_error_cents": 3.9,
+      "seconds": 8,
+      "frames": 122,
+      "voiced_frames": 115,
+      "median_abs_cents": 6.5,
+      "p10_abs_cents": 3.4,
+      "p90_abs_cents": 590.3,
+      "octave_errors": 6,
+      "phrase": false,
+      "gated": true,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "file": "soprano_sax_high_C6",
+      "reference_peak_hz": 1049.13,
+      "reference_hz": 1049.13,
+      "label_hz": 1046.5,
+      "label_peak_error_cents": 4.3,
+      "seconds": 3.351,
+      "frames": 49,
+      "voiced_frames": 44,
+      "median_abs_cents": 5.3,
+      "p10_abs_cents": 1.7,
+      "p90_abs_cents": 10.7,
+      "octave_errors": 0,
+      "phrase": false,
+      "gated": true,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "file": "trumpet_high_C6",
+      "reference_peak_hz": 1049.13,
+      "reference_hz": 1049.13,
+      "label_hz": 1046.5,
+      "label_peak_error_cents": 4.3,
+      "seconds": 4.273,
+      "frames": 65,
+      "voiced_frames": 63,
+      "median_abs_cents": 2.4,
+      "p10_abs_cents": 0.5,
+      "p90_abs_cents": 5.3,
+      "octave_errors": 0,
+      "phrase": false,
+      "gated": true,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "file": "vibraphone_mid_C5B5",
+      "reference_peak_hz": 527.13,
+      "reference_hz": 527.13,
+      "label_hz": 523.25,
+      "label_peak_error_cents": 12.8,
+      "seconds": 10,
+      "frames": 149,
+      "voiced_frames": 42,
+      "median_abs_cents": 198.8,
+      "p10_abs_cents": 8.6,
+      "p90_abs_cents": 317.3,
+      "octave_errors": 0,
+      "phrase": false,
+      "gated": true,
+      "verdict": "PASS",
+      "failures": []
+    }
+  ],
+  "excluded": [
+    {
+      "file": "balloon_pop_transient",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "bassoon_low_C2B2",
+      "measured_peak_hz": 486.7,
+      "reason": "not reliable: peak is a high partial, not the C2 fundamental"
+    },
+    {
+      "file": "bells_glock_run_C6B6",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "crotale_high_C7",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "cymbal_inharmonic",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "flute_high_C7",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "flute_trill_high_C7",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "glockenspiel_high_C7",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "guitar_pluck_C4B4",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "marimba_roll_AM_C5B5",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "oboe_mid_C5B5",
+      "measured_peak_hz": 556.85,
+      "reason": "not reliable: h2 is +0.2 dB, so fundamental and 2nd harmonic tie"
+    },
+    {
+      "file": "piano_high_C7",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "piano_low_A1",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "tamtam_inharmonic",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "trumpet_low_A3",
+      "measured_peak_hz": 1091.84,
+      "reason": "not reliable: about 5x the label; a partial"
+    },
+    {
+      "file": "tuba_run_C2B2",
+      "measured_peak_hz": 496.5,
+      "reason": "not reliable: _run_` is a phrase, and 496.5 is not its fundamental"
+    },
+    {
+      "file": "violin_high_sulE_C7E7",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "violin_low_sulG_G3B3",
+      "measured_peak_hz": 394.71,
+      "reason": "not reliable: about 2x the label; second harmonic dominating"
+    },
+    {
+      "file": "vocal_female_vibrato",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "vocal_male_baritone_scale",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "vocal_melody_twinkle_CC0",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "vocal_soprano_range_PD",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "vocal_tenor_operatic_PD",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "vocal_tenor_range_PD",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "xylophone_roll_AM_C6B6",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    },
+    {
+      "file": "xylophone_run_C7B7",
+      "measured_peak_hz": null,
+      "reason": "no measured peak in docs/witness/corpus-pitch-reference.md; the filename note is not a reference"
+    }
+  ],
+  "missing_from_corpus": [],
+  "summary": {
+    "corpus_files": 34,
+    "scored": 8,
+    "gated": 7,
+    "excluded": 26,
+    "failures": 0,
+    "regressions": 0,
+    "pass": true
+  }
+}
