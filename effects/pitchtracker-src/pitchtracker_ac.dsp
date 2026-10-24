@@ -36,11 +36,14 @@ corrAtLagVar(x, w, lagSig) = num / den
 with {
     lagClamped = lagSig : max(1) : min(delayMaxLag);
     d = rwtable(delayTableSize, 0.0, w, x, (w + delayTableSize - lagClamped) % delayTableSize);
-    energyTau = ba.if(lagClamped >= 480.0, 0.02, 0.01);
-    pole = ba.tau2pole(energyTau);
-    smoo(sig) = sig : *(1.0-pole) : + ~ *(pole);
-    num = smoo(x * d);
-    den = max(1e-9, smoo(x*x));
+    energyWide = lagClamped >= 480.0;
+    poleNarrow = ba.tau2pole(0.01);
+    poleWide = ba.tau2pole(0.02);
+    smooNarrow(sig) = sig : *(1.0-poleNarrow) : + ~ *(poleNarrow);
+    smooWide(sig) = sig : *(1.0-poleWide) : + ~ *(poleWide);
+    prodn(xd) = select2(energyWide, smooNarrow(xd), smooWide(xd));
+    num = prodn(x * d);
+    den = max(1e-9, prodn(x*x));
 };
 
 pickFundamental(x) = result
