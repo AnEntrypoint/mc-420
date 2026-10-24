@@ -6,14 +6,20 @@ reason about loop quantization before touching the device. `SCALE = 100` (sim ru
 device run.
 
 Run one case with `node tools/loop-quantization-sim/<case>.js`. There is no committed suite
-runner; `.gm/run-sim-suite.js` runs every case in order and prints one PASS/FAIL line each.
+runner; `.github/workflows/test-loop-sim.yml` lists the cases CI runs, one step each.
 
 ## Link model
 
-The sim mirrors the device's clock-only Link usage: `enableStartStopSync(false)`, so tempo and
-phase are shared and transport never is. `setIsPlaying`, `setIsPlayingAndRequestBeatAtTime` and
-`applyRemoteTransport` exist in this directory only as a model and are deliberately never called
-by a case — the device never calls them (`src/` has no occurrence of any of them).
+The device is clock-only Link: `enableStartStopSync(false)`, so tempo and phase are shared and
+transport never is. `src/` has no occurrence of `setIsPlaying`, `setIsPlayingAndRequestBeatAtTime`
+or `applyRemoteTransport`, so the device's peer `isPlaying` is always false.
+
+The sim does not match that. `link.js` `setTransportPlaying` forwards to `setIsPlaying`, and
+`world.js` `publishTransport` calls it on every play change, so a sim peer's `isPlaying` does
+follow the local loopers. `remote-join.js` `applyRemoteTransport` (called from `stepPair`) launches
+takes on a peer's remote START, a path the device lacks. Both are model-only. The remote-join case
+asserts that model, not device behaviour. `setIsPlayingAndRequestBeatAtTime` is defined in
+`link.js` and never called.
 
 A phase impose is `requestPhaseImpose(...)`, queued off the audio thread and applied by
 `applyPendingPhaseImpose(...)` on the next 5 Hz control tick, so it lands up to 200 ms after the

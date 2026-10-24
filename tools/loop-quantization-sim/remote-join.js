@@ -209,6 +209,8 @@ function main() {
   const stalePhaseResetOnArm = !regression;
   let failed = 0;
 
+  console.log('remote join: MODEL-ONLY. The device is clock-only Link; peer isPlaying is always false, so no remote START reaches it.');
+
   console.log(`remote join: stale-phase reset on arm = ${stalePhaseResetOnArm ? 'ENABLED (matches 50bacfb)' : 'DISABLED (regression of 50bacfb)'}`);
 
   const first = runFirstJoin(stalePhaseResetOnArm);
