@@ -22,6 +22,7 @@ const kCutCases = [
   [4000, 1.0, 1, 'phrase 8 ladder: one beat'],
   [2000, 3.0, 2, 'phrase 4: a 3-beat take is one beat past the half, earlier boundary'],
   [2000, 0.6, 1, 'phrase 4: a sub-beat take floors at one beat'],
+  [2000, 0.3, 1, 'phrase 4: a 0.3-beat take floors at one beat, the beat-long minimum'],
 ];
 const kTakeBeats = [
   1.0, 2.0, 3.4, 4.0, 4.6, 5.5, 8.0, 12.0, 14.0, 16.0, 16.4, 17.2, 18.0,

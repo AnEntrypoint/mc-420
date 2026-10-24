@@ -9,6 +9,7 @@ const kHoldMs = 2000;
 const kSettleMs = 1500;
 const kToleranceSamples = 2;
 const kToleranceBeats = 1e-3;
+const kPhaseToleranceBeats = 0.02;
 
 function circularGap(a, b, period) {
   const d = ((a - b) % period + period) % period;
@@ -47,7 +48,12 @@ function ticker() {
 
   const pressMs = (pressT / W.SIM_SAMPLE_RATE) * 1000;
   const beatAtPress = beatAtTime(session, pressMs);
-  return { gap: circularGap(beatAtPress, 0, LINK_QUANTUM), beatAtPress };
+  const L = a.masterLenSamples;
+  const P = Math.max(1, a.recordedBeats);
+  const nowMs = (a.t / W.SIM_SAMPLE_RATE) * 1000;
+  const linkPhase = ((beatAtTime(session, nowMs) % P) + P) % P;
+  const phaseGapBeats = L > 0 ? circularGap(a.masterPhaseSamples, (linkPhase / P) * L, L) / (L / P) : NaN;
+  return { gap: circularGap(beatAtPress, 0, LINK_QUANTUM), beatAtPress, phaseGapBeats };
 }
 
 function main() {
@@ -63,6 +69,9 @@ function main() {
   const tOk = t.gap <= kToleranceBeats;
   console.log(`  ticker: Link beat at press ${t.beatAtPress.toFixed(4)}, gap to beat 0 mod ${LINK_QUANTUM} = ${t.gap.toFixed(4)} beats ${tOk ? 'ok' : 'FAIL'}`);
   if (!tOk) failed++;
+  const pOk = Number.isFinite(t.phaseGapBeats) && t.phaseGapBeats <= kPhaseToleranceBeats;
+  console.log(`  ticker: DSP loop phase vs Link target at the finish block, gap ${t.phaseGapBeats.toFixed(4)} beats (tolerance ${kPhaseToleranceBeats}) ${pOk ? 'ok' : 'FAIL'}`);
+  if (!pOk) failed++;
 
   console.log(failed === 0 ? 'first take origin: PASS' : `first take origin: FAIL (${failed})`);
   process.exit(failed === 0 ? 0 : 1);
