@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Hardware timing runbook | aloop</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Hardware timing runbook" />
+<meta property="og:locale" content="en_US" />
+<link rel="canonical" href="https://anentrypoint.github.io/mc-420/HARDWARE-TIMING-RUNBOOK.html" />
+<meta property="og:url" content="https://anentrypoint.github.io/mc-420/HARDWARE-TIMING-RUNBOOK.html" />
+<meta property="og:site_name" content="aloop" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Hardware timing runbook" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","headline":"Hardware timing runbook","url":"https://anentrypoint.github.io/mc-420/HARDWARE-TIMING-RUNBOOK.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=50f6827ee6216303f09d0aa3ab0ade46ac35462a">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/mc-420/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1><a href="https://anentrypoint.github.io/mc-420/">aloop</a></h1>
+
+        
+
+        <p></p>
+
+        
+        <p class="view"><a href="https://github.com/AnEntrypoint/mc-420">View the Project on GitHub <small>AnEntrypoint/mc-420</small></a></p>
+        
+
+        
+
+        
+      </header>
+      <section>
+
+      <h1 id="hardware-timing-runbook">Hardware timing runbook</h1>
+
+<p>Status: written offline, not yet run. Every step is untested on the 420. Run it only with the device plugged in, the Focusrite loopback attached (ADR-029), and the netboot sha confirmed with <code class="language-plaintext highlighter-rouge">health</code>.</p>
+
+<h2 id="preconditions">Preconditions</h2>
+
+<ul>
+  <li>Pi 4 at <code class="language-plaintext highlighter-rouge">192.168.137.132</code> (see AGENTS.md “Finding the device”). Confirm the served binary sha before any witness: a stale binary makes every result meaningless.</li>
+  <li>Clean ingress is the Focusrite loopback. A bare AIR 192 reads silent, and any witness through <code class="language-plaintext highlighter-rouge">snd-aloop</code> is invalid.</li>
+  <li>Telemetry is query-only: UDP <code class="language-plaintext highlighter-rouge">status</code> to <code class="language-plaintext highlighter-rouge">192.168.137.132:4445</code>. Never read a cached telemetry file.</li>
+  <li>Restart aloop between scenarios: <code class="language-plaintext highlighter-rouge">rc-service aloop restart</code>.</li>
+  <li>SSH uses <code class="language-plaintext highlighter-rouge">SSH_ASKPASS</code> with JS <code class="language-plaintext highlighter-rouge">ssh2</code> or the pattern in AGENTS.md, never <code class="language-plaintext highlighter-rouge">ssh.exe</code> or <code class="language-plaintext highlighter-rouge">sshpass</code>.</li>
+</ul>
+
+<h2 id="step-1-first-loop-origin-is-the-press-timing-origin-sample-exact-timing-origin-at-arm-press">Step 1: first-loop origin is the press (timing-origin-sample-exact, timing-origin-at-arm-press)</h2>
+
+<ol>
+  <li>Start from a fresh restart with no loops.</li>
+  <li>Inject the record press with <code class="language-plaintext highlighter-rouge">node test/hardware/midi-inject.js 192.168.137.132 note-on &lt;record-note&gt; &lt;velocity&gt;</code>. Get <code class="language-plaintext highlighter-rouge">&lt;record-note&gt;</code> from the record pad constant in <code class="language-plaintext highlighter-rouge">src/control/apc_grid.h</code> before the run. Do not reuse <code class="language-plaintext highlighter-rouge">kApcBtnRec</code> (0x5D): <code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code> binds it to clip export. Send a second press to finish.</li>
+  <li>Capture the Focusrite loopback with <code class="language-plaintext highlighter-rouge">tools/loopback-witness/loopback-witness.js</code>.</li>
+  <li>Pass: the first loop’s wrap sits on the Link beat-0 origin, and that origin equals the press sample. Compare against the UDP <code class="language-plaintext highlighter-rouge">status</code> reply’s <code class="language-plaintext highlighter-rouge">master_phase_beats</code> read at the same moment (wire keys verified at <code class="language-plaintext highlighter-rouge">src/control/telemetry.cpp:135</code>: <code class="language-plaintext highlighter-rouge">grid_beat_index</code>, <code class="language-plaintext highlighter-rouge">master_phase_beats</code>, <code class="language-plaintext highlighter-rouge">master_len_samples</code>, <code class="language-plaintext highlighter-rouge">recorded_beats</code>).</li>
+  <li>Fail: any sample offset between the press and the origin. Record the offset in the row. Do not adjust the threshold.</li>
+</ol>
+
+<h2 id="step-2-late-press-takes-the-earlier-boundary-timing-late-press-one-beat">Step 2: late press takes the earlier boundary (timing-late-press-one-beat)</h2>
+
+<ul>
+  <li>Scenario A: a 4.5-beat take on a 4-beat phrase must finish at 4 beats.</li>
+  <li>Scenario B: a 5.5-beat take must finish at 6 beats.</li>
+  <li>Pass: both within one sample of the target. Fail: any other length.</li>
+</ul>
+
+<h2 id="step-3-far-extend-is-capped-at-one-phrase-timing-far-extend-phrase-cap">Step 3: far-extend is capped at one phrase (timing-far-extend-phrase-cap)</h2>
+
+<ul>
+  <li>A 6-beat take on a 4-beat phrase must end at 4 beats, not 8.</li>
+  <li>Pass: the loop length in <code class="language-plaintext highlighter-rouge">status</code> is 4 beats.</li>
+</ul>
+
+<h2 id="step-4-fold-ladder-timing-fold-ladder">Step 4: fold ladder (timing-fold-ladder)</h2>
+
+<ul>
+  <li>For phrase 4 beats, takes of 4, 2, 1 beats must each land on a ladder step.</li>
+  <li>A 3-beat take must snap to 4 beats or 2 beats per the nearest-step rule, and the result must match the simulator (<code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim/loop-quantum-fold.js</code>).</li>
+</ul>
+
+<h2 id="step-5-status-responder-on-20813-esp-status-port-20813-consumers">Step 5: status responder on 20813 (esp-status-port-20813-consumers)</h2>
+
+<ul>
+  <li>Run <code class="language-plaintext highlighter-rouge">node test/hardware/link-mesh-status.js</code> with the ESP peer attached.</li>
+  <li>Pass: a JSON status reply on 20813. TTMP on 20812 is unaffected.</li>
+</ul>
+
+<h2 id="step-6-empty-slave-adopts-a-peer-recording-timing-empty-slave-adoption">Step 6: empty slave adopts a peer recording (timing-empty-slave-adoption)</h2>
+
+<ul>
+  <li>Not runnable yet. The device guard has not landed (see the row). Do not run this step against a device on which it is not implemented.</li>
+</ul>
+
+<h2 id="two-device-sync-regression">Two-device sync (regression)</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">node test/hardware/verify-two-device-sync.js 192.168.137.132 600000</code></li>
+  <li>Pass per AGENTS.md “TWO-DEVICE LINK SYNC UP”: peer over 95 percent post-acquisition, bpm spread at most 0.05, phase error at most 0.03 beats, eff_speed spread at most 0.005, gaps at most 10 percent.</li>
+</ul>
+
+<h2 id="recording-the-result">Recording the result</h2>
+
+<ul>
+  <li>Put each run’s numbers in <code class="language-plaintext highlighter-rouge">docs/measurements-archive.md</code> under the row’s anchor. Do not write numbers into this runbook.</li>
+  <li>Close a row only on a witness recorded in the ledger from a session other than the resolver’s.</li>
+</ul>
+
+
+      </section>
+      <footer>
+        
+        <p>This project is maintained by <a href="https://github.com/AnEntrypoint">AnEntrypoint</a></p>
+        
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="/mc-420/assets/js/scale.fix.js"></script>
+  </body>
+</html>
