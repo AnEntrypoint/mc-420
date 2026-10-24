@@ -2,6 +2,15 @@
 
 Real Pi 4 root/aloop at `192.168.137.132`; `.100` is the cmdline-pinned netboot address and fails ARP. Pi 3B+ netboots from host. BEHAVIOR clone of `../looper` only: never vendor its source / `LOOPER_DIR` / `loopMachine.cpp` / effects-bridge shim. Shipped `ffaa83d`; input-routing build `0947f3a`+`9cdcae0` (sizes/md5/CI: archive#shipped-builds). RULES only: numbers -> `docs/measurements-archive.md` (below: `archive#anchor`), decisions -> `docs/DECISIONS.md`, rows -> `docs/plans.md`.
 
+# Loop timing invariant (user decision; governs every recording path)
+
+- The first loop recorded, standalone or on a ticker network, is the master for tempo, phrase and grid origin. Its tempo and phrase come from the recorded length and beat count; its origin is the sample at which the record button was pressed, never a grid node and never the block that processed the press.
+- Every later sound plays exactly on the master grid, referenced to that press sample: no audible shift forward or back, seamless wrap, identical under every effect chain and whether standalone or on a ticker network. Only resampled material (SHIFT resample, `recordTap`) is backdated, by a per-strategy offset that tracks measured additional latency, so resampled samples stay on the reference grid.
+- Recording a non-first loop follows the MC-505 model: length folds to halves and quarters down to one beat, so a loop of any length is reachable in beat-long steps. The stop point is the nearest legal boundary: an early press before the ideal boundary keeps recording to that boundary (intentional); a late press within one beat after a half or quarter boundary is an unintentional late press and the earlier boundary is taken. Playback continues without any shift at the stop point.
+- A slave clock that starts empty, or on a hi-hat, adopts the tempo and phrase of the first recording of any peer as soon as that recording is published, and locks its phase to the press origin. Each device publishes the master tempo and origin; no device substitutes its own press time.
+- The esp-idf-link bridge that drives synths behaves identically: it adopts the master tempo and origin and plays the intended phrasing as soon as it is published.
+- Verification: `tools/loop-quantization-sim` must model every rule above and pass. The simulator is a model, so each rule is live only after a hardware witness.
+
 # Working rules
 
 - No comments in code ever (C++/.dsp/JS/shell/YAML, `.gitignore`); 1 sighting: sweep file. Exempt: `#!`, `# syntax=docker/dockerfile:1`, `# shellcheck disable=`, commented-out keys in `config/aloop.conf`, `vendor/` + regenerated Faust.

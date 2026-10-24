@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop - current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5c7e9f5ca0b93683258efabd7bd7e6d5cc549213">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=46d27e70b72c25a7ffd357d9f6d13eff681c225c">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -58,6 +58,17 @@
       <h1 id="aloop---current-state-constraints">aloop - current-state constraints</h1>
 
 <p>Real Pi 4 root/aloop at <code class="language-plaintext highlighter-rouge">192.168.137.132</code>; <code class="language-plaintext highlighter-rouge">.100</code> is the cmdline-pinned netboot address and fails ARP. Pi 3B+ netboots from host. BEHAVIOR clone of <code class="language-plaintext highlighter-rouge">../looper</code> only: never vendor its source / <code class="language-plaintext highlighter-rouge">LOOPER_DIR</code> / <code class="language-plaintext highlighter-rouge">loopMachine.cpp</code> / effects-bridge shim. Shipped <code class="language-plaintext highlighter-rouge">ffaa83d</code>; input-routing build <code class="language-plaintext highlighter-rouge">0947f3a</code>+<code class="language-plaintext highlighter-rouge">9cdcae0</code> (sizes/md5/CI: archive#shipped-builds). RULES only: numbers -&gt; <code class="language-plaintext highlighter-rouge">docs/measurements-archive.md</code> (below: <code class="language-plaintext highlighter-rouge">archive#anchor</code>), decisions -&gt; <code class="language-plaintext highlighter-rouge">docs/DECISIONS.md</code>, rows -&gt; <code class="language-plaintext highlighter-rouge">docs/plans.md</code>.</p>
+
+<h1 id="loop-timing-invariant-user-decision-governs-every-recording-path">Loop timing invariant (user decision; governs every recording path)</h1>
+
+<ul>
+  <li>The first loop recorded, standalone or on a ticker network, is the master for tempo, phrase and grid origin. Its tempo and phrase come from the recorded length and beat count; its origin is the sample at which the record button was pressed, never a grid node and never the block that processed the press.</li>
+  <li>Every later sound plays exactly on the master grid, referenced to that press sample: no audible shift forward or back, seamless wrap, identical under every effect chain and whether standalone or on a ticker network. Only resampled material (SHIFT resample, <code class="language-plaintext highlighter-rouge">recordTap</code>) is backdated, by a per-strategy offset that tracks measured additional latency, so resampled samples stay on the reference grid.</li>
+  <li>Recording a non-first loop follows the MC-505 model: length folds to halves and quarters down to one beat, so a loop of any length is reachable in beat-long steps. The stop point is the nearest legal boundary: an early press before the ideal boundary keeps recording to that boundary (intentional); a late press within one beat after a half or quarter boundary is an unintentional late press and the earlier boundary is taken. Playback continues without any shift at the stop point.</li>
+  <li>A slave clock that starts empty, or on a hi-hat, adopts the tempo and phrase of the first recording of any peer as soon as that recording is published, and locks its phase to the press origin. Each device publishes the master tempo and origin; no device substitutes its own press time.</li>
+  <li>The esp-idf-link bridge that drives synths behaves identically: it adopts the master tempo and origin and plays the intended phrasing as soon as it is published.</li>
+  <li>Verification: <code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim</code> must model every rule above and pass. The simulator is a model, so each rule is live only after a hardware witness.</li>
+</ul>
 
 <h1 id="working-rules">Working rules</h1>
 
