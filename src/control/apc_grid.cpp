@@ -346,6 +346,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
         setLooper(ps, looper, "rec", 1.0f);
         m_looperRecording[looper] = true;
         m_recordStartMs[looper] = now_ms;
+        if (link) link->noteRecordArm();
         m_looperShiftHeldDuringTake[looper] = ps.getBySlot(monitorFoldSlot(ps), 0.0f) > 0.5f;
         armResampleFoldWindow(looper, audio);
     } else if (m_looperPlaying[looper]) {

@@ -886,7 +886,8 @@ static void* worker(void*) {
                         timespec imposeTs{};
                         clock_gettime(CLOCK_MONOTONIC, &imposeTs);
                         const int64_t imposeMicros = (int64_t)imposeTs.tv_sec * 1000000 + imposeTs.tv_nsec / 1000;
-                        g_link->requestPhaseImpose(0.0, imposeMicros, (double)recordedBeatsShared);
+                        const int64_t armMicros = g_link->recordArmMicros();
+                        g_link->requestPhaseImpose(0.0, armMicros > 0 ? armMicros : imposeMicros, (double)recordedBeatsShared);
                     }
                 }
 

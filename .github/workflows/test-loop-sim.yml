@@ -79,6 +79,9 @@ jobs:
       - name: Takes latch the tempo ratio, never the phase trim
         run: node tools/loop-quantization-sim/two-take-rate-lock.js
 
+      - name: First take origin on the record-press sample
+        run: node tools/loop-quantization-sim/first-take-origin.js
+
       - name: Fold error on the 128-quantum capture
         run: node tools/loop-quantization-sim/loop-quantum-fold.js
 

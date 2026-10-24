@@ -231,6 +231,7 @@ function applyRecPlayCycle(w, looper) {
       lenSamples = Math.max(1, Math.min(lenSamples, SIM_MAXLEN));
       w.masterLenSamples = lenSamples;
       w.masterLooper = looper;
+      w.masterArmMs = (lp.recordStartT / SIM_SAMPLE_RATE) * 1000;
       const recordedSeconds = w.masterLenSamples / SIM_SAMPLE_RATE;
       const linkSnap = linkAudioRead(w);
       const adoptLinkTempo = w.legacyAdoptLinkTempo === true
@@ -511,7 +512,7 @@ function stepOneSample(w) {
   const masterJustCreated = w.prevMasterLen <= 0 && masterLen > 0;
   w.prevMasterLen = masterLen;
   if (masterJustCreated) {
-    requestPhaseImpose(w.link.session, 0.0, (w.t / SIM_SAMPLE_RATE) * 1000, phaseImposeQuantumBeats(w), w.link.local);
+    requestPhaseImpose(w.link.session, 0.0, w.masterArmMs, phaseImposeQuantumBeats(w), w.link.local);
   }
 
   if (masterLen > 0) {

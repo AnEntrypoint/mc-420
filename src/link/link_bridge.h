@@ -38,6 +38,8 @@ public:
     void resetTempoAuthority();
 
     void requestPhaseImpose(double beat, int64_t atMicros, double quantum);
+    void noteRecordArm();
+    int64_t recordArmMicros() const;
 
     void setLocalTransportPlaying(bool playing);
 

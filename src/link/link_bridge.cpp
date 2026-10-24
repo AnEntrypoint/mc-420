@@ -37,6 +37,17 @@ std::atomic<int> g_rebaseSeq{0};
 std::atomic<double> g_imposeBeat{0.0};
 std::atomic<double> g_imposeQuantum{16.0};
 std::atomic<int64_t> g_imposeAtMicros{0};
+std::atomic<int64_t> g_recordArmMicros{0};
+}
+
+void LinkBridge::noteRecordArm() {
+    if (!link_) return;
+    auto* l = (ableton::Link*)link_;
+    g_recordArmMicros.store((int64_t)l->clock().micros().count(), std::memory_order_release);
+}
+
+int64_t LinkBridge::recordArmMicros() const {
+    return g_recordArmMicros.load(std::memory_order_acquire);
 }
 
 void LinkBridge::start(double sampleRate, bool enabled) {
