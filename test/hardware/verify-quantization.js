@@ -87,16 +87,12 @@ async function recordLooper(looperIndex, holdMs) {
   return { holdMs, wrapLenSamples, wrapLenSeconds };
 }
 
-function pickAnchorGridBeats(takeLenBeats) {
+function ladderAnchorBeats(phraseBeats, takeLenBeats) {
   const eps = 0.01;
-  if (takeLenBeats > 16.0 + eps) return 16.0;
-  if (takeLenBeats > 8.0 + eps) return 8.0;
-  if (takeLenBeats > 4.0 + eps) return 4.0;
-  if (takeLenBeats > 2.0 + eps) return 2.0;
-  if (takeLenBeats > 1.0 + eps) return 1.0;
-  if (takeLenBeats > 0.5 + eps) return 0.5;
-  if (takeLenBeats > 0.25 + eps) return 0.25;
-  return 0.125;
+  let anchor = phraseBeats;
+  while (anchor * 0.5 >= 1.0 && anchor > takeLenBeats + eps) anchor *= 0.5;
+  if (anchor > takeLenBeats + eps) anchor = 1.0;
+  return anchor;
 }
 
 function deriveTempoQuantBeats(recordedSeconds, anchorBpm) {
@@ -113,20 +109,20 @@ function deriveTempoQuantBeats(recordedSeconds, anchorBpm) {
   return best;
 }
 
-const ANCHOR_MIDPOINT_FRAC = 0.4142135623730951;
+const NEAR_CUT_BEATS = 1.0;
+const WHOLE_BEAT_SNAP_BEATS = 0.4;
 
 function nearCutFarExtendCandidate(effectiveSamples, masterLenSamples, recordedBeats) {
-  const oneBeatSamples = Math.max(1, masterLenSamples / Math.max(1, recordedBeats));
-  const takeLenBeats = effectiveSamples / oneBeatSamples;
-  let anchorGridBeats = pickAnchorGridBeats(takeLenBeats);
   const phraseBeats = Math.max(1, recordedBeats);
-  if (anchorGridBeats > phraseBeats) anchorGridBeats = phraseBeats;
+  const oneBeatSamples = Math.max(1, masterLenSamples / phraseBeats);
+  const takeLenBeats = effectiveSamples / oneBeatSamples;
+  const anchorGridBeats = ladderAnchorBeats(phraseBeats, takeLenBeats);
   const pastMultiple = Math.floor(takeLenBeats / anchorGridBeats + 0.0001);
   const pastNodeBeats = pastMultiple * anchorGridBeats;
   const futureNodeBeats = pastNodeBeats + anchorGridBeats;
   const overshootBeats = takeLenBeats - pastNodeBeats;
-  const cutToleranceBeats = anchorGridBeats * ANCHOR_MIDPOINT_FRAC;
-  const finalBeats = Math.abs(takeLenBeats - 1) <= 0.4 ? 1 : ((pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001) ? pastNodeBeats : futureNodeBeats);
+  let finalBeats = Math.abs(takeLenBeats - 1) <= WHOLE_BEAT_SNAP_BEATS ? 1 : ((pastMultiple >= 1 && overshootBeats <= NEAR_CUT_BEATS + 0.0001) ? pastNodeBeats : futureNodeBeats);
+  if (takeLenBeats < 2 * phraseBeats && finalBeats > phraseBeats) finalBeats = phraseBeats;
   return finalBeats * oneBeatSamples;
 }
 
