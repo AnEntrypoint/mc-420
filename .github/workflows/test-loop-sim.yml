@@ -5,11 +5,19 @@ on:
     paths:
       - 'tools/loop-quantization-sim/**'
       - 'dsp/loop.dsp'
+      - 'src/dsp/audio_thread.cpp'
+      - 'src/control/apc_grid.cpp'
+      - 'src/control/apc_grid.h'
+      - 'src/link/**'
       - '.github/workflows/test-loop-sim.yml'
   pull_request:
     paths:
       - 'tools/loop-quantization-sim/**'
       - 'dsp/loop.dsp'
+      - 'src/dsp/audio_thread.cpp'
+      - 'src/control/apc_grid.cpp'
+      - 'src/control/apc_grid.h'
+      - 'src/link/**'
       - '.github/workflows/test-loop-sim.yml'
   workflow_dispatch:
 
@@ -70,6 +78,9 @@ jobs:
 
       - name: Takes latch the tempo ratio, never the phase trim
         run: node tools/loop-quantization-sim/two-take-rate-lock.js
+
+      - name: Fold error on the 128-quantum capture
+        run: node tools/loop-quantization-sim/loop-quantum-fold.js
 
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50
