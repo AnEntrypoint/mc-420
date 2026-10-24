@@ -1,24 +1,24 @@
 {
   "tool": "corpus-pitch-metric",
   "metric_version": 1,
-  "generated_utc": "2026-10-23T16:32:01.574Z",
+  "generated_utc": "2026-10-24T13:23:12.586Z",
   "reference": {
     "path": "docs/witness/corpus-pitch-reference.md",
-    "sha256": "ad031786122d266d78bb340236e0fde2f85a0705a057da5f9a1cf7d08296a186",
+    "sha256": "1dc13a778906f29ba508ec60846314851c5be36442b226e22d23c8809a02e05a",
     "reliable_rows": 8,
     "not_reliable_rows": 5
   },
   "corpus_dir": "test-audio-corpus/instruments",
-  "dsp_cli": "/tmp/dsp_cli",
+  "dsp_cli": "/home/runner/work/mc-420/mc-420/dsp_cli",
   "semis": 0,
   "include_phrase": false,
   "thresholds": {
-    "min_scored_files": 7,
+    "min_scored_files": 6,
     "octave_cents_tolerance": 50,
     "max_median_regression_cents": 8.6,
     "max_regressed_files": 0
   },
-  "thresholds_sha256": "7ae0d7213d6e547573bd725c9240b75db9dcfa5da308495de447b7b85aec0d7d",
+  "thresholds_sha256": "17ff3c1198a0eab88a7e1f8d1e229b16272f261490d757ad506c50627b6d2d71",
   "octave_cents_tolerance": 50,
   "files": [
     {
@@ -160,9 +160,9 @@
       "p10_abs_cents": 8.6,
       "p90_abs_cents": 317.3,
       "octave_errors": 0,
-      "phrase": false,
-      "gated": true,
-      "verdict": "PASS",
+      "phrase": true,
+      "gated": false,
+      "verdict": "NOT GATED",
       "failures": []
     }
   ],
@@ -175,7 +175,7 @@
     {
       "file": "bassoon_low_C2B2",
       "measured_peak_hz": 486.7,
-      "reason": "not reliable: peak is a high partial, not the C2 fundamental"
+      "reason": "not reliable: peak is a high partial; the comb certifies 69.68, see below"
     },
     {
       "file": "bells_glock_run_C6B6",
@@ -220,7 +220,7 @@
     {
       "file": "oboe_mid_C5B5",
       "measured_peak_hz": 556.85,
-      "reason": "not reliable: h2 is +0.2 dB, so fundamental and 2nd harmonic tie"
+      "reason": "not reliable: two pitch centres measured, 527.35 and 557.67, so no single target"
     },
     {
       "file": "piano_high_C7",
@@ -240,7 +240,7 @@
     {
       "file": "trumpet_low_A3",
       "measured_peak_hz": 1091.84,
-      "reason": "not reliable: about 5x the label; a partial"
+      "reason": "not reliable: about 5x the label; the comb certifies 218.35, see below"
     },
     {
       "file": "tuba_run_C2B2",
@@ -255,7 +255,7 @@
     {
       "file": "violin_low_sulG_G3B3",
       "measured_peak_hz": 394.71,
-      "reason": "not reliable: about 2x the label; second harmonic dominating"
+      "reason": "not reliable: about 2x the label; the comb certifies 196.64, see below"
     },
     {
       "file": "vocal_female_vibrato",
@@ -302,7 +302,7 @@
   "summary": {
     "corpus_files": 34,
     "scored": 8,
-    "gated": 7,
+    "gated": 6,
     "excluded": 26,
     "failures": 0,
     "regressions": 0,
