@@ -8,6 +8,7 @@ const kSettleMs = 30000;
 const kStepMs = 50;
 const kLengthToleranceBeats = 2.0;
 const kPhraseToleranceBeats = 0.02;
+const kExactBeats = { 1: 1, 2: 2, 3.4: 4 };
 const kTakeBeats = [
   1.0, 2.0, 3.4, 4.0, 4.6, 5.5, 8.0, 12.0, 14.0, 16.0, 16.4, 17.2, 18.0,
   19.0, 20.0, 21.5, 24.0, 32.5, 40.7, 64.3,
@@ -34,14 +35,17 @@ function run(legacy, takeBeats) {
 
   const lp = w.loopers[1];
   for (let k = 0; k * kStepMs < kSettleMs; k++) {
-    if (lp.finishTargetPending === 0 && !lp.recording) break;
     advance(w, kStepMs);
+    if (lp.finishTargetPending === 0 && !lp.recording) break;
   }
+  advance(w, kStepMs);
 
   const oneBeat = w.masterLenSamples / Math.max(1, w.recordedBeats);
   const loopBeatLen = oneBeat * lp.dsp.beatScale;
   return {
     loopBeats: lp.dsp.wlen / loopBeatLen,
+    samples: lp.dsp.wlen,
+    oneBeat,
     phraseBeats: Math.max(1, w.recordedBeats),
     pending: lp.finishTargetPending,
   };
@@ -64,6 +68,11 @@ function main() {
 
     if (fixed.pending !== 0) {
       console.log(`    FAIL: take never settled, pending=${fixed.pending}`);
+      failed++;
+    }
+    const exactBeats = kExactBeats[beats];
+    if (exactBeats !== undefined && Math.abs(fixed.samples - exactBeats * fixed.oneBeat) > 1) {
+      console.log(`    FAIL: fixed loop is ${fixed.samples.toFixed(2)} samples, expected ${(exactBeats * fixed.oneBeat).toFixed(2)} (${exactBeats} beats)`);
       failed++;
     }
     const longTake = beats >= 2 * fixed.phraseBeats;
