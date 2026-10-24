@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=b391c4a9f66c3c36673a2d7598d562c31ea3a2d6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f410c6f4c365464353f11368f6243e561adfa219">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -707,6 +707,19 @@ monotonicity is 0.971 (was 0.784 before, over the same 136).</li>
 The grain layer’s own gain there is ~0.34, i.e. grains emitted at a tracked period that is not one
 source period cancel at the hop – a TRACKER defect leaking into the layer, not a mix-math defect.
 Not masked with a wet-path AGC: that would restore the RMS while leaving the cancellation.</li>
+  <li><strong>v3 tracker gate: FAILED, not admissible</strong> (Kaggle, one process, 34 corpus files plus 3 sines,
+EXIT 0, peak RSS 20,224,912 kB = 20.2 GB on a 31 GB notebook, so the 16 GB memory wall is gone).
+Against the pre-registered T1..T5: T1 PASS (median |cents| 4.5, gate 20.0); T2 FAIL (1 octave
+error, gate 0 – sine_2093 settles at 719.3986 Hz, -1848.9 cents, the 2093 register collapsing on
+a pure sine); T3 FAIL (crotale_high_C7 publishes no settled value; marimba publishes 560.7418 Hz,
++3.4 cents); T4 partly unmet (cello +0.8 passes; piano_mid_C4 publishes nothing so its 25-cent
+budget cannot be confirmed; trumpet_low_A3 is unscoreable because its measured peak is a 5x
+partial); T5 not evaluated (no shipped-tracker baseline in that run). No threshold was adjusted
+after the render. Two things T1 hides: only 7 of 37 inputs were scoreable and 23 of 37 produced no
+voiced settled block at all; the scored mid-high readings that do exist are bad (soprano_sax_high_C6
+-31.1 cents, clarinet_high_C6B6 +96.8 cents). Do not resurrect v3 without fixing the 2093
+register; see archive#8df2e2c-above-1000-hz. 23 of 37 silent is itself an open question on the
+gate’s gain convention.</li>
 </ul>
 
 
