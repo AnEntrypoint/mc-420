@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Corpus pitch reference","url":"https://anentrypoint.github.io/mc-420/witness/corpus-pitch-reference.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e557252782b622c7c90df61faaad48e20b94c5fa">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=6d12ab6111ca46a24baf18894a0f66ffc7017cf3">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -235,7 +235,7 @@ fundamental. Each needs a better measurement before it is used as a ground-truth
       <td>trumpet_low_A3</td>
       <td>1091.84</td>
       <td>+2773.4 c</td>
-      <td>about 5x the label; a partial</td>
+      <td>about 5x the label; a partial; extended test finds the fundamental at 218.40 but it fails the 12 dB margin, see below</td>
     </tr>
     <tr>
       <td>violin_low_sulG_G3B3</td>
@@ -258,6 +258,24 @@ A <code class="language-plaintext highlighter-rouge">&lt;note&gt;&lt;octave&gt;&
 <code class="language-plaintext highlighter-rouge">marimba_mid_C5B5</code> carries that shape and is a four-note run (see the note above), so measure any
 range-named file before using it as a single-note target.
 <code class="language-plaintext highlighter-rouge">vibraphone_mid_C5B5</code> had only 3 voiced windows here, so treat it as usable but soft.</p>
+
+<p><code class="language-plaintext highlighter-rouge">tools/pitch-reference/submultiple.mjs</code> runs the same method as this file (16384-sample non-overlapping
+Goertzel windows, power summed, log grid 40-4000 Hz at 0.5 percent steps) with the sub-multiple test
+extended from /2../4 to /2../8, and prints the harmonic ladder at whatever it finds. On
+<code class="language-plaintext highlighter-rouge">trumpet_low_A3</code> it reproduces the 1091.84 Hz peak exactly. The only sub-multiple landing in
+200-240 Hz is peak/5 = 218.368 Hz, and its local maximum is 218.40 Hz at 19.1 dB below the peak,
+which is outside the 12 dB margin above, so this file stays excluded. The exclusion is a limitation
+of the margin, not evidence against the fundamental: the ladder at 218.40 Hz is complete and
+brass-shaped, H1 -60.1, H2 -47.9, H3 -47.5, H4 -42.3, H5 -41.2, H6 -40.0, H7 -42.9, H8 -45.7 dB,
+with H6 the strongest and H1 the weakest, and no partial below the band floor plus 12 dB. So the
+true fundamental is 218.40 Hz (-12.9 c against the A3 label) and a method that tests the whole
+harmonic series instead of the peak’s own level would certify it. Witness:
+<code class="language-plaintext highlighter-rouge">.gm/witness/trumpet-a3-extended-submultiple.txt</code>.</p>
+
+<p><code class="language-plaintext highlighter-rouge">bassoon_low_C2B2</code>, <code class="language-plaintext highlighter-rouge">violin_low_sulG_G3B3</code> and <code class="language-plaintext highlighter-rouge">oboe_mid_C5B5</code> are the same failure class - a
+partial or a harmonic tie beating the fundamental - so a whole-series test would likely move them
+too. Until it exists, 8 of 34 files are scoreable and the gate measures what the reference can
+certify, not what the tracker can hear.</p>
 
 <h2 id="rule">Rule</h2>
 

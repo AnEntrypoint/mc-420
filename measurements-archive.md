@@ -518,3 +518,29 @@ the same 17 blocks.
   -31.1 cents, clarinet_high_C6B6 +96.8 cents). Do not resurrect v3 without fixing the 2093
   register; see archive#8df2e2c-above-1000-hz. 23 of 37 silent is itself an open question on the
   gate's gain convention.
+
+## Trumpet A3 extended sub-multiple test (archive#trumpet-a3-extended-submultiple)
+
+Same method as the corpus pitch reference (16384-sample non-overlapping Goertzel windows, power
+summed, log grid 40-4000 Hz at 0.5 percent steps), sub-multiple test extended from /2../4 to /2../8.
+On trumpet_low_A3 (sha256 1868998cad05cdbbf5f13608e188632d57c8d553b216382ef62e8a4e52dd668a,
+4.19 s, the whole file) it reproduces the reference peak of 1091.84 Hz exactly. Only peak/5
+(218.368 Hz) lands in 200-240 Hz; its local maximum is 218.40 Hz at -60.1 dB, which is 19.1 dB
+below the peak and +23.0 dB above the 200-240 Hz band floor. 19.1 dB is outside the documented
+12 dB margin, so no sub-multiple clears and the file stays excluded. The harmonic ladder at
+218.40 Hz is complete: H1 -60.1, H2 -47.9, H3 -47.5, H4 -42.3, H5 -41.2, H6 -40.0, H7 -42.9,
+H8 -45.7 dB, H6 strongest, no partial below band floor + 12 dB. The device reading of 218.97 Hz
+is +4.5 c against that fundamental, so the tracker hears it and the reference cannot certify it.
+This excludes 1 file but names a method gap that also covers bassoon_low_C2B2,
+violin_low_sulG_G3B3 and oboe_mid_C5B5: 8 of 34 corpus files are scoreable today.
+Witness .gm/witness/trumpet-a3-extended-submultiple.txt.
+
+## Low-frequency correlation tau A/B (archive#lowfreq-corr-tau-ab)
+
+Kaggle heclgang/lowfreq-corr-tau, A = e5572527 (corrAtLagVar tau 0.01 s) versus B = 98ed9068
+(0.02 s), same inputs at corpus gain. sine 65.55: A +2.9 c, B +1.4 c. sine 69.75: A +1.0, B +0.4.
+sine 110: A -18.5, B -9.3. sine 440: A -4.8, B -2.4. cello_low_sulC_A2: A +0.8, B -3.1.
+soprano_sax_high_C6: A -0.6, B -1.5. Lock at 110 Hz: 1.0 s both. The pre-registered rule required
+B to beat A by at least 2.0 c on each low note; B gained 1.5 c and 0.6 c on the two lowest, so the
+verdict is NO-IMPROVEMENT and the constant stays at 0.01. cello got 3.9 c worse while sine 110 got
+9.2 c better, which the rule treats as observations, not a reason to move.
