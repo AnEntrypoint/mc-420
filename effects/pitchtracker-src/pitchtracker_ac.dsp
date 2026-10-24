@@ -36,7 +36,7 @@ corrAtLagVar(x, w, lagSig) = num / den
 with {
     lagClamped = lagSig : max(1) : min(delayMaxLag);
     d = rwtable(delayTableSize, 0.0, w, x, (w + delayTableSize - lagClamped) % delayTableSize);
-    energyTau = 0.01;
+    energyTau = ba.if(lagClamped >= 480.0, 0.02, 0.01);
     pole = ba.tau2pole(energyTau);
     smoo(sig) = sig : *(1.0-pole) : + ~ *(pole);
     num = smoo(x * d);
