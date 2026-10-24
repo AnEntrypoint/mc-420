@@ -216,7 +216,10 @@ function applyRecPlayCycle(w, looper) {
     lp.wrapLenStaleAfterWipe = false;
     lp.playing = true;
     lp.ps_play = 1;
-    const latencyBias = kBlockSizeSimSamples + (w.alsaRoundTripSamples || 0) + (lp.shiftHeldDuringTake ? kBlockSizeSimSamples : 0);
+    const dryBias = kBlockSizeSimSamples + (w.alsaRoundTripSamples || 0);
+    const foldFraction = w.foldFraction !== undefined ? w.foldFraction : (lp.shiftHeldDuringTake ? 1 : 0);
+    const measuredFoldExtra = w.resampleMeasuredExtra !== undefined ? w.resampleMeasuredExtra : kBlockSizeSimSamples;
+    const latencyBias = dryBias * (1 - foldFraction) + (dryBias + measuredFoldExtra) * foldFraction;
     lp.ps_latencybias = latencyBias;
     w.masterLenSamples = w.masterLenSamples;
     if (w.masterLenSamples === 0) {
@@ -511,8 +514,9 @@ function stepOneSample(w) {
   const masterLen = w.masterLenSamples;
   const masterJustCreated = w.prevMasterLen <= 0 && masterLen > 0;
   w.prevMasterLen = masterLen;
-  if (masterJustCreated) {
+  if (masterJustCreated && !(w.adoptsPeerOrigin && w.link.session.originEstablished)) {
     requestPhaseImpose(w.link.session, 0.0, w.masterArmMs, phaseImposeQuantumBeats(w), w.link.local);
+    w.link.session.originEstablished = true;
   }
 
   if (masterLen > 0) {
@@ -545,8 +549,9 @@ function stepOneSample(w) {
         }
       }
 
+      const adoptSnap = masterJustCreated && !!w.adoptsPeerOrigin && !!w.link.session.originEstablished;
       const snapNow = w.phaseLockEnabled && target !== null
-          && !masterJustCreated && (!anyAudible || w.creationSnapPending);
+          && (!masterJustCreated || adoptSnap) && (!anyAudible || w.creationSnapPending || adoptSnap);
       if (snapNow) {
         w.masterPhaseSamples = target;
         w.linkPhaseTrim = 0.0;

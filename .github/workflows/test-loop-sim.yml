@@ -82,6 +82,12 @@ jobs:
       - name: First take origin on the record-press sample
         run: node tools/loop-quantization-sim/first-take-origin.js
 
+      - name: Empty slave adopts the peer origin and keeps it
+        run: node tools/loop-quantization-sim/empty-slave-adopt.js
+
+      - name: Resample backdate tracks the measured fold latency
+        run: node tools/loop-quantization-sim/resample-backdate.js
+
       - name: Fold error on the 128-quantum capture
         run: node tools/loop-quantization-sim/loop-quantum-fold.js
 
