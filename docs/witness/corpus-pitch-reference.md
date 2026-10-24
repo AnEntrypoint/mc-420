@@ -58,7 +58,7 @@ fundamental. Each needs a better measurement before it is used as a ground-truth
 |---|---|---|---|
 | bassoon_low_C2B2 | 486.70 | +3474.5 c | peak is a high partial, not the C2 fundamental |
 | tuba_run_C2B2 | 496.50 | +3509.1 c | `_run_` is a phrase, and 496.5 is not its fundamental |
-| trumpet_low_A3 | 1091.84 | +2773.4 c | about 5x the label; a partial |
+| trumpet_low_A3 | 1091.84 | +2773.4 c | about 5x the label; a partial; extended test finds the fundamental at 218.40 but it fails the 12 dB margin, see below |
 | violin_low_sulG_G3B3 | 394.71 | +1211.9 c | about 2x the label; second harmonic dominating |
 | oboe_mid_C5B5 | 556.85 | +107.8 c | h2 is +0.2 dB, so fundamental and 2nd harmonic tie |
 
@@ -68,6 +68,24 @@ A `<note><octave><note2><octave2>` range name is not proof of a single note eith
 `marimba_mid_C5B5` carries that shape and is a four-note run (see the note above), so measure any
 range-named file before using it as a single-note target.
 `vibraphone_mid_C5B5` had only 3 voiced windows here, so treat it as usable but soft.
+
+`tools/pitch-reference/submultiple.mjs` runs the same method as this file (16384-sample non-overlapping
+Goertzel windows, power summed, log grid 40-4000 Hz at 0.5 percent steps) with the sub-multiple test
+extended from /2../4 to /2../8, and prints the harmonic ladder at whatever it finds. On
+`trumpet_low_A3` it reproduces the 1091.84 Hz peak exactly. The only sub-multiple landing in
+200-240 Hz is peak/5 = 218.368 Hz, and its local maximum is 218.40 Hz at 19.1 dB below the peak,
+which is outside the 12 dB margin above, so this file stays excluded. The exclusion is a limitation
+of the margin, not evidence against the fundamental: the ladder at 218.40 Hz is complete and
+brass-shaped, H1 -60.1, H2 -47.9, H3 -47.5, H4 -42.3, H5 -41.2, H6 -40.0, H7 -42.9, H8 -45.7 dB,
+with H6 the strongest and H1 the weakest, and no partial below the band floor plus 12 dB. So the
+true fundamental is 218.40 Hz (-12.9 c against the A3 label) and a method that tests the whole
+harmonic series instead of the peak's own level would certify it. Witness:
+`.gm/witness/trumpet-a3-extended-submultiple.txt`.
+
+`bassoon_low_C2B2`, `violin_low_sulG_G3B3` and `oboe_mid_C5B5` are the same failure class - a
+partial or a harmonic tie beating the fundamental - so a whole-series test would likely move them
+too. Until it exists, 8 of 34 files are scoreable and the gate measures what the reference can
+certify, not what the tracker can hear.
 
 ## Rule
 
