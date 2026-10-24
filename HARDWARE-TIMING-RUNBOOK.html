@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Hardware timing runbook","url":"https://anentrypoint.github.io/mc-420/HARDWARE-TIMING-RUNBOOK.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e5eae8c65089616ec6b2b731448fbb7136bb47e4">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=92b9c680081f72351d6dd29694a140dbfaf030be">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -127,6 +127,16 @@
   <li>Put each run’s numbers in <code class="language-plaintext highlighter-rouge">docs/measurements-archive.md</code> under the row’s anchor. Do not write numbers into this runbook.</li>
   <li>Close a row only on a witness recorded in the ledger from a session other than the resolver’s.</li>
 </ul>
+
+<h2 id="deployment-gate-decision">Deployment gate (decision)</h2>
+
+<p>The timing changes are on <code class="language-plaintext highlighter-rouge">main</code> and deploy on the next boot through netboot. They are simulator-verified and CI-green, and nothing hardware-verified. Decision: keep them on <code class="language-plaintext highlighter-rouge">main</code>, and run this gate before the device is used for a session:</p>
+
+<ol>
+  <li>Confirm the served binary sha matches the <code class="language-plaintext highlighter-rouge">main</code> tip with <code class="language-plaintext highlighter-rouge">health</code>.</li>
+  <li>Run Steps 1 to 4 above. Any failure is a regression.</li>
+  <li>On any failure, revert the timing commits on <code class="language-plaintext highlighter-rouge">main</code> to the last green build before that session, and record the failing step in the row it belongs to.</li>
+</ol>
 
 
       </section>
