@@ -25,7 +25,7 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
 | trumpet_high_C6 | C6 1046.50 | 1049.13 | +4.3 c | -7.3 | -11.5 |
 | soprano_sax_high_C6 | C6 1046.50 | 1049.13 | +4.3 c | -16.7 | -25.4 |
 | clarinet_high_C6B6 | C6 1046.50 | 1049.13 | +4.3 c | -22.9 | -17.5 |
-| vibraphone_mid_C5B5 | C5 523.25 | 527.13 | +12.8 c | -28.5 | -39.0 |
+| vibraphone_mid_C5B5 | C5 523.25 | 527.13 | +12.8 c | -28.5 | -39.0 | PHRASE, see below |
 | marimba_mid_C5B5 | C5 523.25 | 559.64 | +116.4 c | -42.1 | -39.9 |
 
 `cello_low_sulC_A2` and `marimba_mid_C5B5` sit 27 c and 116 c above their labels, so scoring those
@@ -56,11 +56,11 @@ fundamental. Each needs a better measurement before it is used as a ground-truth
 
 | file | measured peak | vs label | why it is not reliable |
 |---|---|---|---|
-| bassoon_low_C2B2 | 486.70 | +3474.5 c | peak is a high partial, not the C2 fundamental |
+| bassoon_low_C2B2 | 486.70 | +3474.5 c | peak is a high partial; the comb certifies 69.68, see below |
 | tuba_run_C2B2 | 496.50 | +3509.1 c | `_run_` is a phrase, and 496.5 is not its fundamental |
-| trumpet_low_A3 | 1091.84 | +2773.4 c | about 5x the label; a partial; extended test finds the fundamental at 218.40 but it fails the 12 dB margin, see below |
-| violin_low_sulG_G3B3 | 394.71 | +1211.9 c | about 2x the label; second harmonic dominating |
-| oboe_mid_C5B5 | 556.85 | +107.8 c | h2 is +0.2 dB, so fundamental and 2nd harmonic tie |
+| trumpet_low_A3 | 1091.84 | +2773.4 c | about 5x the label; the comb certifies 218.35, see below |
+| violin_low_sulG_G3B3 | 394.71 | +1211.9 c | about 2x the label; the comb certifies 196.64, see below |
+| oboe_mid_C5B5 | 556.85 | +107.8 c | two pitch centres measured, 527.35 and 557.67, so no single target |
 
 Files whose names contain `_run_` or `_scale_` are phrases rather than single notes, and a
 highest-average-power method reports a dominant pitch for them, not the note a gate asks about.
@@ -86,6 +86,47 @@ harmonic series instead of the peak's own level would certify it. Witness:
 partial or a harmonic tie beating the fundamental - so a whole-series test would likely move them
 too. Until it exists, 8 of 34 files are scoreable and the gate measures what the reference can
 certify, not what the tracker can hear.
+
+## Comb certification (archive#corpus-comb-certification)
+
+`tools/pitch-reference/comb.mjs` scores every candidate f0 on a log grid by the power summed at
+k*f0 for k = 1..8, penalised 12 dB per partial that falls below the spectrum median plus 12 dB, and
+takes the LOWEST candidate within 3 dB of the best score. Lowest-wins is what makes it a comb and
+not a peak finder. A candidate with no energy at its own f0 is rejected outright: that one rule is
+what kills the sub-octave candidates, which otherwise score almost as well as the true fundamental
+because their even multiples land on the real harmonics.
+
+Run: `node tools/pitch-reference/comb.mjs --phrase marimba_mid_C5B5,vibraphone_mid_C5B5`, witness
+`.gm/witness/corpus-comb-certification.txt`.
+
+Against the Reliable table it reproduces 7 of 7 non-phrase entries within 6.2 c (piano 262.61 vs
+262.22, marimba_low 65.31 vs 65.21, cello 111.36 vs 111.76, trumpet_high 1045.45 vs 1049.13,
+soprano_sax 1050.68 vs 1049.13, clarinet 1045.45 vs 1049.13, marimba_mid 557.67 vs 559.64).
+
+Newly certified, each with no missing partial and a strong fundamental:
+
+| file | comb f0 | vs filename label | note |
+|---|---|---|---|
+| bassoon_low_C2B2 | 69.68 | +108 c vs C2 | ladder H1 58.1 .. H7 73.8 dB against a 3.4 dB floor; the label is not the note |
+| violin_low_sulG_G3B3 | 196.64 | +5.6 c vs G3 | the 394.71 peak is its 2nd harmonic |
+| trumpet_low_A3 | 218.35 | -13.0 c vs A3 | -0.4 c against the Goertzel sub-multiple value of 218.40 |
+| guitar_pluck_C4B4 | 294.53 | +5.1 c vs D4 | single struck note, confirmed by segmentation |
+
+`oboe_mid_C5B5` and `piano_low_A1` pass the comb rule but are NOT adopted: oboe carries two
+complete ladders a semitone apart (527.35 and 557.67, comb sums 42.7 and 51.6 dB), so a single
+target would be a coin flip, and piano_low_A1's 96.37 is dissonant with its own 275.02 peak.
+`vocal_female_vibrato` and `vocal_tenor_operatic_PD` pass too, but segmentation shows both move
+through several pitches, so one f0 is meaningless for them.
+
+`vibraphone_mid_C5B5` is a four-note run, the same shape as `marimba_mid_C5B5`: struck notes at
+527.3 / 559.6 / 591.8 / 627.0 Hz at 0.34 / 3.07 / 5.80 / 8.87 s, each about +100 c above the
+previous, separated by roughly 46 dB of silence (rms 0.034 against 0.0005). Its 527.13 entry above
+is the first note of that run, which is why the reference called it soft. Score it per note or not
+at all; it is not a single-note target, and it is no longer counted as one.
+
+Scoreable set: 10 files (6 of the previous 8 reliable entries, since vibraphone and marimba_mid are
+phrases, plus the 4 above). The gate had been counting 8 and 2 of those were phrase artifacts, so
+the real change is 6 to 10.
 
 ## Rule
 
