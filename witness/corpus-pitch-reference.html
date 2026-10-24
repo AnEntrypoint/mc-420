@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Corpus pitch reference","url":"https://anentrypoint.github.io/mc-420/witness/corpus-pitch-reference.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=6d12ab6111ca46a24baf18894a0f66ffc7017cf3">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=df8046e2f79f13cf6cf55f0b0209c2376666ee16">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -83,6 +83,7 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
       <th>vs label</th>
       <th>h2</th>
       <th>h3</th>
+      <th> </th>
     </tr>
   </thead>
   <tbody>
@@ -93,6 +94,7 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
       <td>+3.9 c</td>
       <td>-6.7</td>
       <td>-22.0</td>
+      <td> </td>
     </tr>
     <tr>
       <td>marimba_low_C2B2</td>
@@ -101,6 +103,7 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
       <td>-5.2 c</td>
       <td>-37.0</td>
       <td>-40.6</td>
+      <td> </td>
     </tr>
     <tr>
       <td>cello_low_sulC_A2</td>
@@ -109,6 +112,7 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
       <td>+27.4 c</td>
       <td>-2.4</td>
       <td>-8.7</td>
+      <td> </td>
     </tr>
     <tr>
       <td>trumpet_high_C6</td>
@@ -117,6 +121,7 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
       <td>+4.3 c</td>
       <td>-7.3</td>
       <td>-11.5</td>
+      <td> </td>
     </tr>
     <tr>
       <td>soprano_sax_high_C6</td>
@@ -125,6 +130,7 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
       <td>+4.3 c</td>
       <td>-16.7</td>
       <td>-25.4</td>
+      <td> </td>
     </tr>
     <tr>
       <td>clarinet_high_C6B6</td>
@@ -133,6 +139,7 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
       <td>+4.3 c</td>
       <td>-22.9</td>
       <td>-17.5</td>
+      <td> </td>
     </tr>
     <tr>
       <td>vibraphone_mid_C5B5</td>
@@ -141,6 +148,7 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
       <td>+12.8 c</td>
       <td>-28.5</td>
       <td>-39.0</td>
+      <td>PHRASE, see below</td>
     </tr>
     <tr>
       <td>marimba_mid_C5B5</td>
@@ -149,6 +157,7 @@ agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 v
       <td>+116.4 c</td>
       <td>-42.1</td>
       <td>-39.9</td>
+      <td> </td>
     </tr>
   </tbody>
 </table>
@@ -223,7 +232,7 @@ fundamental. Each needs a better measurement before it is used as a ground-truth
       <td>bassoon_low_C2B2</td>
       <td>486.70</td>
       <td>+3474.5 c</td>
-      <td>peak is a high partial, not the C2 fundamental</td>
+      <td>peak is a high partial; the comb certifies 69.68, see below</td>
     </tr>
     <tr>
       <td>tuba_run_C2B2</td>
@@ -235,19 +244,19 @@ fundamental. Each needs a better measurement before it is used as a ground-truth
       <td>trumpet_low_A3</td>
       <td>1091.84</td>
       <td>+2773.4 c</td>
-      <td>about 5x the label; a partial; extended test finds the fundamental at 218.40 but it fails the 12 dB margin, see below</td>
+      <td>about 5x the label; the comb certifies 218.35, see below</td>
     </tr>
     <tr>
       <td>violin_low_sulG_G3B3</td>
       <td>394.71</td>
       <td>+1211.9 c</td>
-      <td>about 2x the label; second harmonic dominating</td>
+      <td>about 2x the label; the comb certifies 196.64, see below</td>
     </tr>
     <tr>
       <td>oboe_mid_C5B5</td>
       <td>556.85</td>
       <td>+107.8 c</td>
-      <td>h2 is +0.2 dB, so fundamental and 2nd harmonic tie</td>
+      <td>two pitch centres measured, 527.35 and 557.67, so no single target</td>
     </tr>
   </tbody>
 </table>
@@ -276,6 +285,77 @@ harmonic series instead of the peak’s own level would certify it. Witness:
 partial or a harmonic tie beating the fundamental - so a whole-series test would likely move them
 too. Until it exists, 8 of 34 files are scoreable and the gate measures what the reference can
 certify, not what the tracker can hear.</p>
+
+<h2 id="comb-certification-archivecorpus-comb-certification">Comb certification (archive#corpus-comb-certification)</h2>
+
+<p><code class="language-plaintext highlighter-rouge">tools/pitch-reference/comb.mjs</code> scores every candidate f0 on a log grid by the power summed at
+k*f0 for k = 1..8, penalised 12 dB per partial that falls below the spectrum median plus 12 dB, and
+takes the LOWEST candidate within 3 dB of the best score. Lowest-wins is what makes it a comb and
+not a peak finder. A candidate with no energy at its own f0 is rejected outright: that one rule is
+what kills the sub-octave candidates, which otherwise score almost as well as the true fundamental
+because their even multiples land on the real harmonics.</p>
+
+<p>Run: <code class="language-plaintext highlighter-rouge">node tools/pitch-reference/comb.mjs --phrase marimba_mid_C5B5,vibraphone_mid_C5B5</code>, witness
+<code class="language-plaintext highlighter-rouge">.gm/witness/corpus-comb-certification.txt</code>.</p>
+
+<p>Against the Reliable table it reproduces 7 of 7 non-phrase entries within 6.2 c (piano 262.61 vs
+262.22, marimba_low 65.31 vs 65.21, cello 111.36 vs 111.76, trumpet_high 1045.45 vs 1049.13,
+soprano_sax 1050.68 vs 1049.13, clarinet 1045.45 vs 1049.13, marimba_mid 557.67 vs 559.64).</p>
+
+<p>Newly certified, each with no missing partial and a strong fundamental:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>file</th>
+      <th>comb f0</th>
+      <th>vs filename label</th>
+      <th>note</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>bassoon_low_C2B2</td>
+      <td>69.68</td>
+      <td>+108 c vs C2</td>
+      <td>ladder H1 58.1 .. H7 73.8 dB against a 3.4 dB floor; the label is not the note</td>
+    </tr>
+    <tr>
+      <td>violin_low_sulG_G3B3</td>
+      <td>196.64</td>
+      <td>+5.6 c vs G3</td>
+      <td>the 394.71 peak is its 2nd harmonic</td>
+    </tr>
+    <tr>
+      <td>trumpet_low_A3</td>
+      <td>218.35</td>
+      <td>-13.0 c vs A3</td>
+      <td>-0.4 c against the Goertzel sub-multiple value of 218.40</td>
+    </tr>
+    <tr>
+      <td>guitar_pluck_C4B4</td>
+      <td>294.53</td>
+      <td>+5.1 c vs D4</td>
+      <td>single struck note, confirmed by segmentation</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><code class="language-plaintext highlighter-rouge">oboe_mid_C5B5</code> and <code class="language-plaintext highlighter-rouge">piano_low_A1</code> pass the comb rule but are NOT adopted: oboe carries two
+complete ladders a semitone apart (527.35 and 557.67, comb sums 42.7 and 51.6 dB), so a single
+target would be a coin flip, and piano_low_A1’s 96.37 is dissonant with its own 275.02 peak.
+<code class="language-plaintext highlighter-rouge">vocal_female_vibrato</code> and <code class="language-plaintext highlighter-rouge">vocal_tenor_operatic_PD</code> pass too, but segmentation shows both move
+through several pitches, so one f0 is meaningless for them.</p>
+
+<p><code class="language-plaintext highlighter-rouge">vibraphone_mid_C5B5</code> is a four-note run, the same shape as <code class="language-plaintext highlighter-rouge">marimba_mid_C5B5</code>: struck notes at
+527.3 / 559.6 / 591.8 / 627.0 Hz at 0.34 / 3.07 / 5.80 / 8.87 s, each about +100 c above the
+previous, separated by roughly 46 dB of silence (rms 0.034 against 0.0005). Its 527.13 entry above
+is the first note of that run, which is why the reference called it soft. Score it per note or not
+at all; it is not a single-note target, and it is no longer counted as one.</p>
+
+<p>Scoreable set: 10 files (6 of the previous 8 reliable entries, since vibraphone and marimba_mid are
+phrases, plus the 4 above). The gate had been counting 8 and 2 of those were phrase artifacts, so
+the real change is 6 to 10.</p>
 
 <h2 id="rule">Rule</h2>
 

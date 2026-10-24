@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=6d12ab6111ca46a24baf18894a0f66ffc7017cf3">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=df8046e2f79f13cf6cf55f0b0209c2376666ee16">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -747,6 +747,33 @@ soprano_sax_high_C6: A -0.6, B -1.5. Lock at 110 Hz: 1.0 s both. The pre-registe
 B to beat A by at least 2.0 c on each low note; B gained 1.5 c and 0.6 c on the two lowest, so the
 verdict is NO-IMPROVEMENT and the constant stays at 0.01. cello got 3.9 c worse while sine 110 got
 9.2 c better, which the rule treats as observations, not a reason to move.</p>
+
+<h2 id="corpus-comb-certification-archivecorpus-comb-certification">Corpus comb certification (archive#corpus-comb-certification)</h2>
+
+<p>tools/pitch-reference/comb.mjs scores each candidate f0 on a 60-1500 Hz log grid by the power
+summed at k*f0 for k = 1..8, penalised 12 dB per partial below the spectrum median plus 12 dB, and
+takes the lowest candidate within 3 dB of the best. A candidate with no energy at its own f0 is
+rejected, which is what kills sub-octave candidates. Witness
+.gm/witness/corpus-comb-certification.txt.</p>
+
+<p>It reproduces 7 of 7 non-phrase Reliable entries within 6.2 c (piano 262.61 vs 262.22, marimba_low
+65.31 vs 65.21, cello 111.36 vs 111.76, trumpet_high 1045.45 vs 1049.13, soprano_sax 1050.68 vs
+1049.13, clarinet 1045.45 vs 1049.13, marimba_mid 557.67 vs 559.64). Newly certified: bassoon
+69.68 (H1 58.1 .. H7 73.8 dB against a 3.4 dB floor), violin_low_sulG 196.64 (+5.6 c vs G3),
+trumpet_low_A3 218.35 (-0.4 c against the 218.40 Goertzel value), guitar_pluck 294.53.</p>
+
+<p>Passing the rule but not adopted: oboe_mid_C5B5 has two complete ladders a semitone apart (527.35
+comb sum 42.7 dB, 557.67 comb sum 51.6 dB); piano_low_A1’s 96.37 is dissonant with its own 275.02
+peak; vocal_female_vibrato and vocal_tenor_operatic_PD move through several pitches by segmentation
+(vocal_female 835 -&gt; 764 -&gt; 729 Hz, vocal_tenor 518 -&gt; 474 -&gt; 553 Hz), so one f0 is meaningless.</p>
+
+<p>vibraphone_mid_C5B5 is a four-note run: 527.3 / 559.6 / 591.8 / 627.0 Hz at 0.34 / 3.07 / 5.80 /
+8.87 s, rms 0.034 against 0.0005 between notes, about +100 c per note. Its reference entry of
+527.13 was the first note of that run, not the file’s pitch.</p>
+
+<p>Scoreable set goes from 6 real single-note targets (the reference claimed 8; two were phrase
+artifacts) to 10. The pre-registered C3 threshold was 12 of 34 and was NOT met; the method itself
+is validated by C1, C2, C4 and C5 and is adopted for the files it certifies.</p>
 
 
       </section>
