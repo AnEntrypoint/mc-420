@@ -571,3 +571,29 @@ vibraphone_mid_C5B5 is a four-note run: 527.3 / 559.6 / 591.8 / 627.0 Hz at 0.34
 Scoreable set goes from 6 real single-note targets (the reference claimed 8; two were phrase
 artifacts) to 10. The pre-registered C3 threshold was 12 of 34 and was NOT met; the method itself
 is validated by C1, C2, C4 and C5 and is adopted for the files it certifies.
+
+## Marimba C2 offline reproduction (archive#marimba-c2-offline-reproduction)
+
+Harness: effects/pitchtracker-src/pitchtracker_ac.dsp (shipped tau 0.01 s, commit f3f07e76) compiled
+with faust -i -a tools/pitchtracker-render/pt_arch.cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -t 600 -cn
+pitchtracker (faust exit 0, 471 s, pt_dsp.cpp 125296 bytes), linked with tools/pitchtracker-render/
+pt_render.cpp, block 64, 48 kHz, float32 from marimba_low_C2B2.wav (480000 frames, 10 s). Settled
+statistic per the row: median of nonzero block-end Hz at t >= 1.0 s (6750 block ends).
+
+- Unscaled corpus input: settled median 69.767 Hz, 5492 voiced, p10 64.62, p90 685.71 Hz.
+  Against the measured peak 65.21: +117.0 c. Against the certified 65.31: +114.3 c.
+- Level-normalised input (tools/corpus-level/normalise-corpus.mjs, rms 0.1): settled median 69.767 Hz,
+  6158 voiced, p10 64.53, p90 72.95 Hz. The median is unchanged; the scaling removes the 685-717 Hz
+  spikes and raises voiced blocks from 81 to 91 percent of the window.
+- Top settled values on both inputs: 69.8 Hz (about 1335 blocks), 66.9 Hz, 70.5 Hz, and the octave
+  spikes 685.7 and 716.9 Hz (unscaled only). Minimum 60.00 Hz is the minTrackHz clamp; maximum
+  1500.00 Hz is the maxTrackHz clamp. The 60.00 floor is the same clamp class dawdreamer reports as
+  defect-tracker-value-clamp-60-192.
+
+M5 (pre-registered: the unmodified file must reproduce -46.5 c within 20 c): NOT MET. Offline the file
+reads +117.0 c against 65.21, a 163.5 c gap from the device claim. The offline result is a
+tracker-output fact, identical across two inputs and across dawdreamer's Kaggle kernel (69.77 Hz).
+The device's -46.5 c is not reproduced by this harness, so no fix is admitted under the row.
+The -46.5 c device claim remains unverified: the device is unplugged, so a witness needs hardware.
+The metric gates marimba_low_C2B2 as PASS because its thresholds set no absolute median limit by
+design (tools/corpus-pitch-metric/thresholds.json); the offline failure is therefore invisible to CI.
