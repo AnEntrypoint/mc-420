@@ -133,7 +133,7 @@ static double pickAnchorGridBeats(double takeLenBeats) {
     return 0.125;
 }
 
-static constexpr double kAnchorMidpointFrac = 0.4142135623730951;
+static constexpr double kNearCutBeats = 1.0;
 static constexpr double kWholeBeatSnapBeats = 0.4;
 
 long resampleLatencySamples(AudioThread* audio) {
@@ -320,13 +320,12 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             double pastNodeBeats = pastMultiple * anchorGridBeats;
             double futureNodeBeats = pastNodeBeats + anchorGridBeats;
             double overshootBeats = takeLenBeats - pastNodeBeats;
-            double cutToleranceBeats = anchorGridBeats * kAnchorMidpointFrac;
+            double cutToleranceBeats = std::min(kNearCutBeats, 0.5 * anchorGridBeats);
             double finalBeats = (std::fabs(takeLenBeats - 1.0) <= kWholeBeatSnapBeats)
                 ? 1.0
                 : ((pastMultiple >= 1.0 && overshootBeats <= cutToleranceBeats + 0.0001)
                     ? pastNodeBeats
-                    : futureNodeBeats);
-            double beatLenSamplesNow = oneBeatSamples * tempoScale;
+                    : futureNodeBeats);            double beatLenSamplesNow = oneBeatSamples * tempoScale;
             long quantized = (long)(finalBeats * beatLenSamplesNow + 0.5);
             if (quantized < 64) quantized = 64;
             if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;

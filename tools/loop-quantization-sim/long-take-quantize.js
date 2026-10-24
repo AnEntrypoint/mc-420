@@ -9,6 +9,13 @@ const kStepMs = 50;
 const kLengthToleranceBeats = 2.0;
 const kPhraseToleranceBeats = 0.02;
 const kExactBeats = { 1: 1, 2: 2, 3.4: 4 };
+const kCutCases = [
+  [2000, 2.5, 2, 'phrase 4: +0.5 past the half takes the half'],
+  [2000, 3.5, 4, 'phrase 4: +1.5 past the half takes the phrase'],
+  [2000, 4.5, 4, 'phrase 4: +0.5 past the phrase takes the phrase'],
+  [4000, 4.5, 4, 'phrase 8: +0.5 past the half takes the half'],
+  [4000, 5.5, 8, 'phrase 8: +1.5 past the half takes the phrase'],
+];
 const kTakeBeats = [
   1.0, 2.0, 3.4, 4.0, 4.6, 5.5, 8.0, 12.0, 14.0, 16.0, 16.4, 17.2, 18.0,
   19.0, 20.0, 21.5, 24.0, 32.5, 40.7, 64.3,
@@ -19,13 +26,13 @@ function advance(w, ms) {
   for (let i = 0; i < n; i++) W.stepOneSample(w);
 }
 
-function run(legacy, takeBeats) {
+function run(legacy, takeBeats, masterMs = kMasterHoldMs) {
   const w = W.createWorld({ looperCount: 4, initialLinkBpm: kBpm });
   w.legacyFinishAnchor = legacy;
 
   advance(w, 300);
   W.onPadPress(w, 0); W.onPadRelease(w, 0);
-  advance(w, kMasterHoldMs);
+  advance(w, masterMs);
   W.onPadPress(w, 0); W.onPadRelease(w, 0);
   advance(w, 1200);
 
@@ -77,8 +84,8 @@ function main() {
     }
     const longTake = beats >= 2 * fixed.phraseBeats;
     if (longTake) {
-      if (!(fixedOff <= kLengthToleranceBeats + 0.05)) {
-        console.log(`    FAIL: fixed run off by ${fixedOff.toFixed(3)} beats, tolerance ${kLengthToleranceBeats}`);
+      if (!(fixedOff <= fixed.phraseBeats)) {
+        console.log(`    FAIL: fixed run off by ${fixedOff.toFixed(3)} beats, tolerance one phrase (${fixed.phraseBeats})`);
         failed++;
       }
       const phraseErr = Math.abs(fixed.loopBeats / fixed.phraseBeats - Math.round(fixed.loopBeats / fixed.phraseBeats));
@@ -90,6 +97,13 @@ function main() {
       console.log(`    FAIL: take shorter than two phrases moved further off the performed length (${legacyOff.toFixed(3)} -> ${fixedOff.toFixed(3)})`);
       failed++;
     }
+  }
+
+  for (const [masterMs, beats, expected, label] of kCutCases) {
+    const fixed = run(false, beats, masterMs);
+    const ok = fixed.pending === 0 && Math.abs(fixed.samples - expected * fixed.oneBeat) <= 1;
+    console.log(`  cut ${label}: take ${beats} -> ${fixed.loopBeats.toFixed(3)} beats (want ${expected}) ${ok ? 'ok' : 'FAIL'}`);
+    if (!ok) failed++;
   }
 
   if (legacyCaught === 0) {
