@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const dgram = require('dgram');
 
-const ESP_STATUS_PORT = 20812;
+const ESP_STATUS_PORT = 20813;
 
 function parseArgs(argv) {
   const a = { aloop: null, esp: null, watch: false, timeoutMs: 2000 };
