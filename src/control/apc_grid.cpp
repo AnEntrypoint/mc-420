@@ -121,16 +121,12 @@ static TempoSolveResult deriveTempoQuant(double seconds, double anchorBpm = 120.
     }
     return best;
 }
-static double pickAnchorGridBeats(double takeLenBeats) {
+static double ladderAnchorBeats(double phraseBeats, double takeLenBeats) {
     const double eps = 0.01;
-    if (takeLenBeats > 16.0 + eps) return 16.0;
-    if (takeLenBeats > 8.0 + eps) return 8.0;
-    if (takeLenBeats > 4.0 + eps) return 4.0;
-    if (takeLenBeats > 2.0 + eps) return 2.0;
-    if (takeLenBeats > 1.0 + eps) return 1.0;
-    if (takeLenBeats > 0.5 + eps) return 0.5;
-    if (takeLenBeats > 0.25 + eps) return 0.25;
-    return 0.125;
+    double anchor = phraseBeats;
+    while (anchor * 0.5 >= 1.0 && anchor > takeLenBeats + eps) anchor *= 0.5;
+    if (anchor > takeLenBeats + eps) anchor = 1.0;
+    return anchor;
 }
 
 static constexpr double kNearCutBeats = 1.0;
@@ -313,14 +309,13 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             double beatsPerMasterLen = std::max(1.0f, ps.get("cmd/recorded_beats", 0.0f));
             double oneBeatSamples = std::max(1.0, (double)m_masterLenSamples / beatsPerMasterLen);
             double takeLenBeats = effectiveSamples / oneBeatSamples;
-            double anchorGridBeats = pickAnchorGridBeats(takeLenBeats);
             double phraseBeats = std::max(1.0, beatsPerMasterLen);
-            if (anchorGridBeats > phraseBeats) anchorGridBeats = phraseBeats;
+            double anchorGridBeats = ladderAnchorBeats(phraseBeats, takeLenBeats);
             double pastMultiple = std::floor(takeLenBeats / anchorGridBeats + 0.0001);
             double pastNodeBeats = pastMultiple * anchorGridBeats;
             double futureNodeBeats = pastNodeBeats + anchorGridBeats;
             double overshootBeats = takeLenBeats - pastNodeBeats;
-            double cutToleranceBeats = std::min(kNearCutBeats, 0.5 * anchorGridBeats);
+            double cutToleranceBeats = kNearCutBeats;
             double finalBeats = (std::fabs(takeLenBeats - 1.0) <= kWholeBeatSnapBeats)
                 ? 1.0
                 : ((pastMultiple >= 1.0 && overshootBeats <= cutToleranceBeats + 0.0001)

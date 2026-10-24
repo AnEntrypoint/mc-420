@@ -51,6 +51,14 @@ function pickAnchorGridBeats(takeLenBeats) {
   return 0.125;
 }
 
+function ladderAnchorBeats(phraseBeats, takeLenBeats) {
+  const eps = 0.01;
+  let anchor = phraseBeats;
+  while (anchor * 0.5 >= 1.0 && anchor > takeLenBeats + eps) anchor *= 0.5;
+  if (anchor > takeLenBeats + eps) anchor = 1.0;
+  return anchor;
+}
+
 function snapBeatsToPow2(continuousBeats) {
   let best = kCandidates[0];
   let bestDist = 1e18;
@@ -278,15 +286,15 @@ function applyRecPlayCycle(w, looper) {
       const beatsPerMasterLen = Math.max(1.0, w.recordedBeats);
       const oneBeat = Math.max(1.0, w.masterLenSamples / beatsPerMasterLen);
       const takeLenBeats = effectiveSamples / oneBeat;
-      let anchorGridBeats = pickAnchorGridBeats(takeLenBeats);
       const phraseBeats = Math.max(1.0, beatsPerMasterLen);
       const legacy = w.legacyFinishAnchor === true;
+      let anchorGridBeats = legacy ? pickAnchorGridBeats(takeLenBeats) : ladderAnchorBeats(phraseBeats, takeLenBeats);
       if (!legacy && anchorGridBeats > phraseBeats) anchorGridBeats = phraseBeats;
       const pastMultiple = Math.floor(takeLenBeats / anchorGridBeats + 0.0001);
       const pastNodeBeats = pastMultiple * anchorGridBeats;
       const futureNodeBeats = pastNodeBeats + anchorGridBeats;
       const overshootBeats = takeLenBeats - pastNodeBeats;
-      const cutToleranceBeats = legacy ? 1.0 : Math.min(NEAR_CUT_BEATS, 0.5 * anchorGridBeats);
+      const cutToleranceBeats = legacy ? 1.0 : NEAR_CUT_BEATS;
       let finalBeats = (!legacy && Math.abs(takeLenBeats - 1) <= WHOLE_BEAT_SNAP_BEATS)
         ? 1
         : ((pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001)
