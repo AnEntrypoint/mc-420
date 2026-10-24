@@ -95,6 +95,7 @@ function runFoldPair(opts) {
 
 function main() {
   let failed = 0;
+  console.log('[second-master: a second world creates its own master and re-imposes origin at phase 0; the device has no empty-slave adoption] loop-quantum fold');
   setPhaseQuantum(kCaptureQuantumBeats);
 
   for (const holdMs of [1500, 3000, 15000]) {

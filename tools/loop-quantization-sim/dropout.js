@@ -95,7 +95,7 @@ function main() {
   const legacy = run(false);
   const fixed = run(true);
 
-  console.log('dropout: mesh retunes while the link is down, then reconnects');
+  console.log('[second-master: a second world creates its own master and re-imposes origin at phase 0; the device has no empty-slave adoption] dropout: mesh retunes while the link is down, then reconnects');
   console.log(`  beats=${fixed.beatsA}, blackout ${kDropoutMs}ms at ${kNewTempo} BPM`);
   console.log(`  locked before:  A ${fixed.worstBeforeA.toFixed(3)} beats, B ${fixed.worstBeforeB.toFixed(3)} beats`);
   console.log(`  legacy (no re-snap on reconnect): settled after ${legacy.settledMs} ms, worst ${legacy.worst.toFixed(3)} beats, gap ${legacy.worstGap.toFixed(3)}`);

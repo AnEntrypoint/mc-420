@@ -171,7 +171,7 @@ function main() {
   const legacy = runLatePair(false);
   const fixed = runLatePair(true);
 
-  console.log('late join: A records and plays standalone, then B connects and records');
+  console.log('[second-master: B creates its own master and re-imposes origin at phase 0; the device has no empty-slave adoption] late join: A records and plays standalone, then B connects and records');
   console.log(`  beats=${fixed.beatsA}/${fixed.beatsB}`);
   console.log(`  legacy (no snap on join): settled after ${legacy.settledMs} ms`);
   console.log(`  fixed  (snap on join):    settled after ${fixed.settledMs} ms`);

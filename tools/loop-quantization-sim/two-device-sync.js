@@ -111,6 +111,7 @@ function main() {
   let failed = 0;
   setPhaseQuantum(128.0);
 
+  console.log('[second-master: B creates its own master and re-imposes origin at phase 0; the device has no empty-slave adoption] two-device sync');
   for (const holdMs of [2000, 1500, 2600]) {
     const legacy = runPair({ holdMs, phaseLock: false, loopPhaseCapture: false });
     const fixed = runPair({ holdMs, phaseLock: true });

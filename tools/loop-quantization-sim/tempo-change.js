@@ -110,7 +110,7 @@ function main() {
   const legacy = worstOver(false);
   const fixed = worstOver(true);
 
-  console.log('tempo change: loops recorded at 120 must stay locked when the mesh retunes');
+  console.log('[second-master: a second world creates its own master and re-imposes origin at phase 0; the device has no empty-slave adoption] tempo change: loops recorded at 120 must stay locked when the mesh retunes');
   console.log(`  beats=${fixed.beatsA}, retuned to ${kTempoChanges.join('/')} BPM`);
   console.log(`  locked before:  A ${fixed.worstBeforeA.toFixed(3)} beats, B ${fixed.worstBeforeB.toFixed(3)} beats`);
   console.log(`  legacy (anchor ignores varispeed): settled A ${legacy.lateA.toFixed(3)} beats, B ${legacy.lateB.toFixed(3)} beats, gap ${legacy.worstGap.toFixed(3)}`);

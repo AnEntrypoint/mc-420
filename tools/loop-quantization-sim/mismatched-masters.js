@@ -46,7 +46,7 @@ function run(phaseLock, aMs, bMs) {
 
 function main() {
   let failed = 0;
-  console.log('mismatched masters: two devices each establish their own phrase length');
+  console.log('[second-master: each device creates its own master and re-imposes origin at phase 0; the device has no empty-slave adoption] mismatched masters: two devices each establish their own phrase length');
   console.log('  each device is asserted against absolute grid time, not against its peer,');
   console.log('  because mismatched phrase lengths make an A/B gap meaningless.');
 

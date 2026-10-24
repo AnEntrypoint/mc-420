@@ -109,7 +109,7 @@ function main() {
   const legacy = worstOver(false);
   const fixed = worstOver(true);
 
-  console.log('read-head lineup: each loop must sound the material belonging at this grid instant');
+  console.log('[second-master: a second world creates its own master and re-imposes origin at phase 0; the device has no empty-slave adoption] read-head lineup: each loop must sound the material belonging at this grid instant');
   console.log(`  beats=${fixed.beats}, lead offsets=${kLeadOffsetsMs.join('/')}ms`);
   console.log(`  legacy (no phase lock): A ${legacy.worstA.toFixed(3)} beats, B ${legacy.worstB.toFixed(3)} beats`);
   console.log(`  fixed  (phase lock):    A ${fixed.worstA.toFixed(3)} beats, B ${fixed.worstB.toFixed(3)} beats`);
