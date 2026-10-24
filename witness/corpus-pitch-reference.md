@@ -118,11 +118,11 @@ target would be a coin flip, and piano_low_A1's 96.37 is dissonant with its own 
 `vocal_female_vibrato` and `vocal_tenor_operatic_PD` pass too, but segmentation shows both move
 through several pitches, so one f0 is meaningless for them.
 
-`vibraphone_mid_C5B5` is a four-note run, the same shape as `marimba_mid_C5B5`: struck notes at
-527.3 / 559.6 / 591.8 / 627.0 Hz at 0.34 / 3.07 / 5.80 / 8.87 s, each about +100 c above the
-previous, separated by roughly 46 dB of silence (rms 0.034 against 0.0005). Its 527.13 entry above
-is the first note of that run, which is why the reference called it soft. Score it per note or not
-at all; it is not a single-note target, and it is no longer counted as one.
+`vibraphone_mid_C5B5` is a PHRASE, not one note: a four-note run, the same shape as
+`marimba_mid_C5B5`, with struck notes at 527.3 / 559.6 / 591.8 / 627.0 Hz at 0.34 / 3.07 / 5.80 /
+8.87 s, each about +100 c above the previous, separated by roughly 46 dB of silence (rms 0.034
+against 0.0005). Its 527.13 entry above is the first note of that run, which is why the reference
+called it soft. Score it per note or not at all; the metric measures it and does not gate it.
 
 Scoreable set: 10 files (6 of the previous 8 reliable entries, since vibraphone and marimba_mid are
 phrases, plus the 4 above). The gate had been counting 8 and 2 of those were phrase artifacts, so
