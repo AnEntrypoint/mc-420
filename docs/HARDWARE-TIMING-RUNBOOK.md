@@ -52,3 +52,11 @@ Status: written offline, not yet run. Every step is untested on the 420. Run it 
 
 - Put each run's numbers in `docs/measurements-archive.md` under the row's anchor. Do not write numbers into this runbook.
 - Close a row only on a witness recorded in the ledger from a session other than the resolver's.
+
+## Deployment gate (decision)
+
+The timing changes are on `main` and deploy on the next boot through netboot. They are simulator-verified and CI-green, and nothing hardware-verified. Decision: keep them on `main`, and run this gate before the device is used for a session:
+
+1. Confirm the served binary sha matches the `main` tip with `health`.
+2. Run Steps 1 to 4 above. Any failure is a regression.
+3. On any failure, revert the timing commits on `main` to the last green build before that session, and record the failing step in the row it belongs to.
