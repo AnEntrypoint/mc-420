@@ -287,11 +287,13 @@ function applyRecPlayCycle(w, looper) {
       const futureNodeBeats = pastNodeBeats + anchorGridBeats;
       const overshootBeats = takeLenBeats - pastNodeBeats;
       const cutToleranceBeats = legacy ? 1.0 : Math.min(NEAR_CUT_BEATS, 0.5 * anchorGridBeats);
-      const finalBeats = (!legacy && Math.abs(takeLenBeats - 1) <= WHOLE_BEAT_SNAP_BEATS)
+      let finalBeats = (!legacy && Math.abs(takeLenBeats - 1) <= WHOLE_BEAT_SNAP_BEATS)
         ? 1
         : ((pastMultiple >= 1 && overshootBeats <= cutToleranceBeats + 0.0001)
           ? pastNodeBeats
-          : futureNodeBeats);      const beatLenSamplesNow = w.tempoScaleInverted ? oneBeat / tempoScale : oneBeat * tempoScale;
+          : futureNodeBeats);
+      if (!legacy && takeLenBeats < 2 * phraseBeats && finalBeats > phraseBeats) finalBeats = phraseBeats;
+      const beatLenSamplesNow = w.tempoScaleInverted ? oneBeat / tempoScale : oneBeat * tempoScale;
       let quantized = Math.round(finalBeats * beatLenSamplesNow);
       if (quantized < 1) quantized = 1;
       if (quantized > SIM_MAXLEN) quantized = SIM_MAXLEN;

@@ -325,7 +325,9 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
                 ? 1.0
                 : ((pastMultiple >= 1.0 && overshootBeats <= cutToleranceBeats + 0.0001)
                     ? pastNodeBeats
-                    : futureNodeBeats);            double beatLenSamplesNow = oneBeatSamples * tempoScale;
+                    : futureNodeBeats);
+            if (takeLenBeats < 2.0 * phraseBeats && finalBeats > phraseBeats) finalBeats = phraseBeats;
+            double beatLenSamplesNow = oneBeatSamples * tempoScale;
             long quantized = (long)(finalBeats * beatLenSamplesNow + 0.5);
             if (quantized < 64) quantized = 64;
             if (quantized > kMaxLoopSamples) quantized = kMaxLoopSamples;

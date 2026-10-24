@@ -13,6 +13,7 @@ const kCutCases = [
   [2000, 2.5, 2, 'phrase 4: +0.5 past the half takes the half'],
   [2000, 3.5, 4, 'phrase 4: +1.5 past the half takes the phrase'],
   [2000, 4.5, 4, 'phrase 4: +0.5 past the phrase takes the phrase'],
+  [2000, 6.0, 4, 'phrase 4: far-extend capped at one phrase'],
   [4000, 4.5, 4, 'phrase 8: +0.5 past the half takes the half'],
   [4000, 5.5, 8, 'phrase 8: +1.5 past the half takes the phrase'],
 ];
