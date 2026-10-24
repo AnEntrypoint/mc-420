@@ -54,7 +54,7 @@ Real Pi 4 root/aloop at `192.168.137.132`; `.100` is the cmdline-pinned netboot 
 
 ## Ableton Link checklist
 
-- `commitAppSessionState()` off-audio-thread (the only commit we make; `src/` has no `commitAudioSessionState`); the audio thread only calls `LinkBridge::audioRead()`, a lock-free double-buffered `LinkSnapshot` stamped `CLOCK_MONOTONIC`, extrapolated at session tempo.
+- `commitAppSessionState()` off-audio-thread (the only commit we make; `src/` has no audio-thread commit); the audio thread only calls `LinkBridge::audioRead()`, a lock-free double-buffered `LinkSnapshot` stamped `CLOCK_MONOTONIC`, extrapolated at session tempo.
 - `setTempo` rewrites EVERY peer; `imposeTempo(bpm)` is the only writer of `weOwnTempo`; never gate `linkSpeedRatio` on it; `imposeTempo()` republishes in the same call or the finish edge doubles the take. (archive#link-tempo-authority)
 - CLOCK-ONLY FOREVER (user decision: a localized stop must not stop the others): `enableStartStopSync(false)`, never `setIsPlaying`; tempo + phase shared, transport NEVER. `setIsPlaying*` exists ONLY in `tools/loop-quantization-sim/` -> peer `isPlaying()` ALWAYS false.
 - Phase trim applies to `masterPhaseSamples` ONLY, ZEROED unless `linkVarispeedEngaged && !manualPunchActive`; `masterPhaseBuf` ramps per-sample (never `std::fill()`); `effSpeed` carries TEMPO alone; `masterPhaseSamples` advances at `linkSpeedRatio` ALONE. (archive#link-phase-trim)
