@@ -88,6 +88,9 @@ jobs:
       - name: Resample backdate tracks the measured fold latency
         run: node tools/loop-quantization-sim/resample-backdate.js
 
+      - name: Resample impulse lands on the master grid
+        run: node tools/loop-quantization-sim/resample-impulse-landing.js
+
       - name: Fold error on the 128-quantum capture
         run: node tools/loop-quantization-sim/loop-quantum-fold.js
 

@@ -10,7 +10,7 @@ function initLooperDsp() {
   return {
     fin: 0, act: 0, widx: 0, wlen: 1, rsm: 0, coff: 0, rpos: 0, gate: 0,
     beatScale: 1, bakedSpeed: 1,
-    recPrevEdge: 0,
+    recPrevEdge: 0, buf: [],
   };
 }
 
@@ -18,7 +18,7 @@ function stepSample(s, inp) {
   const {
     recN, finishReqN, finishTargetN, eraseN, clearAll,
     masterPhase, masterPhasePrev, masterLen, recordedBeats,
-    effSpeed, manualSpeed,
+    effSpeed, manualSpeed, inputSample = 0,
   } = inp;
 
   const wipe = Math.max(clearAll, eraseN);
@@ -42,6 +42,7 @@ function stepSample(s, inp) {
   const gateOf = (x) => (actNext > 0.5 ? 1 : 0) * (1 - (finNext > 0.5 ? 1 : 0) * (x >= finishTargetN ? 1 : 0));
   const gateCur = gateOf(s.widx);
   const widxNext = armEdge ? 0 : (gateCur > 0.5 ? Math.min(s.widx + 1, MAXLEN - 1) : s.widx);
+  if (gateCur > 0.5 && inputSample !== 0) s.buf[widxNext] = inputSample;
 
   const finishEdge = gateCur < 0.5 && s.gate > 0.5;
   const gateNext = gateCur;
@@ -104,6 +105,7 @@ function stepSample(s, inp) {
     rsm: rsmNext, coff: coffNext, rpos: rposNext, gate: gateNext,
     beatScale: beatScaleNext, bakedSpeed: bakedSpeedNext,
     recPrevEdge: recN > 0.5 ? 1 : 0,
+    buf: s.buf, out: s.buf[Math.floor(rposNext)] || 0,
     armEdge, finishEdge,
   };
 }

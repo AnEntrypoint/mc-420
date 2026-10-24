@@ -604,6 +604,7 @@ function stepOneSample(w) {
       recordedBeats: w.recordedBeats,
       effSpeed, manualSpeed: w.manualSpeedMul, latencyBiasN: lp.ps_latencybias,
       resyncCoeff: kResyncCoeffPerSample, legacyBake: w.legacyBakeVarispeed === true,
+      inputSample: w.inputImpulse && w.inputImpulse.at === w.t ? w.inputImpulse.amp : 0,
     };
     const next = stepSample(lp.dsp, inp);
     lp.dsp = next;
