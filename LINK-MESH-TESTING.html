@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop &lt;-&gt; esp-idf-link mesh: first-contact test plan","url":"https://anentrypoint.github.io/mc-420/LINK-MESH-TESTING.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=58abdbdc74a065e4b518c96c98db058979130dcd">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=a3eb6e6a266a283d0c36bfafbd28c3f51fbd4d8a">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -264,7 +264,7 @@ below no longer need a human watching a serial console next to a curl:</p>
 <ul>
   <li><strong>aloop</strong>: <code class="language-plaintext highlighter-rouge">/run/aloop/status.json</code> carries
 <code class="language-plaintext highlighter-rouge">link.{synced,bpm,peers,playing}</code> plus <code class="language-plaintext highlighter-rouge">wifi: "ap"|"sta"</code>.</li>
-  <li><strong>esp-idf-link</strong>: a UDP status responder on port <strong>20812</strong>
+  <li><strong>esp-idf-link</strong>: a UDP status responder on port <strong>20813</strong>
 (<code class="language-plaintext highlighter-rouge">main/link_sync.cpp</code>’s <code class="language-plaintext highlighter-rouge">status_responder_task</code>) replies to any datagram
 with one JSON line: <code class="language-plaintext highlighter-rouge">peers</code>, <code class="language-plaintext highlighter-rouge">bpm</code>, <code class="language-plaintext highlighter-rouge">playing</code>, <code class="language-plaintext highlighter-rouge">beat</code>, <code class="language-plaintext highlighter-rouge">phase</code>,
 <code class="language-plaintext highlighter-rouge">quantum</code>, <code class="language-plaintext highlighter-rouge">ap</code>.</li>

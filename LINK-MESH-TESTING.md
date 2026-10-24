@@ -164,7 +164,7 @@ below no longer need a human watching a serial console next to a curl:
 
 - **aloop**: `/run/aloop/status.json` carries
   `link.{synced,bpm,peers,playing}` plus `wifi: "ap"|"sta"`.
-- **esp-idf-link**: a UDP status responder on port **20812**
+- **esp-idf-link**: a UDP status responder on port **20813**
   (`main/link_sync.cpp`'s `status_responder_task`) replies to any datagram
   with one JSON line: `peers`, `bpm`, `playing`, `beat`, `phase`,
   `quantum`, `ap`.
