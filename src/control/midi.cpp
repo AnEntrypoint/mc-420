@@ -79,6 +79,7 @@ static bool beatClockUsable(const AudioThread::Telemetry& t) {
     return t.linkSynced && t.bpm > 1.0f && t.masterLenSamples > 0.0f;
 }
 
+constexpr int kBeatLeadMs = 30;
 static int millisToNextBeat(const LinkBridge::BeatMark& bm, int capMs) {
     long ms = (long)((bm.nextBeatMicros - bm.nowMicros + 999) / 1000);
     if (ms < 1) ms = 1;
@@ -222,7 +223,8 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
             LinkBridge::BeatMark bm = link->beatMarkNow();
             if (bm.valid) {
                 beatClockLive = true;
-                waitMs = millisToNextBeat(bm, kPollTimeoutMs);
+                const int leadWaitMs = millisToNextBeat(bm, kPollTimeoutMs) - kBeatLeadMs;
+                waitMs = leadWaitMs < 1 ? 1 : leadWaitMs;
             }
         }
 
@@ -236,7 +238,8 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         if (beatClockLive) {
             LinkBridge::BeatMark bm = link->beatMarkNow();
             if (bm.valid) {
-                beatIndex = bm.index;
+                const bool leadOpen = bm.nextBeatMicros - bm.nowMicros <= static_cast<int64_t>(kBeatLeadMs) * 1000;
+                beatIndex = leadOpen ? (bm.index + 1) % static_cast<int>(kLinkQuantum) : bm.index;
                 if (bm.index != lastPadBeatIndex) {
                     lastPadBeatIndex = bm.index;
                     publishBeatPadMark(bm.index, bm.nowMicros - bm.curBeatMicros, bm.bpm);
