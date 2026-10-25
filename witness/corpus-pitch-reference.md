@@ -132,9 +132,3 @@ the real change is 6 to 10.
 
 A gate that scores pitch against a target note must either use a measured peak from this table, or
 record the measurement it used with the run. Do not take the note from the filename.
-
-## Scope of a settled metric (marimba_low_C2B2)
-
-The peak above is measured over the first 6 s. The settled metric in `tools/pitchtracker-render/render_corpus.py` (`SETTLE_S = 1.0`) scores every voiced block from 1.0 s to the end of the file, so the two windows disagree for this file. The 6-10 s tail is quiet (rms -36 dBFS) and its dominant periodicity is 69.6-69.8 Hz: the Goertzel peak over 6-10 s is 69.58 Hz with 65.21 Hz 12.9 dB below it, and the normalised autocorrelation of the raw file reaches r >= 0.998 at lags 677-691 over 6.5-9.5 s. In the same CI trace the 1.0-3.6 s sustain settles at 65.526 Hz (+8.4 c). The settled value of 69.767 Hz (+116.95 c) comes from the tail: 47.5 percent of the 6-10 s voiced blocks sit at exactly that value.
-
-Witness: dispatch 1792922745694-3069-404da0200617f3 (session verify-defect-marimba-c2-offline-plus117c), over CI run 40178097047 traces and the corpus wav. 69.77 / 65.21 is not an integer or simple ratio, so the offset is not an octave or harmonic lock. A settled metric must score the window its reference covers, or the reference must be measured over the scored window. Choosing between them is an owner decision (decision-marimba-c2-metric-window).
