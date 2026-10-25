@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=38c2ae1f63dd8c633ce4acf11cd82e827b1d189a">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=ff53699e9b1c37720fb024c7f0f9cecbf868f381">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1010,6 +1010,13 @@ on references).</p>
 </ul>
 
 <p>Verdict: the gain convention explains 20 of the 23 silent inputs. The 27/7 counts in the row are refuted. The remaining 3 are a tracker-level question (confidence, octave flicker or value clamp at the corpus gain) and need per-file settled output from the shipped tracker at that gain. Row: gate-silence-23-of-37 (open); residual row: gate-silence-23-of-37-ready-unvoiced. The fix belongs to gate-level-normalisation.</p>
+
+<h2 id="marimba-c2-settled-window-scope-defect-marimba-c2-offline-plus117c">Marimba C2 settled-window scope (defect-marimba-c2-offline-plus117c)</h2>
+
+<ul>
+  <li>CI run 40178097047 (pt-render-base, unmodified tracker) settles marimba_low_C2B2 at 69.767 Hz (+116.95 c) over every voiced block from t &gt;= 1.0 s. The same trace split by window: 1.0-3.6 s median 65.526 Hz (+8.4 c, 1950 blocks); 6-10 s median 69.767 Hz (2733 blocks, 47.5 percent at exactly 69.767). Raw-file Goertzel: [0,6) s peak 65.21 Hz (the reference), [6,10) s peak 69.58 Hz with 65.21 Hz 12.9 dB below it, tail rms -36 dBFS. Normalised autocorrelation of the raw file at 6.5-9.5 s peaks at lags 677-691 (r &gt;= 0.998). 69.77 / 65.21 is not an integer or simple ratio, so the offset is not an octave or harmonic lock. Witness: dispatch 1792922745694-3069-404da0200617f3 (verify-defect-marimba-c2-offline-plus117c). Window choice: decision-marimba-c2-metric-window.</li>
+  <li>Tracker-side knobs on a replica of pitchtracker_ac.dsp (matches the CI settled values of 32 corpus files to 0.01 c and voiced counts exactly): octave gate 0.03, coarse tau 0.03 below 100 Hz, coarse tau 0.02 or 0.03 below 150 Hz, saturated-refinement guard, refinement cap 64, corrAtLagVar tau 0.02. None moves marimba_low_C2B2 within 10 c. Cap 64 gives 68.549 Hz and moves cello_low_sulC_A2 to -17.4 c. Witness: dispatch 1792922662704-3054-15dbb2040cfbe7da.</li>
+</ul>
 
 
       </section>
