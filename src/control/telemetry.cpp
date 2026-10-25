@@ -136,7 +136,7 @@ void Telemetry::publish() {
         "\"beat_mark\":{\"valid\":%s,\"beat\":%.5f,\"index\":%d,\"ms_to_next\":%.1f,\"late_ms\":%.3f},"
         "\"beat_pad_mark\":{\"seq\":%llu,\"index\":%d,\"late_ms\":%.3f,\"age_ms\":%lld,\"bpm\":%.3f},"
         "\"groove\":{\"shuffle\":%d,\"gate\":%d,\"beat_len_samples\":%.1f,\"gate_min\":%.3f,\"gate_max\":%.3f,\"swing_offset_samples\":%.1f,\"swing_grid_beats\":%.3f},"
-        "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s,\"stateflags\":%s,\"latencybias\":%s},\"sample_clock\":{\"audio_samples\":%llu,\"last_take_arm_sample\":%llu,\"last_take_span_samples\":%.1f,\"master_phase_samples\":%.1f,\"link_target_samples\":%.1f,\"link_capture_us\":%.0f,\"link_now_us\":%.0f,\"link_loop_phase_beats\":%.4f,\"create_audio_samples\":%.1f,\"create_span_samples\":%.1f,\"create_master_len\":%.1f,\"create_phase_samples\":%.1f}}",
+        "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s,\"stateflags\":%s,\"latencybias\":%s},\"sample_clock\":{\"audio_samples\":%llu,\"last_take_arm_sample\":%llu,\"last_take_span_samples\":%.1f,\"master_phase_samples\":%.1f,\"link_target_samples\":%.1f,\"link_capture_us\":%.0f,\"link_now_us\":%.0f,\"link_loop_phase_beats\":%.4f,\"create_audio_samples\":%.1f,\"create_span_samples\":%.1f,\"create_master_len\":%.1f,\"create_phase_samples\":%.1f,\"impose_audio_samples\":%.1f,\"impose_target_samples\":%.1f}}",
         t.coreBusyPct[0], t.coreBusyPct[1], t.coreBusyPct[2], t.coreBusyPct[3],
         (unsigned long long)t.xruns,
         t.linkSynced ? "true" : "false", t.bpm,
@@ -163,7 +163,8 @@ void Telemetry::publish() {
         (unsigned long long)t.audioSampleCount, (unsigned long long)t.lastTakeArmSample,
         t.lastTakeSpanSamples, t.masterPhaseSamples,
         t.linkTargetSamples, t.linkCaptureUs, t.linkNowUs, t.linkLoopPhaseBeats,
-        t.createAudioSamples, t.createSpanSamples, t.createMasterLen, t.createPhaseSamples);
+        t.createAudioSamples, t.createSpanSamples, t.createMasterLen, t.createPhaseSamples,
+        t.imposeAudioSamples, t.imposeTargetSamples);
 
     FILE* statusFile = fopen("/run/aloop/status.json", "w");
     if (statusFile) { fwrite(json, 1, (size_t)n, statusFile); fclose(statusFile); }

@@ -108,6 +108,8 @@ public:
         double   createSpanSamples = 0.0;
         double   createMasterLen = 0.0;
         double   createPhaseSamples = 0.0;
+        double   imposeAudioSamples = -1.0;
+        double   imposeTargetSamples = -1.0;
         int      clipExportState = 0;
         int      gridBeatIndex = -1;
         float    masterLenSamples = 0.0f;

@@ -909,6 +909,8 @@ static void* worker(void*) {
                         const int64_t imposeMicros = (int64_t)imposeTs.tv_sec * 1000000 + imposeTs.tv_nsec / 1000;
                         const int64_t armMicros = g_link->recordArmMicros();
                         g_link->requestPhaseImpose(0.0, armMicros > 0 ? armMicros : imposeMicros, (double)recordedBeatsShared);
+                        g_telem.imposeAudioSamples = (double)audioSampleCount;
+                        g_telem.imposeTargetSamples = -1.0;
                     }
                 }
 
@@ -948,6 +950,7 @@ static void* worker(void*) {
                             linkTargetSamples = loopBeatPos * beatLenSamplesShared;
                             haveLinkTarget = true;
                             g_telem.linkTargetSamples = linkTargetSamples;
+                            if (masterJustCreated) g_telem.imposeTargetSamples = linkTargetSamples;
                             g_telem.linkCaptureUs = (double)linkSnap.captureMicros;
                             g_telem.linkNowUs = nowMicros;
                             g_telem.linkLoopPhaseBeats = (double)linkSnap.loopPhaseMicroBeats / 1e6;
