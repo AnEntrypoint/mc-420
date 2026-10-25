@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=801137d652c0e29b8e1d511a8c7cf4d697763874">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5fffc35aed63174e2711dfab471f96ad4c37c1f2">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -780,6 +780,13 @@ loaded, so ordinary sampler playback is untouched.</p>
 <ul>
   <li>Change: <code class="language-plaintext highlighter-rouge">src/control/telemetry.cpp</code>, status buffer 8192 bytes with an overflow guard (commit <code class="language-plaintext highlighter-rouge">a3016211</code>).</li>
   <li>Witness: live status reply from the deployed build (sha256 <code class="language-plaintext highlighter-rouge">76e844a9</code>, CI build of <code class="language-plaintext highlighter-rouge">ae38d08b</code>), rendered length 1979 bytes, valid JSON, verify dispatch <code class="language-plaintext highlighter-rouge">1792939127238-4456-7f26503382a48bc3</code>.</li>
+</ul>
+
+<h2 id="writer-lock-check-counts-committable-changes-2026-10-25-row-writer-lock-check-counts-untracked-gm-state">Writer-lock check counts committable changes, 2026-10-25 (row writer-lock-check-counts-untracked-gm-state)</h2>
+
+<ul>
+  <li>Change: gm-mcp <code class="language-plaintext highlighter-rouge">fe30b69</code>. The writer_lock check excludes gm runtime state under <code class="language-plaintext highlighter-rouge">.gm</code> and <code class="language-plaintext highlighter-rouge">.agentplug</code>, so a clean checkout is no longer reported as not_clean.</li>
+  <li>Witness: verify dispatch <code class="language-plaintext highlighter-rouge">1792942081993-1411264-0b02732382860cc3</code> (gm ledger), dirty=8 with <code class="language-plaintext highlighter-rouge">.gm</code> excluded.</li>
 </ul>
 
 
