@@ -643,3 +643,8 @@ Kept open, with the blocker:
 
 - Change: `src/control/telemetry.cpp`, status buffer 8192 bytes with an overflow guard (commit `a3016211`).
 - Witness: live status reply from the deployed build (sha256 `76e844a9`, CI build of `ae38d08b`), rendered length 1979 bytes, valid JSON, verify dispatch `1792939127238-4456-7f26503382a48bc3`.
+
+## Writer-lock check counts committable changes, 2026-10-25 (row writer-lock-check-counts-untracked-gm-state)
+
+- Change: gm-mcp `fe30b69`. The writer_lock check excludes gm runtime state under `.gm` and `.agentplug`, so a clean checkout is no longer reported as not_clean.
+- Witness: verify dispatch `1792942081993-1411264-0b02732382860cc3` (gm ledger), dirty=8 with `.gm` excluded.
