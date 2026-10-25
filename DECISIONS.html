@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=418ec1dc666a9cf505afd13f5e47f82bd55f6c7c">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d31c49f3c99784f8159ead02b866e6f863fc9e9d">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -714,6 +714,18 @@ loaded, so ordinary sampler playback is untouched.</p>
   </li>
   <li>Pins outside PINNED_HZ, including 1500.0 at maxTrackHz, are not excluded and are reported as observed.</li>
   <li>Verdict: the row is resolved if P1 to P4 pass on the full corpus. P5 is recorded either way. Thresholds are not changed after a run.</li>
+</ul>
+
+<h2 id="verdict-pinned-value-voicing-gate-2026-10-25-row-defect-tracker-value-clamp-60-192">Verdict: pinned-value voicing gate, 2026-10-25 (row defect-tracker-value-clamp-60-192)</h2>
+
+<ul>
+  <li>Witness: dispatch 1792923974362-3155-fa202804fe298590 (session verify-defect-tracker-value-clamp-60-192, in .gm/exec-spool/.dispatch-ledger.json). It runs the committed render_corpus.py at 0e3d6f6c over the traces of CI run 40180595931 (sha 263b94dc) and reproduces each raw settled value and voiced count of the CI json exactly before it applies the pin rule. CI for 0e3d6f6c: success.</li>
+  <li>P1 (no loss): PASS on base, coarse-gate and corr-tau-0.02. No reliable non-phrase file lost voicing.</li>
+  <li>P2 (no move toward a pin): PASS on all three variants.</li>
+  <li>P3 (no file settles at a pin): PASS on all three variants.</li>
+  <li>P4 (unpinned files unchanged): PASS on all three variants.</li>
+  <li>Non-phrase voiced count, 32 files: base 31 raw to 29 under the pin rule; coarse-gate 31 to 29; corr-tau-0.02 30 to 29. The pinned-only files cymbal_inharmonic and piano_low_A1 are no longer voiced in base and coarse-gate. The 192.0 pins on violin_low_sulG_G3B3, violin_high_sulE_C7E7 and xylophone_run_C7B7 are excluded, and the files now read the unpinned values recorded in the follow-up rows.</li>
+  <li>Verdict: resolved on the gate criterion. The source of the 192.0 pin is not traced in the DSP, so that acceptance clause is split into defect-pin-192-dsp-source. The unpinned readings on those files are split into defect-pin-hidden-readings. The registered threshold of 22 is not recomputable in this repo and is handed to its owner in gate-level-normalised-pin-rule-reregister.</li>
 </ul>
 
 <h2 id="verdict-v2-2093-hz-register-candidate-2026-10-25-row-defect-sine-2093-subharmonic">Verdict v2: 2093 Hz register candidate, 2026-10-25 (row defect-sine-2093-subharmonic)</h2>
