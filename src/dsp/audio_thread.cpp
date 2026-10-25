@@ -898,6 +898,10 @@ static void* worker(void*) {
                 if (masterJustCreated) {
                     masterPhaseSamples = (lastTakeSpanSamples > 0.0 && masterLen > 0.0f)
                         ? std::fmod(lastTakeSpanSamples, (double)masterLen) : 0.0;
+                    g_telem.createAudioSamples = (double)audioSampleCount;
+                    g_telem.createSpanSamples = lastTakeSpanSamples;
+                    g_telem.createMasterLen = (double)masterLen;
+                    g_telem.createPhaseSamples = masterPhaseSamples;
                     linkPhaseTrim = 0.0;
                     if (g_link) {
                         timespec imposeTs{};

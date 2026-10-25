@@ -104,6 +104,10 @@ public:
         double   linkCaptureUs = 0.0;
         double   linkNowUs = 0.0;
         double   linkLoopPhaseBeats = 0.0;
+        double   createAudioSamples = 0.0;
+        double   createSpanSamples = 0.0;
+        double   createMasterLen = 0.0;
+        double   createPhaseSamples = 0.0;
         int      clipExportState = 0;
         int      gridBeatIndex = -1;
         float    masterLenSamples = 0.0f;
