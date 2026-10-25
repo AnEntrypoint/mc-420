@@ -618,3 +618,11 @@ Kept open, with the blocker:
 - Why: the rule table then has one owner. A byte-identical copy in mc-420 would be a second rule set that drifts (row secrets-rules-two-copies).
 - Evidence: refusal dispatch 1792924417401-226746-85d03d69da0827cd (`checker_missing`, path named in the refusal).
 - Alternatives rejected: a byte-identical checker copy under mc-420 `scripts/` (two copies to keep in sync, and a witness would prove the copy, not the rules).
+
+## Verdict: energy-norm render variant, 2026-10-25 (row defect-pitch-render-energy-norm-compile)
+
+- Diagnosis: the energy-norm job is killed inside its Faust codegen step, not by a compile error. The step is `.github/workflows/test-pitch-tracker.yml:180` (`faust ... -t 600`). In run 40178097047 (job 121123067162) it starts at 08:49:09Z and the runner reports a shutdown signal at 08:58:26Z. In run 40180595931 (job 121133589959) it starts at 09:40:29Z and the signal arrives at 09:49:41Z. Both kills come about 9.2 minutes in, before the 10-minute faust `-t` timeout can fire. The patch that generates the variant is `tools/pitchtracker-render/variants.py:9` (`den = max(1e-9, sqrt(smoo(x*x) * smoo(d*d)));`, 2 occurrences). base, coarse-gate and corr-tau-0.02 finish codegen and render in about five minutes on the same runner image.
+- Matrix: commit 7783adc2 removed `energy-norm` from the render matrix. At HEAD 47d0af89 the matrix is `[base, coarse-gate, corr-tau-0.02]` (`.github/workflows/test-pitch-tracker.yml:153`).
+- Witness: dispatch 1792928612933-3805-f00a044d7798ebc2 (session verify-defect-pitch-render-energy-norm-compile, in .gm/exec-spool/.dispatch-ledger.json). Literal `energy` over `.github/workflows/**` matches 0 lines in 22 files. Positive control: dispatch 1792928613539-3806-41fde61ac81250c2 (same session) finds `energy-norm` at `tools/pitchtracker-render/variants.py:9`, so the search sees the token where it exists.
+- Verdict: stale. No workflow names the variant, so the job cannot run on main and cannot be red. The energy-norm patch stays in `variants.py`, outside the matrix.
+- Clearing action before energy-norm is added back to the matrix: a CI run of the variant that reaches its render step inside the job window, with the codegen time read from that run's log.
