@@ -697,3 +697,14 @@ offset of about 0.81 s.
 The device sample clock gives the same picture: the origin sits a constant near half a loop from the
 arm-sample model in every take (4.0 and 4.49 beats). The origin fix (38eeb13f) sets the phase to
 span mod loop at creation, and the device does not reach that value. Row: first-loop-origin-finish-based.
+
+## First-loop origin is the master's arm edge (archive#first-loop-origin-master-arm)
+
+Creation build 8784f9d2. Probe dispatch 1792915408580-2164-35ce983377089798 (verify-create-probe, exit 0).
+The master is the first take, so its origin is its own arm edge. Creation block values: audio 469376,
+span 104640, master length 104575, phase 65 (span mod length). Master arm = creation audio minus creation
+span = 364736. At audio 649984 the DSP phase is 76162 and the arm model is 76098: residual 64 samples, one
+64-sample block. The earlier "finish-based" reading came from comparing against the late take's press; that
+is a constant offset, not the origin. Press-to-arm-edge latency is still unmeasured, so the origin is exact
+to the DSP arm edge, not to the MIDI press. Row: first-loop-origin-finish-based (premise refuted; close blocked
+on references).
