@@ -90,10 +90,10 @@ const noteOn = (note, vel, ch) => sendBytes([0x90 | (ch & 0x0f), note, vel]);
 const noteOff = (note, ch) => sendBytes([0x80 | (ch & 0x0f), note, 0]);
 const cc = (controller, value, ch) => sendBytes([0xb0 | (ch & 0x0f), controller, value]);
 
-function telemetryOnce() {
+function telemetryOnce(host = opts.host, port = kTelemPort, timeoutMs = 3000) {
   return new Promise((resolve, reject) => {
     const sock = dgram.createSocket('udp4');
-    const timer = setTimeout(() => { sock.close(); reject(new Error(`telemetry query to ${opts.host}:${kTelemPort} timed out`)); }, 3000);
+    const timer = setTimeout(() => { sock.close(); reject(new Error(`telemetry query to ${host}:${port} timed out`)); }, timeoutMs);
     sock.on('message', (msg) => {
       clearTimeout(timer);
       sock.close();
@@ -101,14 +101,14 @@ function telemetryOnce() {
       catch (e) { reject(e); }
     });
     sock.on('error', (e) => { clearTimeout(timer); reject(e); });
-    sock.send('status', kTelemPort, opts.host);
+    sock.send('status', port, host);
   });
 }
 
-async function telemetry(attempts = 3) {
+async function telemetry(attempts = 3, host = opts.host, port = kTelemPort, timeoutMs = 3000) {
   let lastErr = null;
   for (let i = 0; i < attempts; i += 1) {
-    try { return await telemetryOnce(); } catch (e) { lastErr = e; }
+    try { return await telemetryOnce(host, port, timeoutMs); } catch (e) { lastErr = e; }
   }
   throw new Error(`${lastErr.message} (after ${attempts} attempts)`);
 }
@@ -552,7 +552,41 @@ function writeRecord(record) {
   console.log('[loopback-witness] json ' + opts.json);
 }
 
-function selfTest() {
+async function slowReplyCase() {
+  const server = dgram.createSocket('udp4');
+  let mode = 'slow';
+  let seen = 0;
+  server.on('message', (msg, rinfo) => {
+    seen += 1;
+    if (mode === 'slow' && seen >= 2) server.send('{"ok":true,"probe":"slow-reply"}', rinfo.port, rinfo.address);
+  });
+  await new Promise((resolve) => server.bind(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  let recovered = false;
+  let recoveredDetail;
+  try {
+    const reply = await telemetry(3, '127.0.0.1', port, 300);
+    recovered = reply.probe === 'slow-reply';
+    recoveredDetail = `reply recovered after ${seen} request(s)`;
+  } catch (e) {
+    recoveredDetail = e.message;
+  }
+  mode = 'silent';
+  seen = 0;
+  let bounded = false;
+  let boundedDetail;
+  try {
+    await telemetry(2, '127.0.0.1', port, 200);
+    boundedDetail = 'silent responder answered';
+  } catch (e) {
+    bounded = /after 2 attempts/.test(e.message);
+    boundedDetail = `silent responder gave up after ${seen} request(s), reported ${bounded ? '2 attempts' : 'no attempt count'}`;
+  }
+  server.close();
+  return { ok: recovered && bounded, detail: `${recoveredDetail}; ${boundedDetail}` };
+}
+
+async function selfTest() {
   const n = 3 * kRate;
   const sine = (hz, amp) => Float64Array.from({ length: n }, (_, i) => amp * Math.sin(2 * Math.PI * hz * i / kRate));
   let seed = 12345;
@@ -592,12 +626,15 @@ function selfTest() {
     if (!ok) failed += 1;
     console.log(`[loopback-witness] selftest ${c.name}: measured ${measured} Hz rms ${rms.toFixed(6)} -> ${valid ? 'VALID' : 'INVALID'} ${ok ? 'PASS' : 'FAIL'}`);
   }
-  console.log(`[loopback-witness] selftest ${failed === 0 ? 'PASS' : 'FAIL'} (${cases.length - failed}/${cases.length})`);
+  const slow = await slowReplyCase();
+  if (!slow.ok) failed += 1;
+  console.log(`[loopback-witness] selftest slow telemetry reply: ${slow.detail} -> ${slow.ok ? 'PASS' : 'FAIL'}`);
+  console.log(`[loopback-witness] selftest ${failed === 0 ? 'PASS' : 'FAIL'} (${cases.length + 1 - failed}/${cases.length + 1})`);
   return failed === 0 ? 0 : 1;
 }
 
 async function main() {
-  if (opts.selftest) { process.exitCode = selfTest(); return; }
+  if (opts.selftest) { process.exitCode = await selfTest(); return; }
   if (!fs.existsSync(kWorkDir)) fs.mkdirSync(kWorkDir, { recursive: true });
   console.log(`[loopback-witness] host=${opts.host} play=${opts.playCard} ch${opts.playCh}/${opts.playChannels} cap=${opts.capCard} ch${opts.capCh}/${opts.capChannels}`);
 
