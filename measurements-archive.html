@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=909e1ac79ecd5ad3c1929bdf1c56fc8a47ad5860">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=015433c455a414fae7f1b16adc07fee3bcc3d05f">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -938,6 +938,23 @@ device origin = arm + 2.48 beats.</li>
 <p>Within-run scatter is about 0.015 beat. Between runs the origin moves by 1.4 beats, and in each run it is
 more than a beat off the arm press. Host timing error is about 0.1 beat, so the offset is real. Row:
 first-loop-origin-unstable.</p>
+
+<h2 id="correction-first-loop-origin-is-stable-at-the-press-archivefirst-loop-origin-correction">Correction: first-loop origin is stable at the press (archive#first-loop-origin-correction)</h2>
+
+<p>The earlier “unstable origin” result (archive#first-loop-origin-unstable) was measured against the wrong
+reference. A late take does not re-origin the loop: the grid origin is the first take’s press. Solving the
+origin against the late take’s press therefore reported offsets that depended on the gap between presses.</p>
+
+<p>Against the first take’s press, the master-window calibration constant c (telemetry error when the origin is
+the press) was +0.058, +0.073, +0.060, +0.068 and +0.060 beats over five runs (ledger witnesses
+1792908365404-1853-5d78f51a298c39a4, 1792908400294-1855-3b89166a341dbdd4, 1792908827639-1893-be1ffa95012264e7).
+The origin is stable and sits at the press to about 0.07 beat, which is 35 ms, within host timing error.</p>
+
+<p>On the first take the tempo is solved from the take’s own span, so the loop length equals the span in beats.
+The press origin and the finish origin then coincide, so a standalone first take cannot tell them apart. The
+origin change (raw span mod loop length, commit 38eeb13f) matters only when the first take’s tempo comes from
+Link peers, where the loop length is rounded from the Link tempo. That case needs a second device to witness,
+and the sample-exact claim still needs device-side timestamps.</p>
 
 
       </section>
