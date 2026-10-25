@@ -12,6 +12,9 @@ on:
       - 'dsp/**'
       - 'config/**'
       - '.github/workflows/build-image.yml'
+      - '!docs/**'
+      - '!**/*.md'
+      - '!**/witness/**'
   workflow_dispatch:
 
 permissions:
@@ -31,6 +34,8 @@ jobs:
         board: [pi3, pi4, pi5]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Tools (mtools, dosfstools, fdisk, e2fsprogs, xz, u-boot-tools, file — image assembly)
         run: sudo apt-get update && sudo apt-get install -y mtools dosfstools fdisk e2fsprogs xz-utils util-linux u-boot-tools curl gzip file zip
