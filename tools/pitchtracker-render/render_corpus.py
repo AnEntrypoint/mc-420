@@ -12,6 +12,8 @@ SR = 48000
 BLOCK = 64
 SETTLE_S = 1.0
 PHRASE_FILES = {"vibraphone_mid_C5B5", "marimba_mid_C5B5"}
+PINNED_HZ = (60.0, 192.0)
+PIN_TOL_HZ = 0.001
 
 
 def read_reference(path):
@@ -54,13 +56,27 @@ def render(binary, x, work):
     return np.fromfile(dst, dtype="<f4")
 
 
+def median_and_count(values):
+    if values.size == 0:
+        return 0.0, 0
+    return float(np.median(values)), int(values.size)
+
+
 def settle(y):
     ends = y[BLOCK - 1::BLOCK]
     times = (np.arange(ends.size) * BLOCK + BLOCK) / SR
-    voiced = ends[(times >= SETTLE_S) & (ends > 0.0)]
-    if voiced.size == 0:
-        return 0.0, 0, ends
-    return float(np.median(voiced)), int(voiced.size), ends
+    live = (times >= SETTLE_S) & (ends > 0.0)
+    pinned = np.isclose(ends[:, None], np.array(PINNED_HZ)[None, :], rtol=0.0, atol=PIN_TOL_HZ).any(axis=1)
+    settled, n = median_and_count(ends[live & ~pinned])
+    raw_settled, raw_n = median_and_count(ends[live])
+    stats = {
+        "settled": settled,
+        "voiced": n,
+        "pinned": int(np.count_nonzero(live & pinned)),
+        "raw_settled": raw_settled,
+        "raw_voiced": raw_n,
+    }
+    return stats, ends
 
 
 def main():
@@ -82,14 +98,18 @@ def main():
     with tempfile.TemporaryDirectory() as td:
         work = pathlib.Path(td)
         for f in files:
-            settled, n, ends = settle(render(args.render, read_wav(f), work))
+            stats, ends = settle(render(args.render, read_wav(f), work))
+            settled = stats["settled"]
             peak = peaks.get(f.stem)
             cents = 1200.0 * math.log2(settled / peak) if peak and settled > 0.0 else None
             rows.append({
                 "file": f.stem,
                 "peak_hz": peak,
                 "settled_hz": round(settled, 3),
-                "voiced_blocks": n,
+                "voiced_blocks": stats["voiced"],
+                "pinned_blocks": stats["pinned"],
+                "settled_raw_hz": round(stats["raw_settled"], 3),
+                "voiced_raw_blocks": stats["raw_voiced"],
                 "cents": None if cents is None else round(cents, 2),
             })
             traces[f.stem] = ends.astype(np.float32)
