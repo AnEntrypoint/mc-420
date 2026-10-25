@@ -943,6 +943,10 @@ static void* worker(void*) {
                             if (loopBeatPos < 0.0) loopBeatPos += recordedBeatsShared;
                             linkTargetSamples = loopBeatPos * beatLenSamplesShared;
                             haveLinkTarget = true;
+                            g_telem.linkTargetSamples = linkTargetSamples;
+                            g_telem.linkCaptureUs = (double)linkSnap.captureMicros;
+                            g_telem.linkNowUs = nowMicros;
+                            g_telem.linkLoopPhaseBeats = (double)linkSnap.loopPhaseMicroBeats / 1e6;
                         }
 
                         const bool linkJoined = !wasLinkDriving && !masterJustCreated;

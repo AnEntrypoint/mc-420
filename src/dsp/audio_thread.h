@@ -100,6 +100,10 @@ public:
         uint64_t lastTakeArmSample = 0;
         double   lastTakeSpanSamples = 0.0;
         double   masterPhaseSamples = 0.0;
+        double   linkTargetSamples = -1.0;
+        double   linkCaptureUs = 0.0;
+        double   linkNowUs = 0.0;
+        double   linkLoopPhaseBeats = 0.0;
         int      clipExportState = 0;
         int      gridBeatIndex = -1;
         float    masterLenSamples = 0.0f;
