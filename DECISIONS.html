@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=86fd394d4995d04101560fbd89d200b9c7f6b1b7">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=52d15874bea8eabe6f5900d007b191921444bd96">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -765,6 +765,14 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Change: <code class="language-plaintext highlighter-rouge">tools/pitchtracker-render/judge_maxtrack2600.py</code>, sha256 <code class="language-plaintext highlighter-rouge">2286419c29c00187c21a243dcf00a99234bc4ead561194a926bdf0c230339480</code>. An unvoiced settled value returns the UNVOICED marker instead of inf; a pair of unvoiced results is a zero move (the R5 null rule of <code class="language-plaintext highlighter-rouge">docs/witness/tracker-ceiling-margin-pair-prereg.md</code>); a mixed pair still fails. Other checks unchanged.</li>
   <li>Registered verdict: defect-sine-2093-subharmonic (RESULT REJECTED S1,R1-no-peak,R2,NR) stays on the scratch judge, sha256 2a5b2c32 (verify dispatch 1792927677862-3658-7ff450bdbd367275). It is not re-judged, and no pre-registration or pinned hash changes.</li>
   <li>Witness: dispatch 1792931940283-4172-8c218f0c6b2bfeb2 (session verify-defect-sine-2093-judge-unvoiced-cents), the new judge on the pt-maxtrack artifacts of CI run 40187702631 (sha 7ae889a5): R5 PASS with sine_55.69 unvoiced; RESULT REJECTED S1,R1-no-peak,R2,NR. This is a fix witness of the new judge, not a registered verdict.</li>
+</ul>
+
+<h2 id="metronome-beat-pad-red-flash-2026-10-25-row-metronome-red-flash-brief">Metronome beat pad: red flash, 2026-10-25 (row metronome-red-flash-brief)</h2>
+
+<ul>
+  <li>Change: <code class="language-plaintext highlighter-rouge">src/control/apc_leds.h</code>. The current beat pad turns red only for <code class="language-plaintext highlighter-rouge">kBeatFlashMs</code> (100 ms) after each beat edge, then shows its normal colour. Shuffle blink and gate-mod colours are unchanged.</li>
+  <li>Witness: CI for <code class="language-plaintext highlighter-rouge">ae38d08b</code> (build-binary and build-image success), read by verify session <code class="language-plaintext highlighter-rouge">verify-metronome-red-flash-brief</code>, dispatch <code class="language-plaintext highlighter-rouge">1792934651896-4262-df1e901ecd1f5ab</code>.</li>
+  <li>Not yet observed on the device: the image is not deployed to the Pi.</li>
 </ul>
 
 
