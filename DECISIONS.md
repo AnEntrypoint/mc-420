@@ -577,3 +577,17 @@ Kept open, with the blocker:
 - R4 v2 and R5 v2: unchanged from v1.
 - Admission v2: S1 v2 and R1 v2 to R5 v2 pass on the normalised cand artifact of the commit that carries this text, and the candidate then replaces the shipped file in a follow-up commit. Any failure rejects the candidate; the reason is recorded here and the row stays open with that fact.
 - Pre-run check: the workflow concurrency is set to cancel-in-progress false in the same commit, so an unrelated push to main cannot cancel this render (the v1 run was cancelled by 263b94dc, a different row's commit).
+
+## Pre-registration: pinned-value voicing gate, 2026-10-25 (row defect-tracker-value-clamp-60-192)
+
+- Problem: the render gate counts a block as voiced whenever the tracker output is above zero, including blocks pinned at a constant the tracker emits without a measurement. The pins are 60.0 Hz (minTrackHz, effects/pitchtracker-src/pitchtracker_ac.dsp) and 192.0 Hz (source not isolated in the DSP; a follow-up row carries it). Evidence: CI run 40180595931 at 263b94dc, row defect-tracker-value-clamp-60-192 notes.
+- Change, measurement only: tools/pitchtracker-render/render_corpus.py treats a block as pinned when its output equals a value in PINNED_HZ = (60.0, 192.0) within 0.001 Hz. Pinned blocks are excluded from settled_hz and voiced_blocks, and counted in pinned_blocks. The pre-change values stay in settled_raw_hz and voiced_raw_blocks. The tracker output and the DSP are unchanged.
+- Cross-lane effect: defect-sine-2093-subharmonic reads voiced_blocks and settled_hz in R1 v2 and R2 v2. For any render made after this commit those fields use the pin rule. Its v1 verdict stays on the raw values, and its thresholds are unchanged.
+- Rules, fixed before the numbers are read. Measured on the 34-file corpus from the traces of CI run 40180595931, with no new render:
+  - P1 (no loss): each reliable non-phrase file in docs/witness/corpus-pitch-reference.md (the Reliable table, excluding the PHRASE files) that is voiced under the raw rule stays voiced under the pin rule.
+  - P2 (no move toward a pin): for those files, |cents(pin rule, peak)| <= |cents(raw rule, peak)| + 5.
+  - P3 (resolution): no file settles at a PINNED_HZ value under the pin rule. A file whose only voiced blocks were pinned has voiced_blocks 0.
+  - P4 (no regression elsewhere): for any file with pinned_blocks 0, voiced_blocks and settled_hz are identical under both rules.
+  - P5 (count, not a threshold): the non-phrase voiced count under both rules is recorded. The registered threshold of 22 in the external level-normalised gate is not changed here. If it fails under the pin rule, that is the recorded verdict, and a row is filed for its owner to re-register before any rerun.
+- Pins outside PINNED_HZ, including 1500.0 at maxTrackHz, are not excluded and are reported as observed.
+- Verdict: the row is resolved if P1 to P4 pass on the full corpus. P5 is recorded either way. Thresholds are not changed after a run.
