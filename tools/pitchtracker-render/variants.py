@@ -9,6 +9,9 @@ PATCHES = {
     "energy-norm": [
         ("den = max(1e-9, smoo(x*x));", "den = max(1e-9, sqrt(smoo(x*x) * smoo(d*d)));", 2),
     ],
+    "corr-tau-0.02": [
+        ("    energyTau = 0.01;", "    energyTau = 0.02;", 1),
+    ],
 }
 
 

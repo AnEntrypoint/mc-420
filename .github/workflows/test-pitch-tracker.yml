@@ -150,7 +150,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [base, coarse-gate, energy-norm]
+        variant: [base, coarse-gate, energy-norm, corr-tau-0.02]
     steps:
       - uses: actions/checkout@v4
 
@@ -181,11 +181,15 @@ jobs:
           fi
           g++ -O2 -std=c++17 -I /tmp/ptrender-cache -o pt_render tools/pitchtracker-render/pt_render.cpp -lm
 
+      - name: Level-normalise the corpus for the render
+        run: |
+          node tools/corpus-level/normalise-corpus.mjs --src test-audio-corpus/instruments --out work/normalised --rms 0.1
+
       - name: Render the corpus through the variant
         run: |
           python3 tools/pitchtracker-render/render_corpus.py \
             --render ./pt_render \
-            --corpus test-audio-corpus/instruments \
+            --corpus work/normalised \
             --reference docs/witness/corpus-pitch-reference.md \
             --variant ${{ matrix.variant }} \
             --out render-out
