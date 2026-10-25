@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1759b039be4ec58ebab24369e9d5879657770f27">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=364b28a584c94ceeb8c306d48c5557f9e21e1817">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -788,6 +788,14 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Change: gm-mcp <code class="language-plaintext highlighter-rouge">fe30b69</code>. The writer_lock check excludes gm runtime state under <code class="language-plaintext highlighter-rouge">.gm</code> and <code class="language-plaintext highlighter-rouge">.agentplug</code>, so a clean checkout is no longer reported as not_clean.</li>
   <li>Witness: verify dispatch <code class="language-plaintext highlighter-rouge">1792942081993-1411264-0b02732382860cc3</code> (gm ledger), dirty=8 with <code class="language-plaintext highlighter-rouge">.gm</code> excluded.</li>
   <li>Closing witness in the mc-420 ledger: verify dispatch <code class="language-plaintext highlighter-rouge">1792942580175-4543-f843ee191d16e3d3</code>, the gm-mcp build-verify run <code class="language-plaintext highlighter-rouge">40206423906</code> read as success.</li>
+</ul>
+
+<h2 id="1920-hz-constant-producing-path-2026-10-25-row-defect-pin-192-dsp-source">192.0 Hz constant: producing path, 2026-10-25 (row defect-pin-192-dsp-source)</h2>
+
+<ul>
+  <li>Path: the refine of the 60 Hz fallback’s 3x candidate in <code class="language-plaintext highlighter-rouge">effects/pitchtracker-src/pitchtracker_ac.dsp</code>. Lraw = L0 = 266, K = 16, and delta saturated at -1 by the clamp at line 112, so refinedLag = 250 (line 114) and refinedFreq = 48000/250 = 192.0 (line 115). This is the lower edge of the refine window, not a measured vertex.</li>
+  <li>Witness: DawDreamer sub-block trace, bash dispatch <code class="language-plaintext highlighter-rouge">1792949738637-4781-6405c0062d80be0f</code> (ledger-confirmed, session verify-pin-192-dsp-source), kernel <code class="language-plaintext highlighter-rouge">heclgang/pin192-subblock</code> v1.</li>
+  <li>Block-end sampling misses the 192.0 flicker on <code class="language-plaintext highlighter-rouge">violin_high_sulE_C7E7</code> and <code class="language-plaintext highlighter-rouge">xylophone_run_C7B7</code>. That is the same sampling defect as render-voiced-count-block-end-sampling.</li>
 </ul>
 
 <h2 id="empty-closing-publish-2026-10-25-row-publish-on-origin-empty-close-commit">Empty closing publish, 2026-10-25 (row publish-on-origin-empty-close-commit)</h2>

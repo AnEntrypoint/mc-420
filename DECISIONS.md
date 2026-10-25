@@ -650,6 +650,12 @@ Kept open, with the blocker:
 - Witness: verify dispatch `1792942081993-1411264-0b02732382860cc3` (gm ledger), dirty=8 with `.gm` excluded.
 - Closing witness in the mc-420 ledger: verify dispatch `1792942580175-4543-f843ee191d16e3d3`, the gm-mcp build-verify run `40206423906` read as success.
 
+## 192.0 Hz constant: producing path, 2026-10-25 (row defect-pin-192-dsp-source)
+
+- Path: the refine of the 60 Hz fallback's 3x candidate in `effects/pitchtracker-src/pitchtracker_ac.dsp`. Lraw = L0 = 266, K = 16, and delta saturated at -1 by the clamp at line 112, so refinedLag = 250 (line 114) and refinedFreq = 48000/250 = 192.0 (line 115). This is the lower edge of the refine window, not a measured vertex.
+- Witness: DawDreamer sub-block trace, bash dispatch `1792949738637-4781-6405c0062d80be0f` (ledger-confirmed, session verify-pin-192-dsp-source), kernel `heclgang/pin192-subblock` v1.
+- Block-end sampling misses the 192.0 flicker on `violin_high_sulE_C7E7` and `xylophone_run_C7B7`. That is the same sampling defect as render-voiced-count-block-end-sampling.
+
 ## Empty closing publish, 2026-10-25 (row publish-on-origin-empty-close-commit)
 
 - Change: gm-mcp `b574595`. Only a non-closing empty publish is refused as nothing_to_publish, so a closing publish carries its row.
