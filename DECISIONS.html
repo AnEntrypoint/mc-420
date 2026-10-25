@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5420386d912ecb939874e4666f8726a45a4161a5">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=86fd394d4995d04101560fbd89d200b9c7f6b1b7">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -757,6 +757,14 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Witness: dispatch 1792928612933-3805-f00a044d7798ebc2 (session verify-defect-pitch-render-energy-norm-compile, in .gm/exec-spool/.dispatch-ledger.json). Literal <code class="language-plaintext highlighter-rouge">energy</code> over <code class="language-plaintext highlighter-rouge">.github/workflows/**</code> matches 0 lines in 22 files. Positive control: dispatch 1792928613539-3806-41fde61ac81250c2 (same session) finds <code class="language-plaintext highlighter-rouge">energy-norm</code> at <code class="language-plaintext highlighter-rouge">tools/pitchtracker-render/variants.py:9</code>, so the search sees the token where it exists.</li>
   <li>Verdict: stale. No workflow names the variant, so the job cannot run on main and cannot be red. The energy-norm patch stays in <code class="language-plaintext highlighter-rouge">variants.py</code>, outside the matrix.</li>
   <li>Clearing action before energy-norm is added back to the matrix: a CI run of the variant that reaches its render step inside the job window, with the codegen time read from that run’s log.</li>
+</ul>
+
+<h2 id="judge-revision-unvoiced-cents-2026-10-25-row-defect-sine-2093-judge-unvoiced-cents">Judge revision: unvoiced cents, 2026-10-25 (row defect-sine-2093-judge-unvoiced-cents)</h2>
+
+<ul>
+  <li>Change: <code class="language-plaintext highlighter-rouge">tools/pitchtracker-render/judge_maxtrack2600.py</code>, sha256 <code class="language-plaintext highlighter-rouge">2286419c29c00187c21a243dcf00a99234bc4ead561194a926bdf0c230339480</code>. An unvoiced settled value returns the UNVOICED marker instead of inf; a pair of unvoiced results is a zero move (the R5 null rule of <code class="language-plaintext highlighter-rouge">docs/witness/tracker-ceiling-margin-pair-prereg.md</code>); a mixed pair still fails. Other checks unchanged.</li>
+  <li>Registered verdict: defect-sine-2093-subharmonic (RESULT REJECTED S1,R1-no-peak,R2,NR) stays on the scratch judge, sha256 2a5b2c32 (verify dispatch 1792927677862-3658-7ff450bdbd367275). It is not re-judged, and no pre-registration or pinned hash changes.</li>
+  <li>Witness: dispatch 1792931940283-4172-8c218f0c6b2bfeb2 (session verify-defect-sine-2093-judge-unvoiced-cents), the new judge on the pt-maxtrack artifacts of CI run 40187702631 (sha 7ae889a5): R5 PASS with sine_55.69 unvoiced; RESULT REJECTED S1,R1-no-peak,R2,NR. This is a fix witness of the new judge, not a registered verdict.</li>
 </ul>
 
 

@@ -626,3 +626,9 @@ Kept open, with the blocker:
 - Witness: dispatch 1792928612933-3805-f00a044d7798ebc2 (session verify-defect-pitch-render-energy-norm-compile, in .gm/exec-spool/.dispatch-ledger.json). Literal `energy` over `.github/workflows/**` matches 0 lines in 22 files. Positive control: dispatch 1792928613539-3806-41fde61ac81250c2 (same session) finds `energy-norm` at `tools/pitchtracker-render/variants.py:9`, so the search sees the token where it exists.
 - Verdict: stale. No workflow names the variant, so the job cannot run on main and cannot be red. The energy-norm patch stays in `variants.py`, outside the matrix.
 - Clearing action before energy-norm is added back to the matrix: a CI run of the variant that reaches its render step inside the job window, with the codegen time read from that run's log.
+
+## Judge revision: unvoiced cents, 2026-10-25 (row defect-sine-2093-judge-unvoiced-cents)
+
+- Change: `tools/pitchtracker-render/judge_maxtrack2600.py`, sha256 `2286419c29c00187c21a243dcf00a99234bc4ead561194a926bdf0c230339480`. An unvoiced settled value returns the UNVOICED marker instead of inf; a pair of unvoiced results is a zero move (the R5 null rule of `docs/witness/tracker-ceiling-margin-pair-prereg.md`); a mixed pair still fails. Other checks unchanged.
+- Registered verdict: defect-sine-2093-subharmonic (RESULT REJECTED S1,R1-no-peak,R2,NR) stays on the scratch judge, sha256 2a5b2c32 (verify dispatch 1792927677862-3658-7ff450bdbd367275). It is not re-judged, and no pre-registration or pinned hash changes.
+- Witness: dispatch 1792931940283-4172-8c218f0c6b2bfeb2 (session verify-defect-sine-2093-judge-unvoiced-cents), the new judge on the pt-maxtrack artifacts of CI run 40187702631 (sha 7ae889a5): R5 PASS with sine_55.69 unvoiced; RESULT REJECTED S1,R1-no-peak,R2,NR. This is a fix witness of the new judge, not a registered verdict.
