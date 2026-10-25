@@ -284,3 +284,10 @@ a green build, downloaded + rebuilt the root, and the Pi's own DHCP/TFTP fetch
 of firmware/kernel/initramfs was served correctly **concurrently**, with no
 interference between the two. The rebuilt `aloop.apkovl.tar.gz` carried the
 fresh binary+LV2 (grew from a smaller layout-only size to a real payload).
+
+## Refreshing the served payload
+
+`tools/netboot/refresh-apkovl.sh` takes the newest green `build-binary` artifact on `main`, or a binary path
+if given, repacks `/srv/tftp/aloop-netboot/aloop.apkovl.tar.gz` with the same 210 entries and that binary,
+checks the binary's sha256 inside the archive, and keeps a dated backup of the archive it replaces. Run it
+after a green build lands; then confirm `tar -xzOf <archive> ./opt/aloop/aloop | sha256sum` equals the artifact.
