@@ -6,7 +6,7 @@ declare description "Normalized-autocorrelation pitch tracker, packaged as its o
 import("stdfaust.lib");
 
 minTrackHz = 60.0;
-maxTrackHz = 1500.0;
+maxTrackHz = 2600.0;
 corrThresh = 0.85;
 
 delayTableSize = 4096;
