@@ -592,6 +592,16 @@ Kept open, with the blocker:
 - Pins outside PINNED_HZ, including 1500.0 at maxTrackHz, are not excluded and are reported as observed.
 - Verdict: the row is resolved if P1 to P4 pass on the full corpus. P5 is recorded either way. Thresholds are not changed after a run.
 
+## Verdict: pinned-value voicing gate, 2026-10-25 (row defect-tracker-value-clamp-60-192)
+
+- Witness: dispatch 1792923974362-3155-fa202804fe298590 (session verify-defect-tracker-value-clamp-60-192, in .gm/exec-spool/.dispatch-ledger.json). It runs the committed render_corpus.py at 0e3d6f6c over the traces of CI run 40180595931 (sha 263b94dc) and reproduces each raw settled value and voiced count of the CI json exactly before it applies the pin rule. CI for 0e3d6f6c: success.
+- P1 (no loss): PASS on base, coarse-gate and corr-tau-0.02. No reliable non-phrase file lost voicing.
+- P2 (no move toward a pin): PASS on all three variants.
+- P3 (no file settles at a pin): PASS on all three variants.
+- P4 (unpinned files unchanged): PASS on all three variants.
+- Non-phrase voiced count, 32 files: base 31 raw to 29 under the pin rule; coarse-gate 31 to 29; corr-tau-0.02 30 to 29. The pinned-only files cymbal_inharmonic and piano_low_A1 are no longer voiced in base and coarse-gate. The 192.0 pins on violin_low_sulG_G3B3, violin_high_sulE_C7E7 and xylophone_run_C7B7 are excluded, and the files now read the unpinned values recorded in the follow-up rows.
+- Verdict: resolved on the gate criterion. The source of the 192.0 pin is not traced in the DSP, so that acceptance clause is split into defect-pin-192-dsp-source. The unpinned readings on those files are split into defect-pin-hidden-readings. The registered threshold of 22 is not recomputable in this repo and is handed to its owner in gate-level-normalised-pin-rule-reregister.
+
 ## Verdict v2: 2093 Hz register candidate, 2026-10-25 (row defect-sine-2093-subharmonic)
 
 - CI run 40182748324 on f05427eb (pinned route, level-normalised gate, render_corpus.py before 0e3d6f6c). S1 v2 PASS: sine_2093 2092.38 Hz at both taus (base 700.24 Hz).
@@ -600,3 +610,11 @@ Kept open, with the blocker:
 - Note: 0e3d6f6c (another row, render gate: exclude tracker-pinned values) changes render_corpus.py to exclude settled values pinned at 60.0 and 192.0. None of the listed regressions is a pinned value on either side, so the verdict does not depend on that change.
 - Verdict: REJECTED under v2. The candidate reads the 2093 sine, but it moves other files on the row's gate, including an octave-down on vibraphone_mid_C5B5 and a runaway on piano_low_A1. The shipped tracker is unchanged and nothing is admitted.
 - Clearing action before any re-render: a confidence gate for candidates above 1581 Hz, so a high candidate cannot win on low-register material (as the 2026-10-18 record already requires). Pre-register it with the regression list above as its acceptance set, before it is rendered. Filed as row defect-2093-grid-ext-low-register-regression.
+
+## Decision: secrets checker route for publish, 2026-10-25 (row mc420-secrets-check-path-missing)
+
+- Problem: `publish_on_origin` refused with `checker_missing`. Its refusal reads the checker from `<cwd>/scripts/check-staged-secrets.mjs`, and mc-420 has no `scripts/` directory.
+- Decision: the publish verb takes `cwd` = the gm checkout (`/config/workspace/gm`), which holds the checker, and `repo_dir` = `/config/workspace/mc-420`, which is the tree published. mc-420 carries no copy of the secrets rules.
+- Why: the rule table then has one owner. A byte-identical copy in mc-420 would be a second rule set that drifts (row secrets-rules-two-copies).
+- Evidence: refusal dispatch 1792924417401-226746-85d03d69da0827cd (`checker_missing`, path named in the refusal).
+- Alternatives rejected: a byte-identical checker copy under mc-420 `scripts/` (two copies to keep in sync, and a witness would prove the copy, not the rules).
