@@ -597,3 +597,21 @@ The device's -46.5 c is not reproduced by this harness, so no fix is admitted un
 The -46.5 c device claim remains unverified: the device is unplugged, so a witness needs hardware.
 The metric gates marimba_low_C2B2 as PASS because its thresholds set no absolute median limit by
 design (tools/corpus-pitch-metric/thresholds.json); the offline failure is therefore invisible to CI.
+
+## First-loop origin, click-capture run (archive#first-loop-origin-click-run)
+
+Device: aloop b99d7543 on the Pi, freshly restarted (empty), Focusrite line 7 playing a 1 Hz click train
+into the AIR 192 ch2 input, passthrough latched by SHIFT+sustain. Arm = looper 1 pad (note 2) at host
+3.12 s, finish = second press at host 10.14 s. Return captured on Focusrite Analogue 2 (ch index 1).
+The click train also passed through live, so the return mixes live clicks with the loop.
+
+- Recorded loop: 14 beats, 336831 samples (7.0175 s), tempo derived to 119.70 BPM.
+- Grid origin fitted from 50 post-finish phase polls, taken modulo the loop: 3.0739 s, spread 6.6 ms.
+- Arm press modulo the loop: 3.1205 s. Origin minus press: -46.6 ms (-2236 samples, -0.093 beats).
+- The finish press falls on the arm press modulo the loop, because the loop length equals the take. An
+  arm-origin and a finish-origin therefore produce the same phase, so this take cannot tell them apart.
+- Resolution is limited by host-side timing: the press is stamped before the injector process starts,
+  and the phase is sampled over UDP. Sample-exact validation needs device-side timestamps.
+
+Verdict: the grid origin lies within about 50 ms of the press, with no drift across 50 polls. It is not
+sample-exact, and it does not discriminate the arm origin from the finish origin.
