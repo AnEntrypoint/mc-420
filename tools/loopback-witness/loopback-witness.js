@@ -90,7 +90,7 @@ const noteOn = (note, vel, ch) => sendBytes([0x90 | (ch & 0x0f), note, vel]);
 const noteOff = (note, ch) => sendBytes([0x80 | (ch & 0x0f), note, 0]);
 const cc = (controller, value, ch) => sendBytes([0xb0 | (ch & 0x0f), controller, value]);
 
-function telemetry() {
+function telemetryOnce() {
   return new Promise((resolve, reject) => {
     const sock = dgram.createSocket('udp4');
     const timer = setTimeout(() => { sock.close(); reject(new Error(`telemetry query to ${opts.host}:${kTelemPort} timed out`)); }, 3000);
@@ -103,6 +103,14 @@ function telemetry() {
     sock.on('error', (e) => { clearTimeout(timer); reject(e); });
     sock.send('status', kTelemPort, opts.host);
   });
+}
+
+async function telemetry(attempts = 3) {
+  let lastErr = null;
+  for (let i = 0; i < attempts; i += 1) {
+    try { return await telemetryOnce(); } catch (e) { lastErr = e; }
+  }
+  throw new Error(`${lastErr.message} (after ${attempts} attempts)`);
 }
 
 const peakOf = (t) => (t && t.audio_peak ? t.audio_peak : {});
