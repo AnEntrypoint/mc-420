@@ -6,7 +6,7 @@ declare description "Normalized-autocorrelation pitch tracker, packaged as its o
 import("stdfaust.lib");
 
 minTrackHz = 60.0;
-maxTrackHz = 2600.0;
+maxTrackHz = 1500.0;
 corrThresh = 0.85;
 
 delayTableSize = 4096;
@@ -129,7 +129,6 @@ with {
 };
 
 subharmDominanceMargin = 0.004;
-promoteMargin = 0.001;
 
 demoteTau = 0.2;
 demotePole = ba.tau2pole(demoteTau);
@@ -160,8 +159,8 @@ with {
     reachable2 = freq2 <= maxTrackHz;
     reachable3 = freq3 <= maxTrackHz;
     notDemoted = 1.0 - demoteNow;
-    dominant3 = reachable3 & (raw3 >= corrThresh) & (raw3 > pBase + promoteMargin) & (raw3 >= raw2) & (notDemoted > 0.5);
-    dominant2 = reachable2 & (raw2 >= corrThresh) & (raw2 > pBase + promoteMargin) & (notDemoted > 0.5);
+    dominant3 = reachable3 & (raw3 >= corrThresh) & (raw3 > pBase + subharmDominanceMargin) & (raw3 >= raw2) & (notDemoted > 0.5);
+    dominant2 = reachable2 & (raw2 >= corrThresh) & (raw2 > pBase + subharmDominanceMargin) & (notDemoted > 0.5);
     promotedRatio = ba.if(dominant3, 3.0, ba.if(dominant2, 2.0, ba.if(demoteNow, 0.5, 1.0)));
     promotedConfidence = ba.if(dominant3, raw3, ba.if(dominant2, raw2, pBase));
 };
