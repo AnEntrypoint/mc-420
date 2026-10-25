@@ -709,6 +709,18 @@ is a constant offset, not the origin. Press-to-arm-edge latency is still unmeasu
 to the DSP arm edge, not to the MIDI press. Row: first-loop-origin-finish-based (premise refuted; close blocked
 on references).
 
+## First-loop origin lies inside the arm block, not on its edge (archive#first-loop-origin-sub-block)
+
+Witness: session verify-timing-origin-sample-exact, dispatch 1792919051560-2621-bf506c0efb34c0f2 (standalone only; no ESP peer, so no 20813 poll). Six aloop restarts; per run one arm press on looper 0 at a random phase (2.0-3.3 s), finish 1.5 s later, status polled over UDP 4445 about every 8 ms, press sent over TCP 9401 and host-timed at write. First take: 72000-sample loop (120 bpm, rb 3).
+
+- Origin minus the arm-edge block (sample domain: origin = audio count - master phase, arm edge = last_take_arm_sample): runs 1-5 -39.1, -6.0, -47.5, -11.1, -41.9 samples, within-run sd 2.6-8.3. The origin is inside the observing block, never on its end. The old "64-sample residual" is that block offset, not an origin error.
+- Press to arm edge, host raw: 2.2-4.1 ms (sd 0.7 ms, one block is 1.33 ms). Press to origin, host raw, clean runs: 2.0-2.2 ms (run 1 3.2 ms, mapping noise).
+- Clock map: a status reply is built at the publish tick, so the host receipt time is the content time to a common offset of about 0.8 ms. Map on receipt time, never the send/receive midpoint (midpoint error is RTT/2, about 21 ms here).
+- rb 4 two-bar takes (exploratory, not verdict runs): origin minus arm edge -46.7 (sd 5.7) and -33.5 (sd 19.2) samples.
+- Run 6 (verdict run, outlier): after creation the master phase ramps against the audio count, origin moved from -38 to +1692 samples over 1.6 s. The phase trim chases a Link target folded by the 16-beat fallback (link target minus phase: -18498, -37762, -57026 samples). This is a beat-scale rb 3 defect, filed as its own row, not an origin sub-block error.
+
+Decision: no origin code change. The claim that the origin is block-accurate is refuted (row timing-origin-sample-exact: stale). Sample-exactness against the Link arm stamp was not read directly, because telemetry does not expose recordArmMicros. Host-to-processing transport of about 1.2 ms on the TCP injection path is outside the origin definition.
+
 ## Gate silence at the corpus gain (archive#gate-silence-corpus-gain)
 
 The v3 harness scales every corpus file by 10^(-43/20) = 0.00707945784384138 and leaves the sines at 1.0 (tools/ceiling-dedup/render_candidate.cpp:89). The tracker energy gate is absolute: a 3 ms one-pole of x^2 must stay above 1e-6 (-60 dBFS RMS) for 1680 consecutive samples (effects/pitchtracker-src/pitchtracker_ac.dsp, energyReady), and holdLastGood publishes a value only when that gate and confidence both hold.
