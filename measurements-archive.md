@@ -632,3 +632,20 @@ Tempo 115.2 BPM. Host durations are the press-to-press spans, so each take's bea
 host timing error (tens of ms). The fold check is near the boundary at 3 beats, so its margin is 0.13 beats.
 Scope: phrase 4 only. Odd phrases are unmeasured, and the DSP re-snap in dsp/loop.dsp still uses the old
 ladder (dsp-finish-snap-odd-phrase), so timing-fold-ladder stays pending.
+
+## Odd-phrase finish on the device (archive#odd-phrase-finish-device)
+
+Build a36ed841 (commit 0ce2b568, loop.dsp trusts the finish target). Witness dispatch
+1792906879959-1786-c454639037b21a72, session verify-dsp-odd-phrase5, exit 0. Clean restart before each run.
+
+Phrase 3 (3.0 beats, 113.6 BPM):
+
+| take | host duration | beats | wraplen beats | rule (C++ target) |
+|---|---|---|---|---|
+| 1.60 beats | 0.843 s | 1.60 | 1.500 | 1.5 |
+| 4.14 beats | 2.188 s | 4.14 | 2.999 | 3 |
+| 2.82 beats | 1.489 s | 2.82 | 2.999 | 3 |
+
+Before the fix the DSP re-snapped with the old ladder and ceil, so a 1.6-beat take played 2 beats. Phrase 4
+regression (4.0 beats, 115.0 BPM): late press 2.335 s wraps at 4 beats, far extend 3.087 s at 4 beats, and
+the 2.8-beat fold at 2 beats. All unchanged.

@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0ce2b568d739d7c6e795b048e163bce38103b65e">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=a3bf67cd75477a5877050d2c1ca06adb7e498f26">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -874,6 +874,52 @@ Device aloop b99d7543 after a fresh restart, a 4-beat master, then three takes o
 host timing error (tens of ms). The fold check is near the boundary at 3 beats, so its margin is 0.13 beats.
 Scope: phrase 4 only. Odd phrases are unmeasured, and the DSP re-snap in dsp/loop.dsp still uses the old
 ladder (dsp-finish-snap-odd-phrase), so timing-fold-ladder stays pending.</p>
+
+<h2 id="odd-phrase-finish-on-the-device-archiveodd-phrase-finish-device">Odd-phrase finish on the device (archive#odd-phrase-finish-device)</h2>
+
+<p>Build a36ed841 (commit 0ce2b568, loop.dsp trusts the finish target). Witness dispatch
+1792906879959-1786-c454639037b21a72, session verify-dsp-odd-phrase5, exit 0. Clean restart before each run.</p>
+
+<p>Phrase 3 (3.0 beats, 113.6 BPM):</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>take</th>
+      <th>host duration</th>
+      <th>beats</th>
+      <th>wraplen beats</th>
+      <th>rule (C++ target)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1.60 beats</td>
+      <td>0.843 s</td>
+      <td>1.60</td>
+      <td>1.500</td>
+      <td>1.5</td>
+    </tr>
+    <tr>
+      <td>4.14 beats</td>
+      <td>2.188 s</td>
+      <td>4.14</td>
+      <td>2.999</td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td>2.82 beats</td>
+      <td>1.489 s</td>
+      <td>2.82</td>
+      <td>2.999</td>
+      <td>3</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Before the fix the DSP re-snapped with the old ladder and ceil, so a 1.6-beat take played 2 beats. Phrase 4
+regression (4.0 beats, 115.0 BPM): late press 2.335 s wraps at 4 beats, far extend 3.087 s at 4 beats, and
+the 2.8-beat fold at 2 beats. All unchanged.</p>
 
 
       </section>
