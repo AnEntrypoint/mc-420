@@ -615,3 +615,20 @@ The click train also passed through live, so the return mixes live clicks with t
 
 Verdict: the grid origin lies within about 50 ms of the press, with no drift across 50 polls. It is not
 sample-exact, and it does not discriminate the arm origin from the finish origin.
+
+## Device timing rules, telemetry run (archive#device-timing-rules-run)
+
+Witness: gm bash dispatch 1792906114734-1744-6b768ba1c25e21f2 (session verify-timing-rules, exit 0).
+Device aloop b99d7543 after a fresh restart, a 4-beat master, then three takes on looper 2 to 4.
+
+| take | host duration | beats | wraplen (samples) | result on a 4-beat phrase |
+|---|---|---|---|---|
+| master | 2.087 s | 4.00 | 100031 | sets the phrase |
+| late press | 2.338 s | 4.49 | 100031 | 4 beats (earlier boundary) |
+| far extend | 3.086 s | 5.90 | 100031 | 4 beats (one-phrase cap) |
+| fold | 1.498 s | 2.87 | 50016 | 2 beats (ladder step) |
+
+Tempo 115.2 BPM. Host durations are the press-to-press spans, so each take's beat count carries the
+host timing error (tens of ms). The fold check is near the boundary at 3 beats, so its margin is 0.13 beats.
+Scope: phrase 4 only. Odd phrases are unmeasured, and the DSP re-snap in dsp/loop.dsp still uses the old
+ladder (dsp-finish-snap-odd-phrase), so timing-fold-ladder stays pending.
