@@ -656,6 +656,12 @@ Kept open, with the blocker:
 - Witness: DawDreamer sub-block trace, bash dispatch `1792949738637-4781-6405c0062d80be0f` (ledger-confirmed, session verify-pin-192-dsp-source), kernel `heclgang/pin192-subblock` v1.
 - Block-end sampling misses the 192.0 flicker on `violin_high_sulE_C7E7` and `xylophone_run_C7B7`. That is the same sampling defect as render-voiced-count-block-end-sampling.
 
+## Clamp parent, re-scoped, 2026-10-25 (row defect-tracker-value-clamp-60-192-parent)
+
+- Recorded as re-scoped, not as a fix. The tracker still emits the 60.0 Hz floor and the 192.0 Hz constant; the shipped DSP is unchanged.
+- Both children are closed: `defect-minTrack-floor-settle-unpitched` (known limitation) and `defect-pin-192-dsp-source` (producing path confirmed on three files).
+- Witness: bash dispatch `1792949980026-4793-bd58dee1cc495650` (session verify-clamp-parent-children-closed), reading both children as resolved in the mc-420 prd log.
+
 ## Empty closing publish, 2026-10-25 (row publish-on-origin-empty-close-commit)
 
 - Change: gm-mcp `b574595`. Only a non-closing empty publish is refused as nothing_to_publish, so a closing publish carries its row.

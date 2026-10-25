@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=364b28a584c94ceeb8c306d48c5557f9e21e1817">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8789c9228b32f0c7ef1e6d2801f4e07d7a746de1">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -796,6 +796,14 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Path: the refine of the 60 Hz fallback’s 3x candidate in <code class="language-plaintext highlighter-rouge">effects/pitchtracker-src/pitchtracker_ac.dsp</code>. Lraw = L0 = 266, K = 16, and delta saturated at -1 by the clamp at line 112, so refinedLag = 250 (line 114) and refinedFreq = 48000/250 = 192.0 (line 115). This is the lower edge of the refine window, not a measured vertex.</li>
   <li>Witness: DawDreamer sub-block trace, bash dispatch <code class="language-plaintext highlighter-rouge">1792949738637-4781-6405c0062d80be0f</code> (ledger-confirmed, session verify-pin-192-dsp-source), kernel <code class="language-plaintext highlighter-rouge">heclgang/pin192-subblock</code> v1.</li>
   <li>Block-end sampling misses the 192.0 flicker on <code class="language-plaintext highlighter-rouge">violin_high_sulE_C7E7</code> and <code class="language-plaintext highlighter-rouge">xylophone_run_C7B7</code>. That is the same sampling defect as render-voiced-count-block-end-sampling.</li>
+</ul>
+
+<h2 id="clamp-parent-re-scoped-2026-10-25-row-defect-tracker-value-clamp-60-192-parent">Clamp parent, re-scoped, 2026-10-25 (row defect-tracker-value-clamp-60-192-parent)</h2>
+
+<ul>
+  <li>Recorded as re-scoped, not as a fix. The tracker still emits the 60.0 Hz floor and the 192.0 Hz constant; the shipped DSP is unchanged.</li>
+  <li>Both children are closed: <code class="language-plaintext highlighter-rouge">defect-minTrack-floor-settle-unpitched</code> (known limitation) and <code class="language-plaintext highlighter-rouge">defect-pin-192-dsp-source</code> (producing path confirmed on three files).</li>
+  <li>Witness: bash dispatch <code class="language-plaintext highlighter-rouge">1792949980026-4793-bd58dee1cc495650</code> (session verify-clamp-parent-children-closed), reading both children as resolved in the mc-420 prd log.</li>
 </ul>
 
 <h2 id="empty-closing-publish-2026-10-25-row-publish-on-origin-empty-close-commit">Empty closing publish, 2026-10-25 (row publish-on-origin-empty-close-commit)</h2>
