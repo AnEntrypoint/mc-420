@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f2bf3cc600dd732cfe3d7bd85665ad71ef589d62">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=1759b039be4ec58ebab24369e9d5879657770f27">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -788,6 +788,13 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Change: gm-mcp <code class="language-plaintext highlighter-rouge">fe30b69</code>. The writer_lock check excludes gm runtime state under <code class="language-plaintext highlighter-rouge">.gm</code> and <code class="language-plaintext highlighter-rouge">.agentplug</code>, so a clean checkout is no longer reported as not_clean.</li>
   <li>Witness: verify dispatch <code class="language-plaintext highlighter-rouge">1792942081993-1411264-0b02732382860cc3</code> (gm ledger), dirty=8 with <code class="language-plaintext highlighter-rouge">.gm</code> excluded.</li>
   <li>Closing witness in the mc-420 ledger: verify dispatch <code class="language-plaintext highlighter-rouge">1792942580175-4543-f843ee191d16e3d3</code>, the gm-mcp build-verify run <code class="language-plaintext highlighter-rouge">40206423906</code> read as success.</li>
+</ul>
+
+<h2 id="empty-closing-publish-2026-10-25-row-publish-on-origin-empty-close-commit">Empty closing publish, 2026-10-25 (row publish-on-origin-empty-close-commit)</h2>
+
+<ul>
+  <li>Change: gm-mcp <code class="language-plaintext highlighter-rouge">b574595</code>. Only a non-closing empty publish is refused as nothing_to_publish, so a closing publish carries its row.</li>
+  <li>Witness: probe dispatch <code class="language-plaintext highlighter-rouge">1792942166762-1411264-fe64b425b4997d36</code> (mc-420 ledger).</li>
 </ul>
 
 
