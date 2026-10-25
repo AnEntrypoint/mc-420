@@ -600,3 +600,11 @@ Kept open, with the blocker:
 - Note: 0e3d6f6c (another row, render gate: exclude tracker-pinned values) changes render_corpus.py to exclude settled values pinned at 60.0 and 192.0. None of the listed regressions is a pinned value on either side, so the verdict does not depend on that change.
 - Verdict: REJECTED under v2. The candidate reads the 2093 sine, but it moves other files on the row's gate, including an octave-down on vibraphone_mid_C5B5 and a runaway on piano_low_A1. The shipped tracker is unchanged and nothing is admitted.
 - Clearing action before any re-render: a confidence gate for candidates above 1581 Hz, so a high candidate cannot win on low-register material (as the 2026-10-18 record already requires). Pre-register it with the regression list above as its acceptance set, before it is rendered. Filed as row defect-2093-grid-ext-low-register-regression.
+
+## Decision: secrets checker route for publish, 2026-10-25 (row mc420-secrets-check-path-missing)
+
+- Problem: `publish_on_origin` refused with `checker_missing`. Its refusal reads the checker from `<cwd>/scripts/check-staged-secrets.mjs`, and mc-420 has no `scripts/` directory.
+- Decision: the publish verb takes `cwd` = the gm checkout (`/config/workspace/gm`), which holds the checker, and `repo_dir` = `/config/workspace/mc-420`, which is the tree published. mc-420 carries no copy of the secrets rules.
+- Why: the rule table then has one owner. A byte-identical copy in mc-420 would be a second rule set that drifts (row secrets-rules-two-copies).
+- Evidence: refusal dispatch 1792924417401-226746-85d03d69da0827cd (`checker_missing`, path named in the refusal).
+- Alternatives rejected: a byte-identical checker copy under mc-420 `scripts/` (two copies to keep in sync, and a witness would prove the copy, not the rules).
