@@ -3,6 +3,10 @@
 The whole runtime, in order, so the device is legible. Configured by
 `config/aloop.conf` and the overlay laid down by `.github/workflows/build-image.yml`.
 
+## When CI rebuilds the image
+
+`build-image.yml` runs on a push to `main` that touches `image/`, `kernel/`, `src/`, `dsp/`, `config/` or the workflow itself, and after each completed `build-binary` run. That `workflow_run` build checks out the commit that produced the binary. Docs (`docs/**`, `*.md`) and witness directories (`**/witness/**`) are excluded from the push trigger, so a docs-only push does not start an image build.
+
 ## Board support matrix
 
 `build-image.yml` builds one image per board via `image/build-image.sh BOARD=<x>`

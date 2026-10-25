@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Boot sequence — from power-on to making sound","url":"https://anentrypoint.github.io/mc-420/BOOT.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f26f77cd5fd16bb62d21590df5c525b5383a36c7">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5420386d912ecb939874e4666f8726a45a4161a5">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -59,6 +59,10 @@
 
 <p>The whole runtime, in order, so the device is legible. Configured by
 <code class="language-plaintext highlighter-rouge">config/aloop.conf</code> and the overlay laid down by <code class="language-plaintext highlighter-rouge">.github/workflows/build-image.yml</code>.</p>
+
+<h2 id="when-ci-rebuilds-the-image">When CI rebuilds the image</h2>
+
+<p><code class="language-plaintext highlighter-rouge">build-image.yml</code> runs on a push to <code class="language-plaintext highlighter-rouge">main</code> that touches <code class="language-plaintext highlighter-rouge">image/</code>, <code class="language-plaintext highlighter-rouge">kernel/</code>, <code class="language-plaintext highlighter-rouge">src/</code>, <code class="language-plaintext highlighter-rouge">dsp/</code>, <code class="language-plaintext highlighter-rouge">config/</code> or the workflow itself, and after each completed <code class="language-plaintext highlighter-rouge">build-binary</code> run. That <code class="language-plaintext highlighter-rouge">workflow_run</code> build checks out the commit that produced the binary. Docs (<code class="language-plaintext highlighter-rouge">docs/**</code>, <code class="language-plaintext highlighter-rouge">*.md</code>) and witness directories (<code class="language-plaintext highlighter-rouge">**/witness/**</code>) are excluded from the push trigger, so a docs-only push does not start an image build.</p>
 
 <h2 id="board-support-matrix">Board support matrix</h2>
 
