@@ -648,3 +648,4 @@ Kept open, with the blocker:
 
 - Change: gm-mcp `fe30b69`. The writer_lock check excludes gm runtime state under `.gm` and `.agentplug`, so a clean checkout is no longer reported as not_clean.
 - Witness: verify dispatch `1792942081993-1411264-0b02732382860cc3` (gm ledger), dirty=8 with `.gm` excluded.
+- Closing witness in the mc-420 ledger: verify dispatch `1792942580175-4543-f843ee191d16e3d3`, the gm-mcp build-verify run `40206423906` read as success.
