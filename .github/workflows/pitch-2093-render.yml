@@ -4,10 +4,8 @@ on:
   push:
     paths:
       - 'docs/witness/pitch-2093/**'
-      - 'effects/pitchtracker-src/pitchtracker_ac.dsp'
       - 'tools/pitchtracker-render/**'
       - 'tools/ceiling-dedup/make_sines.py'
-      - '.github/workflows/pitch-2093-render.yml'
   workflow_dispatch:
 
 concurrency:
