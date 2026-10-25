@@ -682,3 +682,18 @@ The press origin and the finish origin then coincide, so a standalone first take
 origin change (raw span mod loop length, commit 38eeb13f) matters only when the first take's tempo comes from
 Link peers, where the loop length is rounded from the Link tempo. That case needs a second device to witness,
 and the sample-exact claim still needs device-side timestamps.
+
+## Correction: the DSP origin tracks the finish press (archive#first-loop-origin-finish-based)
+
+The "origin is the press" closure (timing-origin-at-arm-press) was measured on a 4-beat master, where arm and
+finish coincide modulo the loop, so it could not separate them. It is contradicted by a late take.
+
+Host-clock comparison (ledger 1792914617704-2110-850b8547b166d9cd, verify-host-vs-dsp, exit 0): a 4-beat
+master, then a 4.49-beat late take. The telemetry sample_clock.master_phase_samples against the host press
+time: finish-press model residual mean -38849 samples, sd 1011 (about 21 ms). The arm-press model residual is
+wide, and its spread is inflated by the wrap at L/2. The DSP phase follows the finish press with a constant
+offset of about 0.81 s.
+
+The device sample clock gives the same picture: the origin sits a constant near half a loop from the
+arm-sample model in every take (4.0 and 4.49 beats). The origin fix (38eeb13f) sets the phase to
+span mod loop at creation, and the device does not reach that value. Row: first-loop-origin-finish-based.
