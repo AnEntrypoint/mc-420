@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c2c06f73dd3e6f4f9ee10afee035c210ea28691b">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=09d5ed691a5d522de3f34bfdf8c32b98d7660947">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -622,6 +622,38 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Evidence on record: the 2093 Hz ceiling cause, the duplicate-lag grid runaway, the attack junk on guitar, vibraphone and violin (8be5b398), the high-register silence as an energy-floor issue, and the live witness with its validity gate.</li>
   <li>Reopen when: a gate exists that opens the high-register files (piano C7, crotale, glockenspiel, xylophone run) without moving voice and marimba frames, measured on the same table before any render.</li>
   <li>Not deferred: the gm fixes and the CI cache are done (rs-plugkit fe36570d, build-lv2 0403d1a9).</li>
+</ul>
+
+<h2 id="pre-registration-2093-hz-register-candidate-2026-10-25-row-defect-sine-2093-subharmonic">Pre-registration: 2093 Hz register candidate, 2026-10-25 (row defect-sine-2093-subharmonic)</h2>
+
+<ul>
+  <li>Scope: this row only. The 2026-10-19 tracker deferral does not list it. Its reopen gate (an energy gate for the high-register files) is not a precondition here: rule R3 requires those four files to stay silent, and their own gate stays in its own row.</li>
+  <li>Base: effects/pitchtracker-src/pitchtracker_ac.dsp at c2c06f73 (file sha256 cea5e4f0…). The same content as b563a62a, the commit the 2093 witness measured (dispatch 1792914615672), so the measured mechanism applies to the live file.</li>
+  <li>Candidate: docs/witness/pitch-2093/pitchtracker_ac_2093.dsp, generated from the base. Changes: 19 grid candidates above 1581.12 Hz at ratio 1.0545 (top 4333.61 Hz, lag 11), each read through corrAtLagVarTau at tau 0.02 (rwtable taps, literal lags); the output clamp min(maxTrackHz) becomes min(maxRawHz) with maxRawHz = 4200.0. maxTrackHz stays 1500.0 and still bounds the 2x and 3x promotion.</li>
+  <li>Ceiling decision: the output clamp is the only range change, because a 2093 Hz read cannot leave the tracker above 1500 Hz. maxTrackHz (the documented range and the promotion reach) stays 1500.</li>
+  <li>Measured before this text (grid level, a JS model, dispatch 1792919899033-2757-557e29c004bae503): base grid settles sine_2093 at 700 Hz at every tau; candidate grid settles it at 2061.57 Hz. Grid-level corpus moves: flute_high_C7, flute_trill_high_C7 and glockenspiel_high_C7. The model has no energy gate, so the glockenspiel move is expected to be silent at device level.</li>
+  <li>Render (CI, workflow pitch-2093-render.yml, pinned route): faust -i -a tools/pitchtracker-render/pt_arch.cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -t 600 -cn pitchtracker, g++ -O2, tools/pitchtracker-render/render_corpus.py over the 34 corpus files, the 5 standard sines and sine_2093 (2093.005 Hz, amplitude 0.3, 3 s). Variants: base (shipped), cand (shipped tau policy), cand-tau01 (tau 0.01 on tauFor and on the candidate taps). Reference: docs/witness/corpus-pitch-reference.md, reliable rows.</li>
+  <li>S1 (acceptance): sine_2093 settled median within 50 c of 2093.005 Hz in cand AND in cand-tau01. Base is reported, not judged.</li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>R1 (no regression against the measured peak): for each corpus file with a reliable peak,</td>
+          <td>cents(cand, peak)</td>
+          <td>&lt;=</td>
+          <td>cents(base, peak)</td>
+          <td>+ 5. A move toward the peak is not a regression. This replaces the 2026-10-18 rule “no moved file over 5 c”, fixed here before any render, because that rule counted the flute correction toward the peak as a failure. Files without a reliable peak:</td>
+          <td>settled(cand) - settled(base)</td>
+          <td>within 5 c.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>R2: voiced_blocks(cand) &gt;= voiced_blocks(base) for every corpus file.</li>
+  <li>R3: piano_high_C7, crotale_high_C7, glockenspiel_high_C7 and xylophone_run_C7B7 settle with zero voiced blocks in cand, as in base.</li>
+  <li>R4: cello_low_sulC_A2 and vocal_male_baritone_scale settle below 1000 Hz in cand.</li>
+  <li>R5: sine_55.69, sine_110, sine_220, sine_440 and sine_1000 stay within 1 c of base.</li>
+  <li>Admission: S1 and R1 to R5 pass on the cand artifact of the commit that carries this text, and the candidate then replaces the shipped file in a follow-up commit. Any failure rejects the candidate; the reason is recorded here and the row stays open with that fact. Thresholds are not changed after a run.</li>
 </ul>
 
 
