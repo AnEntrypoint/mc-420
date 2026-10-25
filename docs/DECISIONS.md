@@ -591,3 +591,12 @@ Kept open, with the blocker:
   - P5 (count, not a threshold): the non-phrase voiced count under both rules is recorded. The registered threshold of 22 in the external level-normalised gate is not changed here. If it fails under the pin rule, that is the recorded verdict, and a row is filed for its owner to re-register before any rerun.
 - Pins outside PINNED_HZ, including 1500.0 at maxTrackHz, are not excluded and are reported as observed.
 - Verdict: the row is resolved if P1 to P4 pass on the full corpus. P5 is recorded either way. Thresholds are not changed after a run.
+
+## Verdict v2: 2093 Hz register candidate, 2026-10-25 (row defect-sine-2093-subharmonic)
+
+- CI run 40182748324 on f05427eb (pinned route, level-normalised gate, render_corpus.py before 0e3d6f6c). S1 v2 PASS: sine_2093 2092.38 Hz at both taus (base 700.24 Hz).
+- R2 v2 FAIL: crotale_high_C7 voiced blocks 1358 to 1357.
+- R1 v2 FAIL (files without a reliable peak, outside the 3:1 family): vibraphone_mid_C5B5 556.4 to 189.4 Hz (-1866 c); piano_low_A1 60.0 to 1714.3 Hz (+5804 c, runaway); xylophone_run_C7B7 268.2 to 1090.9 Hz; piano_high_C7 349.1 to 2105.8 Hz (6:1, outside the 3:1 family); marimba_mid_C5B5 590.4 to 627.6 Hz (+106 c); oboe_mid_C5B5 295.1 to 277.8 Hz (-104 c); cymbal_inharmonic 60.0 to 61.2 Hz (+35 c); flute_trill_high_C7 1128.8 to 2257.9 Hz (2:1).
+- Note: 0e3d6f6c (another row, render gate: exclude tracker-pinned values) changes render_corpus.py to exclude settled values pinned at 60.0 and 192.0. None of the listed regressions is a pinned value on either side, so the verdict does not depend on that change.
+- Verdict: REJECTED under v2. The candidate reads the 2093 sine, but it moves other files on the row's gate, including an octave-down on vibraphone_mid_C5B5 and a runaway on piano_low_A1. The shipped tracker is unchanged and nothing is admitted.
+- Clearing action before any re-render: a confidence gate for candidates above 1581 Hz, so a high candidate cannot win on low-register material (as the 2026-10-18 record already requires). Pre-register it with the regression list above as its acceptance set, before it is rendered. Filed as row defect-2093-grid-ext-low-register-regression.
