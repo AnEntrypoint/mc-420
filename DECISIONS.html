@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=446e713b6ae0796f69323b620f1ab83c5c75c1ce">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=801137d652c0e29b8e1d511a8c7cf4d697763874">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -773,6 +773,13 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Change: <code class="language-plaintext highlighter-rouge">src/control/apc_leds.h</code>. The current beat pad turns red only for <code class="language-plaintext highlighter-rouge">kBeatFlashMs</code> (100 ms) after each beat edge, then shows its normal colour. Shuffle blink and gate-mod colours are unchanged.</li>
   <li>Witness: CI for <code class="language-plaintext highlighter-rouge">ae38d08b</code> (build-binary and build-image success), read by verify session <code class="language-plaintext highlighter-rouge">verify-metronome-red-flash-brief</code>, dispatch <code class="language-plaintext highlighter-rouge">1792934651896-4262-df1e901ecd1f5ab</code>.</li>
   <li>Not yet observed on the device: the image is not deployed to the Pi.</li>
+</ul>
+
+<h2 id="status-json-buffer-headroom-2026-10-25-row-telemetry-status-json-buffer-headroom">Status JSON buffer headroom, 2026-10-25 (row telemetry-status-json-buffer-headroom)</h2>
+
+<ul>
+  <li>Change: <code class="language-plaintext highlighter-rouge">src/control/telemetry.cpp</code>, status buffer 8192 bytes with an overflow guard (commit <code class="language-plaintext highlighter-rouge">a3016211</code>).</li>
+  <li>Witness: live status reply from the deployed build (sha256 <code class="language-plaintext highlighter-rouge">76e844a9</code>, CI build of <code class="language-plaintext highlighter-rouge">ae38d08b</code>), rendered length 1979 bytes, valid JSON, verify dispatch <code class="language-plaintext highlighter-rouge">1792939127238-4456-7f26503382a48bc3</code>.</li>
 </ul>
 
 

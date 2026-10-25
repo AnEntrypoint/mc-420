@@ -638,3 +638,8 @@ Kept open, with the blocker:
 - Change: `src/control/apc_leds.h`. The current beat pad turns red only for `kBeatFlashMs` (100 ms) after each beat edge, then shows its normal colour. Shuffle blink and gate-mod colours are unchanged.
 - Witness: CI for `ae38d08b` (build-binary and build-image success), read by verify session `verify-metronome-red-flash-brief`, dispatch `1792934651896-4262-df1e901ecd1f5ab`.
 - Not yet observed on the device: the image is not deployed to the Pi.
+
+## Status JSON buffer headroom, 2026-10-25 (row telemetry-status-json-buffer-headroom)
+
+- Change: `src/control/telemetry.cpp`, status buffer 8192 bytes with an overflow guard (commit `a3016211`).
+- Witness: live status reply from the deployed build (sha256 `76e844a9`, CI build of `ae38d08b`), rendered length 1979 bytes, valid JSON, verify dispatch `1792939127238-4456-7f26503382a48bc3`.
