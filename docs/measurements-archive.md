@@ -665,3 +665,20 @@ telemetry constant). For each run the device origin is solved as arm + (model or
 Within-run scatter is about 0.015 beat. Between runs the origin moves by 1.4 beats, and in each run it is
 more than a beat off the arm press. Host timing error is about 0.1 beat, so the offset is real. Row:
 first-loop-origin-unstable.
+
+## Correction: first-loop origin is stable at the press (archive#first-loop-origin-correction)
+
+The earlier "unstable origin" result (archive#first-loop-origin-unstable) was measured against the wrong
+reference. A late take does not re-origin the loop: the grid origin is the first take's press. Solving the
+origin against the late take's press therefore reported offsets that depended on the gap between presses.
+
+Against the first take's press, the master-window calibration constant c (telemetry error when the origin is
+the press) was +0.058, +0.073, +0.060, +0.068 and +0.060 beats over five runs (ledger witnesses
+1792908365404-1853-5d78f51a298c39a4, 1792908400294-1855-3b89166a341dbdd4, 1792908827639-1893-be1ffa95012264e7).
+The origin is stable and sits at the press to about 0.07 beat, which is 35 ms, within host timing error.
+
+On the first take the tempo is solved from the take's own span, so the loop length equals the span in beats.
+The press origin and the finish origin then coincide, so a standalone first take cannot tell them apart. The
+origin change (raw span mod loop length, commit 38eeb13f) matters only when the first take's tempo comes from
+Link peers, where the loop length is rounded from the Link tempo. That case needs a second device to witness,
+and the sample-exact claim still needs device-side timestamps.
