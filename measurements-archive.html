@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c1361f2534f02e5830cb9dd54208af3bed1c7dcc">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=787a9a3e329c3bd50b9274f553854e2007840375">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -822,6 +822,58 @@ and the phase is sampled over UDP. Sample-exact validation needs device-side tim
 
 <p>Verdict: the grid origin lies within about 50 ms of the press, with no drift across 50 polls. It is not
 sample-exact, and it does not discriminate the arm origin from the finish origin.</p>
+
+<h2 id="device-timing-rules-telemetry-run-archivedevice-timing-rules-run">Device timing rules, telemetry run (archive#device-timing-rules-run)</h2>
+
+<p>Witness: gm bash dispatch 1792906114734-1744-6b768ba1c25e21f2 (session verify-timing-rules, exit 0).
+Device aloop b99d7543 after a fresh restart, a 4-beat master, then three takes on looper 2 to 4.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>take</th>
+      <th>host duration</th>
+      <th>beats</th>
+      <th>wraplen (samples)</th>
+      <th>result on a 4-beat phrase</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>master</td>
+      <td>2.087 s</td>
+      <td>4.00</td>
+      <td>100031</td>
+      <td>sets the phrase</td>
+    </tr>
+    <tr>
+      <td>late press</td>
+      <td>2.338 s</td>
+      <td>4.49</td>
+      <td>100031</td>
+      <td>4 beats (earlier boundary)</td>
+    </tr>
+    <tr>
+      <td>far extend</td>
+      <td>3.086 s</td>
+      <td>5.90</td>
+      <td>100031</td>
+      <td>4 beats (one-phrase cap)</td>
+    </tr>
+    <tr>
+      <td>fold</td>
+      <td>1.498 s</td>
+      <td>2.87</td>
+      <td>50016</td>
+      <td>2 beats (ladder step)</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Tempo 115.2 BPM. Host durations are the press-to-press spans, so each take’s beat count carries the
+host timing error (tens of ms). The fold check is near the boundary at 3 beats, so its margin is 0.13 beats.
+Scope: phrase 4 only. Odd phrases are unmeasured, and the DSP re-snap in dsp/loop.dsp still uses the old
+ladder (dsp-finish-snap-odd-phrase), so timing-fold-ladder stays pending.</p>
 
 
       </section>
