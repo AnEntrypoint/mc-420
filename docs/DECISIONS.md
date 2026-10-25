@@ -632,3 +632,9 @@ Kept open, with the blocker:
 - Change: `tools/pitchtracker-render/judge_maxtrack2600.py`, sha256 `2286419c29c00187c21a243dcf00a99234bc4ead561194a926bdf0c230339480`. An unvoiced settled value returns the UNVOICED marker instead of inf; a pair of unvoiced results is a zero move (the R5 null rule of `docs/witness/tracker-ceiling-margin-pair-prereg.md`); a mixed pair still fails. Other checks unchanged.
 - Registered verdict: defect-sine-2093-subharmonic (RESULT REJECTED S1,R1-no-peak,R2,NR) stays on the scratch judge, sha256 2a5b2c32 (verify dispatch 1792927677862-3658-7ff450bdbd367275). It is not re-judged, and no pre-registration or pinned hash changes.
 - Witness: dispatch 1792931940283-4172-8c218f0c6b2bfeb2 (session verify-defect-sine-2093-judge-unvoiced-cents), the new judge on the pt-maxtrack artifacts of CI run 40187702631 (sha 7ae889a5): R5 PASS with sine_55.69 unvoiced; RESULT REJECTED S1,R1-no-peak,R2,NR. This is a fix witness of the new judge, not a registered verdict.
+
+## Metronome beat pad: red flash, 2026-10-25 (row metronome-red-flash-brief)
+
+- Change: `src/control/apc_leds.h`. The current beat pad turns red only for `kBeatFlashMs` (100 ms) after each beat edge, then shows its normal colour. Shuffle blink and gate-mod colours are unchanged.
+- Witness: CI for `ae38d08b` (build-binary and build-image success), read by verify session `verify-metronome-red-flash-brief`, dispatch `1792934651896-4262-df1e901ecd1f5ab`.
+- Not yet observed on the device: the image is not deployed to the Pi.
