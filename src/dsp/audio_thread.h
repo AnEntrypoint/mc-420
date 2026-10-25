@@ -96,6 +96,10 @@ public:
         float    looperStateFlags[kLoopers] = {};
         float    looperLatencyBias[kLoopers] = {};
         bool     looperHasContent[kLoopers] = {};
+        uint64_t audioSampleCount = 0;
+        uint64_t lastTakeArmSample = 0;
+        double   lastTakeSpanSamples = 0.0;
+        double   masterPhaseSamples = 0.0;
         int      clipExportState = 0;
         int      gridBeatIndex = -1;
         float    masterLenSamples = 0.0f;

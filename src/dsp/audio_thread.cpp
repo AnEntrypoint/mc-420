@@ -293,6 +293,7 @@ static void* worker(void*) {
     int64_t armSampleOfLooper[AudioThread::Telemetry::kLoopers] = {};
     bool recWasOnLooper[AudioThread::Telemetry::kLoopers] = {};
     double lastTakeSpanSamples = 0.0;
+    uint64_t lastTakeArmLocal = 0;
 
     const int wireCh = (ch < 2) ? 2 : ch;
     bool stereoOut = g_cfg.stereoOut && wireCh >= 4;
@@ -764,12 +765,18 @@ static void* worker(void*) {
             }
             {
                 audioSampleCount += N;
+                g_telem.audioSampleCount = (uint64_t)audioSampleCount;
                 for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) {
                     auto& tz = looperTelemetryZones[lp];
                     g_telem.looperRec[lp]      = tz.rec      && *tz.rec > 0.5f;
                     const bool recNow = g_telem.looperRec[lp];
                     if (recNow && !recWasOnLooper[lp]) armSampleOfLooper[lp] = audioSampleCount;
-                    if (!recNow && recWasOnLooper[lp]) lastTakeSpanSamples = (double)(audioSampleCount - armSampleOfLooper[lp]);
+                    if (!recNow && recWasOnLooper[lp]) {
+                        lastTakeSpanSamples = (double)(audioSampleCount - armSampleOfLooper[lp]);
+                        lastTakeArmLocal = (uint64_t)armSampleOfLooper[lp];
+                        g_telem.lastTakeSpanSamples = lastTakeSpanSamples;
+                        g_telem.lastTakeArmSample = lastTakeArmLocal;
+                    }
                     recWasOnLooper[lp] = recNow;
                     g_telem.looperPlay[lp]     = tz.play     && *tz.play > 0.5f;
                     g_telem.looperVol[lp]      = tz.vol      ? *tz.vol : 1.0f;
@@ -998,6 +1005,7 @@ static void* worker(void*) {
                     masterPhaseSamples = std::fmod(masterPhaseSamples, (double)masterLen);
                     if (masterPhaseSamples < 0.0) masterPhaseSamples += masterLen;
                     g_telem.masterPhaseBeats = (float)(masterPhaseSamples / beatLenSamplesShared);
+                    g_telem.masterPhaseSamples = masterPhaseSamples;
 
                     float recordedBpmForQuantum = recordedBpmVal;
                     if (recordedBpmForQuantum > 1.0f) {
@@ -1015,6 +1023,7 @@ static void* worker(void*) {
                     standaloneQuantumPhaseSamples = 0.0;
                     lastLinkPhaseMicroBeats = -1;
                     g_telem.masterPhaseBeats = 0.0f;
+                    g_telem.masterPhaseSamples = 0.0;
                     g_telem.linkPhaseErrBeats = 0.0f;
                 }
 

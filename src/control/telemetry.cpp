@@ -120,7 +120,7 @@ void Telemetry::publish() {
         if (rn == 0) { wifiRole[0] = 's'; wifiRole[1] = 't'; wifiRole[2] = 'a'; wifiRole[3] = 0; }
     }
 
-    char json[3072];
+    char json[4096];
     int n = snprintf(json, sizeof json,
         "{\"core_busy\":[%.0f,%.0f,%.0f,%.0f],\"xruns\":%llu,"
         "\"link\":{\"synced\":%s,\"bpm\":%.1f,\"peers\":%d,\"playing\":%s,\"phase_err_beats\":%.3f},"
@@ -136,7 +136,7 @@ void Telemetry::publish() {
         "\"beat_mark\":{\"valid\":%s,\"beat\":%.5f,\"index\":%d,\"ms_to_next\":%.1f,\"late_ms\":%.3f},"
         "\"beat_pad_mark\":{\"seq\":%llu,\"index\":%d,\"late_ms\":%.3f,\"age_ms\":%lld,\"bpm\":%.3f},"
         "\"groove\":{\"shuffle\":%d,\"gate\":%d,\"beat_len_samples\":%.1f,\"gate_min\":%.3f,\"gate_max\":%.3f,\"swing_offset_samples\":%.1f,\"swing_grid_beats\":%.3f},"
-        "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s,\"stateflags\":%s,\"latencybias\":%s}}",
+        "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s,\"stateflags\":%s,\"latencybias\":%s},\"sample_clock\":{\"audio_samples\":%llu,\"last_take_arm_sample\":%llu,\"last_take_span_samples\":%.1f,\"master_phase_samples\":%.1f}}",
         t.coreBusyPct[0], t.coreBusyPct[1], t.coreBusyPct[2], t.coreBusyPct[3],
         (unsigned long long)t.xruns,
         t.linkSynced ? "true" : "false", t.bpm,
@@ -159,7 +159,9 @@ void Telemetry::publish() {
         (double)padMark.lateMicros / 1000.0, (long long)padMark.ageMs, padMark.bpm,
         t.shuffleMode, t.gateMode, t.grooveBeatLenSamples, t.grooveGateMin, t.grooveGateMax,
         t.grooveSwingOffsetSamples, t.grooveSwingGridBeats,
-        recBits, playBits, vols, levels, wraplens, readposes, writeidxs, stateflags, biases);
+        recBits, playBits, vols, levels, wraplens, readposes, writeidxs, stateflags, biases,
+        (unsigned long long)t.audioSampleCount, (unsigned long long)t.lastTakeArmSample,
+        t.lastTakeSpanSamples, t.masterPhaseSamples);
 
     FILE* statusFile = fopen("/run/aloop/status.json", "w");
     if (statusFile) { fwrite(json, 1, (size_t)n, statusFile); fclose(statusFile); }
