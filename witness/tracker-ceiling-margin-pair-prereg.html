@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Pre-registration: maxTrackHz 2600 with promotion margin 0.001, and the margin-only control | aloop</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Pre-registration: maxTrackHz 2600 with promotion margin 0.001, and the margin-only control" />
+<meta property="og:locale" content="en_US" />
+<link rel="canonical" href="https://anentrypoint.github.io/mc-420/witness/tracker-ceiling-margin-pair-prereg.html" />
+<meta property="og:url" content="https://anentrypoint.github.io/mc-420/witness/tracker-ceiling-margin-pair-prereg.html" />
+<meta property="og:site_name" content="aloop" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Pre-registration: maxTrackHz 2600 with promotion margin 0.001, and the margin-only control" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","headline":"Pre-registration: maxTrackHz 2600 with promotion margin 0.001, and the margin-only control","url":"https://anentrypoint.github.io/mc-420/witness/tracker-ceiling-margin-pair-prereg.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8c7d6e7ff25f0a0f86ebba91964807fd9a16bd75">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/mc-420/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1><a href="https://anentrypoint.github.io/mc-420/">aloop</a></h1>
+
+        
+
+        <p></p>
+
+        
+        <p class="view"><a href="https://github.com/AnEntrypoint/mc-420">View the Project on GitHub <small>AnEntrypoint/mc-420</small></a></p>
+        
+
+        
+
+        
+      </header>
+      <section>
+
+      <h1 id="pre-registration-maxtrackhz-2600-with-promotion-margin-0001-and-the-margin-only-control">Pre-registration: maxTrackHz 2600 with promotion margin 0.001, and the margin-only control</h1>
+
+<p>Row: defect-sine-2093-subharmonic. Registered 2026-10-25, before any render of this pair. This file changes no shipped DSP.</p>
+
+<p>Relation to earlier files. docs/witness/tracker-maxtrackhz-2600-prereg.md (commit 72b8db1d) registered the ceiling-only candidate, which was REJECTED on the pinned route (witness dispatch 1792927677862-3658-7ff450bdbd367275; reverted by 47d0af89). That verdict stands. This file registers the pair DawDreamer’s B1 used: ceiling 1500 to 2600 plus promotion margin 0.001. Where it keeps 72b8db1d’s criteria it says so; where it differs it gives the reason.</p>
+
+<h2 id="1-variants">1. Variants</h2>
+
+<p>Base: effects/pitchtracker-src/pitchtracker_ac.dsp at commit 47d0af89 (the shipped text), sha256 cea5e4f00533f0364bfd7eb9f62e851029ee9a1301b4ba8566d0c5dc7f4d67e0, 18289 bytes. Base is rendered in every run.</p>
+
+<p>P (the pair), made from base by three exact edits. Each target must occur exactly once; the render workflow aborts otherwise.</p>
+<ul>
+  <li>E1: “maxTrackHz = 1500.0;” becomes “maxTrackHz = 2600.0;”.</li>
+  <li>E2: insert the line “promoteMargin = 0.001;” directly after “subharmDominanceMargin = 0.004;”.</li>
+  <li>E3: “(raw3 &gt; pBase + subharmDominanceMargin)” becomes “(raw3 &gt; pBase + promoteMargin)”, and “(raw2 &gt; pBase + subharmDominanceMargin)” becomes “(raw2 &gt; pBase + promoteMargin)”.
+The demotion test keeps subharmDominanceMargin (0.004). The output clamp “rawFreq = … : min(maxTrackHz)” moves with E1. No maxRawHz, no grid change.</li>
+</ul>
+
+<p>B3 (margin-only control): P with E1 undone, so maxTrackHz stays 1500.0. E2 and E3 are kept.</p>
+
+<p>Tau axis (the tauFor site, as in 72b8db1d): T-S is the shipped “ba.if(freqHz &gt;= 575.0, 0.02,” and T-F is the same site with 0.01. Base, P and B3 each render at T-S and T-F: six settled sets per run.</p>
+
+<p>Not varied: minTrackHz, corrThresh, the coarse grid, refine spread, onset hold, demote and energy constants, energyTau.</p>
+
+<h2 id="2-why-these-edits">2. Why these edits</h2>
+
+<ul>
+  <li>maxTrackHz read sites (codesearch regex, dispatch 1792928503256-3753-d33b42e81760ffc2): the declaration, reachable2 and reachable3 (promotion reach), and the rawFreq output clamp. Nothing else reads it.</li>
+  <li>E3 changes only the 2x and 3x promotion comparisons. The lag set, sweep, tau, refine and demotion are unchanged, so E1 to E3 cannot re-time the sweep; the range check of 72b8db1d section 2 holds for the pair.</li>
+  <li>The ceiling-only candidate changed E1 alone and left sine_2093 at 700.244 Hz. The margin alone (B3) failed on DawDreamer’s route. The pair is therefore registered together with its control.</li>
+</ul>
+
+<h2 id="3-corpus">3. Corpus</h2>
+
+<ul>
+  <li>The 34 instrument WAVs in test-audio-corpus/instruments/ (classes in section 6), 48 kHz mono 16-bit, normalised in CI by tools/corpus-level/normalise-corpus.mjs –rms 0.1.</li>
+  <li>Six sines from tools/ceiling-dedup/make_sines.py: sine_55.69, sine_110, sine_220, sine_440, sine_1000, sine_2093 (2093.005 Hz).</li>
+  <li>40 files per variant. No file is excluded.</li>
+</ul>
+
+<h2 id="4-route-ci-next-round-nothing-is-rendered-in-this-round">4. Route (CI, next round; nothing is rendered in this round)</h2>
+
+<ul>
+  <li>Renderer: tools/pitchtracker-render/render_corpus.py with the pinned Faust flags -vec -fun -dfs -vs 32 -nvi -ct 0 -t 600, and g++ -O3 for the driver. 72b8db1d used -O2; this pair uses -O3 to follow the flag rule. Base, P and B3 share the flags, so the comparison is internal.</li>
+  <li>The next round’s candidate commit adds E1 to E3 and a workflow pitch-pair-render.yml, workflow_dispatch only. The workflow checks the base sha, fails unless each edit matches exactly once, and renders base, P and B3 at T-S and T-F.</li>
+  <li>pitch-2093-render.yml carries a path trigger on the DSP file, restored by the 47d0af89 revert. The candidate commit removes it (as the 72b8db1d route did), so a candidate push runs one render, not two.</li>
+  <li>A verify session (verify-defect-sine-2093-subharmonic) applies the judge to the settled JSON and records the judge sha256 and the witness dispatch id.</li>
+</ul>
+
+<h2 id="5-measured-targets-for-r1a">5. Measured targets for R1a</h2>
+
+<p>Reference rule (docs/witness/corpus-pitch-reference.md): a gate that scores a target uses a measured peak from the Reliable table, or records the measurement it used with the run. Filename labels are not used.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>file</th>
+      <th>target Hz</th>
+      <th>basis</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>piano_mid_C4</td>
+      <td>262.22</td>
+      <td>corpus-pitch-reference.md, Reliable table</td>
+    </tr>
+    <tr>
+      <td>marimba_low_C2B2</td>
+      <td>65.21</td>
+      <td>same</td>
+    </tr>
+    <tr>
+      <td>cello_low_sulC_A2</td>
+      <td>111.76</td>
+      <td>same</td>
+    </tr>
+    <tr>
+      <td>trumpet_high_C6</td>
+      <td>1049.13</td>
+      <td>same</td>
+    </tr>
+    <tr>
+      <td>soprano_sax_high_C6</td>
+      <td>1049.13</td>
+      <td>same</td>
+    </tr>
+    <tr>
+      <td>clarinet_high_C6B6</td>
+      <td>1049.13</td>
+      <td>same</td>
+    </tr>
+    <tr>
+      <td>piano_high_C7</td>
+      <td>2109.01</td>
+      <td>in neither reference file; measured for this pre-reg (below)</td>
+    </tr>
+    <tr>
+      <td>flute_trill_high_C7</td>
+      <td>2151.51</td>
+      <td>in neither reference file; measured for this pre-reg (below)</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>piano_high_C7: node tools/pitch-reference/submultiple.mjs –wav test-audio-corpus/instruments/piano_high_C7.wav –seconds 6 gives global peak 2109.01 Hz (40-4000 Hz, 0.5 percent grid, the reference method). The local ladder at 2109.76 Hz reads H2 -40.0 dB and H3 -69.0 dB against the peak, so the fundamental is clear. tools/pitch-reference/comb.mjs does not certify it (its pick is 1061.21 Hz with H3 to H8 missing). The disagreement between the two methods is recorded here, not resolved. The 349.05 Hz figure quoted for this file is the base tracker reading in the 7ae889a5 verdict (349.05 to 2095.10 Hz), not a file peak, and is not a target.</p>
+
+<p>flute_trill_high_C7: the same command with –seconds 4.5 gives global peak 2151.51 Hz. The file is a two-note trill (C7 to Db7, about 2093 to 2217 Hz). Its local peaks at 2143.70, 2151.04 and 2154.62 Hz lie within 3 dB of one another, so the peak is a smear across about 2140 to 2160 Hz, not a single line. comb.mjs excludes it as a phrase. R1a reads the target as written; NR (section 7) holds the file strictly to base, so R1a cannot admit a move on its own.</p>
+
+<p>Classification change: 72b8db1d judged piano_high_C7 and flute_trill_high_C7 as no-peak files. This pair judges them by the targets above.</p>
+
+<h2 id="6-the-34-files">6. The 34 files</h2>
+
+<p>R1a (8): piano_mid_C4, marimba_low_C2B2, cello_low_sulC_A2, trumpet_high_C6, soprano_sax_high_C6, clarinet_high_C6B6, piano_high_C7, flute_trill_high_C7.</p>
+
+<p>NR (6, strict): piano_low_A1, marimba_mid_C5B5, vibraphone_mid_C5B5, oboe_mid_C5B5, cymbal_inharmonic, flute_trill_high_C7 (flute also sits in R1a).</p>
+
+<p>R1b (26): every corpus file not in R1a. Five of them are NR files: piano_low_A1, marimba_mid_C5B5, vibraphone_mid_C5B5, oboe_mid_C5B5, cymbal_inharmonic. The other 21 are violin_low_sulG_G3B3, violin_high_sulE_C7E7, trumpet_low_A3, bassoon_low_C2B2, vocal_female_vibrato, vocal_male_baritone_scale, flute_high_C7, xylophone_roll_AM_C6B6, marimba_roll_AM_C5B5, bells_glock_run_C6B6, xylophone_run_C7B7, glockenspiel_high_C7, crotale_high_C7, tamtam_inharmonic, balloon_pop_transient, guitar_pluck_C4B4, tuba_run_C2B2, vocal_soprano_range_PD, vocal_tenor_range_PD, vocal_tenor_operatic_PD, vocal_melody_twinkle_CC0.</p>
+
+<p>Sines: S1 uses sine_2093; R5 uses sine_55.69, sine_110, sine_220, sine_440, sine_1000; C-RANGE uses sine_55.69, sine_110, sine_220, sine_440.</p>
+
+<h2 id="7-criteria">7. Criteria</h2>
+
+<p>Notation: c(x) = settled_hz of variant x; v(x) = voiced_blocks of variant x; cents(a,b) = 1200 log2(a/b); T = target from section 5.</p>
+
+<p>Rule fields: every criterion reads the pin fields, settled_hz and voiced_blocks, as the render judge defines them after commit 0e3d6f6c (a block pinned at the 60.0 Hz floor or at 192.0 Hz is not voiced). The raw fields (settled_raw_hz, voiced_raw_blocks) are written to the JSON and reported beside each verdict; no criterion reads them.</p>
+
+<p>Null rule: c is null when a file has no voiced block. cents is undefined when either side is null. Two nulls are equal (unchanged). A null against a value fails every equality or cents clause, except R1a, where a null base makes the bound infinite.</p>
+
+<ul>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>S1 (sine_2093; P at T-S and at T-F):</td>
+          <td>cents(c(P), 2093.005)</td>
+          <td>&lt;= 50 and v(P) &gt; 0. Pin fields: settled_hz, voiced_blocks.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>R1a (the 8 files of section 5; P):</td>
+          <td>cents(c(P), T)</td>
+          <td>&lt;=</td>
+          <td>cents(c(base), T)</td>
+          <td>+ 5. A move toward T is not a regression. Pin field: settled_hz.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>R1b (the 26 files of section 6; P vs base):</td>
+          <td>cents(c(P), c(base))</td>
+          <td>&lt;= 5, except that the 3:1 family passes if v(base) &gt; 0, v(P) &gt; 0,</td>
+          <td>cents(c(P), c(base)) - 1901.955</td>
+          <td>&lt;= 50 and</td>
+          <td>cents(c(P), 2093.005)</td>
+          <td>&lt;= 50. The 3:1 exception is not available to NR files. Pin fields: settled_hz, voiced_blocks.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>R2 (all 34 corpus files; P vs base): v(P) &gt;= v(base). Pin field: voiced_blocks.</li>
+  <li>R4 (cello_low_sulC_A2 and vocal_male_baritone_scale; P): 0 &lt; c(P) &lt; 1000. Pin field: settled_hz.</li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>R5 (sine_55.69, sine_110, sine_220, sine_440, sine_1000; P vs base): both null, or both non-null with</td>
+          <td>cents(c(P), c(base))</td>
+          <td>&lt;= 1. Pin field: settled_hz.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>C-RANGE (sine_55.69, sine_110, sine_220, sine_440; P vs base): c and v identical, exact, no tolerance. Null equals null. Pin fields: settled_hz, voiced_blocks.</li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>NR (the 6 files of section 6; P vs base):</td>
+          <td>cents(c(P), c(base))</td>
+          <td>&lt;= 5 and v(P) &gt;= v(base). No 3:1 exception. Pin fields: settled_hz, voiced_blocks.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+</ul>
+
+<p>R5 keeps 72b8db1d’s sine set and tolerance. The null rule is new here: 72b8db1d’s verdict flagged sine_55.69 as unvoiced in both variants and left that case undefined. It is defined now, before any render.</p>
+
+<h2 id="8-verdict-and-handling">8. Verdict and handling</h2>
+
+<ul>
+  <li>P is ADMIT only if S1 (at T-S and at T-F), R1a, R1b, R2, R4, R5, C-RANGE and NR all pass on one CI run.</li>
+  <li>Attribution: P is admitted only if B3 fails S1 at T-S or at T-F, which shows the ceiling is needed. If B3 passes every criterion, nothing is admitted from this pair; the margin-only change needs its own pre-registration before any edit.</li>
+  <li>Any failure: REJECTED. The failing criterion, its numbers, the run id and the judge sha256 go on the row. Nothing is retuned: no threshold, variant, tau, corpus member, class or window changes in the same window. A retune needs a new pre-registration and a new candidate.</li>
+  <li>The row stays open on REJECTED. It resolves only on ADMIT with CI green on the shipped sha and a verify witness. A rejected candidate that reaches main is returned by an append revert.</li>
+  <li>This file changes no DSP. The candidate commit belongs to the next round.</li>
+</ul>
+
+<h2 id="9-disclosed-differences-and-routes">9. Disclosed differences and routes</h2>
+
+<ol>
+  <li>piano_high_C7 and flute_trill_high_C7 are absent from both reference files; their targets are measured here (section 5).</li>
+  <li>The comb method and the Goertzel ladder disagree on piano_high_C7; both are recorded.</li>
+  <li>The tau axis is the tauFor site, as in 72b8db1d. DawDreamer’s energyTau axis is not this pair’s axis and is not scored here.</li>
+  <li>The driver is compiled with g++ -O3, not -O2 (section 4).</li>
+  <li>Four comb-certified files (bassoon_low_C2B2, violin_low_sulG_G3B3, trumpet_low_A3, guitar_pluck_C4B4) stay in R1b. Their comb f0 values are not added to R1a, because that would change the registered list.</li>
+  <li>DawDreamer’s B1 and B3 (tools/sine-clamp/PREREG.md, Amendment 1, in /config/workspace/DawDreamer) are not the pinned CI route; their numbers do not close the row under its backend rule.</li>
+  <li>The promotion margin is named promoteMargin, as in the DawDreamer PREREG. In the shipped file the two promotion comparisons use subharmDominanceMargin; E3 is the only change to them.</li>
+</ol>
+
+<h2 id="10-reproduce">10. Reproduce</h2>
+
+<ul>
+  <li>sha256sum effects/pitchtracker-src/pitchtracker_ac.dsp gives cea5e4f00533f0364bfd7eb9f62e851029ee9a1301b4ba8566d0c5dc7f4d67e0.</li>
+  <li>node tools/pitch-reference/submultiple.mjs –wav test-audio-corpus/instruments/piano_high_C7.wav –seconds 6</li>
+  <li>node tools/pitch-reference/submultiple.mjs –wav test-audio-corpus/instruments/flute_trill_high_C7.wav –seconds 4.5</li>
+  <li>node tools/pitch-reference/comb.mjs –only piano_high_C7</li>
+</ul>
+
+
+      </section>
+      <footer>
+        
+        <p>This project is maintained by <a href="https://github.com/AnEntrypoint">AnEntrypoint</a></p>
+        
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="/mc-420/assets/js/scale.fix.js"></script>
+  </body>
+</html>
