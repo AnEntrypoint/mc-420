@@ -69,12 +69,20 @@ def settle(y):
     pinned = np.isclose(ends[:, None], np.array(PINNED_HZ)[None, :], rtol=0.0, atol=PIN_TOL_HZ).any(axis=1)
     settled, n = median_and_count(ends[live & ~pinned])
     raw_settled, raw_n = median_and_count(ends[live])
+    blocks = y[: (y.size // BLOCK) * BLOCK].reshape(-1, BLOCK)
+    sample_live = ((np.arange(blocks.size) + 1) / SR >= SETTLE_S).reshape(blocks.shape)
+    sample_positive = blocks > 0.0
+    sample_pinned = np.isclose(blocks[:, :, None], np.array(PINNED_HZ)[None, None, :], rtol=0.0, atol=PIN_TOL_HZ).any(axis=2)
+    sub_raw = (sample_live & sample_positive).any(axis=1)
+    sub_pin = (sample_live & sample_positive & ~sample_pinned).any(axis=1)
     stats = {
         "settled": settled,
         "voiced": n,
         "pinned": int(np.count_nonzero(live & pinned)),
         "raw_settled": raw_settled,
         "raw_voiced": raw_n,
+        "subblock_raw_voiced": int(np.count_nonzero(sub_raw)),
+        "subblock_voiced": int(np.count_nonzero(sub_pin)),
     }
     return stats, ends
 
@@ -110,6 +118,8 @@ def main():
                 "pinned_blocks": stats["pinned"],
                 "settled_raw_hz": round(stats["raw_settled"], 3),
                 "voiced_raw_blocks": stats["raw_voiced"],
+                "voiced_subblock_raw_blocks": stats["subblock_raw_voiced"],
+                "voiced_subblock_blocks": stats["subblock_voiced"],
                 "cents": None if cents is None else round(cents, 2),
             })
             traces[f.stem] = ends.astype(np.float32)
