@@ -63,7 +63,7 @@ public:
                 sendCoalesced(note, gridColor(row, col, grid, looperLevels), write);
             }
         }
-        drawBeatPads(grid, gridBeatIndex, write);
+        drawBeatPads(now_ms, grid, gridBeatIndex, write);
         drawInputRoutePads(grid, write);
         sendCoalesced(kApcPadGateMod, grid.gateModHeld() ? kLedYellow :
                                       grid.gateMode() > 0 ? kLedGreen : kLedOff, write);
@@ -95,13 +95,14 @@ public:
         if (!bootMs_) bootMs_ = now_ms ? now_ms : 1;
         if (now_ms - bootMs_ < kBootDelayMs) return;
         if (clipFlashReleaseAt_ != 0 && now_ms < clipFlashReleaseAt_) return;
-        drawBeatPads(grid, gridBeatIndex, write);
+        drawBeatPads(now_ms, grid, gridBeatIndex, write);
     }
 
 private:
     static constexpr unsigned kBootDelayMs = 2000;
     static constexpr unsigned kRefreshMs = 33;
     static constexpr unsigned kClipFlashMs = 1200;
+    static constexpr unsigned kBeatFlashMs = 100;
 
     unsigned bootMs_ = 0;
     unsigned lastMs_ = 0;
@@ -110,6 +111,8 @@ private:
     int lastClipExportState_ = 0;
     unsigned clipFlashReleaseAt_ = 0;
     bool clipFlashIsError_ = false;
+    int lastBeatIndex_ = -2;
+    unsigned beatEdgeMs_ = 0;
 
     static bool isBeatPadNote(int note) {
         for (int g = 0; g < 4; g++) if (note == kApcBeatPadNotes[g]) return true;
@@ -130,10 +133,15 @@ private:
     }
 
     template <typename WriteFn>
-    void drawBeatPads(const ApcGrid& grid, int gridBeatIndex, WriteFn&& write) {
+    void drawBeatPads(unsigned now_ms, const ApcGrid& grid, int gridBeatIndex, WriteFn&& write) {
+        if (gridBeatIndex != lastBeatIndex_) {
+            lastBeatIndex_ = gridBeatIndex;
+            beatEdgeMs_ = now_ms;
+        }
         const int activeGroup = gridBeatIndex >= 0 ? (gridBeatIndex >> 2) : -1;
         const int posInGroup  = gridBeatIndex >= 0 ? (gridBeatIndex & 0x3) : 0;
         const bool havePhrase = gridBeatIndex >= 0;
+        const bool beatFlash  = havePhrase && now_ms - beatEdgeMs_ < kBeatFlashMs;
         for (int g = 0; g < 4; g++) {
             uint8_t color;
             if (grid.gateModHeld()) {
@@ -142,7 +150,7 @@ private:
                 if (!havePhrase)             color = kLedOff;
                 else if (g < activeGroup)    color = kLedYellow;
                 else                         color = kLedGreen;
-                if (havePhrase && g == posInGroup) color = kLedRed;
+                if (beatFlash && g == posInGroup) color = kLedRed;
                 if (grid.shuffleMode() == g + 1) {
                     color = (color == kLedRed)    ? kLedRedBlink :
                             (color == kLedYellow) ? kLedYellowBlink :
