@@ -289,6 +289,10 @@ static void* worker(void*) {
     setFlushToZero();
     const int N = g_cfg.blockSize;
     const int ch = g_cfg.channels;
+    int64_t audioSampleCount = 0;
+    int64_t armSampleOfLooper[AudioThread::Telemetry::kLoopers] = {};
+    bool recWasOnLooper[AudioThread::Telemetry::kLoopers] = {};
+    double lastTakeSpanSamples = 0.0;
 
     const int wireCh = (ch < 2) ? 2 : ch;
     bool stereoOut = g_cfg.stereoOut && wireCh >= 4;
@@ -759,9 +763,14 @@ static void* worker(void*) {
                 if (divZone) *divZone = microrepeatDivVal;
             }
             {
+                audioSampleCount += N;
                 for (int lp = 0; lp < AudioThread::Telemetry::kLoopers; lp++) {
                     auto& tz = looperTelemetryZones[lp];
                     g_telem.looperRec[lp]      = tz.rec      && *tz.rec > 0.5f;
+                    const bool recNow = g_telem.looperRec[lp];
+                    if (recNow && !recWasOnLooper[lp]) armSampleOfLooper[lp] = audioSampleCount;
+                    if (!recNow && recWasOnLooper[lp]) lastTakeSpanSamples = (double)(audioSampleCount - armSampleOfLooper[lp]);
+                    recWasOnLooper[lp] = recNow;
                     g_telem.looperPlay[lp]     = tz.play     && *tz.play > 0.5f;
                     g_telem.looperVol[lp]      = tz.vol      ? *tz.vol : 1.0f;
                     g_telem.looperLevel[lp]    = tz.level    ? *tz.level : 0.0f;
@@ -880,7 +889,8 @@ static void* worker(void*) {
                 bool masterJustCreated = (prevMasterLen <= 0.0f && masterLen > 0.0f);
                 prevMasterLen = masterLen;
                 if (masterJustCreated) {
-                    masterPhaseSamples = 0.0;
+                    masterPhaseSamples = (lastTakeSpanSamples > 0.0 && masterLen > 0.0f)
+                        ? std::fmod(lastTakeSpanSamples, (double)masterLen) : 0.0;
                     linkPhaseTrim = 0.0;
                     if (g_link) {
                         timespec imposeTs{};
