@@ -4,7 +4,6 @@ on:
   push:
     paths:
       - 'docs/witness/pitch-2093/**'
-      - 'effects/pitchtracker-src/pitchtracker_ac.dsp'
       - 'tools/pitchtracker-render/**'
       - 'tools/ceiling-dedup/make_sines.py'
       - '.github/workflows/pitch-2093-render.yml'
@@ -41,7 +40,9 @@ jobs:
           set -e
           mkdir -p work
           case "${{ matrix.variant }}" in
-            base) cp effects/pitchtracker-src/pitchtracker_ac.dsp work/variant.dsp ;;
+            base)
+              echo "cea5e4f00533f0364bfd7eb9f62e851029ee9a1301b4ba8566d0c5dc7f4d67e0  docs/witness/pitch-maxtrack-2600/base_maxTrackHz1500.dsp" | sha256sum -c -
+              cp docs/witness/pitch-maxtrack-2600/base_maxTrackHz1500.dsp work/variant.dsp ;;
             cand) cp docs/witness/pitch-2093/pitchtracker_ac_2093.dsp work/variant.dsp ;;
             cand-tau01) sed -e 's/ba.if(freqHz >= 575.0, 0.02,/ba.if(freqHz >= 575.0, 0.01,/' -e 's/lagFor(f), 0.02);/lagFor(f), 0.01);/' docs/witness/pitch-2093/pitchtracker_ac_2093.dsp > work/variant.dsp ;;
           esac

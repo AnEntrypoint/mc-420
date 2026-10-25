@@ -1,0 +1,86 @@
+name: pitch-maxtrack-2600-render
+
+on:
+  push:
+    paths:
+      - 'effects/pitchtracker-src/pitchtracker_ac.dsp'
+      - 'docs/witness/pitch-maxtrack-2600/**'
+      - 'tools/pitchtracker-render/**'
+      - 'tools/corpus-level/normalise-corpus.mjs'
+      - 'tools/ceiling-dedup/make_sines.py'
+      - '.github/workflows/pitch-maxtrack-2600-render.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        variant: [base1500, ceil2600, ceil2600-tau01]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Faust and numpy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y faust
+          pip install numpy
+
+      - name: Prepare the variant source
+        run: |
+          set -e
+          mkdir -p work
+          case "${{ matrix.variant }}" in
+            base1500)
+              echo "cea5e4f00533f0364bfd7eb9f62e851029ee9a1301b4ba8566d0c5dc7f4d67e0  docs/witness/pitch-maxtrack-2600/base_maxTrackHz1500.dsp" | sha256sum -c -
+              cp docs/witness/pitch-maxtrack-2600/base_maxTrackHz1500.dsp work/variant.dsp ;;
+            ceil2600)
+              echo "945837e1afbc56b12fdb110339ba2d22b2774612c4bb1fb196d97ecc29886a7b  effects/pitchtracker-src/pitchtracker_ac.dsp" | sha256sum -c -
+              cp effects/pitchtracker-src/pitchtracker_ac.dsp work/variant.dsp ;;
+            ceil2600-tau01)
+              echo "945837e1afbc56b12fdb110339ba2d22b2774612c4bb1fb196d97ecc29886a7b  effects/pitchtracker-src/pitchtracker_ac.dsp" | sha256sum -c -
+              sed -e 's/ba.if(freqHz >= 575.0, 0.02,/ba.if(freqHz >= 575.0, 0.01,/' effects/pitchtracker-src/pitchtracker_ac.dsp > work/variant.dsp
+              test "$(grep -c 'ba.if(freqHz >= 575.0, 0.01,' work/variant.dsp)" = 1 ;;
+          esac
+          test -s work/variant.dsp
+
+      - name: Generate the Faust codegen and build the renderer
+        timeout-minutes: 45
+        run: |
+          set -e
+          faust -i -a tools/pitchtracker-render/pt_arch.cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -t 600 -cn pitchtracker work/variant.dsp -o work/pt_dsp.cpp
+          g++ -O2 -std=c++17 -I work -o pt_render tools/pitchtracker-render/pt_render.cpp -lm
+
+      - name: Build the corpus with the sine inputs
+        run: |
+          set -e
+          mkdir -p work/corpus
+          cp test-audio-corpus/instruments/*.wav work/corpus/
+          python3 tools/ceiling-dedup/make_sines.py work/sines
+          cp work/sines/*.wav work/corpus/
+          python3 -c 'import math,struct,wave; SR=48000; w=wave.open("work/corpus/sine_2093.wav","wb"); w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes(b"".join(struct.pack("<h", round(0.3*math.sin(2*math.pi*2093.005*i/SR)*32767)) for i in range(3*SR))); w.close()'
+          node tools/corpus-level/normalise-corpus.mjs --src work/corpus --out work/normalised --rms 0.1
+
+      - name: Render the corpus through the variant
+        run: |
+          python3 tools/pitchtracker-render/render_corpus.py --render ./pt_render --corpus work/normalised --reference docs/witness/corpus-pitch-reference.md --variant ${{ matrix.variant }} --out render-out
+
+      - name: Upload the settled table and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pt-maxtrack-${{ matrix.variant }}
+          path: render-out
+          if-no-files-found: error
+          retention-days: 14
