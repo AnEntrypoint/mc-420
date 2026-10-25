@@ -649,3 +649,19 @@ Phrase 3 (3.0 beats, 113.6 BPM):
 Before the fix the DSP re-snapped with the old ladder and ceil, so a 1.6-beat take played 2 beats. Phrase 4
 regression (4.0 beats, 115.0 BPM): late press 2.335 s wraps at 4 beats, far extend 3.087 s at 4 beats, and
 the 2.8-beat fold at 2 beats. All unchanged.
+
+## First-loop origin, late-take discrimination (archive#first-loop-origin-unstable)
+
+Method: tools/timing/origin-discrim.py. A 4-beat master, a 4.49-beat late take that wraps at 4 beats, then a
+2.5 s master-window calibration constant c (the master's arm and finish coincide, so its error is the
+telemetry constant). For each run the device origin is solved as arm + (model origin error - c), mod 4.
+
+- Run B (1792908365404-1853-5d78f51a298c39a4): c +0.058; arm-origin error -1.020, finish-origin error -0.348;
+  device origin = arm + 1.08 beats.
+- Run C (1792908400294-1855-3b89166a341dbdd4): c +0.073; arm-origin error +1.595, finish-origin error -1.745;
+  device origin = arm + 2.48 beats.
+- Run A (1792908327788-1848-cf78a9112fdb119d): no calibration; arm error +1.595 (vs -1.463 earlier run, same method).
+
+Within-run scatter is about 0.015 beat. Between runs the origin moves by 1.4 beats, and in each run it is
+more than a beat off the arm press. Host timing error is about 0.1 beat, so the offset is real. Row:
+first-loop-origin-unstable.
