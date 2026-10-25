@@ -143,3 +143,58 @@ jobs:
 
       - name: Trace main-loop y trajectory (baseline vs frequency-scaled main tracker)
         run: python3 test/pitch-tracker-transient/diag_trace_main_loop.py
+
+  pitchtracker-render:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [base, coarse-gate, energy-norm]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Faust and numpy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y faust
+          pip install numpy
+
+      - name: Restore the variant Faust cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/ptrender-cache
+          key: faust-pt-render-v1-${{ matrix.variant }}-${{ hashFiles('effects/pitchtracker-src/pitchtracker_ac.dsp', 'tools/pitchtracker-render/pt_arch.cpp', 'tools/pitchtracker-render/variants.py') }}
+
+      - name: Generate the variant Faust codegen and build the renderer
+        timeout-minutes: 30
+        run: |
+          set -e
+          mkdir -p /tmp/ptrender-cache work
+          if [ ! -s /tmp/ptrender-cache/pt_dsp.cpp ]; then
+            python3 tools/pitchtracker-render/variants.py ${{ matrix.variant }} effects/pitchtracker-src/pitchtracker_ac.dsp work/pitchtracker_${{ matrix.variant }}.dsp
+            faust -i -a tools/pitchtracker-render/pt_arch.cpp -vec -fun -dfs -vs 32 -nvi -ct 0 -t 600 -cn pitchtracker work/pitchtracker_${{ matrix.variant }}.dsp -o /tmp/ptrender-cache/pt_dsp.cpp
+          fi
+          g++ -O2 -std=c++17 -I /tmp/ptrender-cache -o pt_render tools/pitchtracker-render/pt_render.cpp -lm
+
+      - name: Render the corpus through the variant
+        run: |
+          python3 tools/pitchtracker-render/render_corpus.py \
+            --render ./pt_render \
+            --corpus test-audio-corpus/instruments \
+            --reference docs/witness/corpus-pitch-reference.md \
+            --variant ${{ matrix.variant }} \
+            --out render-out
+
+      - name: Upload the settled table and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pt-render-${{ matrix.variant }}
+          path: render-out
+          if-no-files-found: error
+          retention-days: 14
