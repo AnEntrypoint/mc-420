@@ -708,3 +708,16 @@ span = 364736. At audio 649984 the DSP phase is 76162 and the arm model is 76098
 is a constant offset, not the origin. Press-to-arm-edge latency is still unmeasured, so the origin is exact
 to the DSP arm edge, not to the MIDI press. Row: first-loop-origin-finish-based (premise refuted; close blocked
 on references).
+
+## Gate silence at the corpus gain (archive#gate-silence-corpus-gain)
+
+The v3 harness scales every corpus file by 10^(-43/20) = 0.00707945784384138 and leaves the sines at 1.0 (tools/ceiling-dedup/render_candidate.cpp:89). The tracker energy gate is absolute: a 3 ms one-pole of x^2 must stay above 1e-6 (-60 dBFS RMS) for 1680 consecutive samples (effects/pitchtracker-src/pitchtracker_ac.dsp, energyReady), and holdLastGood publishes a value only when that gate and confidence both hold.
+
+Live replay (verify-gate-silence-23-of-37, dispatch 1792918098137-2397-a60b1cffff25d6bb): the shipped predicate replayed per sample in float32 on the 34 test-audio-corpus/instruments files (manifest = directory, 34 = 34) and on the 5 sines from tools/ceiling-dedup/make_sines.py (recorded sha256 verified, dispatch 1792918050481-2386-511e5a42dcca083b).
+
+- At the corpus gain 14 of 34 files hold the gate. The file-average RMS shortcut in .gm/witness/gate-silence-gain.txt (7 pass, 27 silent) is wrong: loud passages with a peak near 0.4 clear the 35 ms hold (cello_low_sulC_A2 has rms 0.110 and is ready from 0.78 s).
+- 20 of 34 are gate-silent at the corpus gain. At gain 1.0 all 34 and all 5 sines are ready. The smallest uniform gain that clears all 34 is 0.237 (balloon_pop_transient).
+- The per-sample replay and the sliding-window formulation agree on all 34 files.
+- Reconciliation of the 37 inputs (34 corpus + 3 sines in v3): 17 are gate-ready at the corpus gain (14 corpus + 3 sines). v3 voiced 14, which is at most 17. v3 silent 23 = 20 gate-silent + 3 ready-but-unvoiced. crotale_high_C7 is one of the three (v3 T3: no settled value). The other two are not identifiable from the repo.
+
+Verdict: the gain convention explains 20 of the 23 silent inputs. The 27/7 counts in the row are refuted. The remaining 3 are a tracker-level question (confidence, octave flicker or value clamp at the corpus gain) and need per-file settled output from the shipped tracker at that gain. Row: gate-silence-23-of-37 (open); residual row: gate-silence-23-of-37-ready-unvoiced. The fix belongs to gate-level-normalisation.
