@@ -1,0 +1,57 @@
+# Pre-registration: maxTrackHz 1500 to 2600 (row defect-sine-2093-subharmonic)
+
+Registered 2026-10-25, before any render of the candidate. Authority: the row's DawDreamer decision of 10:35 UTC (session mcp-codemode-226746-1792924456265-201), which supersedes the 08:26 UTC orchestrator decision to keep maxTrackHz at 1500. This addendum adds criteria for this candidate. It does not change Verdict v2 or its rules R1, R2, R4, R5 and S1 (docs/DECISIONS.md), which apply unchanged to this candidate.
+
+## 1. Change under test
+
+- Shipped edit, only: effects/pitchtracker-src/pitchtracker_ac.dsp line 9, `maxTrackHz = 1500.0;` becomes `maxTrackHz = 2600.0;`.
+- Output clamp stays `rawFreq = rawFreqUnclamped : max(minTrackHz) : min(maxTrackHz);`, so the clamp moves to 2600 with maxTrackHz. No maxRawHz and no 4200 clamp: that is the grid-extension candidate's decision and is not admitted here.
+- Not included: the grid extension (docs/witness/pitch-2093/pitchtracker_ac_2093.dsp, sha256 c0a6eb03de60e5b815249e8f8afaabc82617ee38826ded1fd72560ec348f52a8), the confidence gate above 1581 Hz (separate change, own pre-registration), and any change to minTrackHz, corrThresh, the grid, tauFor, refineSpread or the onset and demote constants.
+- Frozen base: the file before the edit, sha256 cea5e4f00533f0364bfd7eb9f62e851029ee9a1301b4ba8566d0c5dc7f4d67e0, 18289 bytes, copied to docs/witness/pitch-maxtrack-2600/base_maxTrackHz1500.dsp. The render workflow checks that hash.
+
+## 2. Range-change check: does the change re-time SNAC detection?
+
+AGENTS.md warns that a range change alone re-times SNAC detection through the sweep cap (MAX_PERIOD 900, LAGS_PER_STEP 53, effects/home/faust/snacPeriodTracker.h). That cap is not in this file. pitchtracker_ac.dsp has no SNAC sweep, so the check is made on its own sweep:
+
+- Enumeration: a codesearch literal "TrackHz" over the base file (dispatch 1792926169922-3478-62b0e67a4a37ef8d) shows maxTrackHz read at exactly four code sites: the declaration (line 9), reachable2 (line 159), reachable3 (line 160) and the rawFreq clamp (line 224). The other hits are minTrackHz or the description text.
+- Read of the sweep: the lag set (literal candidates in pickFundamental, lagFor = int(SR/f)), tauFor, refineSpreadK, peakSpreadK, demoteTest (uses minTrackHz only), the 512-sample confirm, the 35 ms onset hold and the 0.2 s demote average take no value from maxTrackHz.
+- Consequence, registered: the change cannot re-time the sweep. Its only effects are the promotion reach (2x allowed when 2f <= maxTrackHz, 3x when 3f <= maxTrackHz) and the output clamp. Detection output can change only where 2f or 3f falls in (1500, 2600] Hz, that is coarse picks in (750, 1300] Hz for 2x and (500, 866.7] Hz for 3x.
+- sine_55.69, sine_110, sine_220 and sine_440 have every 2x and 3x multiple at or below 1500 Hz, so their reach and clamp are unchanged. Their output must be identical to base (criterion C-RANGE). sine_1000 lies in the 2x band and is judged by R5.
+
+## 3. Corpus and route
+
+- Corpus: the 34 files of test-audio-corpus/instruments (manifest.json, 48 kHz mono 16-bit), plus the sines from tools/ceiling-dedup/make_sines.py (sha256 checked by that script: sine_55.69, sine_110, sine_220, sine_440, sine_1000) and sine_2093 (2093.005 Hz, amplitude 0.3, 3 s). All are normalised with tools/corpus-level/normalise-corpus.mjs --rms 0.1 before rendering (the level-normalised gate).
+- The 34 names: piano_low_A1, piano_mid_C4, piano_high_C7, violin_low_sulG_G3B3, violin_high_sulE_C7E7, cello_low_sulC_A2, marimba_low_C2B2, marimba_mid_C5B5, vibraphone_mid_C5B5, trumpet_low_A3, trumpet_high_C6, oboe_mid_C5B5, bassoon_low_C2B2, clarinet_high_C6B6, vocal_female_vibrato, vocal_male_baritone_scale, flute_trill_high_C7, flute_high_C7, soprano_sax_high_C6, xylophone_roll_AM_C6B6, marimba_roll_AM_C5B5, bells_glock_run_C6B6, xylophone_run_C7B7, glockenspiel_high_C7, crotale_high_C7, cymbal_inharmonic, tamtam_inharmonic, balloon_pop_transient, guitar_pluck_C4B4, tuba_run_C2B2, vocal_soprano_range_PD, vocal_tenor_range_PD, vocal_tenor_operatic_PD, vocal_melody_twinkle_CC0.
+- Variants, rendered in CI by .github/workflows/pitch-maxtrack-2600-render.yml with the pinned route (faust -vec -fun -dfs -vs 32 -nvi -ct 0 -t 600, g++ -O2, tools/pitchtracker-render/render_corpus.py):
+  - base1500: the frozen base copy above.
+  - ceil2600: effects/pitchtracker-src/pitchtracker_ac.dsp after the shipped edit.
+  - ceil2600-tau01: ceil2600 with the tauFor site `ba.if(freqHz >= 575.0, 0.02,` set to 0.01. The workflow fails unless that substitution matches exactly once.
+- Reference: docs/witness/corpus-pitch-reference.md. render_corpus.py takes the Reliable table minus PHRASE_FILES. Reliable-peak files: piano_mid_C4, marimba_low_C2B2, cello_low_sulC_A2, trumpet_high_C6, soprano_sax_high_C6, clarinet_high_C6B6. All other files have no reliable peak, including the PHRASE files vibraphone_mid_C5B5 and marimba_mid_C5B5.
+- Rule statement: this verdict reads the PIN-rule fields settled_hz and voiced_blocks (pinned values 60.0 and 192.0 excluded, commit 0e3d6f6c). The raw fields are in the same JSON and are not judged.
+
+## 4. Criteria
+
+Notation: c(x) = settled_hz of variant x, v(x) = voiced_blocks of variant x, cents(a,b) = 1200 * log2(a/b). Thresholds are fixed here and are not changed after any run.
+
+- S1: for ceil2600 AND ceil2600-tau01, |cents(c(sine_2093), 2093.005)| <= 50 and v > 0. base1500 is reported, not judged.
+- R1, reliable-peak files (the six listed in section 3): |cents(c(ceil2600), peak)| <= |cents(c(base1500), peak)| + 5. A move toward the peak is not a regression.
+- R1, no-peak files (all other corpus files): |cents(c(ceil2600), c(base1500))| <= 5, EXCEPT the 3:1 correction family, which passes when v(base1500) > 0, v(ceil2600) > 0, |cents(c(ceil2600), c(base1500)) - 1901.955| <= 50 and |cents(c(ceil2600), 2093.005)| <= 50. A 2:1 move, or any other move over 5 c, fails.
+- R2: v(ceil2600) >= v(base1500) for each of the 34 corpus files.
+- R4: cello_low_sulC_A2 and vocal_male_baritone_scale: 0 < c(ceil2600) < 1000.
+- R5: sine_55.69, sine_110, sine_220, sine_440 and sine_1000: |cents(c(ceil2600), c(base1500))| <= 1.
+- C-RANGE (new in this addendum): sine_55.69, sine_110, sine_220 and sine_440: c and v identical to base1500, exact equality, no tolerance. Any difference is a re-timing or a side effect and fails.
+- NR, named regression list (the 3:1 family exception is NOT available): vibraphone_mid_C5B5, piano_low_A1, marimba_mid_C5B5, oboe_mid_C5B5, cymbal_inharmonic and flute_trill_high_C7. Each must satisfy |cents(c(ceil2600), c(base1500))| <= 5 and v(ceil2600) >= v(base1500). None of the six has a reliable peak, so NR is the strict form of R1 for them.
+- Verdict: ADMIT only if S1, R1 (both clauses), R2, R4, R5, C-RANGE and NR all pass on the one CI run. Any failure is REJECTED. The failing criterion and its numbers are recorded on the row. No threshold, variant, window or corpus is changed in the same window; a retune needs a new addendum and a new candidate.
+
+## 5. Prior evidence (recorded before the render; not a gate)
+
+- Lock harness, docs/witness/pitch-2093-raw/lock/decision.txt (session mc420tv-sub26): the ceiling-only 2600 variant (p2_2600) moved marimba_mid_C5B5 7.4 c worse and piano_high_C7 56 c worse on its own G4 gate. p1q2_p2_2600 moved crotale_high_C7 680 c worse, and p1q4_p2_2600 moved it 6.6 c worse. The lock harness measures held-note lock output, not this render, so these predict a failure and do not decide it.
+- docs/plans.md row defect-lock-above-1500hz-clamp: candidate 934258b (refine K = P/4, ceiling 2600) failed an independent DawDreamer render (crotale_high_C7 +6.6 c, marimba_mid_C5B5 +7.4 c).
+- The 10:35 DawDreamer decision reports the ceiling-only variant passed the 50 c bar with controls unchanged. DawDreamer is not the pinned C++ route, so under the row's backend rule it cannot close the row. It is recorded as stated.
+
+## 6. Route and row handling
+
+- Commit order: this addendum alone; then the candidate commit (the one-line DSP edit, the frozen base copy, the workflow pitch-maxtrack-2600-render.yml, and the pitch-2093-render.yml fix below); then push by full sha.
+- Fix to the grid-extension route, made in the candidate commit: pitch-2093-render.yml takes its base from the frozen copy, and its path trigger on effects/pitchtracker-src/pitchtracker_ac.dsp is removed. Without this, the shipped edit would silently re-base the grid-extension verdict to 2600.
+- Witness: the CI run of pitch-maxtrack-2600-render on the pushed sha (three jobs, artifacts pt-maxtrack-base1500, pt-maxtrack-ceil2600, pt-maxtrack-ceil2600-tau01). A verify-defect-sine-2093-subharmonic session applies the judge to the three settled-<variant>.json files and records its RESULT line, with the judge sha256, in the ledger.
+- The row resolves only on ADMIT with the shipped sha's CI green. On REJECTED, the failure is recorded on the row, the row stays open, and the one-line edit is returned to 1500 by an append revert commit (a rejected candidate must not remain the shipped behaviour). No other change is made in that window.
