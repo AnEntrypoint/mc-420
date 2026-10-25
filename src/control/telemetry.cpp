@@ -120,7 +120,7 @@ void Telemetry::publish() {
         if (rn == 0) { wifiRole[0] = 's'; wifiRole[1] = 't'; wifiRole[2] = 'a'; wifiRole[3] = 0; }
     }
 
-    char json[4096];
+    char json[8192];
     int n = snprintf(json, sizeof json,
         "{\"core_busy\":[%.0f,%.0f,%.0f,%.0f],\"xruns\":%llu,"
         "\"link\":{\"synced\":%s,\"bpm\":%.1f,\"peers\":%d,\"playing\":%s,\"phase_err_beats\":%.3f},"
@@ -165,6 +165,7 @@ void Telemetry::publish() {
         t.linkTargetSamples, t.linkCaptureUs, t.linkNowUs, t.linkLoopPhaseBeats,
         t.createAudioSamples, t.createSpanSamples, t.createMasterLen, t.createPhaseSamples,
         t.imposeAudioSamples, t.imposeTargetSamples);
+    if (n < 0 || (size_t)n >= sizeof json) return;
 
     FILE* statusFile = fopen("/run/aloop/status.json", "w");
     if (statusFile) { fwrite(json, 1, (size_t)n, statusFile); fclose(statusFile); }
