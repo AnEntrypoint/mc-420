@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8789c9228b32f0c7ef1e6d2801f4e07d7a746de1">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0a25588da592a5343d135004ea771dd5345e27de">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1017,6 +1017,19 @@ on references).</p>
   <li>CI run 40178097047 (pt-render-base, unmodified tracker) settles marimba_low_C2B2 at 69.767 Hz (+116.95 c) over every voiced block from t &gt;= 1.0 s. The same trace split by window: 1.0-3.6 s median 65.526 Hz (+8.4 c, 1950 blocks); 6-10 s median 69.767 Hz (2733 blocks, 47.5 percent at exactly 69.767). Raw-file Goertzel: [0,6) s peak 65.21 Hz (the reference), [6,10) s peak 69.58 Hz with 65.21 Hz 12.9 dB below it, tail rms -36 dBFS. Normalised autocorrelation of the raw file at 6.5-9.5 s peaks at lags 677-691 (r &gt;= 0.998). 69.77 / 65.21 is not an integer or simple ratio, so the offset is not an octave or harmonic lock. Witness: dispatch 1792922745694-3069-404da0200617f3 (verify-defect-marimba-c2-offline-plus117c). Window choice: decision-marimba-c2-metric-window.</li>
   <li>Tracker-side knobs on a replica of pitchtracker_ac.dsp (matches the CI settled values of 32 corpus files to 0.01 c and voiced counts exactly): octave gate 0.03, coarse tau 0.03 below 100 Hz, coarse tau 0.02 or 0.03 below 150 Hz, saturated-refinement guard, refinement cap 64, corrAtLagVar tau 0.02. None moves marimba_low_C2B2 within 10 c. Cap 64 gives 68.549 Hz and moves cello_low_sulC_A2 to -17.4 c. Witness: dispatch 1792922662704-3054-15dbb2040cfbe7da.</li>
 </ul>
+
+<h2 id="unpinned-pin-hit-readings-vs-reference-tools-defect-pin-hidden-readings">Unpinned pin-hit readings vs reference tools (defect-pin-hidden-readings)</h2>
+
+<p>Method: <code class="language-plaintext highlighter-rouge">tools/pitch-reference/comb.mjs --only &lt;file&gt;</code> (default flags; excludes <code class="language-plaintext highlighter-rouge">_run_</code> phrase files by rule) and <code class="language-plaintext highlighter-rouge">tools/pitch-reference/submultiple.mjs --wav &lt;file&gt; --peak &lt;hz&gt; --lo &lt;hz&gt; --hi &lt;hz&gt;</code> (margin 12 dB, step 0.02 Hz, 6 s). Relation test: settled vs reference within 50 cents of octave, subharmonic or integer partial. Bands were chosen around each settled reading, so a band-local “no clearing peak” is a conservative check, not a search. Reference method: Hermes 1988, DOI 10.1121/1.396427.</p>
+
+<ul>
+  <li>violin_high_sulE_C7E7, settled 780.6 Hz: comb peak 2234.07 Hz, combF0 557.67 Hz, not certified (H2,H5,H6,H7 missing). Submultiple 500-800 Hz: 0 clearing peaks; /3 744.69 Hz and /4 558.52 Hz fail the 12 dB margin. Settled is +582.2 c from combF0 and -1820.4 c from the peak. No relation within 50 c. Verdict: not the fundamental, octave or subharmonic of any measured reference; no certified reference covers this file.</li>
+  <li>vocal_tenor_operatic_PD, settled 137.5 Hz (raw 119.9): comb peak 461.06 Hz, combF0 114.18 Hz, certified (0 missing low partials), identical on rerun. Submultiple 100-150 Hz: 0 clearing peaks; /4 = 115.27 Hz at -65.4 dB fails the margin. Settled is +321.7 c from combF0 (ratio 1.2042). No octave or subharmonic relation within 50 c. Verdict: the settled 137.5 Hz is not an octave error of the certified 114.18 Hz fundamental. The two tools disagree on whether a line exists at 100-150 Hz (comb floor = median over 60-4000 Hz, submultiple floor = median over the test band).</li>
+  <li>xylophone_run_C7B7, settled 573.0 Hz (phrase, comb excludes): submultiple 500-650 Hz: 0 clearing peaks; ladder fallback 556.52 Hz with H1-H3 below floor+12 dB. Settled is +50.5 c from the ladder, just outside 50 c. Peak 2498.76 Hz / 556.52 Hz = 4.490 (not an integer), so the file is inharmonic for this test. Verdict: no certifiable fundamental, octave or subharmonic.</li>
+  <li>tuba_run_C2B2, settled 93.6 Hz (phrase): submultiple 80-110 Hz: 0 clearing peaks. Ladder fallback 99.20 Hz with all 8 partials above floor+12 dB; peak 496.50 Hz = H5 (ratio 5.005). Settled is -100.6 c from 99.20 Hz; the 93.88 Hz line is at floor+13.9 dB but -19.2 dB below the peak. Verdict: not an octave or subharmonic of the ladder fundamental; the ladder (uncertified) points to 99.2 Hz.</li>
+</ul>
+
+<p>Correction to the row’s earlier note: vocal_tenor_operatic_PD was recorded as “none certified”. Two reruns of comb.mjs certify 114.18 Hz.</p>
 
 
       </section>
