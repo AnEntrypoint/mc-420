@@ -12,6 +12,13 @@ PATCHES = {
     "corr-tau-0.02": [
         ("    energyTau = 0.01;", "    energyTau = 0.02;", 1),
     ],
+    "floor-50": [
+        ("minTrackHz = 60.0;", "minTrackHz = 50.0;", 1),
+    ],
+    "corr-tau-0.02-thr-0.80": [
+        ("    energyTau = 0.01;", "    energyTau = 0.02;", 1),
+        ("corrThresh = 0.85;", "corrThresh = 0.80;", 1),
+    ],
 }
 
 

@@ -150,7 +150,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [base, coarse-gate, corr-tau-0.02]
+        variant: [base, coarse-gate, corr-tau-0.02, floor-50, corr-tau-0.02-thr-0.80]
     steps:
       - uses: actions/checkout@v4
 
