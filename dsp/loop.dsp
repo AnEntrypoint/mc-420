@@ -75,10 +75,7 @@ with {
                     ba.if(finishEdge, wrapAbs(sNext * (coffPrev + ba.if(masterPhaseWrapped, masterLen, 0.0)), wrapLenCur),
                     ba.if(gateCur > 0.5, ba.if(masterPhaseWrapped, coffPrev + masterLen, coffPrev),
                     ba.if(masterPhaseWrapped, wrapAbs(coffPrev + cycleInc, wrapLenCur), coffPrev))));
-        phaseLocked = wrapLenCur < masterLen - 0.5;
-        absPos = ba.if(phaseLocked,
-                       wrapAbs(sNext * (masterPhase - rsmNext) + latencyBiasN, wrapLenCur),
-                       wrapAbs(sNext * (masterPhase - rsmNext) + latencyBiasN + coffNext, wrapLenCur));
+        absPos = wrapAbs(sNext * (masterPhase - rsmNext) + latencyBiasN + coffNext, wrapLenCur);
         speedClamped = max(0.1, min(8.0, effSpeed));
         manualSafe = max(0.1, abs(manualSpeed));
         ratioClamped = max(0.1, min(8.0, effSpeed / manualSafe));

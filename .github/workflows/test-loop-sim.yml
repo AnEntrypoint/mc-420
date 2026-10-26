@@ -52,6 +52,9 @@ jobs:
       - name: Read head tracks the shared grid
         run: node tools/loop-quantization-sim/read-head-lineup.js
 
+      - name: Non-divisor take wraps seamlessly at the master downbeat
+        run: node tools/loop-quantization-sim/non-divisor-wrap.js
+
       - name: Retune after recording
         run: node tools/loop-quantization-sim/tempo-change.js
 
