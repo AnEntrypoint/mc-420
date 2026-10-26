@@ -19,7 +19,6 @@ function main() {
   setPhaseQuantum(LINK_PHASE_QUANTUM);
   const { session, a, b } = makeJoinPair();
   initRemoteTransport(b, true);
-  b.adoptsPeerOrigin = true;
 
   advancePairMs(a, b, 300);
   W.onPadPress(a, 0); W.onPadRelease(a, 0);
@@ -32,7 +31,8 @@ function main() {
   const originAtPublish = circularGap(beatAtTime(session, (pressA / W.SIM_SAMPLE_RATE) * 1000), 0, LINK_QUANTUM);
   const bpmSeenByB = b.linkSnapHeld.bpm;
   const syncedB = b.linkSnapHeld.synced;
-  const adoptOk = syncedB && Math.abs(bpmSeenByB - a.recordedBpm) < 0.05 && originAtPublish <= kOriginToleranceBeats;
+  const adopted = b.adoptedPeerOrigin === true;
+  const adoptOk = syncedB && Math.abs(bpmSeenByB - a.recordedBpm) < 0.05 && originAtPublish <= kOriginToleranceBeats && adopted;
 
   advancePairMs(a, b, 1000);
   W.onPadPress(b, 0); W.onPadRelease(b, 0);
@@ -54,7 +54,7 @@ function main() {
 
   let failed = 0;
   console.log('empty slave adopts the peer origin and keeps it');
-  console.log(`  publish: B sees bpm ${bpmSeenByB.toFixed(3)} (A ${a.recordedBpm.toFixed(3)}), synced ${syncedB}, origin gap ${originAtPublish.toFixed(5)} beats ${adoptOk ? 'ok' : 'FAIL'}`);
+  console.log(`  publish: B sees bpm ${bpmSeenByB.toFixed(3)} (A ${a.recordedBpm.toFixed(3)}), synced ${syncedB}, adopted ${adopted}, origin gap ${originAtPublish.toFixed(5)} beats ${adoptOk ? 'ok' : 'FAIL'}`);
   console.log(`  own later take: origin gap after B's take ${originAfterOwnTake.toFixed(5)} beats ${keepOk ? 'ok' : 'FAIL'}`);
   console.log(`  B loop phase vs Link grid: ${Number.isFinite(phaseGapBeats) ? phaseGapBeats.toFixed(3) : 'n/a'} beats (tolerance ${kPhaseToleranceBeats}) ${phaseOk ? 'ok' : 'FAIL'}`);
   if (!adoptOk) failed++;

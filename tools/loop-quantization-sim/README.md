@@ -47,9 +47,11 @@ that the re-base is instantaneous, which is false on the device.
 In both cases the legacy and fixed arms now print identical numbers. That is not a bug in the
 scaffolding: neither scenario exercises the join-snap path, because the take that triggers the
 impose is the first take on its world, so it goes through the creation impose
-(`masterJustCreated`) which is unconditional in the model and on the device
-(`src/dsp/audio_thread.cpp`). The arms are kept so a future change to the creation path is caught
-here too.
+(`masterJustCreated`) which is unconditional on the device (`src/dsp/audio_thread.cpp`). In the model
+it is skipped on a device that adopted a peer's published origin (`adoptedPeerOrigin`, set when a
+connected device publishes its origin while this device is empty and synced, cleared on phrase
+reset). The device does not yet carry that flag (see the timing-empty-slave-adoption row). The arms
+are kept so a future change to the creation path is caught here too.
 
 ## Where each error signature is covered
 

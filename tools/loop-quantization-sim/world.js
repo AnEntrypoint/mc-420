@@ -124,6 +124,8 @@ function createWorld(opts) {
     lastLinkBpmSeen: 0.0,
     tempoStableSamples: 0,
     prevMasterLen: 0,
+    adoptedPeerOrigin: false,
+    seenPublishedOriginSeq: 0,
   };
   refreshLinkSnapshot(w);
   return w;
@@ -399,6 +401,7 @@ function onClearAll(w, held) {
   }
   w.masterLenSamples = 0;
   w.masterLooper = -1;
+  w.adoptedPeerOrigin = false;
   w.recordedBpm = 0;
   w.recordedBeats = 0;
   w.link.local.resetTempoAuthority();
@@ -479,6 +482,7 @@ function pollHoldsTick(w) {
   if (!anyHasContent && w.masterLenSamples !== 0) {
     w.masterLenSamples = 0;
     w.masterLooper = -1;
+    w.adoptedPeerOrigin = false;
     w.recordedBpm = 0;
     w.recordedBeats = 0;
     w.link.local.resetTempoAuthority();
@@ -512,13 +516,18 @@ function stepOneSample(w) {
 
   const effSpeed = w.manualSpeedMul * linkSpeedRatio;
   const masterLen = w.masterLenSamples;
+  const publishedSeq = w.link.session.publishedOriginSeq || 0;
+  if (publishedSeq !== w.seenPublishedOriginSeq) {
+    w.seenPublishedOriginSeq = publishedSeq;
+    if (masterLen === 0 && linkDriving) w.adoptedPeerOrigin = true;
+  }
   const masterJustCreated = w.prevMasterLen <= 0 && masterLen > 0;
   w.prevMasterLen = masterLen;
-  if (masterJustCreated && !(w.adoptsPeerOrigin && w.link.session.originEstablished)) {
+  if (masterJustCreated && !w.adoptedPeerOrigin) {
     requestPhaseImpose(w.link.session, 0.0, w.masterArmMs, phaseImposeQuantumBeats(w), w.link.local);
     w.awaitingImposeRebase = true;
     w.imposeRebaseSeqAtRequest = w.link.session.rebaseSeq || 0;
-    w.link.session.originEstablished = true;
+    if (w.link.local.connected) w.link.session.publishedOriginSeq = publishedSeq + 1;
   }
 
   if (masterLen > 0) {
@@ -552,7 +561,7 @@ function stepOneSample(w) {
         }
       }
 
-      const adoptSnap = masterJustCreated && !!w.adoptsPeerOrigin && !!w.link.session.originEstablished;
+      const adoptSnap = masterJustCreated && w.adoptedPeerOrigin;
       const snapNow = w.phaseLockEnabled && target !== null
           && (!masterJustCreated || adoptSnap) && (!anyAudible || w.creationSnapPending || adoptSnap);
       if (snapNow) {
