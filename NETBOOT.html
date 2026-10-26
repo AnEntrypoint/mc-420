@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Netbooting aloop over TFTP/DHCP — the pre-SD dry run","url":"https://anentrypoint.github.io/mc-420/NETBOOT.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f742bed020a3216f3d02bbb227e6bf39c194b27e">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=af8fcea8da1c293100c059530243d099f71e8046">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -352,10 +352,11 @@ fresh binary+LV2 (grew from a smaller layout-only size to a real payload).</p>
 
 <h2 id="refreshing-the-served-payload">Refreshing the served payload</h2>
 
-<p><code class="language-plaintext highlighter-rouge">tools/netboot/refresh-apkovl.sh</code> takes the newest green <code class="language-plaintext highlighter-rouge">build-binary</code> artifact on <code class="language-plaintext highlighter-rouge">main</code>, or a binary path
-if given, repacks <code class="language-plaintext highlighter-rouge">/srv/tftp/aloop-netboot/aloop.apkovl.tar.gz</code> with the same 210 entries and that binary,
-checks the binary’s sha256 inside the archive, and keeps a dated backup of the archive it replaces. Run it
-after a green build lands; then confirm <code class="language-plaintext highlighter-rouge">tar -xzOf &lt;archive&gt; ./opt/aloop/aloop | sha256sum</code> equals the artifact.</p>
+<p><code class="language-plaintext highlighter-rouge">tools/netboot/refresh-apkovl.sh</code> takes the <code class="language-plaintext highlighter-rouge">build-binary</code> artifact of the pinned commit (<code class="language-plaintext highlighter-rouge">NETBOOT_PIN</code>, default
+<code class="language-plaintext highlighter-rouge">5acb7d3b</code>: the last commit before <code class="language-plaintext highlighter-rouge">cc9296ac</code> with green <code class="language-plaintext highlighter-rouge">build-binary</code> and <code class="language-plaintext highlighter-rouge">build-lv2</code>), or a binary path
+if given, never the newest build on <code class="language-plaintext highlighter-rouge">main</code>; it repacks <code class="language-plaintext highlighter-rouge">/srv/tftp/aloop-netboot/aloop.apkovl.tar.gz</code> with the same 210 entries and that binary,
+checks the binary’s sha256 inside the archive, and keeps a dated backup of the archive it replaces. Move
+<code class="language-plaintext highlighter-rouge">NETBOOT_PIN</code> to a newer green commit only after its hardware witness passes; then confirm <code class="language-plaintext highlighter-rouge">tar -xzOf &lt;archive&gt; ./opt/aloop/aloop | sha256sum</code> equals the artifact.</p>
 
 
       </section>

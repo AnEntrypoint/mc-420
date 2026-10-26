@@ -287,7 +287,8 @@ fresh binary+LV2 (grew from a smaller layout-only size to a real payload).
 
 ## Refreshing the served payload
 
-`tools/netboot/refresh-apkovl.sh` takes the newest green `build-binary` artifact on `main`, or a binary path
-if given, repacks `/srv/tftp/aloop-netboot/aloop.apkovl.tar.gz` with the same 210 entries and that binary,
-checks the binary's sha256 inside the archive, and keeps a dated backup of the archive it replaces. Run it
-after a green build lands; then confirm `tar -xzOf <archive> ./opt/aloop/aloop | sha256sum` equals the artifact.
+`tools/netboot/refresh-apkovl.sh` takes the `build-binary` artifact of the pinned commit (`NETBOOT_PIN`, default
+`5acb7d3b`: the last commit before `cc9296ac` with green `build-binary` and `build-lv2`), or a binary path
+if given, never the newest build on `main`; it repacks `/srv/tftp/aloop-netboot/aloop.apkovl.tar.gz` with the same 210 entries and that binary,
+checks the binary's sha256 inside the archive, and keeps a dated backup of the archive it replaces. Move
+`NETBOOT_PIN` to a newer green commit only after its hardware witness passes; then confirm `tar -xzOf <archive> ./opt/aloop/aloop | sha256sum` equals the artifact.
