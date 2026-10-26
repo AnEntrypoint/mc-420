@@ -689,3 +689,13 @@ Kept open, with the blocker:
   - Verdict: ADMIT when S1, L and R5 pass. Otherwise REJECTED with the failing rule names. Thresholds are not changed after a run. A REJECTED candidate needs a new pre-registration before its next render.
 - Judge: tools/pitchtracker-render/judge_2093_gated.py over the settled-<variant>.json artifacts of one CI run.
 - Known limits: the 0.985 value is a midpoint chosen from a model with a first-order high-pass approximation, so CI is the authority. L also tests whether the unchanged output clamp moves listed files; a failure there is a clamp finding, not a gate finding.
+
+## Verdict: high-grid pure-tone gate, 2026-10-26 (row defect-2093-grid-ext-low-register-regression)
+
+- Witness: CI run 40287012251 on fae40a99 (pitch-2093-render, five variants, all success). Judge tools/pitchtracker-render/judge_2093_gated.py sha256 8a655b13bd933ab1047cfbfde29130c83b342e39967b2af75d058e8cb6f643b6, run on settled-base.json, settled-gated.json and settled-gated-tau01.json (verify dispatch 1793002465907-4551-986479cc6c80d77a, session verify-defect-2093-grid-ext-low-register-regression). Base reproduces the Verdict v2 raw values, and the pin-rule fields are read.
+- S1 PASS: sine_2093 2092.38 Hz at both taus (-0.52 c).
+- L FAIL: xylophone_run_C7B7 572.99 to 604.33 Hz (+92.20 c, voiced 748 to 736); vibraphone_mid_C5B5 568.08 to 569.72 Hz (+5.01 c, voiced 3378 to 3309, over the 5 c bound); crotale_high_C7 voiced 1282 to 1294. piano_low_A1, cymbal_inharmonic, marimba_mid_C5B5 and oboe_mid_C5B5 do not move.
+- R5 PASS: sine_55.69, sine_110, sine_220, sine_440 and sine_1000 do not move.
+- Verdict: REJECTED under L. The gate is not shown to isolate the listed files.
+- Finding outside the registered gate: the candidate's pickFundamental chain omits the base mid isPeak(c(65.4), c(62.64), c(60.0)) -> 62.64 Hz. Found by diffing the candidate against base; the pre-registration does not mention it. Filed as its own row.
+- Clearing action: a v2 candidate needs its own pre-registration, written before its render, that (a) restores the 62.64 Hz mid and (b) states whether the output clamp maxRawHz 4200 is kept. The row stays open; nothing is admitted.
