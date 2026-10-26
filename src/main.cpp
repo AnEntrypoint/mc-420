@@ -3,6 +3,7 @@
 #include "control/telemetry.h"
 #include "control/midi.h"
 #include "control/remote_control.h"
+#include "control/phrase_mesh.h"
 #include "control/midi_clock.h"
 #include "storage/usb_recorder.h"
 
@@ -125,6 +126,11 @@ aloop::AudioConfig loadConfig(const char* path) {
             cfg.linkEnabled = (strcmp(s, "true") == 0 || strcmp(s, "1") == 0 ||
                                strcmp(s, "yes") == 0  || strcmp(s, "on") == 0);
         }
+        else if (sscanf(line, " phrase_mesh_enabled = %199s", s) == 1) {
+            cfg.phraseMeshEnabled = (strcmp(s, "true") == 0 || strcmp(s, "1") == 0 ||
+                                     strcmp(s, "yes") == 0  || strcmp(s, "on") == 0);
+        }
+        else if (sscanf(line, " phrase_mesh_port = %d", &v) == 1) cfg.phraseMeshPort = v;
         else if (sscanf(line, " iface = %199s", s) == 1) cfg.linkIface = s;
         else if (sscanf(line, " iface_wait_sec = %d", &v) == 1) cfg.linkIfaceWaitSec = v;
         else if (sscanf(line, " usb_record = %199s", s) == 1) {
@@ -176,6 +182,8 @@ int main(int argc, char** argv) {
 
     aloop::RemoteControl remote;
     remote.start(4446, cfg.remoteToken);
+    aloop::PhraseMesh phraseMesh;
+    phraseMesh.start(cfg.phraseMeshEnabled, cfg.phraseMeshPort);
 
     aloop::MidiClock midiClock;
     midiClock.start(&link);
@@ -183,6 +191,8 @@ int main(int argc, char** argv) {
     printf("[aloop] ready.\n");
 
     while (g_run.load()) {
+        float adoptedPhraseBeats = 0.0f;
+        if (phraseMesh.tick(params.get("cmd/recorded_beats", 0.0f), adoptedPhraseBeats)) params.setByName("cmd/recorded_beats", adoptedPhraseBeats);
         const float beatsForPhaseQuantum = params.get("cmd/recorded_beats", 0.0f);
         link.setLoopPhaseQuantumBeats(beatsForPhaseQuantum >= 1.0f ? (double)beatsForPhaseQuantum : aloop::kLinkQuantum);
         link.controlTick();
@@ -195,6 +205,7 @@ int main(int argc, char** argv) {
     printf("[aloop] shutting down.\n");
     audio.stop();
     telem.stop();
+    phraseMesh.stop();
     remote.stop();
     midiClock.stop();
     link.stop();

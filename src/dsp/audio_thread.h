@@ -38,6 +38,8 @@ struct AudioConfig {
     std::string instrumentDeviceMatch = "AIR 192";
     std::string audioDevice = "hw:UAC2Gadget,0";
     std::string remoteToken = "";
+    bool phraseMeshEnabled = false;
+    int phraseMeshPort = 4447;
     int latencyTrimSamples = 0;
 
     bool usbRecordEnabled = true;

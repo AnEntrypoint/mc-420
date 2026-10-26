@@ -50,7 +50,8 @@ Real Pi 4 root/aloop at `192.168.137.132`; `.100` is the cmdline-pinned netboot 
 - Link multicast needs the ROUTE, not just the join: without `224.0.0.0/4 dev wlan0`, `ip route get 224.76.78.75` = unreachable while `/proc/net/igmp` shows membership; install in `start_ap()`/`join_sta()` + re-add every tick.
 - TWO-DEVICE LINK SYNC UP: `verify-two-device-sync.js <pi-ip> 600000`; FAIL on peer <95% post-acquisition, bpm spread >0.05, |phase_err_beats| >0.03, eff_speed spread >0.005, gaps >10%. Post-acquisition = t > +60 s from cold boot (opening the ESP's USB serial reboots it); ~1% ICMP loss on the mesh is NOT a fault. (archive#two-device-sync-acceptance)
 - `peers` 1->0 WHILE associated is esp-side IP loss, never Wi-Fi. Route flap drops the Link peer: restart it within 45 s or it self-heals only in ~1 h. (archive#soaks-and-route-flap)
-- aloop binds 20808 + 4445/4446 ONLY (never 20810/20812/20813; the esp-idf-link status responder is 20813). `/var/log/messages` is the association authority.
+- aloop binds 20808 + 4445/4446 ONLY, plus 4447 only when `[link] phrase_mesh_enabled = true` (default off; 4447 is a proposal until esp-ticker confirms it is free) (never 20810/20812/20813; the esp-idf-link status responder is 20813). `/var/log/messages` is the association authority.
+- Phrase message (`[link] phrase_mesh_enabled`, default off): one ASCII datagram `ALOOP-PHRASE/1 <beats %.3f> <seq> <node>` per second to `224.76.78.76:4447` from the recorder (the device whose own take set `cmd/recorded_beats`). An empty device adopts the freshest beats into `cmd/recorded_beats`, so its Link loop quantum and turnaround match. esp-idf-link must build to this format before the flag is enabled on both sides.
 
 ## Ableton Link checklist
 

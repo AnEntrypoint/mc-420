@@ -19,6 +19,7 @@ set(DSP_SOURCES
   control/apc_leds.cpp
   control/midi_clock.cpp
   control/remote_control.cpp
+  control/phrase_mesh.cpp
   storage/usb_recorder.cpp
   storage/clip_exporter.cpp
   main.cpp
