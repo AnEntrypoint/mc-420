@@ -524,9 +524,10 @@ function stepOneSample(w) {
   const masterJustCreated = w.prevMasterLen <= 0 && masterLen > 0;
   w.prevMasterLen = masterLen;
   if (masterJustCreated && !w.adoptedPeerOrigin) {
-    requestPhaseImpose(w.link.session, 0.0, w.masterArmMs, phaseImposeQuantumBeats(w), w.link.local);
+    const loopMs = (masterLen / SIM_SAMPLE_RATE) * 1000;
+    requestPhaseImpose(w.link.session, 0.0, w.masterArmMs - loopMs, phaseImposeQuantumBeats(w), w.link.local);
     w.awaitingImposeRebase = true;
-    w.imposeRebaseSeqAtRequest = w.link.session.rebaseSeq || 0;
+    w.imposeRebaseSeqAtRequest = (s && s.rebaseSeq) || 0;
     if (w.link.local.connected) w.link.session.publishedOriginSeq = publishedSeq + 1;
   }
 
@@ -537,7 +538,7 @@ function stepOneSample(w) {
       w.lastLinkBpmSeen = curBpm;
       w.tempoStableSamples = bpmChanged ? 0 : w.tempoStableSamples + 1;
 
-      if (w.awaitingImposeRebase && (w.link.session.rebaseSeq || 0) !== w.imposeRebaseSeqAtRequest) w.awaitingImposeRebase = false;
+      if (w.awaitingImposeRebase && (s.rebaseSeq || 0) !== w.imposeRebaseSeqAtRequest) w.awaitingImposeRebase = false;
       const target = w.awaitingImposeRebase ? null : linkTargetSamplesAt(w, (w.t / SIM_SAMPLE_RATE) * 1e6);
       let anyAudible = false;
       for (const lp of w.loopers) if (lp.playing || lp.recording) { anyAudible = true; break; }

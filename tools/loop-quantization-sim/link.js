@@ -88,6 +88,7 @@ function createLinkPeer(name, session) {
         quantumMicroBeats: Math.round(g_phaseQuantum * 1e6),
         loopPhaseMicroBeats: foldBeats >= 1.0 ? Math.round(phaseAtTime(session, timeMs, foldBeats) * 1e6) : 0,
         loopQuantumBeats: foldBeats >= 1.0 ? foldBeats : 0,
+        rebaseSeq: session.rebaseSeq || 0,
       };
     },
     imposeTempo(bpm, atTimeMs) {

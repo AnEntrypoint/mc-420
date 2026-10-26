@@ -911,7 +911,9 @@ static void* worker(void*) {
                         clock_gettime(CLOCK_MONOTONIC, &imposeTs);
                         const int64_t imposeMicros = (int64_t)imposeTs.tv_sec * 1000000 + imposeTs.tv_nsec / 1000;
                         const int64_t armMicros = g_link->recordArmMicros();
-                        g_link->requestPhaseImpose(0.0, armMicros > 0 ? armMicros : imposeMicros, (double)recordedBeatsShared);
+                        const int64_t loopMicros = (int64_t)((double)masterLen / g_cfg.sampleRate * 1e6);
+                        const int64_t pressMicros = armMicros > 0 ? armMicros : imposeMicros - loopMicros;
+                        g_link->requestPhaseImpose(0.0, pressMicros - loopMicros, (double)recordedBeatsShared);
                         awaitingImposeRebase = true;
                         imposeRebaseSeqAtRequest = linkSnap.rebaseSeq;
                         g_telem.imposeAudioSamples = (double)audioSampleCount;
