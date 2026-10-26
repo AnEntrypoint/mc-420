@@ -79,6 +79,9 @@ jobs:
       - name: Takes latch the tempo ratio, never the phase trim
         run: node tools/loop-quantization-sim/two-take-rate-lock.js
 
+      - name: First take phrase turnaround sits one loop before the press
+        run: node tools/loop-quantization-sim/first-take-phrase-offset.js
+
       - name: First take origin on the record-press sample
         run: node tools/loop-quantization-sim/first-take-origin.js
 
