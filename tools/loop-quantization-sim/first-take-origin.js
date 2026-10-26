@@ -53,7 +53,7 @@ function ticker() {
   const nowMs = (a.t / W.SIM_SAMPLE_RATE) * 1000;
   const linkPhase = ((beatAtTime(session, nowMs) % P) + P) % P;
   const phaseGapBeats = L > 0 ? circularGap(a.masterPhaseSamples, (linkPhase / P) * L, L) / (L / P) : NaN;
-  return { gap: circularGap(beatAtPress, 0, LINK_QUANTUM), beatAtPress, phaseGapBeats };
+  return { gap: circularGap(beatAtPress, P, LINK_QUANTUM), beatAtPress, phaseGapBeats, P };
 }
 
 function holder() {
@@ -81,7 +81,7 @@ function holder() {
   const gap = L > 0 ? circularGap(b.masterPhaseSamples, expectedB, L) / (L / Math.max(1, b.recordedBeats)) : NaN;
   const phrase = Math.max(1, b.recordedBeats);
   const pressedBeatA = beatAtTime(session, (pressA / W.SIM_SAMPLE_RATE) * 1000);
-  return { gap, oldOriginOffset, originGap: circularGap(pressedBeatA, 0, phrase), L, recordedBeats: phrase, hasPhrase: L > 0 };
+  return { gap, oldOriginOffset, originGap: circularGap(pressedBeatA, a.recordedBeats, phrase), L, recordedBeats: phrase, hasPhrase: L > 0 };
 }
 
 function main() {
@@ -102,7 +102,7 @@ function main() {
 
   const t = ticker();
   const tOk = t.gap <= kToleranceBeats;
-  console.log(`  ticker: Link beat at press ${t.beatAtPress.toFixed(4)}, gap to beat 0 mod ${LINK_QUANTUM} = ${t.gap.toFixed(4)} beats ${tOk ? 'ok' : 'FAIL'}`);
+  console.log(`  ticker: Link beat at press ${t.beatAtPress.toFixed(4)}, gap to phrase turnaround one loop before press (beat ${t.P} mod ${LINK_QUANTUM}) = ${t.gap.toFixed(4)} beats ${tOk ? 'ok' : 'FAIL'}`);
   if (!tOk) failed++;
   const pOk = Number.isFinite(t.phaseGapBeats) && t.phaseGapBeats <= kPhaseToleranceBeats;
   console.log(`  ticker: DSP loop phase vs Link target at the finish block, gap ${t.phaseGapBeats.toFixed(4)} beats (tolerance ${kPhaseToleranceBeats}) ${pOk ? 'ok' : 'FAIL'}`);

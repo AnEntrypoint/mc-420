@@ -28,7 +28,7 @@ function main() {
   const finishA = a.t;
   advancePairMs(a, b, kTickMs);
 
-  const originAtPublish = circularGap(beatAtTime(session, (pressA / W.SIM_SAMPLE_RATE) * 1000), 0, LINK_QUANTUM);
+  const originAtPublish = circularGap(beatAtTime(session, (pressA / W.SIM_SAMPLE_RATE) * 1000), a.recordedBeats, LINK_QUANTUM);
   const bpmSeenByB = b.linkSnapHeld.bpm;
   const syncedB = b.linkSnapHeld.synced;
   const adopted = b.adoptedPeerOrigin === true;
@@ -41,7 +41,7 @@ function main() {
   W.onPadPress(b, 0); W.onPadRelease(b, 0);
   advancePairMs(a, b, kSettleMs);
 
-  const originAfterOwnTake = circularGap(beatAtTime(session, (pressA / W.SIM_SAMPLE_RATE) * 1000), 0, LINK_QUANTUM);
+  const originAfterOwnTake = circularGap(beatAtTime(session, (pressA / W.SIM_SAMPLE_RATE) * 1000), a.recordedBeats, LINK_QUANTUM);
   const keepOk = originAfterOwnTake <= kOriginToleranceBeats;
 
   const beatsB = b.recordedBeats || a.recordedBeats;
