@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e49a80fac8237089b0b91a8deafe799caa6f9197">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=4c84f041546880b9ee1495be66d4cb5b50a8a6dd">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -852,6 +852,31 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Verdict: REJECTED under L. The gate is not shown to isolate the listed files.</li>
   <li>Finding outside the registered gate: the candidate’s pickFundamental chain omits the base mid isPeak(c(65.4), c(62.64), c(60.0)) -&gt; 62.64 Hz. Found by diffing the candidate against base; the pre-registration does not mention it. Filed as its own row.</li>
   <li>Clearing action: a v2 candidate needs its own pre-registration, written before its render, that (a) restores the 62.64 Hz mid and (b) states whether the output clamp maxRawHz 4200 is kept. The row stays open; nothing is admitted.</li>
+</ul>
+
+<h2 id="pre-registration-v2-restored-6264-hz-mid-2026-10-26-row-defect-2093-candidate-drops-62-64-mid">Pre-registration v2: restored 62.64 Hz mid, 2026-10-26 (row defect-2093-candidate-drops-62-64-mid)</h2>
+
+<ul>
+  <li>PRE-REGISTRATION v2, written before any v2 render (session drain-defect-2093-candidate-drops-62-64-mid).</li>
+  <li>Candidate v2 = docs/witness/pitch-2093/pitchtracker_ac_2093v2.dsp: the gated candidate pitchtracker_ac_2093g.dsp (sha256 ccde00d1) plus one inserted line restoring base’s step <code class="language-plaintext highlighter-rouge">ba.if(isPeak(c(65.4), c(62.64), c(60.0)), 62.64,</code> before the floor, and one closing paren. Expected v2 sha256 74198abbd954b48553ef72af1c66b62547e07b114e212695ddd0314ab1f0b0eb.</li>
+  <li>C0 (live, before render; dry run dispatch 1793002786524-4592-2de89ad3fd6df053): pickFundamental steps with pick below 1581.12 Hz are identical to base, 38 of 38 including 62.64 (cH read as c); paren balance 0; floor line identical. PASS.</li>
+  <li>Output clamp: maxRawHz = 4200.0 STAYS (decision). maxTrackHz 1500.0 unchanged. Reason: the registered change is the grid extension plus gate, the clamp is part of it, and changing it would be a second change.</li>
+  <li>Render: one CI run of pitch-2093-render.yml, matrix base, gated, gated-tau01, v2, v2-tau01. base and gated are re-rendered in the same run as the reference for v2.</li>
+  <li>Judge: tools/pitchtracker-render/judge_2093_v2.py sha256 a7e915e83b72d5dac6131e3650aa7849ac9561c6d3fb36c49cb7bcb93b671367. Self-test in scratchpad: absent root REFUSED exit 2; equal tables ADMIT exit 0; one injected base-file move REJECTED MID2 exit 1.</li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>Thresholds, fixed now: S1 sine_2093 within 50 c of 2093.005 Hz at v2 and v2-tau01, voiced &gt; 0. L the seven listed files within 5 c of base with equal voiced_blocks (v2). R5 five sines within 1 c of base with equal voiced_blocks (v2). MID2 the files that move versus base in v2 (</td>
+          <td>cents</td>
+          <td>&gt; 1 c or voiced differs), minus those that move in gated, must be empty. MID1 is reported (v2 versus gated), no threshold.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>Row witness: C0 PASS, CI green on the v2 sha, judge output with MID2 PASS names the leader. S1, L and R5 verdicts go to parent defect-2093-grid-ext-low-register-regression and do not decide this row.</li>
+  <li>Leader H1: restoring the mid adds no base-file move beyond the gated candidate’s own (MID2 PASS). Rival H0: it adds one (MID2 FAIL); an H0 witness binds no row, files an unknown, and the row stays pending.</li>
+  <li>Thresholds are not changed after the render.</li>
 </ul>
 
 
