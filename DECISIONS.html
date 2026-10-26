@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5a4fdf3d4f07760e028db9b092662045b7371997">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=609d4d4029ea50fa8cb8320e2626e0fe9cfaed8e">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -820,6 +820,26 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Why: the impose is queued off the audio thread and applied only by LinkBridge::controlTick at kControlLoopHz 5, so the snapshot’s loop quantum and session timeline are both stale for up to 200 ms. A pre-impose target offset by about one beat (archive#creation-impose-window).</li>
   <li>Rejected: folding a pre-impose target on the 128-beat capture path when the snapshot quantum differs from recorded beats. That fallback is wrong for rb not dividing 128 and was not reached once the target is held.</li>
   <li>Witness: pending the verifier lane (verify-defect-rb3-link-target-fold-origin-drift), six restarts, origin within 64 samples for 10 s.</li>
+</ul>
+
+<h2 id="pre-registration-high-grid-pure-tone-gate-2026-10-26-row-defect-2093-grid-ext-low-register-regression">Pre-registration: high-grid pure-tone gate, 2026-10-26 (row defect-2093-grid-ext-low-register-regression)</h2>
+
+<ul>
+  <li>Scope: this row only. Parent: defect-sine-2093-subharmonic (Verdict v2, REJECTED, commit 27c923ad). Its clearing action asks for a confidence gate above 1581 Hz, pre-registered before any render.</li>
+  <li>Evidence before this text (no render of a gated variant exists): (1) the local harness reproduces the CI raw values of Verdict v2 for the shipped tracker to 0.1 Hz (sine_2093 700.244, vibraphone_mid_C5B5 556.386, xylophone_run_C7B7 268.156, piano_high_C7 349.051, marimba_mid_C5B5 590.431, oboe_mid_C5B5 295.085, flute_trill_high_C7 1128.762, crotale_high_C7 1358 raw voiced). (2) On this host, faust for the candidate and for the candidate with maxRawHz reverted to maxTrackHz both stop on faust’s 120 s SIGALRM, so CI is the only compile witness. (3) A scratch numpy model of the 16 high candidates (not committed) shows a correlation-only threshold cannot separate the pure sine (correlation 0.9998 at lag 23) from the listed files, whose high-candidate peaks reach 0.99 median and 1.00 maximum. (4) The same model at the half-period lag int(48000/(2f)), tau 0.02, separates them: sine_2093 at -0.992 on every block; the least negative high-candidate peak of any listed file is -0.978 (xylophone_run_C7B7, 2417 Hz); no listed file admits a high candidate at or below -0.985.</li>
+  <li>Candidate: docs/witness/pitch-2093/pitchtracker_ac_2093g.dsp, sha256 ccde00d1188f9a6a88205a562e20b8dd59338e2de5799058961a6e786548ec58, generated from effects/pitchtracker-src/pitchtracker_ac.dsp as the v2 candidate with one change: each of the 16 grid candidates at or above 1581.12 Hz is accepted only when isPeak holds and corrAtLagVarTau at lag int(48000/(2f)), tau 0.02, is at most pureToneCorr = -0.985. The output clamp stays maxRawHz = 4200 (S1 needs outputs above 1500 Hz). maxTrackHz 1500 still bounds promotion.</li>
+  <li>Variants (CI workflow pitch-2093-render, matrix base, cand, cand-tau01, gated, gated-tau01). gated-tau01 is the gated file with tauFor and both correlation taps at 0.01.</li>
+  <li>Rules, fixed before any render. The rules read the pin-rule fields settled_hz and voiced_blocks (commit 0e3d6f6c).
+    <ul>
+      <li>S1: sine_2093 settled within 50 c of 2093.005 Hz in gated AND gated-tau01, with voiced_blocks above 0.</li>
+      <li>L (row acceptance): for each of vibraphone_mid_C5B5, piano_low_A1, xylophone_run_C7B7, marimba_mid_C5B5, oboe_mid_C5B5, cymbal_inharmonic, crotale_high_C7, gated settled_hz within 5 c of base (both 0.0 counts as no move; one 0.0 fails) and voiced_blocks identical to base.</li>
+      <li>R5: sine_55.69, sine_110, sine_220, sine_440 and sine_1000 in gated within 1 c of base, voiced_blocks identical.</li>
+      <li>Report only, not judged: every other corpus file, including flute_trill_high_C7, piano_high_C7, glockenspiel_high_C7, flute_high_C7, violin_high_sulE_C7E7 and xylophone_roll_AM_C6B6.</li>
+      <li>Verdict: ADMIT when S1, L and R5 pass. Otherwise REJECTED with the failing rule names. Thresholds are not changed after a run. A REJECTED candidate needs a new pre-registration before its next render.</li>
+    </ul>
+  </li>
+  <li>Judge: tools/pitchtracker-render/judge_2093_gated.py over the settled-<variant>.json artifacts of one CI run.</variant></li>
+  <li>Known limits: the 0.985 value is a midpoint chosen from a model with a first-order high-pass approximation, so CI is the authority. L also tests whether the unchanged output clamp moves listed files; a failure there is a clamp finding, not a gate finding.</li>
 </ul>
 
 
