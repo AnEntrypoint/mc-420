@@ -88,10 +88,7 @@ function stepSample(s, inp) {
       : (gateCur > 0.5
         ? (masterPhaseWrapped ? s.coff + masterLen : s.coff)
         : (masterPhaseWrapped ? wrapAbs(s.coff + cycleInc, wrapLenCur) : s.coff)));
-  const phaseLocked = wrapLenCur < masterLen - 0.5;
-  const absPos = phaseLocked
-    ? wrapAbs(beatScaleNext * (masterPhase - rsmNext) + inp.latencyBiasN, wrapLenCur)
-    : wrapAbs(beatScaleNext * (masterPhase - rsmNext) + inp.latencyBiasN + coffNext, wrapLenCur);
+  const absPos = wrapAbs(beatScaleNext * (masterPhase - rsmNext) + inp.latencyBiasN + coffNext, wrapLenCur);
   const varispeedActive = effSpeed !== 1.0 || bakedActive;
   const manualPunchActive = Math.abs(effSpeed - 1.0) > 0.3;
   const resyncCoeff = manualPunchActive || bakedActive ? 0.0 : inp.resyncCoeff;
