@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5acb7d3b48269432e64de63eb120f4fa5b4ab356">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f742bed020a3216f3d02bbb227e6bf39c194b27e">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -885,6 +885,14 @@ Why: Link carries tempo and the beat origin only. Each peer passes its own quant
 Evidence: Link-3.1.3 include/ableton/Link.hpp:269, :281, :342 (quantum per call); include/ableton/link/Timeline.hpp:92-94 (tempo, beatOrigin, timeOrigin only); include/ableton/link/SessionState.hpp:37-40. Device: src/main.cpp:186-187 (quantum = cmd/recorded_beats, fallback kLinkQuantum) and src/link/link_bridge.cpp publishSnapshot (loopPhaseMicroBeats per device). Sim: tools/loop-quantization-sim/phrase-turnaround.js FAILS on the current model (master phrase 4 beats, slave loop phrase 2 beats from its own take).
 Alternatives rejected: encoding the phrase into Timeline.beatOrigin or timeOrigin (no peer convention, and it breaks the origin = record-press-sample rule); a new UDP port (aloop binds 20808, 4445 and 4446 only); the absolute 128-beat phase (shared, but it does not carry the phrase length).
 Revisit if: the Link SDK gains an application-state field, or the owner picks a carrier (a wire change that also touches esp-idf-link). The local phrase override seam is built with that carrier, not before.</p>
+
+<h2 id="adr-034--the-first-loops-phrase-turnaround-sits-one-loop-before-the-record-press-2026-10-26-first-loop-phrase-offset-by-loop-length">ADR-034 — The first loop’s phrase turnaround sits one loop before the record press (2026-10-26, first-loop-phrase-offset-by-loop-length)</h2>
+<p>Decision: when the first loop is created with length L beats, the Link beat origin is imposed at (record press - L), so the phrase turnaround is one loop before the press. The loop grid origin (DSP phase 0) stays at the press.
+Why: the owner’s final phrase model. Each recording folds to one shared phrase, and the first loop defines where that phrase starts.
+History: before 91117013 (2026-10-24) the Link origin was imposed at the creation block (finish), with DSP phase 0 at the same block, so both matched (turnaround at finish = press + L). 91117013 moved the Link impose to the arm press (apc_grid noteRecordArm, link_bridge recordArmMicros) and 38eeb13f set the DSP phase to the take span mod loop length, so both sit at the press. Nothing in those commits applied the loop-length offset.
+Evidence: src/dsp/audio_thread.cpp master creation block (requestPhaseImpose at press minus loopMicros, loopMicros = masterLen / sampleRate); tools/loop-quantization-sim/first-take-phrase-offset.js (2, 3 and 4 beat first takes, Link beat at press equals L mod 16); world.js impose at masterArmMs minus loop length.
+Sim finding fixed with it: the sim’s awaiting-rebase check read the live session rebaseSeq while the target read a held snapshot, so a stale target could trigger a join snap. The snapshot now carries rebaseSeq (link.js audioRead) and the check reads it, as the device does (linkSnap.rebaseSeq).
+Revisit if: a peer with a different phrase length needs the turnaround on the shared phrase (the phrase row), or the Link SDK rounds forceBeatAtTime to the quantum so that the absolute beat is not kept.</p>
 
 
       </section>

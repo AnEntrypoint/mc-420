@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop - current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5acb7d3b48269432e64de63eb120f4fa5b4ab356">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f742bed020a3216f3d02bbb227e6bf39c194b27e">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -62,7 +62,7 @@
 <h1 id="loop-timing-invariant-user-decision-governs-every-recording-path">Loop timing invariant (user decision; governs every recording path)</h1>
 
 <ul>
-  <li>The first loop recorded, standalone or on a ticker network, is the master for tempo, phrase and grid origin. Its tempo and phrase come from the recorded length and beat count; its origin is the sample at which the record button was pressed, never a grid node and never the block that processed the press.</li>
+  <li>The first loop recorded, standalone or on a ticker network, is the master for tempo, phrase and grid origin. Its tempo and phrase come from the recorded length and beat count; its origin is the sample at which the record button was pressed, never a grid node and never the block that processed the press. The phrase turnaround of a first loop of L beats sits one loop before that press: the Link beat origin is imposed at press minus L beats, so the Link beat at the press is L (ADR-034).</li>
   <li>Every later sound plays exactly on the master grid, referenced to that press sample: no audible shift forward or back, seamless wrap, identical under every effect chain and whether standalone or on a ticker network. Only resampled material (SHIFT resample, <code class="language-plaintext highlighter-rouge">recordTap</code>) is backdated, by a per-strategy offset that tracks measured additional latency, so resampled samples stay on the reference grid.</li>
   <li>Recording a non-first loop follows the MC-505 model: length folds to halves and quarters down to one beat, so a loop of any length is reachable in beat-long steps. The stop point is the nearest legal boundary: an early press before the ideal boundary keeps recording to that boundary (intentional); a late press within one beat after a half or quarter boundary is an unintentional late press and the earlier boundary is taken. Playback continues without any shift at the stop point.</li>
   <li>A slave clock that starts empty, or on a hi-hat, adopts the tempo and phrase of the first recording of any peer as soon as that recording is published, and locks its phase to the press origin. Each device publishes the master tempo and origin; no device substitutes its own press time.</li>
