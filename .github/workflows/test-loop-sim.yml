@@ -85,9 +85,6 @@ jobs:
       - name: Empty slave adopts the peer origin and keeps it
         run: node tools/loop-quantization-sim/empty-slave-adopt.js
 
-      - name: Phrase turnaround adopted over the phrase message
-        run: node tools/loop-quantization-sim/phrase-turnaround-adopt.js
-
       - name: Resample backdate tracks the measured fold latency
         run: node tools/loop-quantization-sim/resample-backdate.js
 

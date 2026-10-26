@@ -489,36 +489,6 @@ function pollHoldsTick(w) {
   }
 }
 
-let g_phraseMeshEnabled = false;
-const kPhraseMeshSendSamples = SIM_SAMPLE_RATE;
-const kPhraseMeshFreshSamples = 5 * SIM_SAMPLE_RATE;
-const kPhraseMeshEpsilon = 1e-3;
-
-function setPhraseMeshEnabled(enabled) {
-  g_phraseMeshEnabled = !!enabled;
-}
-
-function phraseMeshStep(w) {
-  if (!g_phraseMeshEnabled) return;
-  const session = w.link.session;
-  const phrase = session.phrase;
-  if (w.recordedBeats >= 1.0 && !w.phraseAdopted) {
-    if (!phrase || phrase.beats !== w.recordedBeats || (w.t - phrase.sentAt) >= kPhraseMeshSendSamples) {
-      session.phrase = { beats: w.recordedBeats, sentAt: w.t };
-    }
-    return;
-  }
-  if (w.recordedBeats < 1.0) w.phraseAdopted = false;
-  if (w.phraseAdopted && Math.abs(w.recordedBeats - w.phraseAdoptedBeats) > kPhraseMeshEpsilon) w.phraseAdopted = false;
-  if (!phrase || (w.t - phrase.sentAt) >= kPhraseMeshFreshSamples || phrase.beats < 1.0) return;
-  const adoptNow = w.recordedBeats < 1.0
-    || (w.phraseAdopted && Math.abs(phrase.beats - w.phraseAdoptedBeats) > kPhraseMeshEpsilon);
-  if (!adoptNow) return;
-  w.recordedBeats = phrase.beats;
-  w.phraseAdopted = true;
-  w.phraseAdoptedBeats = phrase.beats;
-}
-
 function stepOneSample(w) {
   if (w.pendingBeats && w.t >= w.pendingBeats.atT) {
     w.recordedBpm = w.pendingBeats.bpm;
@@ -527,7 +497,6 @@ function stepOneSample(w) {
   }
   if (w.t % kControlTickSamples === 0) {
     applyPendingPhaseImpose(w.link.session);
-    phraseMeshStep(w);
     if (w.resnapAfterRebase && w.seenRebaseSeq !== w.link.session.rebaseSeq) {
       w.seenRebaseSeq = w.link.session.rebaseSeq;
       w.creationSnapPending = true;
@@ -664,7 +633,6 @@ function advance(w, samples) {
 }
 
 module.exports = {
-  setPhraseMeshEnabled,
   createWorld, advance, stepOneSample,
   onPadPress, onPadRelease, onClearAll, onShiftPress, onShiftRelease,
   msToSimSamples, SIM_SAMPLE_RATE, SIM_MAXLEN,
