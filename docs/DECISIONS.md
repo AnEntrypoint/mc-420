@@ -666,3 +666,11 @@ Kept open, with the blocker:
 
 - Change: gm-mcp `b574595`. Only a non-closing empty publish is refused as nothing_to_publish, so a closing publish carries its row.
 - Witness: probe dispatch `1792942166762-1411264-fe64b425b4997d36` (mc-420 ledger).
+
+
+## Creation target held until the impose is consumed, 2026-10-26 (row defect-rb3-link-target-fold-origin-drift)
+
+- Decision: the audio thread does not use the Link target between master creation and the first controlTick that consumes the creation impose. Consumption is observed as a change of `linkSnap.rebaseSeq`. Until then no idle snap, trim or join runs from the pre-impose target.
+- Why: the impose is queued off the audio thread and applied only by LinkBridge::controlTick at kControlLoopHz 5, so the snapshot's loop quantum and session timeline are both stale for up to 200 ms. A pre-impose target offset by about one beat (archive#creation-impose-window).
+- Rejected: folding a pre-impose target on the 128-beat capture path when the snapshot quantum differs from recorded beats. That fallback is wrong for rb not dividing 128 and was not reached once the target is held.
+- Witness: pending the verifier lane (verify-defect-rb3-link-target-fold-origin-drift), six restarts, origin within 64 samples for 10 s.

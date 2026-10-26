@@ -892,6 +892,8 @@ static void* worker(void*) {
                 double grooveBeatLen = (g_cfg.sampleRate * 60.0) / grooveBpmNow;
                 g_telem.grooveBeatLenSamples = (float)grooveBeatLen;
 
+                static bool awaitingImposeRebase = false;
+                static int imposeRebaseSeqAtRequest = 0;
                 static double prevMasterLen = 0.0;
                 bool masterJustCreated = (prevMasterLen <= 0.0f && masterLen > 0.0f);
                 prevMasterLen = masterLen;
@@ -909,6 +911,8 @@ static void* worker(void*) {
                         const int64_t imposeMicros = (int64_t)imposeTs.tv_sec * 1000000 + imposeTs.tv_nsec / 1000;
                         const int64_t armMicros = g_link->recordArmMicros();
                         g_link->requestPhaseImpose(0.0, armMicros > 0 ? armMicros : imposeMicros, (double)recordedBeatsShared);
+                        awaitingImposeRebase = true;
+                        imposeRebaseSeqAtRequest = linkSnap.rebaseSeq;
                         g_telem.imposeAudioSamples = (double)audioSampleCount;
                         g_telem.imposeTargetSamples = -1.0;
                     }
@@ -927,7 +931,8 @@ static void* worker(void*) {
                         const double nowMicros = (double)nowTs.tv_sec * 1e6 + (double)nowTs.tv_nsec / 1e3;
                         bool haveLinkTarget = false;
                         double linkTargetSamples = 0.0;
-                        if (recordedBeatsValid && linkSnap.phaseValid && linkSnap.quantumMicroBeats > 0 && linkSnap.captureMicros > 0) {
+                        if (awaitingImposeRebase && linkSnap.rebaseSeq != imposeRebaseSeqAtRequest) awaitingImposeRebase = false;
+                        if (recordedBeatsValid && !awaitingImposeRebase && linkSnap.phaseValid && linkSnap.quantumMicroBeats > 0 && linkSnap.captureMicros > 0) {
                             double elapsedMicros = nowMicros - (double)linkSnap.captureMicros;
                             if (elapsedMicros < 0.0) elapsedMicros = 0.0;
                             if (elapsedMicros > 4e6) elapsedMicros = 4e6;
