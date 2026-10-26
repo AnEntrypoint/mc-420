@@ -7,7 +7,9 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 if [ $# -ge 1 ]; then BINARY=$1; else
   REPO=${REPO:-AnEntrypoint/mc-420}
-  RUN=$(gh api "/repos/$REPO/actions/workflows/build-binary.yml/runs?branch=main&status=success&per_page=1" -q '.workflow_runs[0].id')
+  PIN=${NETBOOT_PIN:-5acb7d3b48269432e64de63eb120f4fa5b4ab356}
+  RUN=$(gh api "/repos/$REPO/actions/workflows/build-binary.yml/runs?head_sha=$PIN&status=success&per_page=1" -q '.workflow_runs[0].id')
+  [ -n "$RUN" ] || { echo "no green build-binary run for pin $PIN" >&2; exit 4; }
   AID=$(gh api "/repos/$REPO/actions/runs/$RUN/artifacts" -q '.artifacts[] | select(.name=="aloop-aarch64-musl") | .id')
   gh api "/repos/$REPO/actions/artifacts/$AID/zip" > "$WORK/artifact.zip"
   python3 -c "import zipfile,sys;zipfile.ZipFile(sys.argv[1]).extract('aloop',sys.argv[2])" "$WORK/artifact.zip" "$WORK"
