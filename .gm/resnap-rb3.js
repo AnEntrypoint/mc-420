@@ -1,8 +1,24 @@
 'use strict';
 const net = require('net');
 const dgram = require('dgram');
+const fs = require('fs');
 
-const HOST = '192.168.137.100';
+const FALLBACK_HOST = '192.168.137.132';
+const LEASES_PATH = '/var/lib/misc/dnsmasq.leases';
+
+function resolveHost() {
+  if (process.env.ALOOP_PI_HOST) return process.env.ALOOP_PI_HOST;
+  let best = null;
+  try {
+    for (const line of fs.readFileSync(LEASES_PATH, 'utf8').split('\n')) {
+      const f = line.trim().split(/\s+/);
+      if (f.length >= 4 && f[3] === 'aloop' && (!best || Number(f[0]) > Number(best[0]))) best = f;
+    }
+  } catch (e) {}
+  return best ? best[2] : FALLBACK_HOST;
+}
+
+const HOST = resolveHost();
 const WATCH_MS = Number(process.argv[2] || '900000');
 const WANT_RB = 3;
 const TAKE_MS_LIST = [1500, 1520, 1480, 1560, 1440];
