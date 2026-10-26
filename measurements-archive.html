@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=af8fcea8da1c293100c059530243d099f71e8046">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fc1d70b4c7a42a036f3614d5c1b204a4ca1b4bbb">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -987,7 +987,7 @@ on references).</p>
 <p>Witness: session verify-timing-origin-sample-exact, dispatch 1792919051560-2621-bf506c0efb34c0f2 (standalone only; no ESP peer, so no 20813 poll). Six aloop restarts; per run one arm press on looper 0 at a random phase (2.0-3.3 s), finish 1.5 s later, status polled over UDP 4445 about every 8 ms, press sent over TCP 9401 and host-timed at write. First take: 72000-sample loop (120 bpm, rb 3).</p>
 
 <ul>
-  <li>Origin minus the arm-edge block (sample domain: origin = audio count - master phase, arm edge = last_take_arm_sample): runs 1-5 -39.1, -6.0, -47.5, -11.1, -41.9 samples, within-run sd 2.6-8.3. The origin is inside the observing block, never on its end. The old “64-sample residual” is that block offset, not an origin error.</li>
+  <li>Origin minus the arm-edge block (sample domain: origin = centre((audio count - master phase) mod master_len), centre(x) = ((x + master_len/2) mod master_len) - master_len/2, because <code class="language-plaintext highlighter-rouge">master_phase_samples</code> is wrapped by <code class="language-plaintext highlighter-rouge">fmod(.., masterLen)</code> at <code class="language-plaintext highlighter-rouge">src/dsp/audio_thread.cpp:1022</code> and the raw difference gains one master_len per wrap; arm edge = last_take_arm_sample; origin minus arm edge = centre(origin - arm edge)): runs 1-5 -39.1, -6.0, -47.5, -11.1, -41.9 samples, within-run sd 2.6-8.3. The origin is inside the observing block, never on its end. The old “64-sample residual” is that block offset, not an origin error.</li>
   <li>Press to arm edge, host raw: 2.2-4.1 ms (sd 0.7 ms, one block is 1.33 ms). Press to origin, host raw, clean runs: 2.0-2.2 ms (run 1 3.2 ms, mapping noise).</li>
   <li>Clock map: a status reply is built at the publish tick, so the host receipt time is the content time to a common offset of about 0.8 ms. Map on receipt time, never the send/receive midpoint (midpoint error is RTT/2, about 21 ms here).</li>
   <li>rb 4 two-bar takes (exploratory, not verdict runs): origin minus arm edge -46.7 (sd 5.7) and -33.5 (sd 19.2) samples.</li>
