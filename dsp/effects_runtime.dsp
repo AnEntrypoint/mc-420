@@ -7,6 +7,7 @@ import("stdfaust.lib");
 HPCUT    = hslider("HPCUT",   0.0, 0.0, 1.0, 0.001);
 LPCUT    = hslider("LPCUT",   1.0, 0.0, 1.0, 0.001);
 LPRES    = hslider("LPRES",   0.0, 0.0, 1.0, 0.001);
+LPSLOPE  = hslider("LPSLOPE", 0.0, 0.0, 1.0, 1.0);
 REVAMT   = hslider("REVAMT",  0.0, 0.0, 2.0, 0.001);
 DELAYAMT = hslider("DELAYAMT",0.0, 0.0, 1.0, 0.001);
 TIME     = hslider("TIME",    0.5, 0.0, 1.0, 0.001);
@@ -31,7 +32,7 @@ DUBLFOSHAPE    = hslider("fx/dublfo/shape",        0.0, 0.0, 1.0, 0.001);
 DUBLFOTARGET   = hslider("fx/dublfo/target",       0.0, 0.0, 1.0, 0.001);
 DUBLFOPHASE    = hslider("fx/dublfo/phase",        0.0, 0.0, 1.0, 0.001);
 
-filterStage = component("effects/home/faust/filters.dsp")[ HPCUT=HPCUT; LPCUT=LPCUT; LPRES=LPRES; ];
+filterStage = component("effects/home/faust/filters.dsp")[ HPCUT=HPCUT; LPCUT=LPCUT; LPRES=LPRES; LPSLOPE=LPSLOPE; ];
 delayStage  = component("effects/home/faust/delay.dsp")[ DELAYAMT=DELAYAMT; TIME=TIME; ];
 reverbStage = component("effects/home/faust/reverb.dsp")[ REVAMT=REVAMT; TIME=TIME; ];
 delayStageMaster  = component("effects/home/faust/delay.dsp")[ DELAYAMT=DELAYAMT; TIME=TIME; ];

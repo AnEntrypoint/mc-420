@@ -26,16 +26,12 @@ with {
 
 lpMaxFreq = SR * 0.45;
 lpG(cutoff) = tan(PI * min(20.0 * pow(1000.0, cutoff), lpMaxFreq) / SR);
-lpK(res)    = 1.0 / (0.5 + (res*res) * 24.5);
+lpQ12(res)  = 0.70710678 + res * (8.0 - 0.70710678);
+lpQ24a      = 0.54119610;
+lpQ24b(res) = 1.30656296 + res * (14.6 - 1.30656296);
 
-softClip(x) = select2(x > 1.0,
-                select2(x < -1.0, x - (x*x*x)/3.0, -2.0/3.0),
-                2.0/3.0);
-
-svfLPf(cutoff, res, x) = (blk ~ si.bus(2) : (!, !, _)) : softClip
+svfLP(g, k, x) = (blk ~ si.bus(2) : (!, !, _))
 with {
-    g  = lpG(cutoff);
-    k  = lpK(res);
     a1 = 1.0 / (1.0 + g*(g+k));
     a2 = g*a1;
     a3 = g*a2;
@@ -52,8 +48,21 @@ with {
 HPCUT = 0.0;
 LPCUT = 1.0;
 LPRES = 0.0;
+LPSLOPE = 0.0;
 
 hpStage(x) = select2(HPCUT > 0.01, x, svfHPf(HPCUT, x));
-lpStage(x) = select2(LPCUT < 0.99, x, svfLPf(LPCUT, LPRES, x));
+
+lpCutS   = 1.0 - ((1.0 - LPCUT) : si.smoo);
+lpResS   = LPRES : si.smoo;
+lpSlopeS = LPSLOPE : si.smoo;
+lpStage(x) = x + lpWet*(lpMix - x)
+with {
+    g     = lpG(lpCutS);
+    lp12  = svfLP(g, 1.0/lpQ12(lpResS), x);
+    lpA   = svfLP(g, 1.0/lpQ24a, x);
+    lp24  = svfLP(g, 1.0/lpQ24b(lpResS), lpA);
+    lpMix = lp12 + lpSlopeS*(lp24 - lp12);
+    lpWet = min(1.0, max(0.0, (0.995 - lpCutS)*100.0));
+};
 
 process = hpStage : lpStage;
