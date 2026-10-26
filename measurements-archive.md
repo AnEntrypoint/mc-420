@@ -749,3 +749,13 @@ Method: `tools/pitch-reference/comb.mjs --only <file>` (default flags; excludes 
 - tuba_run_C2B2, settled 93.6 Hz (phrase): submultiple 80-110 Hz: 0 clearing peaks. Ladder fallback 99.20 Hz with all 8 partials above floor+12 dB; peak 496.50 Hz = H5 (ratio 5.005). Settled is -100.6 c from 99.20 Hz; the 93.88 Hz line is at floor+13.9 dB but -19.2 dB below the peak. Verdict: not an octave or subharmonic of the ladder fundamental; the ladder (uncertified) points to 99.2 Hz.
 
 Correction to the row's earlier note: vocal_tenor_operatic_PD was recorded as "none certified". Two reruns of comb.mjs certify 114.18 Hz.
+
+
+## Creation-window origin, rb 3 first take, 2026-10-26 (archive#creation-impose-window)
+
+Witness lane: drain-defect-rb3-link-target-fold-origin-drift, one take on aloop as deployed (impose telemetry present, no restart). Arm press note 2 at +1.0 s, finish press at +2.5 s, status polled over UDP 4445 at 40 Hz (telemetry publishes at about 5 Hz). Scratch driver and analyzer kept outside the repo.
+
+- Span 72192 samples, create_phase 385, master_len 71807, rb 3. Pre-impose Link target 52258 samples: circular offset to the master phase 19934 (0.83 beat). Clear of the offset between +0.113 s and +0.313 s, consistent with one controlTick (kControlLoopHz 5).
+- Origin minus arm edge: +64.0 at +0.113 s (the pre-impose window), then +45 to +50 steady, max |origin| 64.6 at +9.54 s. Link target minus master phase after the clear: within 20 samples throughout.
+- Earlier take run2 (2026-10-25) reached +234.9 samples in the same window. Run3 reached 64.0.
+- Reading: the origin sits inside the arm block (archive#first-loop-origin-sub-block), so the steady +45 to +50 is block offset, not drift. Only the pre-impose window is a creation defect. Fix: the Link target is not used until the creation impose is consumed (edit in src/dsp/audio_thread.cpp; sim mirror in tools/loop-quantization-sim/world.js). Acceptance (origin within 64 samples over 10 s, 6 restarts) is open until a fresh witness.

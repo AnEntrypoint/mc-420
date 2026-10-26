@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0a25588da592a5343d135004ea771dd5345e27de">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5a4fdf3d4f07760e028db9b092662045b7371997">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -811,6 +811,15 @@ loaded, so ordinary sampler playback is untouched.</p>
 <ul>
   <li>Change: gm-mcp <code class="language-plaintext highlighter-rouge">b574595</code>. Only a non-closing empty publish is refused as nothing_to_publish, so a closing publish carries its row.</li>
   <li>Witness: probe dispatch <code class="language-plaintext highlighter-rouge">1792942166762-1411264-fe64b425b4997d36</code> (mc-420 ledger).</li>
+</ul>
+
+<h2 id="creation-target-held-until-the-impose-is-consumed-2026-10-26-row-defect-rb3-link-target-fold-origin-drift">Creation target held until the impose is consumed, 2026-10-26 (row defect-rb3-link-target-fold-origin-drift)</h2>
+
+<ul>
+  <li>Decision: the audio thread does not use the Link target between master creation and the first controlTick that consumes the creation impose. Consumption is observed as a change of <code class="language-plaintext highlighter-rouge">linkSnap.rebaseSeq</code>. Until then no idle snap, trim or join runs from the pre-impose target.</li>
+  <li>Why: the impose is queued off the audio thread and applied only by LinkBridge::controlTick at kControlLoopHz 5, so the snapshot’s loop quantum and session timeline are both stale for up to 200 ms. A pre-impose target offset by about one beat (archive#creation-impose-window).</li>
+  <li>Rejected: folding a pre-impose target on the 128-beat capture path when the snapshot quantum differs from recorded beats. That fallback is wrong for rb not dividing 128 and was not reached once the target is held.</li>
+  <li>Witness: pending the verifier lane (verify-defect-rb3-link-target-fold-origin-drift), six restarts, origin within 64 samples for 10 s.</li>
 </ul>
 
 

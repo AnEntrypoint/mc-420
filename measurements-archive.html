@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=0a25588da592a5343d135004ea771dd5345e27de">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=5a4fdf3d4f07760e028db9b092662045b7371997">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1030,6 +1030,27 @@ on references).</p>
 </ul>
 
 <p>Correction to the row’s earlier note: vocal_tenor_operatic_PD was recorded as “none certified”. Two reruns of comb.mjs certify 114.18 Hz.</p>
+
+<h2 id="creation-window-origin-rb-3-first-take-2026-10-26-archivecreation-impose-window">Creation-window origin, rb 3 first take, 2026-10-26 (archive#creation-impose-window)</h2>
+
+<p>Witness lane: drain-defect-rb3-link-target-fold-origin-drift, one take on aloop as deployed (impose telemetry present, no restart). Arm press note 2 at +1.0 s, finish press at +2.5 s, status polled over UDP 4445 at 40 Hz (telemetry publishes at about 5 Hz). Scratch driver and analyzer kept outside the repo.</p>
+
+<ul>
+  <li>Span 72192 samples, create_phase 385, master_len 71807, rb 3. Pre-impose Link target 52258 samples: circular offset to the master phase 19934 (0.83 beat). Clear of the offset between +0.113 s and +0.313 s, consistent with one controlTick (kControlLoopHz 5).</li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>Origin minus arm edge: +64.0 at +0.113 s (the pre-impose window), then +45 to +50 steady, max</td>
+          <td>origin</td>
+          <td>64.6 at +9.54 s. Link target minus master phase after the clear: within 20 samples throughout.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>Earlier take run2 (2026-10-25) reached +234.9 samples in the same window. Run3 reached 64.0.</li>
+  <li>Reading: the origin sits inside the arm block (archive#first-loop-origin-sub-block), so the steady +45 to +50 is block offset, not drift. Only the pre-impose window is a creation defect. Fix: the Link target is not used until the creation impose is consumed (edit in src/dsp/audio_thread.cpp; sim mirror in tools/loop-quantization-sim/world.js). Acceptance (origin within 64 samples over 10 s, 6 restarts) is open until a fresh witness.</li>
+</ul>
 
 
       </section>
