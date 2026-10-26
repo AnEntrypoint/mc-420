@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop - current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=f63df064ecfcbbfaac35da53748c72a991edd7e6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=6ed0fdd1f8c625f0bb2c5ad1fcfd82a6281cda44">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -126,7 +126,8 @@
     </table>
   </li>
   <li><code class="language-plaintext highlighter-rouge">peers</code> 1-&gt;0 WHILE associated is esp-side IP loss, never Wi-Fi. Route flap drops the Link peer: restart it within 45 s or it self-heals only in ~1 h. (archive#soaks-and-route-flap)</li>
-  <li>aloop binds 20808 + 4445/4446 ONLY (never 20810/20812/20813; the esp-idf-link status responder is 20813). <code class="language-plaintext highlighter-rouge">/var/log/messages</code> is the association authority.</li>
+  <li>aloop binds 20808 + 4445/4446 ONLY, plus 4447 only when <code class="language-plaintext highlighter-rouge">[link] phrase_mesh_enabled = true</code> (default off; 4447 is a proposal until esp-ticker confirms it is free) (never 20810/20812/20813; the esp-idf-link status responder is 20813). <code class="language-plaintext highlighter-rouge">/var/log/messages</code> is the association authority.</li>
+  <li>Phrase message (<code class="language-plaintext highlighter-rouge">[link] phrase_mesh_enabled</code>, default off): one ASCII datagram <code class="language-plaintext highlighter-rouge">ALOOP-PHRASE/1 &lt;beats %.3f&gt; &lt;seq&gt; &lt;node&gt;</code> per second to <code class="language-plaintext highlighter-rouge">224.76.78.76:4447</code> from the recorder (the device whose own take set <code class="language-plaintext highlighter-rouge">cmd/recorded_beats</code>). An empty device adopts the freshest beats into <code class="language-plaintext highlighter-rouge">cmd/recorded_beats</code>, so its Link loop quantum and turnaround match. esp-idf-link must build to this format before the flag is enabled on both sides.</li>
 </ul>
 
 <h2 id="ableton-link-checklist">Ableton Link checklist</h2>
