@@ -12,6 +12,7 @@ normalized values, so reproducing these mappings makes any knob position match.
 | HP cutoff | CC51 | `data2/127` | HPCUT ∈ [0,1] |
 | LP resonance | CC54 | `data2/127` | LPRES ∈ [0,1] |
 | LP cutoff | CC55 | `data2/127` | LPCUT ∈ [0,1] |
+| LP slope | `fx/lpslope` (no CC bound yet) | 0 = 12 dB/oct, 1 = 24 dB/oct | LPSLOPE ∈ {0,1} |
 | Reverb amount | CC48 | `data2/127` | REVAMT ∈ [0,1] |
 | Delay amount | CC49 | `data2/127` | DELAYAMT ∈ [0,1] |
 | Time | CC50 | `data2/127` | TIME ∈ [0,1] |

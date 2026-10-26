@@ -167,6 +167,7 @@ static std::string targetToZone(const std::string& target) {
     if (target == "fx/hp")      return "HPCUT";
     if (target == "fx/lp")      return "LPCUT";
     if (target == "fx/lpres")   return "LPRES";
+    if (target == "fx/lpslope") return "LPSLOPE";
     if (target == "fx/reverb")  return "REVAMT";
     if (target == "fx/delay")   return "DELAYAMT";
     if (target == "fx/time")    return "TIME";

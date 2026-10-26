@@ -10,6 +10,7 @@ TIME     = hslider("TIME",    0.5, 0.0, 1.0, 0.001);
 HPCUT    = hslider("HPCUT",   0.0, 0.0, 1.0, 0.001);
 LPCUT    = hslider("LPCUT",   1.0, 0.0, 1.0, 0.001);
 LPRES    = hslider("LPRES",   0.0, 0.0, 1.0, 0.001);
+LPSLOPE  = hslider("LPSLOPE", 0.0, 0.0, 1.0, 1.0);
 FORMANT  = hslider("FORMANT", 0.0, -3.0, 3.0, 0.001);
 SEMIS    = hslider("SEMIS",   0.0, -12.0, 12.0, 0.001);
 EXTFREQDET = hslider("fx/extfreqdet", 0.0, 0.0, 1500.0, 0.01);
@@ -20,7 +21,7 @@ glitchDivisor    = nentry("DIV", 0, 0, 16, 1);
 masterLoopBlocks = nentry("MLB", 0, 0, 4096, 1);
 recordedBeats    = nentry("RECORDEDBEATS", 16, 1, 128, 1);
 
-filterStage = component("effects/home/faust/filters.dsp")[ HPCUT=HPCUT; LPCUT=LPCUT; LPRES=LPRES; ];
+filterStage = component("effects/home/faust/filters.dsp")[ HPCUT=HPCUT; LPCUT=LPCUT; LPRES=LPRES; LPSLOPE=LPSLOPE; ];
 microStage  = component("effects/home/faust/microrepeat.dsp")[ DIV=glitchDivisor; MLB=masterLoopBlocks; RECORDEDBEATS=recordedBeats; ];
 pitchStage  = component("effects/home/faust/pitch.dsp")[ SEMIS=SEMIS; FORMANT=FORMANT; ENGAGED=ENGAGED; ];
 
