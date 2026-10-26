@@ -2,7 +2,7 @@ name: build-image
 
 on:
   workflow_run:
-    workflows: ["build-binary"]
+    workflows: ["build-binary", "build-lv2"]
     types: [completed]
   push:
     paths:
