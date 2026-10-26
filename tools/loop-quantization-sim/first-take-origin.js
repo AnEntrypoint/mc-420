@@ -56,9 +56,44 @@ function ticker() {
   return { gap: circularGap(beatAtPress, 0, LINK_QUANTUM), beatAtPress, phaseGapBeats };
 }
 
+function holder() {
+  setPhaseQuantum(LINK_PHASE_QUANTUM);
+  const { session, a, b } = makeJoinPair();
+  initRemoteTransport(b, true);
+  b.link.local.connected = false;
+  advancePairMs(a, b, 300);
+  W.onPadPress(b, 0); W.onPadRelease(b, 0);
+  const pressB = b.loopers[0].recordStartT;
+  advancePairMs(a, b, kHoldMs);
+  W.onPadPress(b, 0); W.onPadRelease(b, 0);
+  advancePairMs(a, b, 1000);
+  b.link.local.connected = true;
+  advancePairMs(a, b, 500);
+  W.onPadPress(a, 0); W.onPadRelease(a, 0);
+  const pressA = a.loopers[0].recordStartT;
+  advancePairMs(a, b, kHoldMs);
+  W.onPadPress(a, 0); W.onPadRelease(a, 0);
+  advancePairMs(a, b, kSettleMs);
+
+  const L = b.masterLenSamples;
+  const expectedB = ((b.t - pressA) % L + L) % L;
+  const oldOriginOffset = circularGap(pressB % L, pressA % L, L) / L;
+  const gap = L > 0 ? circularGap(b.masterPhaseSamples, expectedB, L) / (L / Math.max(1, b.recordedBeats)) : NaN;
+  const phrase = Math.max(1, b.recordedBeats);
+  const pressedBeatA = beatAtTime(session, (pressA / W.SIM_SAMPLE_RATE) * 1000);
+  return { gap, oldOriginOffset, originGap: circularGap(pressedBeatA, 0, phrase), L, recordedBeats: phrase, hasPhrase: L > 0 };
+}
+
 function main() {
   let failed = 0;
   console.log('first take origin: the master grid starts on the record-press sample');
+
+  const h = holder();
+  const hMoved = h.oldOriginOffset > 0.05;
+  const hOriginTolBeats = kToleranceSamples * Math.max(1, h.recordedBeats) / h.L;
+  const hOk = h.hasPhrase && hMoved && h.gap <= kPhaseToleranceBeats && h.originGap <= hOriginTolBeats;
+  console.log(`  holder: device with a phrase from before the network endpoint, old origin ${(h.oldOriginOffset * 100).toFixed(1)}% of the loop away${hMoved ? '' : ' (case proves nothing)'}; position vs press ${h.gap.toFixed(4)} beats, origin gap ${h.originGap.toFixed(4)} beats ${hOk ? 'ok' : 'FAIL'}`);
+  if (!hOk) failed++;
 
   const s = standalone();
   const sOk = s.worst <= kToleranceSamples;
