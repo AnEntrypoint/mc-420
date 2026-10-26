@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        variant: [base, cand, cand-tau01, gated, gated-tau01]
+        variant: [base, gated, gated-tau01, v2, v2-tau01]
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +46,8 @@ jobs:
             cand-tau01) sed -e 's/ba.if(freqHz >= 575.0, 0.02,/ba.if(freqHz >= 575.0, 0.01,/' -e 's/lagFor(f), 0.02);/lagFor(f), 0.01);/' docs/witness/pitch-2093/pitchtracker_ac_2093.dsp > work/variant.dsp ;;
             gated) cp docs/witness/pitch-2093/pitchtracker_ac_2093g.dsp work/variant.dsp ;;
             gated-tau01) sed -e 's/ba.if(freqHz >= 575.0, 0.02,/ba.if(freqHz >= 575.0, 0.01,/' -e 's/lagFor(f), 0.02);/lagFor(f), 0.01);/' -e 's/lagFor(2.0 \* f), 0.02)/lagFor(2.0 * f), 0.01)/' docs/witness/pitch-2093/pitchtracker_ac_2093g.dsp > work/variant.dsp ;;
+            v2) cp docs/witness/pitch-2093/pitchtracker_ac_2093v2.dsp work/variant.dsp ;;
+            v2-tau01) sed -e 's/ba.if(freqHz >= 575.0, 0.02,/ba.if(freqHz >= 575.0, 0.01,/' -e 's/lagFor(f), 0.02);/lagFor(f), 0.01);/' -e 's/lagFor(2.0 \* f), 0.02)/lagFor(2.0 * f), 0.01)/' docs/witness/pitch-2093/pitchtracker_ac_2093v2.dsp > work/variant.dsp ;;
           esac
           test -s work/variant.dsp
 
