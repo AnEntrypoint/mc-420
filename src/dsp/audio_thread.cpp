@@ -555,7 +555,7 @@ static void* worker(void*) {
             snd_pcm_hw_params_set_rate_near(pcm, hw, &rate, nullptr);
             snd_pcm_uframes_t period = (snd_pcm_uframes_t)N;
             snd_pcm_hw_params_set_period_size_near(pcm, hw, &period, nullptr);
-            snd_pcm_uframes_t bufSize = period * 4;
+            snd_pcm_uframes_t bufSize = period * 2;
             snd_pcm_hw_params_set_buffer_size_near(pcm, hw, &bufSize);
             if (snd_pcm_hw_params(pcm, hw) < 0) return false;
             unsigned int grantedCh = 0;
