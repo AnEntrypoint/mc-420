@@ -98,7 +98,7 @@ const GITHUB_TOKEN    = arg('--token', process.env.GITHUB_TOKEN || process.env.A
 const AUTO_UPDATE     = process.env.ALOOP_NO_AUTO_UPDATE !== '1';
 const UPDATE_INTERVAL_MS = parseInt(arg('--update-interval', '30000'));
 const SHA_FILE  = path.join(path.dirname(ROOT), '.netboot-update-sha');
-const PI_HOST   = arg('--pi', '192.168.137.100');
+const PI_HOST   = arg('--pi', process.env.ALOOP_PI_HOST || '192.168.137.132');
 const PI_TOKEN  = arg('--pi-token', process.env.PI_TOKEN || '');
 const NETBOOT_SERVER = SERVER_IP;
 

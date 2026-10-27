@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { Client } = require('ssh2');
 
-const HOST = process.env.PI_HOST || '192.168.137.100';
+const HOST = process.env.PI_HOST || process.env.ALOOP_PI_HOST || '192.168.137.132';
 const REC_DIR = '/media/aloop-usb/aloop-rec';
 const REMOTE_SLICE = '/tmp/aloop_witness_slice.raw';
 const SR = Number(process.env.WITNESS_SR || '48000');

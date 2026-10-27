@@ -14,7 +14,7 @@ function arg(name, envName, def) {
 }
 
 const TARGET = arg('--target', 'DSP_TARGET', 'home');
-const HOST = arg('--host', 'PI_HOST', '192.168.137.100');
+const HOST = arg('--host', 'PI_HOST', process.env.ALOOP_PI_HOST || '192.168.137.132');
 const SSH_USER = arg('--user', 'PI_SSH_USER', 'root');
 const SSH_PASS = arg('--pass', 'PI_SSH_PASS', 'aloop');
 const POLL_MS = parseInt(arg('--poll-ms', 'DSP_POLL_MS', '10000'));

@@ -9,7 +9,7 @@ function arg(name, envName, def) {
   return def;
 }
 
-const HOST = arg('--host', 'PI_HOST', '192.168.137.100');
+const HOST = arg('--host', 'PI_HOST', process.env.ALOOP_PI_HOST || '192.168.137.132');
 const PORT = parseInt(arg('--port', 'PI_PORT', '4446'));
 const TOKEN = arg('--token', 'PI_TOKEN', '');
 

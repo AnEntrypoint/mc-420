@@ -4,7 +4,7 @@ const path = require('path');
 const dgram = require('dgram');
 const { Client } = require('ssh2');
 
-const HOST = process.env.PI_HOST || '192.168.137.100';
+const HOST = process.env.PI_HOST || process.env.ALOOP_PI_HOST || '192.168.137.132';
 const REMOTE_BIN = '/tmp/audio-injector';
 const REMOTE_DIR = '/tmp/inject';
 const REMOTE_LOG = '/tmp/inject.log';

@@ -4,7 +4,7 @@ const path = require('path');
 const { Client } = require('ssh2');
 
 const [, , localPath, hostArg] = process.argv;
-const HOST = hostArg || process.env.PI_HOST || '192.168.137.100';
+const HOST = hostArg || process.env.PI_HOST || process.env.ALOOP_PI_HOST || '192.168.137.132';
 const REMOTE_BIN = '/opt/aloop/aloop';
 
 if (!localPath) {

@@ -3,7 +3,7 @@ const net = require('net');
 const dgram = require('dgram');
 const { Client } = require('C:/dev/mc-420/node_modules/ssh2');
 
-const HOST = process.argv[2] || '192.168.137.100';
+const HOST = process.argv[2] || process.env.ALOOP_PI_HOST || '192.168.137.132';
 const HOLD_MS = Number(process.argv[3] || 1500);
 const RUNS = Number(process.argv[4] || 2);
 const SR = 48000;

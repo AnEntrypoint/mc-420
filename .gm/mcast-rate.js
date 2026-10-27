@@ -19,7 +19,7 @@ function ssh(cmd) {
     });
     conn.on('error', (e) => finish('[ssh error] ' + e.message));
     setTimeout(() => finish('[ssh timeout]'), 15000);
-    conn.connect({ host: '192.168.137.100', port: 22, username: 'root', password: 'aloop', readyTimeout: 15000 });
+    conn.connect({ host: process.env.ALOOP_PI_HOST || '192.168.137.132', port: 22, username: 'root', password: 'aloop', readyTimeout: 15000 });
   });
 }
 

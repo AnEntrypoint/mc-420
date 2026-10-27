@@ -4,7 +4,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const run = promisify(execFile);
 
-const HOST = '192.168.137.100';
+const HOST = process.env.ALOOP_PI_HOST || '192.168.137.132';
 const MAC = 'e4:65:b8:77:0d:14';
 const secs = Number(process.argv[2] || 900);
 

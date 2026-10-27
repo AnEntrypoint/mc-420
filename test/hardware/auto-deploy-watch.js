@@ -10,7 +10,7 @@ function arg(name, def) {
   if (i > 0 && process.argv[i + 1]) return process.argv[i + 1];
   return def;
 }
-const HOST = arg('--host', '192.168.137.100');
+const HOST = arg('--host', process.env.ALOOP_PI_HOST || '192.168.137.132');
 const ONCE = process.argv.includes('--once');
 const POLL_MS = 15000;
 const REPO_ROOT = path.resolve(__dirname, '..', '..');

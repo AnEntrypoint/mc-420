@@ -1,7 +1,7 @@
 'use strict';
 const dgram = require('dgram');
 
-const host = process.argv[2] || '192.168.137.100';
+const host = process.argv[2] || process.env.ALOOP_PI_HOST || '192.168.137.132';
 const watchMs = Number(process.argv[3] || 30000);
 const kPollMs = 200;
 const kPeersPresentMinFrac = 0.95;

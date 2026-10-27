@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const { Client } = require('ssh2');
 
-const HOST = process.env.PI_HOST || '192.168.137.100';
+const HOST = process.env.PI_HOST || process.env.ALOOP_PI_HOST || '192.168.137.132';
 const REMOTE_TONE = '/tmp/aloop_witness_tone.raw';
 const REMOTE_FEEDER = '/tmp/aloop_witness_feeder.sh';
 

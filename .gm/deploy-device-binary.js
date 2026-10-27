@@ -1,7 +1,7 @@
 'use strict';
 const { Client } = require('C:/dev/mc-420/node_modules/ssh2');
 
-const HOST = '192.168.137.100';
+const HOST = process.env.ALOOP_PI_HOST || '192.168.137.132';
 const SRC = '/opt/aloop/' + (process.argv[2] || 'aloop.fixed');
 const REMOTE = '/opt/aloop/aloop';
 

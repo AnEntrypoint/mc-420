@@ -2,7 +2,7 @@
 const net = require('net');
 const dgram = require('dgram');
 
-const host = process.argv[2] || '192.168.137.100';
+const host = process.argv[2] || process.env.ALOOP_PI_HOST || '192.168.137.132';
 const holdMs = Number(process.argv[3] || 1500);
 const watchMs = Number(process.argv[4] || 20000);
 

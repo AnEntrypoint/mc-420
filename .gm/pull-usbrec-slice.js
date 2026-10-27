@@ -2,7 +2,7 @@
 const fs = require('fs');
 const { Client } = require('C:/dev/mc-420/node_modules/ssh2');
 
-const HOST = '192.168.137.100';
+const HOST = process.env.ALOOP_PI_HOST || '192.168.137.132';
 const remote = process.argv[2] || '/media/aloop-usb/aloop-rec/aloop_chunk_04.wav';
 const outPath = process.argv[3] || 'C:/dev/mc-420/.gm/usbrec-slice.wav';
 const byteOffset = Number(process.argv[4] || 54720000);

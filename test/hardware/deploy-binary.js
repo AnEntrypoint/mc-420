@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { Client } = require('ssh2');
 
-const HOST = process.argv[2] || process.env.PI_HOST || '192.168.137.100';
+const HOST = process.argv[2] || process.env.PI_HOST || process.env.ALOOP_PI_HOST || '192.168.137.132';
 const SSH_USER = process.env.PI_SSH_USER || 'root';
 const SSH_PASS = process.env.PI_SSH_PASS || 'aloop';
 const REMOTE_BIN = '/opt/aloop/aloop';

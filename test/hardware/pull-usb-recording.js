@@ -2,7 +2,7 @@
 const fs = require('fs');
 const { Client } = require('C:/dev/mc-420/node_modules/ssh2');
 
-const kHost = '192.168.137.100';
+const kHost = process.env.ALOOP_PI_HOST || '192.168.137.132';
 const kSampleRate = 48000;
 const kBytesPerSample = 2;
 
