@@ -60,11 +60,16 @@ WHY DUBFX_BS IS NOT THE KNOB
   32-sample chunk double-steps the sweep. AGENTS.md: step MUST stay
   block-aligned (m_sinceBlock==0).
 
-ALSA BUFFER LEVER, shipped in source, unwitnessed on this device
+ALSA BUFFER LEVER, WITNESSED 2026-11-05T23:35Z
   ALSA buffer_size period*4 -> period*2 shipped in 0ec885bd
-  (src/dsp/audio_thread.cpp:558, 2026-10-26). Live telemetry on 2026-11-05
-  (held netboot build, not period*2): latency_bias_samples 419.4,
-  alsa_roundtrip_samples 355.4, xruns 0. The 323.3 / 259.3 figures used by
-  the offline sweep are 2026-10-18 upper bounds and are superseded. Hot-deploy
-  the period*2 binary and re-read alsa_roundtrip_samples before claiming any
-  latency gain; the failure mode is xruns.
+  (src/dsp/audio_thread.cpp:558). CI run 42127715534 (b210ed41) hot-deployed
+  to /opt/aloop/aloop, md5 3dcb7e4e45b88a1879a2611dc0b82068 matched local,
+  one rc-service aloop restart. Pre 419.4/355.4/xruns 0 -> post
+  190.9/126.9/xruns 1, peers 1 bpm 120. Decomposition is exact:
+  419.4 = N 64 + alsa 355.4 + trim 0; 190.9 = 64 + 126.9 + 0.
+  The entire 228.5-sample / 4.76 ms drop is in alsa_roundtrip_samples;
+  N and trim are unchanged. Idle 3.977 ms, engaged end-to-end 317.9 smp
+  / 6.623 ms, both under 7 ms. The pre-registered 128-sample point estimate
+  is FALSIFIED (observed 1.79x it); the >=84-sample pass line was met.
+  One startup xrun did not grow over a 60 s soak; see aa366622 archive entry
+  and .gm/witness-out/period2-hot-deploy-20261105.txt.
