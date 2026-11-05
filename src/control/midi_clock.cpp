@@ -25,6 +25,10 @@ constexpr long   kSpinNs             = 500000;
 constexpr unsigned char kClockTick = 0xF8;
 constexpr unsigned char kClockStart = 0xFA;
 constexpr unsigned char kClockStop  = 0xFC;
+constexpr unsigned char kSongPosition = 0xF2;
+constexpr double kPhraseBeats = 64.0;
+constexpr int kSppUnitsPerBeat = 4;
+constexpr int kSppMask = 0x3FFF;
 
 double monotonicSeconds() {
     timespec t{};
@@ -172,6 +176,7 @@ void MidiClock::run() {
     bool     sentStart    = false;
     bool     havePulseRef = false;
     int64_t  lastPulseIdx = 0;
+    int64_t  lastPhraseIdx = -1;
 
     const double startedAt = monotonicSeconds();
 
@@ -180,11 +185,14 @@ void MidiClock::run() {
         const int surfaceCard = controlSurfaceCard();
         const bool surfaceSettled = surfaceCard >= 0
             || (nowSec - startedAt) >= kSurfaceGraceSeconds;
+        LinkBridge::BeatNow b = link_ ? link_->beatNow() : LinkBridge::BeatNow{};
+        const double sampledMono = monotonicSeconds();
         if (surfaceCard >= 0) outs.release(surfaceCard);
         if (surfaceSettled && nowSec >= nextRescan) {
             const int beforeCount = outs.count;
             rescan(outs, surfaceCard);
             if (sentStart && outs.count > beforeCount) {
+                writeSongPosition(outs, b.beat, beforeCount, outs.count);
                 unsigned char startByte = kClockStart;
                 outs.write(&startByte, 1, beforeCount, outs.count);
                 fprintf(stderr, "[midi-clock] transport already running, sent 0xFA to %d late output(s)\n",
@@ -193,9 +201,6 @@ void MidiClock::run() {
             nextRescan = nowSec + kRescanSeconds;
         }
 
-        LinkBridge::BeatNow b = link_ ? link_->beatNow() : LinkBridge::BeatNow{};
-        const double sampledMono = monotonicSeconds();
-
         if (!b.valid || outs.count == 0) {
             timespec ts{0, kSleepCeilingNs};
             nanosleep(&ts, nullptr);
@@ -203,6 +208,11 @@ void MidiClock::run() {
         }
 
         const int64_t pulseIdx = (int64_t)std::floor(b.beat * (double)kPulsesPerQuarter);
+        const int64_t phraseIdx = (int64_t)std::floor(b.beat / kPhraseBeats);
+        if (phraseIdx != lastPhraseIdx) {
+            writeSongPosition(outs, b.beat);
+            lastPhraseIdx = phraseIdx;
+        }
 
         if (!sentStart) {
             unsigned char startByte = kClockStart;
@@ -256,6 +266,8 @@ void MidiClock::run() {
         }
     }
 
+    unsigned char stopByte = kClockStop;
+    outs.write(&stopByte, 1);
     outs.closeAll();
 }
 

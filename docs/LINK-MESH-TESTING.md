@@ -28,7 +28,7 @@ paired invariants"):
 
 aloop's `autoap.sh` also gained the MAC-ordered election and self-healing
 supervisor this doc's "If Test 3 fails" section specified, and
-`LinkBridge::start` now calls `enableStartStopSync(true)` to match
+`LinkBridge::start` calls `enableStartStopSync(false)` to match
 esp-idf-link. Quantum (`16.0`), open auth, `192.168.4.1/24`, and channel 6
 were each verified already identical across the two projects.
 
@@ -63,7 +63,7 @@ actually reach a station connected to it?
 | Broadcom `brcmfmac` AP-mode on Linux has the SAME structural gap (not just a client-isolation setting `ap_isolate=0` already addresses) | **UNKNOWN — this is what the live test below determines** |
 | aloop's `autoap.sh` avoids a two-devices-both-AP race the way esp-idf-link's MAC-rank election does | **FIXED — it did not, and now does.** The old script hosted purely on a STA-fail counter with no election. `autoap.sh` now ports esp-idf-link's scheme: MAC-ordered hold (0–6s, same bound as its `HOLD_MAX_MS=6000`), rescan-and-join during the hold, and an AP-role yield to any strictly-lower BSSID (never while clients are attached). Hold monotonicity and the BSSID comparator were unit-verified by execution; live multi-device behaviour is still Test 3. |
 | Both projects host the same SSID / auth / subnet / channel / Link quantum | **Confirmed by source comparison** — `ticker`, open (`key_mgmt=NONE` vs empty-password join), `192.168.4.1/24`, ch6, quantum `16.0`. Tabulated in AGENTS.md as paired invariants. |
-| Both projects enable Link start-stop-sync | **FIXED** — esp-idf-link always did; aloop did not (`grep` found no `enableStartStopSync` in `src/`). Added to `LinkBridge::start`; compiled green on aarch64/musl CI. |
+| Both projects disable Link start-stop-sync | Both call `enableStartStopSync(false)` (clock-only). |
 
 ## Test 1: does standard Link discovery complete at all, AP role = aloop
 
@@ -174,7 +174,7 @@ per device:
 
 ```
 node test/hardware/link-mesh-status.js --aloop 192.168.4.1 --esp 192.168.4.2
-node test/hardware/link-mesh-status.js --aloop 192.168.137.100 --esp 192.168.4.3 --watch
+node test/hardware/link-mesh-status.js --aloop 192.168.137.132 --esp 192.168.4.3 --watch
 ```
 
 `--watch` repolls every 2s, which is what Test 3 wants while power-cycling

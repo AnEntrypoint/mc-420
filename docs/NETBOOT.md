@@ -245,7 +245,7 @@ no manual re-flash, matching looper's `tftp-server.js` `checkAndUpdate()` loop.
 # `gh auth token` works if you're already `gh auth login`'d.
 GITHUB_TOKEN=$(gh auth token) node image/serve-netboot-win.js \
   --root .netboot-serve --server 192.168.137.1 \
-  --pi 192.168.137.100 --pi-token <the aloop.conf [remote] token=>
+  --pi 192.168.137.132 --pi-token <the aloop.conf [remote] token=>
 ```
 
 What it does each poll tick:

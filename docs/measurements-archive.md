@@ -127,7 +127,7 @@ Numeric evidence relocated verbatim from AGENTS.md. Each section is one bullet; 
 
 ## ARM anchor
 
-- ARM anchors a take at the master phase it was armed at, NOT a grid node: `rsmNext = ba.if(armEdge, masterPhase, rsmPrev)` (`dsp/loop.dsp:31`); `kFineGridBeats`/`rsmNearestNode` gone (nearest-node anchoring displaced takes ~31 ms). `verify-arm-lineup.js 192.168.137.100 2000 20000 6` (`readpos` vs `master_phase_beats*beatLen`, one reply, despiked, tol 16): off MATERIAL before max 1242.7 mean 783.3 -> after max 3.4 mean 2.7 (stalled floor max 29.1 mean 18.3); off GRID now max 1395.4 mean 1049.8 = INTENDED. Per-loop beat scale `s`: `1/ratioClamped` at `finishEdge`, `1.0` at `armEdge`; read-head rate `s*masterPhaseSlope` -> drift off grid IFF `s != 1`.
+- ARM anchors a take at the master phase it was armed at, NOT a grid node: `rsmNext = ba.if(armEdge, masterPhase, rsmPrev)` (`dsp/loop.dsp:31`); `kFineGridBeats`/`rsmNearestNode` gone (nearest-node anchoring displaced takes ~31 ms). `verify-arm-lineup.js 192.168.137.132 2000 20000 6` (`readpos` vs `master_phase_beats*beatLen`, one reply, despiked, tol 16): off MATERIAL before max 1242.7 mean 783.3 -> after max 3.4 mean 2.7 (stalled floor max 29.1 mean 18.3); off GRID now max 1395.4 mean 1049.8 = INTENDED. Per-loop beat scale `s`: `1/ratioClamped` at `finishEdge`, `1.0` at `armEdge`; read-head rate `s*masterPhaseSlope` -> drift off grid IFF `s != 1`.
 
 ## FINISH length
 

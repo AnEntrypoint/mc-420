@@ -32,7 +32,7 @@ how ongoing work is tracked, rather than a pre-build task list.
   `isolcpus`/IRQ-affinity/`SCHED_FIFO`/`mlockall`, built and cross-compiled by
   GitHub Actions for real musl/aarch64 targets.
 - **On-hardware verification**: all of the above has run and been debugged live
-  on a real Pi 4 (`192.168.137.100`) — RT jitter, USB audio round-trip, Link
+  on a real Pi 4 (`192.168.137.132`) — RT jitter, USB audio round-trip, Link
   sync, and AP meshing are not theoretical, they are the subject of most of
   `AGENTS.md`'s entries.
 
