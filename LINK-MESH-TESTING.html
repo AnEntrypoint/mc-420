@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop &lt;-&gt; esp-idf-link mesh: first-contact test plan","url":"https://anentrypoint.github.io/mc-420/LINK-MESH-TESTING.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=18a2d9b36f8bf0231b974c104e250412b2a2a01d">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=b699fdc2b0bcc1c5db3270935613872222d34d7c">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -87,7 +87,7 @@ was a hard syntax error on the device.</li>
 
 <p>aloop’s <code class="language-plaintext highlighter-rouge">autoap.sh</code> also gained the MAC-ordered election and self-healing
 supervisor this doc’s “If Test 3 fails” section specified, and
-<code class="language-plaintext highlighter-rouge">LinkBridge::start</code> now calls <code class="language-plaintext highlighter-rouge">enableStartStopSync(true)</code> to match
+<code class="language-plaintext highlighter-rouge">LinkBridge::start</code> calls <code class="language-plaintext highlighter-rouge">enableStartStopSync(false)</code> to match
 esp-idf-link. Quantum (<code class="language-plaintext highlighter-rouge">16.0</code>), open auth, <code class="language-plaintext highlighter-rouge">192.168.4.1/24</code>, and channel 6
 were each verified already identical across the two projects.</p>
 
@@ -150,8 +150,8 @@ actually reach a station connected to it?</p>
       <td><strong>Confirmed by source comparison</strong> — <code class="language-plaintext highlighter-rouge">ticker</code>, open (<code class="language-plaintext highlighter-rouge">key_mgmt=NONE</code> vs empty-password join), <code class="language-plaintext highlighter-rouge">192.168.4.1/24</code>, ch6, quantum <code class="language-plaintext highlighter-rouge">16.0</code>. Tabulated in AGENTS.md as paired invariants.</td>
     </tr>
     <tr>
-      <td>Both projects enable Link start-stop-sync</td>
-      <td><strong>FIXED</strong> — esp-idf-link always did; aloop did not (<code class="language-plaintext highlighter-rouge">grep</code> found no <code class="language-plaintext highlighter-rouge">enableStartStopSync</code> in <code class="language-plaintext highlighter-rouge">src/</code>). Added to <code class="language-plaintext highlighter-rouge">LinkBridge::start</code>; compiled green on aarch64/musl CI.</td>
+      <td>Both projects disable Link start-stop-sync</td>
+      <td>Both call <code class="language-plaintext highlighter-rouge">enableStartStopSync(false)</code> (clock-only).</td>
     </tr>
   </tbody>
 </table>
@@ -274,7 +274,7 @@ with one JSON line: <code class="language-plaintext highlighter-rouge">peers</co
 per device:</p>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>node test/hardware/link-mesh-status.js --aloop 192.168.4.1 --esp 192.168.4.2
-node test/hardware/link-mesh-status.js --aloop 192.168.137.100 --esp 192.168.4.3 --watch
+node test/hardware/link-mesh-status.js --aloop 192.168.137.132 --esp 192.168.4.3 --watch
 </code></pre></div></div>
 
 <p><code class="language-plaintext highlighter-rouge">--watch</code> repolls every 2s, which is what Test 3 wants while power-cycling

@@ -52,8 +52,8 @@ never be confused with a destructive verb like reboot.
 ## Host-side scripts
 
 ```sh
-node image/aloop-reboot.js  --host 192.168.137.100 --token <secret>
-node image/aloop-logtail.js --host 192.168.137.100 --token <secret>
+node image/aloop-reboot.js  --host 192.168.137.132 --token <secret>
+node image/aloop-logtail.js --host 192.168.137.132 --token <secret>
 ```
 
 Or via env vars: `PI_HOST`, `PI_PORT`, `PI_TOKEN`, `PI_LOGTAIL_INTERVAL`
