@@ -30,14 +30,6 @@ constexpr double kPhraseBeats = 64.0;
 constexpr int kSppUnitsPerBeat = 4;
 constexpr int kSppMask = 0x3FFF;
 
-void writeSongPosition(OutputSet& outs, double beat, int from = 0, int to = -1) {
-    int64_t units = (int64_t)std::floor(beat * (double)kSppUnitsPerBeat);
-    int64_t span = (int64_t)kSppMask + 1;
-    int spp = (int)(((units % span) + span) % span);
-    unsigned char msg[3] = { kSongPosition, (unsigned char)(spp & 0x7F), (unsigned char)((spp >> 7) & 0x7F) };
-    outs.write(msg, 3, from, to);
-}
-
 double monotonicSeconds() {
     timespec t{};
     clock_gettime(CLOCK_MONOTONIC, &t);
@@ -106,6 +98,14 @@ struct OutputSet {
         count = live;
     }
 };
+
+void writeSongPosition(OutputSet& outs, double beat, int from = 0, int to = -1) {
+    int64_t units = (int64_t)std::floor(beat * (double)kSppUnitsPerBeat);
+    int64_t span = (int64_t)kSppMask + 1;
+    int spp = (int)(((units % span) + span) % span);
+    unsigned char msg[3] = { kSongPosition, (unsigned char)(spp & 0x7F), (unsigned char)((spp >> 7) & 0x7F) };
+    outs.write(msg, 3, from, to);
+}
 
 bool cardHasRawmidi(int card) {
     char path[64];
