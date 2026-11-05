@@ -3,6 +3,48 @@
 const { initLooperDsp, stepSample, MAXLEN } = require('./looper');
 const { createLinkWorld, LINK_QUANTUM, beatAtTime, requestPhaseImpose, applyPendingPhaseImpose } = require('./link');
 
+const PARAM_DEFAULTS = Object.freeze({
+  'cmd/input1_recordable': 1.0,
+  'cmd/input2_recordable': 1.0,
+  'fx/reverb': 0.0,
+  'fx/delay': 0.0,
+  'fx/time': 0.5,
+  'fx/hp': 0.0,
+  'fx/lpres': 0.0,
+  'fx/lp': 1.0,
+  'fx/pitch': 0.0,
+  'fx/dubgate/amt': 0.0,
+  'fx/dubgate/pattern': 0.0,
+  'fx/dublfo/rate': 0.3,
+  'fx/dublfo/depth': 0.0,
+  'fx/dublfo/shape': 0.0,
+  'fx/dublfo/target': 0.0,
+  'fx/dublfo/phase': 0.0,
+  'fx/resonode/engaged': 0.0,
+  'fx/resonode/position': 0.35,
+  'fx/resonode/tone': 6000.0,
+  'fx/resonode/decay': 1.2,
+  'fx/resonode/damping': 0.85,
+  'fx/resonode/stretch': 0.0,
+  'fx/resonode/collision': 0.0,
+  'fx/resonode/level': 25.0,
+  'fx/resonode/couple': 0.15,
+  'fx/resonode/shape/string': 1.0,
+  'fx/resonode/shape/bell': 0.0,
+  'fx/resonode/shape/plate': 0.0,
+  'fx/resonode/shape/membrane': 0.0,
+  'fx/resonode/shape/bar': 0.0,
+  'fx/shuffle/mode': 0.0,
+  'fx/gate/mode': 0.0,
+  'cmd/master_len': 0.0,
+  'cmd/recorded_bpm': 0.0,
+  'cmd/recorded_beats': 0.0,
+  'cmd/clearall': 0.0,
+  'cmd/halfspeed': 0.0,
+  'cmd/doublespeed': 0.0,
+  'cmd/sustain': 0.0,
+});
+
 const WHOLE_BEAT_SNAP_BEATS = 0.4;
 const NEAR_CUT_BEATS = 1.0;
 const SCALE = 100;
@@ -97,6 +139,7 @@ function createWorld(opts) {
     masterPhaseSamples: 0.0,
     masterPhasePrev: -1,
     ps_clearall: 0,
+    params: Object.assign({}, PARAM_DEFAULTS),
     shiftHeld: false,
     manualSpeedMul: 1.0,
     link: linkWorld,
@@ -379,7 +422,12 @@ function onPadRelease(w, looper) {
   lp.held = false;
 }
 
-function onClearAll(w, held) {
+function resetParamDefaults(w) {
+  for (const k of Object.keys(PARAM_DEFAULTS)) w.params[k] = PARAM_DEFAULTS[k];
+}
+
+function onClearAll(w, held, resetDefaults = true) {
+  if (held && resetDefaults) resetParamDefaults(w);
   w.ps_clearall = held ? 1 : 0;
   if (!held) return;
   for (let i = 0; i < w.looperCount; i++) {
@@ -634,7 +682,7 @@ function advance(w, samples) {
 }
 
 module.exports = {
-  createWorld, advance, stepOneSample,
+  createWorld, advance, stepOneSample, PARAM_DEFAULTS, resetParamDefaults,
   onPadPress, onPadRelease, onClearAll, onShiftPress, onShiftRelease,
   msToSimSamples, SIM_SAMPLE_RATE, SIM_MAXLEN,
   snapshotWriteIdx, snapshotWrapLen, linkAudioRead, deriveTempoQuant, snapBeatsToPow2,

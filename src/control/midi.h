@@ -15,19 +15,27 @@ class LinkBridge;
 struct ParamStore {
     static constexpr int MAX = 256;
     std::array<std::atomic<float>, MAX> value;
+    std::array<float, MAX> defaultValue;
     std::unordered_map<std::string, int> slot;
     std::mutex startupBindMtx;
     int count = 0;
 
-    ParamStore() { for (auto& v : value) v.store(0.0f); }
+    ParamStore() {
+        for (auto& v : value) v.store(0.0f);
+        for (auto& v : defaultValue) v = 0.0f;
+    }
 
     void bind(const std::string& name, float defaultVal = 0.0f) {
         std::lock_guard<std::mutex> g(startupBindMtx);
         if (slot.find(name) == slot.end() && count < MAX) {
             int idx = count++;
             slot[name] = idx;
+            defaultValue[idx] = defaultVal;
             value[idx].store(defaultVal, std::memory_order_relaxed);
         }
+    }
+    void resetToDefaults() {
+        for (int i = 0; i < count; i++) value[i].store(defaultValue[i], std::memory_order_relaxed);
     }
     void setByName(const std::string& name, float v) {
         auto it = slot.find(name);

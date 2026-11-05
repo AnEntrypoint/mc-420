@@ -645,6 +645,7 @@ void ApcGrid::onStopImmediate(unsigned now_ms, ParamStore& ps, LinkBridge* link,
     updateLocalTransport(link);
 }
 void ApcGrid::onClearAll(unsigned now_ms, bool held, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
+    if (held) ps.resetToDefaults();
     ps.setByName("cmd/clearall", held ? 1.0f : 0.0f);
     if (!held) return;
     for (int lp = 0; lp < kLooperCount; lp++) {
@@ -696,6 +697,7 @@ void ApcGrid::onClearAll(unsigned now_ms, bool held, ParamStore& ps, LinkBridge*
         m_resonodeEngaged = false;
         ps.setByName("fx/resonode/engaged", 0.0f);
     }
+    if (link) link->resetTempoAuthority();
     updateLocalTransport(link);
 }
 int ApcGrid::allocateTransposeVoice(int note) {

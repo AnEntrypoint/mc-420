@@ -55,6 +55,9 @@ jobs:
       - name: Non-divisor take wraps seamlessly at the master downbeat
         run: node tools/loop-quantization-sim/non-divisor-wrap.js
 
+      - name: Clear resets the device to startup defaults
+        run: node tools/loop-quantization-sim/clear-reset-defaults.js
+
       - name: Retune after recording
         run: node tools/loop-quantization-sim/tempo-change.js
 
