@@ -60,9 +60,11 @@ WHY DUBFX_BS IS NOT THE KNOB
   32-sample chunk double-steps the sweep. AGENTS.md: step MUST stay
   block-aligned (m_sinceBlock==0).
 
-NEXT DEVICE-GATED CANDIDATE, not shipped
-  ALSA buffer_size period*4 -> period*2 (src/dsp/audio_thread.cpp:553). If
-  playDelay tracks buffer - period this is worth up to about 128 samples of
-  roundTripEst, far more than anything on the DSP side. It cannot be witnessed
-  without the Pi and the failure mode is xruns, so it stays unshipped and is
-  recorded here for a device run.
+ALSA BUFFER LEVER, shipped in source, unwitnessed on this device
+  ALSA buffer_size period*4 -> period*2 shipped in 0ec885bd
+  (src/dsp/audio_thread.cpp:558, 2026-10-26). Live telemetry on 2026-11-05
+  (held netboot build, not period*2): latency_bias_samples 419.4,
+  alsa_roundtrip_samples 355.4, xruns 0. The 323.3 / 259.3 figures used by
+  the offline sweep are 2026-10-18 upper bounds and are superseded. Hot-deploy
+  the period*2 binary and re-read alsa_roundtrip_samples before claiming any
+  latency gain; the failure mode is xruns.
