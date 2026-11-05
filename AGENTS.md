@@ -14,6 +14,7 @@ Real Pi 4 root/aloop at `192.168.137.132`; `.100` is the cmdline-pinned netboot 
 # Working rules
 
 - No comments in code ever (C++/.dsp/JS/shell/YAML, `.gitignore`); 1 sighting: sweep file. Exempt: `#!`, `# syntax=docker/dockerfile:1`, `# shellcheck disable=`, commented-out keys in `config/aloop.conf`, `vendor/` + regenerated Faust.
+- A `dsp/loop.dsp` change publishes its `tools/loop-quantization-sim/` mirror in the same commit; the simulator is the model for every loop-timing rule.
 - Never add audio-path latency: ~7 ms must never grow, even temporarily; stop + ask first. Exempt: engaged wet effect's own algorithmic latency.
 - Effect parity (#3): every effect must do for resample (`recordTap`) what it does for live input (`inputFxOut`) + cue (`filtOut`); `dubGateLfoStage` on `recordTap`+`filtOut`, NOT `inputFxOut`. The CI parity gate catches the un-fix. (archive#effect-parity)
 - No WSL/Docker; missing compute = GitHub CI/CD (`gh`). WebSearch before irreversible hw steps; Windows Firewall silently black-holes Pi: rule it out before blaming netboot/SSH.

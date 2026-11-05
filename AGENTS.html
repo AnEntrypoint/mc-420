@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop - current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=b699fdc2b0bcc1c5db3270935613872222d34d7c">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=3b03fc2cb6a892adb8ef620126d97993b438dc8c">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -74,6 +74,7 @@
 
 <ul>
   <li>No comments in code ever (C++/.dsp/JS/shell/YAML, <code class="language-plaintext highlighter-rouge">.gitignore</code>); 1 sighting: sweep file. Exempt: <code class="language-plaintext highlighter-rouge">#!</code>, <code class="language-plaintext highlighter-rouge"># syntax=docker/dockerfile:1</code>, <code class="language-plaintext highlighter-rouge"># shellcheck disable=</code>, commented-out keys in <code class="language-plaintext highlighter-rouge">config/aloop.conf</code>, <code class="language-plaintext highlighter-rouge">vendor/</code> + regenerated Faust.</li>
+  <li>A <code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code> change publishes its <code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim/</code> mirror in the same commit; the simulator is the model for every loop-timing rule.</li>
   <li>Never add audio-path latency: ~7 ms must never grow, even temporarily; stop + ask first. Exempt: engaged wet effect’s own algorithmic latency.</li>
   <li>Effect parity (#3): every effect must do for resample (<code class="language-plaintext highlighter-rouge">recordTap</code>) what it does for live input (<code class="language-plaintext highlighter-rouge">inputFxOut</code>) + cue (<code class="language-plaintext highlighter-rouge">filtOut</code>); <code class="language-plaintext highlighter-rouge">dubGateLfoStage</code> on <code class="language-plaintext highlighter-rouge">recordTap</code>+<code class="language-plaintext highlighter-rouge">filtOut</code>, NOT <code class="language-plaintext highlighter-rouge">inputFxOut</code>. The CI parity gate catches the un-fix. (archive#effect-parity)</li>
   <li>No WSL/Docker; missing compute = GitHub CI/CD (<code class="language-plaintext highlighter-rouge">gh</code>). WebSearch before irreversible hw steps; Windows Firewall silently black-holes Pi: rule it out before blaming netboot/SSH.</li>
