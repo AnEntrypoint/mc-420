@@ -65,4 +65,4 @@ with {
     lpWet = min(1.0, max(0.0, (0.995 - lpCutS)*100.0));
 };
 
-process = hpStage : lpStage;
+process = lpStage : hpStage;
