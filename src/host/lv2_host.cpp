@@ -283,6 +283,11 @@ void Lv2Host::runBlock(int nframes) {
 
 void Lv2Host::process(float* buf, int nframes) {
     if (plugins_.empty()) return;
+    bool anyEnabled = false;
+    for (auto& plug : plugins_) {
+        if (plug.enabled && plug.instance) { anyEnabled = true; break; }
+    }
+    if (!anyEnabled) return;
     int n = nframes;
     if ((int)ioBuffer_.size() < n) return;
     std::memcpy(ioBuffer_.data(), buf, (size_t)n * sizeof(float));
