@@ -1,0 +1,3 @@
+WORKING RULE, 2026-11-06 (orchestrator-86 condition, recorded NOW in working notes).
+Before ANY future write-back of a file read with gm.read_file, check the read result for `truncated: true` and REFUSE to write if it is set. Read the rest by paging with `unit:'chars', offset: <next>, limit: 20000` until `truncated` is false, and only then write. gm already reports `truncated`, `total`, `totalBytes`, `next` and a `hint`; the failure was ignoring them, not gm.
+This rule is applied in the restore of docs/plans.md below: the reconstruction used `git show` to temp files (full content, no partial read), and the archive anchor verification used a paged full-read helper that refuses to proceed while `truncated` is true.

@@ -381,4 +381,28 @@ items:
         plugin wanting more than the host has instead of aliasing every audio port onto one
         ioBuffer_; numChannels_==1 for all five mono bundles so it is a no-op today.
     description: >-
-      Resonode
+      Resonode is mono end to end: process(exciteIn) has one input and one output, and every audio
+      port of the LV2 host is connected to the same ioBuffer_ pointer
+      (src/host/lv2_host.cpp:229-231), so channel 2 is never written or read. The reference
+      instrument's mixer exposes per-section pan and an Object width control, and stereo width is
+      one of the cheapest available wins for 'interesting'. Alternate m... [510 chars total, full
+      text at
+      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
+      field 'description']
+    id: resonode-stereo-width
+    session_id: mcp-codemode-2234-1791905128946
+    status: pending
+    subject: 'Resonode: make the instrument stereo'
+    witness_plan: effect-parity-test plus a rendered L/R correlation measurement.
+limit: 200
+offset: 0
+store_total: 25
+total: 25
+truncated: false
+continuation:
+  state: running
+  pending_rows: null
+  idle_ms: 10846
+  action: none
+
+```
