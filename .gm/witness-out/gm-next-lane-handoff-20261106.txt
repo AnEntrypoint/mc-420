@@ -21,3 +21,6 @@ LANE-START ADDENDUM, 2026-11-06 (recorded after the GO; no scope change).
 
 
 ITEM 1 CLOSED, 2026-11-06: e69c152c9c70a418396192a1d62bf46e5f2db45c landed on gm main (parent ba5fee3, rebase confirmed; 29/29 leaves tests; documentation + cap-pinning regression tests; no cap or default change). Full witness .gm/witness-out/gm-item1-landed-20261106.txt. Only ITEM 2 (write_file shrink warning) remains in this brief, UNSTARTED, awaiting orchestrator-86's go in a separate lane. Devices stay fully frozen.
+
+
+BOTH ITEMS CLOSED, 2026-11-06: ITEM 1 e69c152c9c70a418396192a1d62bf46e5f2db45c (job_status 30 s cap documentation + cap-pinning test), ITEM 2 89d95e8334f15072bcd11f845f88332cf380bbcf (write_file non-blocking shrink warning + regression tests). Full witnesses .gm/witness-out/gm-item1-landed-20261106.txt and .gm/witness-out/gm-item2-landed-20261106.txt. 33/33 leaves tests pass at the landed tip; honest C++ ctest CI-only limit kept; no device access. This brief is CLOSED, no queued gm items remain. Devices stay fully frozen.
