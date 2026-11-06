@@ -1,0 +1,22 @@
+ITEM 2 DEVICE FOLD HOT-DEPLOY WITNESS, WINDOW 2, 2026-11-06.
+Deployed sha 77bd050c532d54441321cc8fd1179b48ce61adae ("link: fold phase at the loop quantum, never the 128-beat capture at rb", lanmower only). CI on the exact sha: build-binary 42168438254 completed/success, test-loop-sim 42168438223 completed/success, build-image 42168438233 completed/success; build-lv2 42168438193 was in_progress and is not required for a binary hot-deploy.
+Quiet window: START and END markers both sent to esp; esp held all device polls (4445, 20813, serial, Pi ssh). One change in this window only.
+Pre-registration: pass gate fixed BEFORE the run as xruns_after <= xruns_before + 1, latency_bias_samples_after <= before + 16, alsa_roundtrip_samples_after <= before + 16. Revert on failure restores /opt/aloop/aloop.prev-item2 and restarts.
+Backup (ssh2 via test/hardware/ssh-run.js, read-only plus one copy): "3dcb7e4e45b88a1879a2611dc0b82068  /opt/aloop/aloop" and "3dcb7e4e45b88a1879a2611dc0b82068  /opt/aloop/aloop.prev-item2".
+BEFORE (gm.run_shell, verify-hotdeploy-latency-gate.js capture item2 before): {"xruns":5,"latency_bias_samples":196.7,"alsa_roundtrip_samples":132.7,"latency_trim_samples":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"master_len_samples":72000,"recorded_beats":3}
+DEPLOY (NODE_PATH=/config/workspace/mc-420/test/hardware/node_modules node image/dsp-hotdeploy.js --sha 77bd050c... --target home):
+  [dsp-hotdeploy] stopping aloop service before overwriting its binary (musl ETXTBSY guard)
+  [dsp-hotdeploy] pushing /tmp/dsp-hotdeploy-PSqnKA/bin/aloop -> /opt/aloop/aloop
+  [dsp-hotdeploy] starting aloop service (not a reboot)
+   * Starting aloop ... [ ok ]
+  [dsp-hotdeploy] post-restart status: * status: started
+  [dsp-hotdeploy] done -- no OS rebuild, no netboot reflash, no reboot
+Settle 15 s. Post status (ssh2): "3ed98064f0662c7ac5707b24dc7a7eb0  /opt/aloop/aloop", " * status: started", uptime "47176.43 150358.64" (NO reboot). master_len_samples reset to 0 and recorded_beats to 0 by the service restart, as expected.
+AFTER: {"xruns":1,"latency_bias_samples":193.1,"alsa_roundtrip_samples":129.1,"latency_trim_samples":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"master_len_samples":0,"recorded_beats":0}
+JUDGE:
+  [PASS] xruns before=5 after=1
+  [PASS] latency_bias_samples before=196.7 after=193.1
+  [PASS] alsa_roundtrip_samples before=132.7 after=129.1
+  [hotdeploy-gate] PASS / JUDGE_EXIT=0
+No regression: both latency measures FELL (196.7 -> 193.1 and 132.7 -> 129.1 samples), xruns fell 5 -> 1 because the service restart reset the counter. That xrun drop is NOT claimed as an improvement. The ~7 ms end-to-end invariant did not grow. No revert was needed; the backup remains on the device.
+NOT witnessed here: the rb=3 on-device phase behaviour after the fold fix. That needs a separate hardware take; the sim and shipped-C++ assertions (8/8, rb=3/5/6/7 old FAIL -> new PASS) are in .gm/witness-out/item2-device-fold-patch-20261106.txt and .gm/witness-out/item2-phase-fold-sim-20261106.txt. No threshold changed after results.

@@ -1,0 +1,301 @@
+ITEM 5 OFFLINE HALF - rb3 origin-drift analysis - 2026-11-06
+Offline only: no Pi SSH, no UDP 4445/4446, no 20813, no serial, no flash, no restart, no power cycle, no hot-deploy, no MIDI injection. Quiet Pi window CLOSED; esp running device polls. Back-to-back aloop restarts are the parent's job, not done here.
+
+Analyser (new, runnable, paths as argv): tools/rb3-origin-drift-analyze.js
+Command: node tools/rb3-origin-drift-analyze.js .gm/receipts/defect-rb3-origin-rate-41ppm/02-PROVE-DECIDE.md .gm/prd/defect-rb3-origin-rate-41ppm.yml .gm/prd/defect-rb3-origin-level-per-run-offset.yml .gm/prd/defect-rb3-link-target-fold-origin-drift.yml .gm/witness-out/item2-phase-fold-sim-20261106.txt docs/measurements-archive.md
+node --check OK; run exit 0. Full output quoted verbatim at the end of this file.
+
+METHOD
+- Pre-registered limits only, taken verbatim from the PRDs, NOT invented after seeing results: rate 2 ppm (.gm/prd/defect-rb3-origin-rate-41ppm.yml:4 acceptance_criteria), level 16 samples (.gm/prd/defect-rb3-origin-level-per-run-offset.yml:4 acceptance_criteria), origin window 64 samples (.gm/prd/defect-rb3-link-target-fold-origin-drift.yml:3 description "within 64 samples of the arm edge for 10 s"). The >=20 s judge is AGENTS.md ("rate only by least-squares slope over >=20 s").
+- Each numeric series is parsed from the named files (no conclusion hardcoded). x = 1..n (run or reading index); least-squares y = level(x0) + rate*x. Reported: intercept/level(x0), slope/rate, residual RMS, residual max, R2, n, mean, sd. n<3 => NOT_MEASURABLE_RATE. Zero series => NOT_DETECTED.
+- Sample rate 48000 Hz; ppm = (samples/s)/48000*1e6.
+- Origin formula (docs/measurements-archive.md:724): origin = centre((audio count - master phase) mod master_len), centre(x) = ((x + master_len/2) mod master_len) - master_len/2, because master_phase_samples is wrapped by fmod at src/dsp/audio_thread.cpp:1012. The wrap correction is required (PRD docs-origin-formula-misses-phase-wrap.yml:3; fixed at origin/main fc1d70b4, CI run 40373995970 success).
+
+=====================================================================
+HYPOTHESIS 1 - level offset per run
+=====================================================================
+EXISTING EVIDENCE (exact numbers + path:line)
+- Intercepts at t=0, six runs: -3.4, 7.1, 22.6, 45.4, 51.0, 78.3 samples. .gm/prd/defect-rb3-origin-level-per-run-offset.yml:3. Stated suspect: Link forced beat anchored to recordArmMicros() (wall clock at MIDI press) vs arm edge last_take_arm_sample (audio block that processed the press), press-to-audio latency jitter about 0.1 to 1.7 ms (1 ms = 48 samples); archive#first-loop-origin-sub-block press-to-arm-edge host raw 2.2-4.1 ms.
+- Level at 1 s, six runs: 58.8, 20.3, 71.7, 43.8, 43.2, 59.6 samples. .gm/prd/defect-rb3-origin-rate-41ppm.yml:20.
+- Sub-block origin minus arm-edge block, runs 1-5: -39.1, -6.0, -47.5, -11.1, -41.9 samples, within-run sd 2.6-8.3. docs/measurements-archive.md:724.
+- Creation-window take: origin minus arm edge +64.0 at +0.113 s (pre-impose), then +45 to +50 steady, max |origin| 64.6 at +9.54 s. docs/measurements-archive.md:767. Earlier run2 reached +234.9 at +0.119 s (.gm/prd/defect-rb3-link-target-fold-origin-drift.yml:14); run3 reached 64.0.
+- worst |origin| over 10 s, six restarts: 64.0, 64.0, 76.4, 64.0, 69.9, 101.4 samples (recorded FAIL pass=3 of 6). .gm/prd/defect-rb3-link-target-fold-origin-drift.yml:30.
+- Acceptance: intercept at t=0 within 16 samples of zero in six restarts (.gm/prd/defect-rb3-origin-level-per-run-offset.yml:4).
+
+WHAT THE FIT SUPPORTS / REFUTES
+- Fit of the intercept series over run index: level(x0) = -22.80 samples, rate = +16.09 samples/run, residRMS = 4.17 samples, residMax = 6.63 samples, R2 = 0.9775, mean = 33.50, sd = 27.79, n = 6. The series is monotone increasing (-3.4 -> 78.3) with a very low residual: a run-order-dependent accumulator fits far better than i.i.d. jitter. The "i.i.d. press-to-audio latency jitter" mechanism is NOT supported by the recorded numbers as the whole explanation; the magnitude (78.3 samples = 1.63 ms at 48 kHz) is nevertheless inside the stated 0.1-1.7 ms jitter band, so jitter remains a plausible contributor, not a proven cause.
+- Acceptance recomputed: |intercept| <= 16 in 2/6 runs (-3.4, 7.1 pass; 22.6, 45.4, 51.0, 78.3 fail) => NOT_MET. Level@1s is 0/6 within 16 samples.
+- 64-sample origin window recomputed: 3/6 pass (T1), reproducing the recorded "FAIL pass=3 of 6" exactly.
+- Separation of level from rate: the archive reading "steady +45 to +50 is block offset, not drift" (docs/measurements-archive.md:769) is refuted by its own endpoint (T6): post-clear +45..+50 at +0.313 s to max 64.6 at +9.54 s implies 1.582..2.124 samples/s = 33.0..44.3 ppm, which overlaps the 41 ppm witness range 27.4..42.8 ppm. A constant level and a linear rate are separable; the archive conflated them.
+- Verdict: NOT_MET. No live-witness closure offline.
+
+RANKED REMAINING UNKNOWNS (each with the code that would produce it)
+1. Sample-accurate press stamp is absent from the DSP. Origin is anchored to last_take_arm_sample (audio block that processed the press) at src/dsp/audio_thread.cpp:779 (g_telem.lastTakeArmSample = lastTakeArmLocal), while the Link force beat is anchored to pressMicros - loopMicros at src/dsp/audio_thread.cpp:916 (requestPhaseImpose(0.0, ...)), with the press stamped on CLOCK_MONOTONIC at src/control/midi.cpp:47. The press-to-audio latency jitter is therefore NOT_MEASURABLE from telemetry (PRD timing-origin-exact-sample-unwitnessed.yml:3, host jitter about 0.8 ms = 38 samples).
+2. impose_target_samples is not observable on a fresh take. It is written only when masterJustCreated at src/dsp/audio_thread.cpp:949 and reset to -1.0 at src/dsp/audio_thread.cpp:920; the field is published at src/control/telemetry.cpp:139. All nine samples read -1 (.gm/witness-out/item1-clear-reset-witness-20261106.txt:12), so the creation-tick origin cannot be read offline.
+3. Restart timestamps for the six-run intercept set (dispatch 1793000119071-4447) are not recorded; the rerun set does record them at .gm/prd/defect-rb3-origin-rate-41ppm.yml:40. Without them the +16.09 samples/run monotone trend cannot be tested as an integral of a clock-rate offset => NOT_MEASURABLE.
+
+=====================================================================
+HYPOTHESIS 2 - 41 ppm rate / audio-clock-vs-monotonic-rate
+=====================================================================
+EXISTING EVIDENCE (exact numbers + path:line)
+- Decomposition of the FAIL pass=3 of 6 witness: slope 1.95-2.36 samples/s = 40.6-49.2 ppm in all six runs, per-run level -3.4 to +78.3 samples. .gm/prd/defect-rb3-link-target-fold-origin-drift.yml:30; .gm/prd/defect-rb3-origin-rate-41ppm.yml:3.
+- First witness rate (1-10 s, tolerance 2 ppm): 32.06, 42.77, 27.37, 33.94, 40.23, 41.37 ppm; NOT MET. .gm/receipts/defect-rb3-origin-rate-41ppm/02-PROVE-DECIDE.md:7; .gm/prd/defect-rb3-origin-rate-41ppm.yml:20.
+- Tempo clause (6-26 s), same six runs: runs 1-2 -1.16, -1.06 ppm; runs 3-6 the Link session tempo moved inside the window (425, -64, -848, 142 ppm), not measurable. .gm/receipts/defect-rb3-origin-rate-41ppm/02-PROVE-DECIDE.md:8.
+- Audio samples against CLOCK_MONOTONIC (6-26 s), same six runs: -48.11, -35.32, -49.86, -42.50, -46.62, -39.51 ppm. .gm/receipts/defect-rb3-origin-rate-41ppm/02-PROVE-DECIDE.md:9. This is the H2 audio-clock candidate (unknown u-audio-clock-vs-monotonic-rate): sign and size "agree to about 20 ppm per run, not proven".
+- Rerun (dispatch 1793010730693), 1-10 s: -44.4, -23.5, -55.3, -11.2, -50.8, -29.2 ppm; 1-21 s (the >=20 s judge): -43.4, -37.9, -46.3, -40.0, -41.6, -36.9 ppm; instrument run 900000: W1 -44.0, W2 -41.0 ppm; "All negative; magnitudes match the earlier 27-43 ppm lane in sign-flipped form". .gm/prd/defect-rb3-origin-rate-41ppm.yml:40. Level W1 mean -15.9 to -74.3 samples, max abs 40-88.
+- link.bpm reads 120.0 at every tick (one-decimal telemetry, resolution about 420 ppm); masterLen 72000 implies 120.000 exactly; the 2 ppm tempo agreement needs a full-precision tempo field. .gm/prd/defect-rb3-origin-rate-41ppm.yml:40.
+- ACH matrix as recorded (.gm/receipts/defect-rb3-origin-rate-41ppm/02-PROVE-DECIDE.md:11-14): H1 leader (Link tempo vs masterLen tempo differ ~42 ppm) REFUTED by runs 1-2; H2 audio sample clock slow against CLOCK_MONOTONIC survives, N/C; H3 witness artifact not supported (origin, arm and phase from one reply; selftest slopes 0, +2, -2 passed). Leader probe: a live run that changes the audio-rate estimate and shows the origin slope moves with it.
+- Acceptance: origin slope over 1-10 s within 2 ppm of zero in six restarts, AND Link session tempo and masterLen-implied tempo agree to 2 ppm at the creation tick. .gm/prd/defect-rb3-origin-rate-41ppm.yml:4.
+
+WHAT THE FIT SUPPORTS / REFUTES
+- Rate fits over run index: first-witness level(x0)=31.740 ppm, rate/x=+1.3000 ppm/run, residRMS=5.1109, R2=0.1587, mean=36.290, sd=5.572, 0/6 within 2 ppm. Rerun 1-10 s: level(x0)=-39.553, rate/x=+1.0914, residRMS=15.5903, R2=0.0141, mean=-35.733, sd=15.701, 0/6. Rerun 1-21 s: level(x0)=-43.787, rate/x=+0.7914, residRMS=2.9059, R2=0.1779, mean=-41.017, sd=3.205, 0/6. Instrument run n=2 => NOT_MEASURABLE_RATE (mean -42.5 ppm). Rate acceptance 0/6 in every set => NOT_MET.
+- T4 H1 tempo leader: |origin|/|tempo| = 27.6 and 40.3 in runs 1-2 (32.06/-1.16, 42.77/-1.06). A 1.16 ppm tempo error cannot supply a 32-43 ppm origin rate. Runs 3-6 tempo sd = 472.8 ppm => NOT_MEASURABLE. H1 REFUTED, confirming the receipt's ACH by computation.
+- T3 H2 proportional test on the SAME six paired runs: regress origin rate on -audioClock rate gives slope = -0.869 (H2 predicts +1), intercept = +74.241 ppm, R2 = 0.629, residRMS = 3.392 ppm. Per-run (origin + audioClock) = [-16.05, 7.45, -22.49, -8.56, -6.39, 1.86] ppm, mean -7.36, range -22.49..7.45; max |residual| 22.49 ppm >> the 2 ppm limit. So the audio-clock rate is ANTI-correlated with the origin rate across runs and leaves residuals 4-11x the acceptance limit: H2 is NOT_DETECTED as a -1:1 quantitative model. The receipt's "sign and size agree to about 20 ppm" is confirmed as a loose order-of-magnitude statement, not a match. H2 survives only as a candidate.
+- T2 sign convention: first-witness mean +36.29 ppm (n=6) vs rerun 1-21 s mean -41.02 ppm (n=6), opposite signs, |means| differ by 4.73 ppm; the rerun note says "sign-flipped form". One drift mechanism measured with two analyser sign conventions, NOT two physical effects. This eliminates the "two mechanisms" unknown offline.
+- Verdict: NOT_MET. H1 leader refuted; H2 not established; cannot close offline.
+
+RANKED REMAINING UNKNOWNS (each with the code that would produce it)
+1. Full-precision creation-tick tempo (needs 2 ppm). src/control/telemetry.cpp:126 prints "bpm":%.1f (one decimal, about 420 ppm resolution). Tempo enters the target as beatLenSamplesShared = masterLen / recordedBeatsShared at src/dsp/audio_thread.cpp:887 and samplesPerBeat = sampleRate*60/linkSnap.bpm at src/dsp/audio_thread.cpp:821; linkTargetSamples = loopBeatPos * beatLenSamplesShared at src/dsp/audio_thread.cpp:946. Without a full-precision field the tempo clause is NOT_MEASURABLE.
+2. Audio sample clock vs CLOCK_MONOTONIC as the actual driver. Both clocks are stamped (src/link/link_bridge.cpp:143 capTs; src/dsp/audio_thread.cpp:911 imposeTs; src/control/telemetry.cpp:25 publish), but the -35 to -50 ppm rate was measured in only one witness and was never perturbed. The receipt's own H2 probe (change the audio-rate estimate and watch the origin slope move) is a live run. Candidate path: src/dsp/audio_thread.cpp:1012 fmod wrap of masterPhaseSamples vs src/dsp/audio_thread.cpp:948 g_telem.linkTargetSamples.
+3. Analyser sign convention is uncommitted. The rate numbers come from a scratchpad UDP status logger outside the repo (stated in .gm/prd/defect-rb3-origin-rate-41ppm.yml:40 "rate numbers come from a concurrent UDP status logger in the scratchpad, outside the repo"; the witness instrument "is not committed"). The two sign conventions cannot be reconciled from code offline; only the numbers (T2) show they are one mechanism.
+4. Single-reply clock pair at full precision. link_capture_us, link_now_us, audio_samples, master_phase_samples and link_target_samples are all in the sample_clock object at src/control/telemetry.cpp:139; no offline copy of the raw per-reply series exists in the repo, so the rate cannot be recomputed from raw points offline (only from the published per-run slopes).
+5. Creation impose target. src/dsp/audio_thread.cpp:949 (imposeTargetSamples written only on masterJustCreated) and src/dsp/audio_thread.cpp:920 (-1.0 otherwise); published at src/control/telemetry.cpp:139. Reads -1 in all nine samples (.gm/witness-out/item1-clear-reset-witness-20261106.txt:12).
+
+=====================================================================
+HYPOTHESIS 3 - 128-beat fold at rb=3
+=====================================================================
+EXISTING EVIDENCE (exact numbers + path:line)
+- Run 6 (verdict run, outlier): after creation the master phase ramps against the audio count, origin moved from -38 to +1692 samples over 1.6 s; the phase trim chases a Link target folded by the 16-beat fallback (link target minus phase: -18498, -37762, -57026 samples). docs/measurements-archive.md:728; .gm/prd/defect-rb3-link-target-fold-origin-drift.yml:3 ("16 mod 3 is not 0").
+- Creation-impose-window take: Span 72192 samples, create_phase 385, master_len 71807, rb 3; pre-impose Link target 52258 samples, circular offset to the master phase 19934 (0.83 beat); clear of the offset between +0.113 s and +0.313 s, one controlTick (kControlLoopHz 5). docs/measurements-archive.md:766. Link target minus master phase after the clear within 20 samples throughout (docs/measurements-archive.md:767).
+- Sim witness (item2, committed): rb=3 before=FAIL(mismatch=1.0000b misplaced=110 off=1.0000b), after=PASS(0.0000b misplaced=0 off=0.0000b); commit 149048038556a385b0eef9f068c1f61891f9dffb; CI test-loop-sim run 42166249324 conclusion=success; device patch HELD. .gm/witness-out/item2-phase-fold-sim-20261106.txt:1.
+- Resnap witness: recorded_beats=3, 128 mod 3 = 2 -> a mis-fold reads ~2 beats; shipped d316e22 max 0.0010 mean 0.0002 (n=483) vs pre-resnap aloop.fixed max 0.9880 mean 0.1473 (n=569). docs/measurements-archive.md:54.
+- Two quantums (AGENTS.md "Two quantums"): 16 transport (kLinkQuantum, src/link/link_bridge.h:8) and 128 phase CAPTURE (kLinkPhaseQuantumBeats = 128.0, src/link/link_bridge.h:9). Phase is ABSOLUTE-beat: folding a 128-beat capture at rb is WRONG unless rb divides 128. Capture publishes phaseAtTime(now, kLinkPhaseQuantumBeats) at src/link/link_bridge.cpp:151 with quantumMicroBeats = 128e6 at src/link/link_bridge.cpp:154.
+
+WHAT THE FIT SUPPORTS / REFUTES
+- Fit of the three link-target-minus-phase readings: level(x0) = 766.0 samples, step = -19264.0 samples/reading, residRMS = 0.0000, residMax = 0.0000, R2 = 1.0000 (n=3). The ramp is exactly linear: a deterministic fold being chased, not noise. At nominal 120.000 bpm the step is -0.8027 beats, NOT an integer beat; an exact beat conversion needs the creation-tick tempo, which telemetry publishes only to 0.1 bpm => NOT_MEASURABLE (T5).
+- The sim decomposition (mismatch 1.0000b -> 0.0000b, misplaced 110 -> 0) supports the fold as the cause of the beat-scale placement error at rb=3; the resnap numbers (max 0.9880 -> 0.0010) support the same for the 128-quantum capture. The creation-window fix (5a4fdf3d, "Link target held until the creation impose is consumed") bounds the first origin sample at 64.0 in every run (.gm/prd/defect-rb3-link-target-fold-origin-drift.yml:30) but does not set the level (hypothesis 1) or the rate (hypothesis 2).
+- Verdict: CODE_VERIFIED + SIM_WITNESSED, device patch HELD so hardware NOT_WITNESSED. No offline row closure.
+
+RANKED REMAINING UNKNOWNS (each with the code that would produce it)
+1. Device build carrying the fix. The sim fix is tools/loop-quantization-sim/world.js:216-217 (absolutePhaseFold => phaseAtTime(w.link.session, nowMicros/1000, beats)); the defect branch is tools/loop-quantization-sim/world.js:222 (loopBeatPos = ((linkBeat % beats) + beats) % beats). The shipped C++ capture is src/link/link_bridge.cpp:151/157 and the fold is src/dsp/audio_thread.cpp:936-946 (current tree after the parent's concurrent edit); setLoopPhaseQuantumBeats is at src/main.cpp:187. A hot-deploy + rb=3 hardware witness is required.
+2. Beat conversion of the -19264 samples/reading step. Needs full-precision creation tempo: src/control/telemetry.cpp:126 (%.1f), src/dsp/audio_thread.cpp:887 (beatLenSamplesShared), src/dsp/audio_thread.cpp:946 (target conversion). NOT_MEASURABLE offline.
+3. Pre-impose 0.83-beat circular offset (19934 samples) cannot be confirmed on a fresh take because impose_target_samples is -1: src/dsp/audio_thread.cpp:920, src/dsp/audio_thread.cpp:949, src/control/telemetry.cpp:139, .gm/witness-out/item1-clear-reset-witness-20261106.txt:12.
+
+=====================================================================
+HYPOTHESIS 4 - backwards phrase jump on phase rebase
+=====================================================================
+EXISTING EVIDENCE (exact numbers + path:line)
+- .gm/prd/pi-phase-rebase-backwards-phrase-jump.yml:1-7: "A backwards phrase-number jump on a Pi rebase can cross a phrase number on the ESP. Reported by esp-ticker; UNVERIFIED on mc-420", status pending. No numeric series in any file.
+- .gm/prd/esp-no-realign-on-phase-rebase-without-ltmp.yml:1-7: "ESP does not queue a realign on a Pi phase rebase that arrives without an LTMP. Reported by esp-ticker; UNVERIFIED on mc-420", status pending. No numeric series.
+- Related anchors, NOT a measurement of this hypothesis: AGENTS.md "Anchors taken before a timeline re-base are off by (-dBeat) mod rb" (archive#anchors-before-timeline-re-base); docs/measurements-archive.md:26 ESP beat counter monotonic (0 decreases over 388 samples) as the signature of an unexplained ESP reboot; archive#resnap-witness-rb3 judges the NEXT 1.5 s after the impose (.gm/resnap-rb3.js 900000).
+- docs/HARDWARE-TIMING-RUNBOOK.md:1-3 "Status: written offline, not yet run. Every step is untested on the 420."
+
+WHAT THE FIT SUPPORTS / REFUTES
+- Numeric series parsed for this hypothesis: 0 => NOT_DETECTED. No level/rate decomposition is possible. Nothing is supported or refuted by the offline numbers; the hypothesis is NOT_MEASURABLE offline. Any statement about a backwards phrase jump would be prose, not a measurement, so no verdict is forced.
+- Verdict: NOT_MEASURABLE offline; needs an ESP-side phrase capture on a live Pi phase rebase.
+
+RANKED REMAINING UNKNOWNS (each with the code that would produce it)
+1. No on-device phrase capture at all. The mc-420 side produces the rebase via requestPhaseImpose at src/dsp/audio_thread.cpp:916, tracks rebaseSeq at src/dsp/audio_thread.cpp:967-969, and snaps masterPhaseSamples = linkTargetSamples at src/dsp/audio_thread.cpp:976. The phrase counter that the ESP consumes is fed by src/control/midi_clock.cpp and the beat index at src/control/midi.cpp:242. The ESP-side realign path lives in ../esp-idf-link (out of scope for this offline half). Needs a live device + ESP poll.
+2. LTMP-to-phrase mapping is not recorded anywhere in mc-420: the row esp-no-realign-on-phase-rebase-without-ltmp.yml is UNVERIFIED with no numbers.
+3. Pi clock is UNSET (AGENTS.md "Telemetry QUERY-ONLY"): cross-device log correlation needs a wall-clock offset that offline files do not carry.
+
+=====================================================================
+UNKNOWNS ELIMINATED BY RUNNING CODE (not prose)
+=====================================================================
+- U-two-drift-mechanisms: ELIMINATED. T2: +36.29 ppm (first witness, n=6) vs -41.02 ppm (rerun >=20 s, n=6), opposite signs, magnitudes within 4.73 ppm, recorded as "sign-flipped form". One mechanism, two analyser sign conventions.
+- U-H1-tempo-leader: ELIMINATED (quantified). T4 ratios 27.6 and 40.3; runs 3-6 tempo sd 472.8 ppm NOT_MEASURABLE.
+- U-H2-proportional-audio-clock as a sufficient explanation: ELIMINATED as a -1:1 model. T3 slope -0.869 (predicted +1), R2 0.629, residRMS 3.392 ppm, paired residuals -22.49..+7.45 ppm, max 22.49 ppm >> 2 ppm. H2 remains a candidate, not a proven cause.
+- U-64-sample-verdict: ELIMINATED. T1 recomputes 3/6 from [64.0, 64.0, 76.4, 64.0, 69.9, 101.4] and reproduces "FAIL pass=3 of 6".
+- U-archive-steady-block-offset: ELIMINATED as a supported reading. T6 implies 33.0-44.3 ppm from the archive's own +45..+50 at +0.313 s and 64.6 at +9.54 s, overlapping the 41 ppm witness 27.4-42.8 ppm. Level and rate are separable.
+- U-level-iid-jitter: REDUCED, not eliminated. Intercept fit trend +16.09 samples/run, R2 0.978, residRMS 4.17 on a monotone series; pure i.i.d. jitter is not supported, but restart timestamps are missing so a clock-rate integral is NOT_MEASURABLE.
+
+=====================================================================
+GLOBAL RANKED OPEN UNKNOWNS
+=====================================================================
+1. Full-precision creation-tick tempo to 2 ppm - src/control/telemetry.cpp:126.
+2. Sample-accurate press stamp in the DSP - src/dsp/audio_thread.cpp:779, src/dsp/audio_thread.cpp:916, src/control/midi.cpp:47.
+3. Audio-clock-vs-monotonic rate measured in the SAME run as a changed audio-rate estimate (H2 probe) - src/link/link_bridge.cpp:143, src/dsp/audio_thread.cpp:911, src/dsp/audio_thread.cpp:1012/948.
+4. impose_target_samples observability (-1) - src/dsp/audio_thread.cpp:920/949, src/control/telemetry.cpp:139.
+5. Device build carrying the 128-beat fold fix, hardware-witnessed at rb=3 - src/link/link_bridge.cpp:151, tools/loop-quantization-sim/world.js:216.
+6. ESP-side phrase capture on a live Pi rebase - src/dsp/audio_thread.cpp:916/976, src/control/midi.cpp:242.
+7. Restart timestamps for the intercept witness set - .gm/prd/defect-rb3-origin-rate-41ppm.yml:40 (rerun has them, the 1793000119071-4447 set does not).
+
+=====================================================================
+ROW CLOSURE
+=====================================================================
+Can any of the four rows be closed with a live witness from these offline numbers? NO.
+Every acceptance clause is a six-restart hardware take (origin within 64 samples for 10 s over 6 restarts; intercept within 16 samples in 6 restarts; slope within 2 ppm in 6 restarts plus 2 ppm tempo agreement at the creation tick), a full-precision creation-tick tempo, a sample-accurate press stamp, or an ESP-side phrase capture. The quiet Pi window is CLOSED and this analysis touched no device. The back-to-back aloop restarts are the parent's job. No hardware verdict is claimed from offline numbers.
+
+=====================================================================
+ADDENDUM - concurrent tree change during this analysis (item 2 lane)
+=====================================================================
+After the fits above were computed, a separate lane landed the device-side 128-beat-fold patch on mc-420 main at 77bd050c532d54441321cc8fd1179b48ce61adae (gh api repos/AnEntrypoint/mc-420/commits/main --jq .sha returned that sha). CI for that head_sha at the time of this note: test-loop-sim 42168438223 completed success, build-binary 42168438254 completed success, build-image 42168438233 completed success, build-lv2 42168438193 in_progress. Its witness is .gm/witness-out/item2-device-fold-patch-20261106.txt (CODE+CI only: NO hardware, NO hot-deploy, NO Pi ssh, NO telemetry polling, NO restart). The current tree now reads:
+- src/dsp/audio_thread.cpp:942-944 - double beats = linkSnap.loopPhaseMicroBeats/1e6 + (elapsedMicros/1e6)*(linkSnap.bpm/60.0); double loopBeatPos = std::fmod(beats, recordedBeatsShared);
+- src/link/link_bridge.cpp:156-158 - captureQuantum = loopQuantum >= 1.0 ? loopQuantum : kLinkQuantum; s.loopPhaseMicroBeats = phaseAtTime(now, captureQuantum); s.loopQuantumBeats = captureQuantum;
+Corrections to the H3_FOLD section above:
+- The script's static H3_FOLD verdict line "device patch HELD" describes the item2 SIM witness AS RECORDED (.gm/witness-out/item2-phase-fold-sim-20261106.txt:1). The current tree has the device code patch on main with CI green. The line numbers in H3_FOLD unknown #1 (src/dsp/audio_thread.cpp:936-946, src/link/link_bridge.cpp:151/157) are the pre-patch positions; the post-patch positions are 942-944 and 156-158.
+- H3_FOLD unknown #1 is PARTIALLY closed: code + CI are done, but the hot-deploy and the rb=3 hardware witness are still OPEN. This is NOT a hardware verdict.
+No fit, residual, rate, level or cross-series test above changes: all are computed from the RECORDED witness numbers, which are unchanged. Hypotheses 1, 2 and 4 are unaffected. Row closure for all four remains NO.
+
+=====================================================================
+SCRIPT OUTPUT (verbatim, exit 0)
+=====================================================================
+=== rb3 origin-drift offline analysis: numbers parsed from the files named below ===
+sampleRate=48000 Hz
+pre-registered limits (from the PRDs, not invented here): rate=2 ppm, level=16 samples, origin window=64 samples
+limit sources: .gm/prd/defect-rb3-origin-rate-41ppm.yml, .gm/prd/defect-rb3-origin-level-per-run-offset.yml, .gm/prd/defect-rb3-link-target-fold-origin-drift.yml
+input files:
+  .gm/receipts/defect-rb3-origin-rate-41ppm/02-PROVE-DECIDE.md
+  .gm/prd/defect-rb3-origin-rate-41ppm.yml
+  .gm/prd/defect-rb3-origin-level-per-run-offset.yml
+  .gm/prd/defect-rb3-link-target-fold-origin-drift.yml
+  .gm/witness-out/item2-phase-fold-sim-20261106.txt
+  docs/measurements-archive.md
+
+=== SERIES FITS (x = 1..n, run or reading index; level = intercept at x=0; rate = least-squares slope) ===
+
+SERIES rate_first_1_10s [H2_RATE] unit=ppm xKind=runs FIT
+  label : origin slope 1-10 s after creation, six restarts, dispatch 1793004167996-4772
+  source: .gm/receipts/defect-rb3-origin-rate-41ppm/02-PROVE-DECIDE.md:7
+  raw   : Rate (1-10 s after creation, tolerance 2 ppm): 32.06, 42.77, 27.37, 33.94, 40.23, 41.37 ppm. Not met.
+  ys    : [32.06, 42.77, 27.37, 33.94, 40.23, 41.37]
+  level(x0)=31.740  rate/x=1.3000  mean=36.290  sd=5.572  n=6
+  residRMS=5.1109  residMax=8.4300  R2=0.1587
+  |value| within 2 ppm: 0/6
+
+SERIES audio_clock_vs_monotonic [H2_AUDIOCLK] unit=ppm xKind=runs FIT
+  label : audio samples against CLOCK_MONOTONIC over 6-26 s, same six runs
+  source: .gm/receipts/defect-rb3-origin-rate-41ppm/02-PROVE-DECIDE.md:9
+  raw   : Audio samples against CLOCK_MONOTONIC (6-26 s): -48.11, -35.32, -49.86, -42.50, -46.62, -39.51 ppm.
+  ys    : [-48.11, -35.32, -49.86, -42.50, -46.62, -39.51]
+  level(x0)=-45.299  rate/x=0.4703  mean=-43.653  sd=5.085  n=6
+  residRMS=5.0209  residMax=9.0388  R2=0.0250
+  |value| within 2 ppm: 0/6
+
+SERIES tempo_leader_6runs [H1_TEMPO] unit=ppm xKind=runs FIT
+  label : Link tempo vs masterLen-implied tempo 6-26 s, six runs (runs 3-6 recorded as not measurable)
+  source: .gm/receipts/defect-rb3-origin-rate-41ppm/02-PROVE-DECIDE.md:8
+  raw   : Tempo (6-26 s): runs 1-2 -1.16, -1.06 ppm; runs 3-6 the Link session tempo moved inside the window (425, -64, -848, 142 ppm), not measurable.
+  ys    : [-1.16, -1.06, 425.00, -64.00, -848.00, 142.00]
+  level(x0)=173.532  rate/x=-66.1149  mean=-57.870  sd=388.136  n=6
+  residRMS=371.3494  residMax=690.9577  R2=0.0846
+  |value| within 2 ppm: 2/6
+
+SERIES level_at_1s [H1_LEVEL] unit=samples xKind=runs FIT
+  label : origin level at 1 s, six restarts, dispatch 1793004167996-4772
+  source: .gm/prd/defect-rb3-origin-rate-41ppm.yml:20
+  raw   : Result rate (acceptance 2 ppm, 1-10 s after creation): origin slope 32.06, 42.77, 27.37, 33.94, 40.23, 41.37 ppm. NOT MET in 6 of 6. Level at 1 s: 58.8, 20.3, 71.7, 43.8,
+  ys    : [58.80, 20.30, 71.70, 43.80, 43.20, 59.60]
+  level(x0)=45.087  rate/x=1.2800  mean=49.567  sd=16.361  n=6
+  residRMS=16.2145  residMax=27.3467  R2=0.0179
+  |value| within 16 samples: 0/6
+
+SERIES level_intercepts_t0 [H1_LEVEL] unit=samples xKind=runs FIT
+  label : regression intercept at t=0, six runs, dispatch 1793000119071-4447
+  source: .gm/prd/defect-rb3-origin-level-per-run-offset.yml:3
+  raw   : -3.4, 7.1, 22.6, 45.4, 51.0, 78.3 samples in the six runs
+  ys    : [-3.40, 7.10, 22.60, 45.40, 51.00, 78.30]
+  level(x0)=-22.800  rate/x=16.0857  mean=33.500  sd=27.786  n=6
+  residRMS=4.1664  residMax=6.6286  R2=0.9775
+  |value| within 16 samples: 2/6
+
+SERIES worst_abs_origin [ORIGIN_WINDOW] unit=samples xKind=runs FIT
+  label : worst |origin| over 10 s, six restarts, dispatch 1793000119071-4447
+  source: .gm/prd/defect-rb3-link-target-fold-origin-drift.yml:30
+  raw   : worst_abs_origin=101.4 (runs 64.0, 64.0, 76.4, 64.0, 69.9, 101.4)
+  ys    : [64.00, 64.00, 76.40, 64.00, 69.90, 101.40]
+  level(x0)=54.053  rate/x=5.4943  mean=73.283  sd=13.356  n=6
+  residRMS=9.5041  residMax=14.3810  R2=0.4936
+  |value| within 64 samples: 3/6
+
+SERIES sub_block_origin_5runs [H1_LEVEL] unit=samples xKind=runs FIT
+  label : origin minus arm-edge block, runs 1-5, archive#first-loop-origin-sub-block
+  source: docs/measurements-archive.md:724
+  raw   : runs 1-5 -39.1, -6.0, -47.5, -11.1, -41.9 samples
+  ys    : [-39.10, -6.00, -47.50, -11.10, -41.90]
+  level(x0)=-25.910  rate/x=-1.0700  mean=-29.120  sd=17.088  n=5
+  residRMS=17.0209  residMax=22.0500  R2=0.0078
+  |value| within 16 samples: 2/5
+
+SERIES rerun_rate_1_10s [H2_RATE] unit=ppm xKind=runs FIT
+  label : origin slope [1,10] s, rerun dispatch 1793010730693
+  source: .gm/prd/defect-rb3-origin-rate-41ppm.yml:40
+  raw   : limit 2 ppm: run1 -44.4, run2 -23.5, run3 -55.3, run4 -11.2, run5 -50.8, run6 -29.2 ppm,
+  ys    : [-44.40, -23.50, -55.30, -11.20, -50.80, -29.20]
+  level(x0)=-39.553  rate/x=1.0914  mean=-35.733  sd=15.701  n=6
+  residRMS=15.5903  residMax=23.9876  R2=0.0141
+  |value| within 2 ppm: 0/6
+
+SERIES rerun_rate_1_21s [H2_RATE] unit=ppm xKind=runs FIT
+  label : origin slope [1,21] s, rerun dispatch 1793010730693
+  source: .gm/prd/defect-rb3-origin-rate-41ppm.yml:40
+  raw   : Window [1,21] s (the at-least-20 s judge): run1 -43.4, run2 -37.9, run3 -46.3, run4 -40.0, run5 -41.6, run6 -36.9 ppm.
+  ys    : [-43.40, -37.90, -46.30, -40.00, -41.60, -36.90]
+  level(x0)=-43.787  rate/x=0.7914  mean=-41.017  sd=3.205  n=6
+  residRMS=2.9059  residMax=4.8876  R2=0.1779
+  |value| within 2 ppm: 0/6
+
+SERIES instrument_rate [H2_RATE] unit=ppm xKind=runs NOT_MEASURABLE_RATE
+  label : instrument run 900000, two windows
+  source: .gm/prd/defect-rb3-origin-rate-41ppm.yml:40
+  raw   : Instrument run (900000): W1 -44.0, W2 -41.0 ppm.
+  ys    : [-44.00, -41.00]
+  level(x0)=-47.000  rate/x=3.0000  mean=-42.500  sd=1.500  n=2
+  residRMS=0.0000  residMax=0.0000  R2=1.0000
+  |value| within 2 ppm: 0/2
+
+SERIES link_target_minus_phase [H3_FOLD] unit=samples xKind=reading FIT
+  label : Link target minus master phase, run 6 fold ramp
+  source: docs/measurements-archive.md:728
+  raw   : link target minus phase: -18498, -37762, -57026 samples
+  ys    : [-18498.00, -37762.00, -57026.00]
+  level(x0)=766.000  rate/x=-19264.0000  mean=-37762.000  sd=15728.990  n=3
+  residRMS=0.0000  residMax=0.0000  R2=1.0000
+
+=== CROSS-SERIES TESTS (all computed from parsed numbers) ===
+T1 64-sample acceptance reproduction: pass=3/6; recorded verdict was FAIL pass=3 of 6 -> REPRODUCED
+T2 sign convention across witness sets: first-witness mean=36.29 ppm (n=6); rerun [1,21] s mean=-41.02 ppm (n=6); rerun [1,10] s mean=-35.73 ppm
+   |means| 36.29 vs 41.02 ppm; signs OPPOSITE -> ONE drift mechanism measured with two analyser sign conventions, not two effects
+T3 H2 proportional test: regress origin rate (y) on -audioClock rate (x) over the SAME six paired runs
+   x=-audioClock = [48.11, 35.32, 49.86, 42.50, 46.62, 39.51] ppm
+   y=originRate  = [32.06, 42.77, 27.37, 33.94, 40.23, 41.37] ppm
+   slope=-0.869 (H2 predicts +1)  intercept=74.241 ppm  R2=0.629  residRMS=3.392 ppm
+   per-run (origin + audioClock) = [-16.05, 7.45, -22.49, -8.56, -6.39, 1.86] ppm; mean=-7.36, range -22.49..7.45
+   max |paired residual| vs 2 ppm limit: EXCEEDS -> H2 as a -1:1 quantitative model NOT_DETECTED
+T4 H1 tempo-leader refutation: measurable tempo runs 1-2 = [-1.16, -1.06] ppm; origin rate runs 1-2 = [32.06, 42.77] ppm
+   |origin|/|tempo| = 27.6, 40.3 -> a 1.2 ppm tempo error cannot supply a 32-43 ppm rate; runs 3-6 tempo sd=472.8 ppm is NOT_MEASURABLE
+T5 fold ramp exactness: level(x0)=766.0 samples, step/reading=-19264.0 samples, residRMS=0.0000, R2=1.0000
+   step at nominal 120.000 bpm = -0.8027 beats; creation-tick tempo is published only to 0.1 bpm so an exact beat conversion is NOT_MEASURABLE
+T6 creation-window implied drift: post-clear steady 45.0..50.0 samples at t=0.313 s; max 64.6 samples at t=9.54 s
+   implied slope 1.582..2.124 samples/s = 33.0..44.3 ppm
+   overlaps the 41 ppm witness range 27.4..42.8 ppm: YES -> the archive "steady, block offset not drift" reading is NOT supported by its own endpoint
+
+=== HYPOTHESIS VERDICTS ===
+H1_LEVEL  per-run level offset
+  evidence: intercepts=[-3.4, 7.1, 22.6, 45.4, 51, 78.3] samples (.gm/prd/defect-rb3-origin-level-per-run-offset.yml:3); level@1s=[58.8, 20.3, 71.7, 43.8, 43.2, 59.6]; sub-block origin=[-39.1, -6, -47.5, -11.1, -41.9]
+  fit over run index: level(x0)=-22.80 samples, trend=16.09 samples/run, R2=0.978, residRMS=4.17
+  acceptance (intercept within 16 samples of zero in six restarts): 2/6 -> NOT_MET
+  mechanism: a monotone run-order trend with R2=0.978 does not look like i.i.d. press-to-audio jitter; but this witness set has no recorded restart timestamps so a clock-rate integral is NOT_MEASURABLE
+  verdict: NOT_MET; cannot close offline (needs six restarts plus a sample-accurate press stamp)
+H2_RATE  41 ppm drift / audio-clock-vs-monotonic-rate
+  first 1-10 s: [32.06, 42.77, 27.37, 33.94, 40.23, 41.37] ppm; within 2 ppm = 0/6
+  rerun 1-10 s: [-44.4, -23.5, -55.3, -11.2, -50.8, -29.2] ppm; within 2 ppm = 0/6
+  rerun 1-21 s: [-43.4, -37.9, -46.3, -40, -41.6, -36.9] ppm; within 2 ppm = 0/6
+  rate acceptance: 0/6 in every set -> NOT_MET
+  H1 tempo leader: REFUTED by T4 (1.16 ppm tempo vs 32-43 ppm origin rate)
+  H2 audio clock: the six paired residuals are in T3; sign and size agree loosely, a +1 proportional fit is NOT_DETECTED
+  sign flip between witness sets: resolved by T2 as ONE mechanism with two analyser sign conventions
+  verdict: NOT_MET; H2 remains a candidate, not established; cannot close offline
+H3_FOLD  128-beat phase-capture fold at rb=3
+  ramp: level=766.0 samples, step=-19264.0 samples/reading, residRMS=0.0000, R2=1.0000 (docs/measurements-archive.md:728)
+  sim witness rb=3: before mismatch=1.0000b misplaced=110 off=1.0000b; after mismatch=0.0000b misplaced=0 off=0.0000b (.gm/witness-out/item2-phase-fold-sim-20261106.txt)
+  resnap: - `.gm/resnap-rb3.js 900000`, `recorded_beats=3` (`128 mod 3 = 2` -> a mis-fold reads ~2 beats): shipped `d316e22` max 0.0010 mean 0.0002 (n=483) vs p (docs/measurements-archive.md:54)
+  verdict: CODE_VERIFIED + SIM_WITNESSED (commit 14904803, CI test-loop-sim 42166249324 success); device patch HELD so hardware NOT_WITNESSED; no offline row closure
+H4_REBASE  backwards phrase jump on phase rebase
+  evidence: .gm/prd/pi-phase-rebase-backwards-phrase-jump.yml status=pending, UNVERIFIED on mc-420; .gm/prd/esp-no-realign-on-phase-rebase-without-ltmp.yml status=pending, UNVERIFIED
+  numeric series parsed for this hypothesis: 0 -> NOT_DETECTED
+  verdict: NOT_MEASURABLE offline; needs an ESP-side phrase capture on a live Pi phase rebase
+
+=== ROW CLOSURE ===
+live-witness closure possible from these offline numbers for H1_LEVEL, H2_RATE, H3_FOLD, H4_REBASE: NO
+reason: every acceptance clause is a six-restart hardware take, a full-precision creation-tick tempo, a sample-accurate press stamp, or an ESP-side phrase capture; the quiet Pi window is closed and this analysis touched no device.
