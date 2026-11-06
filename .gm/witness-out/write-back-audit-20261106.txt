@@ -1,0 +1,8 @@
+WRITE-BACK AUDIT, 2026-11-06 (offline, no device access).
+After discovering two truncations from read-then-write with gm.read_file({unit:'chars', limit:...}), I audited every write-back in this campaign by comparing the source file's size at the time against the read limit:
+  docs/measurements-archive.md — 104,588 bytes read with limit 20,000 chars -> TRUNCATED in a159c3ca, RESTORED in 1d0ca464 + fce6dbca (byte-identical historical prefix).
+  docs/plans.md — 20,978 bytes read with limit 20,000 chars -> TRUNCATED in dd7f74f9, RESTORED in d058be54 (historical dump byte-identical).
+All other read-then-write targets were SMALLER than their read limit and therefore complete: .gm/witness-out/item1-corrected-gate-witness-20261106.txt, item1-clear-reset-preregistration-20261106.txt (new), .gm/prd/resonode-m1-envelope-follow-target-0-30.yml, the eight pitch-row cross-reference files (each read with limit 20000, each under ~10 KB), test/hardware/adr034-impose-target-preregistration.md, .gm/witness-out/campaign-ledger-20261106.txt, restart-control-verdict-20261106.txt, consistency-check-20261106.txt, attribution-compliance-20261106.txt, archive-truncation-restore-20261106.txt (new), plans-restore-and-anchor-verification-20261106.txt. Files changed by gm.edit_file (exact-string replacement) and brand-new gm.write_file calls carry no truncation risk.
+VERIFICATION: full 13-test offline suite PASS (45e4e9ec), docs/plans.md historical dump byte-identical, docs/measurements-archive.md historical prefix byte-identical, origin-wrap-regression PASS.
+No other file was truncated. The write-back rule in .gm/witness-out/write-back-rule-20261106.txt is in force and saved to persistent memory.
+No device reading, poll or action. No threshold changed.
