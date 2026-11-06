@@ -113,6 +113,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         {"fx/hp",      0.0f},
         {"fx/lpres",   0.0f},
         {"fx/lp",      1.0f},
+        {"fx/lpslope", 0.0f},
         {"fx/reverb",  0.0f},
         {"fx/delay",   0.0f},
         {"fx/time",    0.5f},

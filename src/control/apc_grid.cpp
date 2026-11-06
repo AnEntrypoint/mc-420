@@ -80,6 +80,7 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("fx/hp",      0.0f);
     ps.bind("fx/lpres",   0.0f);
     ps.bind("fx/lp",      1.0f);
+    ps.bind("fx/lpslope", 0.0f);
     ps.bind("fx/pitch",   0.0f);
 
     ps.bind("fx/dubgate/amt",     0.0f);
