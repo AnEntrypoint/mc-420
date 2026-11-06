@@ -1,0 +1,10 @@
+SERVED-SKILL PROPAGATION CHECK, 2026-11-06 (offline, no device access).
+Question: does the skill that agents actually read contain the three gm upstream fixes shipped this campaign?
+Tool evidence:
+  gm.read_file(skill://gm/SKILL.md) -> 139 lines returned, truncated:false. Checks: scopeAll=false, rowStore=false, childTask=true (the last is a loose regex match on the "Handing work to a child session" section, NOT proof the child-task fix is present).
+  /config/.gmnew/.gmnew-update.json -> {"version":"9742f2a-135"}.
+  /config/.gmnew/current/skills/gm/SKILL.md -> 138 lines / 16,507 bytes; SCOPE_ALL=false, ROW_STORE=false.
+  /config/workspace/gm-upstream/skills/gm/SKILL.md -> 145 lines; SCOPE_ALL=true, ROW_STORE=true, CHILD_TASK=true. Repo tip 9885043 and the skill's last-touching commit is 9885043.
+VERDICT: the SERVED skill is STALE relative to upstream main by the three shipped fixes (03876efd scope:'all', 84b7cd6 row-store docs, 98850431 child-task refusal). This is the DOCUMENTED auto-update propagation lag, not a defect: CLAUDE.md states gm auto-updates from the latest release on start and every six hours, and invariant 2 says keep working on the current build until the auto-update lands. No reinstall, no manual skill edit, no gm update was performed.
+MITIGATION IN FORCE: this session passes scope:'all' explicitly on gm.grep for any file written in the same run (verified working), reads .gm/prd rows with gm.read_file/gm.list_dir rather than relying on prd_list, and briefs every subagent with lanmower-only attribution and the child-context rule. So the stale served skill does not block the work.
+The three upstream commits stand on main. Devices fully frozen; no poll, no device reading, no device action. No threshold changed.
