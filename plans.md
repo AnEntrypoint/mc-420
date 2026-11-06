@@ -1,6 +1,48 @@
 # Open plans (mirror of gm PRD rows)
 
-Generated from the gm PRD store, which is gitignored state. This file is the tracked copy so the plans reach the remote. Each row lists its id and its subject, as filed.
+## Current state, 2026-11-06 (33 open rows)
+
+Generated from `.gm/prd/*.yml`, the gitignored gm row store. This section is the tracked copy of the CURRENT open rows; the historical `prd-list` dump below is preserved unchanged. Full campaign shas, verdicts and holds: `.gm/witness-out/campaign-ledger-20261106.txt`.
+
+| id | subject |
+| --- | --- |
+| adr034-impose-target-not-published | ADR-034 press-minus-L phrase origin is not observable in telemetry |
+| adr034-peer-present-hardware-witness | ADR-034 press-minus-L origin needs a hardware witness with a live Link peer |
+| decision-7ms-invariant-peer-present-engaged-figure | Owner decision and live loopback witness for the ~7 ms invariant with a Link peer present |
+| defect-2093-grid-ext-low-register-regression | 2093 grid extension moves vibraphone_mid_C5B5 to 189 Hz and runs piano_low_A1 to 1714 Hz |
+| defect-marimba-c2-3p6-685hz-segment | marimba_low_C2B2 3.6-6.0 s segment settles at 685.7 Hz in the CI traces |
+| defect-piano-low-a1-tau-sensitive | piano_low_A1 is voiced at corrAtLagVar tau 0.01 and silent at 0.02 on identical input |
+| defect-pin-vocal-tenor-137-vs-certified-114 | vocal_tenor_operatic_PD settles at 137.5 Hz; the certified comb F0 is 114.18 Hz (321.7 cents, not an octave or subharmonic) |
+| defect-rb3-link-target-fold-origin-drift | rb 3 first take: Link target folds on 16 beats, phase trim drifts the origin by a beat |
+| defect-rb3-origin-level-per-run-offset | rb 3 origin settles at a per-run level from -3 to +78 samples off the arm edge |
+| defect-rb3-origin-rate-41ppm | rb 3 origin drifts 41-49 ppm after creation (constant slope in every run) |
+| defect-sine-2093-subharmonic | sine_2093 settles at 700.24 Hz, a 3:1 subharmonic (-1895.6 c), at both correlation taus |
+| esp-no-realign-on-phase-rebase-without-ltmp | ESP does not queue a realign on a Pi phase rebase that arrives without an LTMP |
+| filter-chain-swap-lp-before-hp | swap filter chain order to low-pass then high-pass |
+| first-loop-master-timing | First loop sets master tempo, phrase and origin on every path, predictably |
+| first-loop-own-take-after-peer-origin | A device's own first take after adopting a peer origin re-origins the network |
+| first-loop-phrase-offset-by-loop-length | First loop's phrase turnaround sits one loop before the record press, not at the press |
+| gate-level-normalisation | Normalise gate inputs to a fixed rms so the energy floor stops deciding which files are scoreable |
+| gate-level-normalised-pin-rule-reregister | Level-normalised gate needs re-registration on the pin rule |
+| gate-silence-23-of-37-ready-unvoiced | 3 of the 23 silent gate inputs are energy-ready at the corpus gain but publish no voiced settled block |
+| gate-silence-23-of-37 | 23 of 37 gate inputs publish no voiced settled block: check the gain convention |
+| link-peer-not-reacquired-after-aloop-restart-180s | Link peer did not re-acquire within 180 s of a single aloop service restart |
+| lp-slope-control-binding | LPSLOPE (fx/lpslope) has no control-surface binding, so 24 dB/oct is unreachable from the device |
+| midi-transport-realign-needs-on-device-din-capture | Gear-side MIDI Start after a real peer loss has no on-device DIN/UART byte witness |
+| netboot-refresh-replaces-binary-only-lv2-stale | refresh-apkovl.sh swaps only the binary, leaving LV2 from the old payload |
+| netboot-served-payload-not-pin-build | served apkovl is pre-offset but not the pinned build |
+| netboot-windows-poller-ignores-pin | serve-netboot-win.js polls newest green main, not the pin |
+| peer-reacquisition-alsa-roundtrip-rise | ALSA roundtrip and latency bias rise ~52 samples on Link peer re-acquisition and stay elevated |
+| pi-phase-capture-128-fold-rb | 128-beat phase capture is folded at rb when rb does not divide 128 |
+| pi-phase-rebase-backwards-phrase-jump | Pi phase rebase can make the ESP emit a false phrase boundary |
+| pitch-reference-comb-submultiple-floor-disagree | comb.mjs certifies vocal 114.18 Hz while submultiple.mjs finds no clearing line in 100-150 Hz |
+| resonode-m1-envelope-follow-target-0-30 | resonode envelope-follow M1: re-registered target 0.30, round 5 pending |
+| timing-empty-slave-adoption | Empty slave must adopt a peer's first recording seamlessly and fast |
+| timing-origin-exact-sample-unwitnessed | Exact-sample origin claim is unwitnessed on hardware |
+
+Owner status: devices FULLY FROZEN, no polls of any kind; the ~7 ms invariant call, the four gate rows, resonode round 5 and the netboot flash/soak/peer-present windows are owner-held. Closed this campaign: docs-origin-formula-misses-phase-wrap, phrase-gap-triage-mc420-gm-scope-23, gap-38-20813-status-field-semantics, gap-76-ci-hardware-verifiers, gap-80-duplicate-sim-step, gap-81-phrase-anchor-path-gate, gap-51-join-race-tempo-authority, clear-reset-corrected-gate.
+
+## Historical prd-list dump (preserved)
 
 ```
 dispatch_id: 1792225771179-500-a8612c4934bf630
@@ -339,28 +381,4 @@ items:
         plugin wanting more than the host has instead of aliasing every audio port onto one
         ioBuffer_; numChannels_==1 for all five mono bundles so it is a no-op today.
     description: >-
-      Resonode is mono end to end: process(exciteIn) has one input and one output, and every audio
-      port of the LV2 host is connected to the same ioBuffer_ pointer
-      (src/host/lv2_host.cpp:229-231), so channel 2 is never written or read. The reference
-      instrument's mixer exposes per-section pan and an Object width control, and stereo width is
-      one of the cheapest available wins for 'interesting'. Alternate m... [510 chars total, full
-      text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'description']
-    id: resonode-stereo-width
-    session_id: mcp-codemode-2234-1791905128946
-    status: pending
-    subject: 'Resonode: make the instrument stereo'
-    witness_plan: effect-parity-test plus a rendered L/R correlation measurement.
-limit: 200
-offset: 0
-store_total: 25
-total: 25
-truncated: false
-continuation:
-  state: running
-  pending_rows: null
-  idle_ms: 10846
-  action: none
-
-```
+      Resonode
