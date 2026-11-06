@@ -1,0 +1,29 @@
+GM UPSTREAM PIN-LOSS INVESTIGATION, 2026-11-06 (READ-ONLY on gm upstream; NO revert, NO edit, NO device access).
+Question (orchestrator-86, from dawdreamer-bd's flag): do our ITEM 1 / ITEM 2 regression pins still exist at gm main a73f0238a5f7e52a8a0c621d6c47a7f6cc16bc38 after two other-lane commits (6a23dc7 "tests: revert the strengthened search and log test cases" and a73f023 "tests: remove the unit tests and their CMake targets; checks run on the real tree through tools/check-build.mjs").
+
+ANSWER: THE FOUR PIN FILES WERE DELETED at a73f023. The regression pins NO LONGER RUN.
+  git show --stat a73f0238a5f7e52a8a0c621d6c47a7f6cc16bc38 -> 56 files changed, 56 insertions(+), 6761 deletions(-).
+  Deleted files that held our pins (exact paths, all ABSENT at a73f023, all PRESENT at 89d95e8):
+    native/leaves/tests/job-status-cap.test.mjs        |  43 -------  (ITEM 1, 4 Node cap/clamp/re-arm tests)
+    native/leaves/tests/write-file-shrink.test.mjs     |  67 -------  (ITEM 2, 4 Node shrink-warning / no-warning tests)
+    native/components/mcp/tests/mcp_test.cpp           | 1148 ------- (ITEM 1 C++ golden-source cap-pinning block at :1126)
+    native/components/verbs/tests/verbs_test.cpp       | 444 --------  (ITEM 2 native +8 assertions at :158-165)
+  git cat-file -e at a73f023: all four ABSENT. At 89d95e8: job-status-cap PRESENT, write-file-shrink PRESENT (verified). git ls-tree -r --name-only a73f023 | grep test -> only native/tests/parity/fake-mcp.mjs, native/tests/parity/run.mjs, research/dep-recall/production-check.cjs, tools/check-build.mjs. TOTAL_TEST_FILES=2, LEAVES_TESTS=0.
+  cpp and leaves test CMake targets removed (native/components/mcp/CMakeLists.txt, native/components/verbs/CMakeLists.txt, tests/CMakeLists.txt, tests/main.cpp). AGENTS.md at a73f023 now states "Owner policy, permanent (2026-11-06): no unit tests and no test files. Checks run against the real tree: tools/check-build.mjs (the conformance run on a built binary), the commit gate, and the parity harness." and drops "node --test native/leaves/tests/*.test.mjs".
+
+DO THE CAP / SHRINK ASSERTIONS STILL RUN? NO.
+  tools/check-build.mjs at a73f023 is 26 lines: it locates the built gm binary and spawns tools/mcp-conformance.mjs --stdio, then exits with that status.
+  tools/mcp-conformance.mjs at a73f023 is 427 lines with 73 ok() checks. Case-insensitive count of shrink|job_status|waitMs|30000 in it = 0. No job_status 30 s cap assertion, no re-arm assertion, no write_file shrinkWarning assertion, no no-warning-path assertion.
+  src/gate.mjs at a73f023: no cap/shrink/job_status/waitMs checks (only an initialize payload match).
+  native/tests/parity/run.mjs at a73f023 calls job_status and write_file in parity scenarios, but its only related exception row is :369 for job_start timeoutMs native-ahead (60000 vs 300000) — it does NOT assert the 30 s job_status cap or the shrink warning. :377 is about next_context waitMs 100000 vs 300000. So the parity harness does not replace our pins.
+
+WHAT SURVIVES at a73f023 (implementations and instructions intact, both shipped items still ancestors):
+  e69c152 ANCESTOR_OK, 89d95e8 ANCESTOR_OK (git merge-base --is-ancestor).
+  verbs.cpp:58 job_status served description "capped at 30000 ms (30 s; a larger waitMs is clamped); re-arm gm.job_status({ job, waitMs: 30000 }) while state is running".
+  verbs.cpp:52 write_file served description "Replacing an existing file with content less than half its prior byte size adds shrunkByBytes, shrinkRatio and shrinkWarning ... (never blocks the write)".
+  verbs.cpp:382 "reply.set(\"shrinkWarning\", ...)" native implementation.
+  src/tools.mjs:194 "reply.shrinkWarning = ..." Node implementation.
+  skills/gm/SKILL.md at a73f023: 149 lines, SHRINK_IN_SKILL=1, CAP_IN_SKILL=1.
+So the code and served instructions still ship, but NOTHING exercises them any more. Both item-1 and item-2 acceptance clauses required regression tests covering the cap and the shrink/no-warning paths; those witnesses were recorded at 89d95e8 / e69c152 against tests that no longer exist at the current tip. The 33/33 leaves-test result is historical, not reproducible at a73f023.
+
+ACTION TAKEN: read-only git show / git cat-file / git ls-tree / grep ONLY. NO revert, NO edit, NO push, NO upstream change, NO new gm lane started. Devices fully frozen; no poll, no device reading, no device action. Lanmower-only attribution on this witness commit. Both shipped items keep their ITEM 1 / ITEM 2 labels; this is a NEW emergent open item for the owner's ruling.
