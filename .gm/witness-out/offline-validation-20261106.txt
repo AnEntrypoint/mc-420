@@ -1,0 +1,15 @@
+OFFLINE VALIDATION WITNESS, 2026-11-06 (no device access of any kind; devices fully frozen).
+Tool: gm.run_shell, quoted verbatim.
+  cd /config/workspace/mc-420 && for f in <13 shipped JS files>; do node --check "$f" >/dev/null 2>&1 || echo SYNTAX_FAIL=$f; done; echo ALL_NODE_CHECK_DONE && node tools/loop-quantization-sim/smoketest.js 2>&1 | tail -3 && echo SMOKE_EXIT=$? && node tools/ci-contract-check.js 2>&1 | tail -2 && echo CONTRACT_EXIT=$?
+  -> ALL_NODE_CHECK_DONE (zero SYNTAX_FAIL lines)
+  -> loop1 resumed: rpos before= 335.64 immediately after resume= 335.64 delta= 0
+  -> [link] masterLen= 863 recordedBpm= 133.48783314020858 recordedBeats= 4 (should be a power of 2)
+  -> SMOKE_EXIT=0
+  ->   workflow_dispatch: present ok
+  -> CI workflow contract: PASS
+  -> CONTRACT_EXIT=0
+The 13 checked files: tools/loop-quantization-sim/smoketest.js, phase-capture-128-fold.js, join-race-tempo-authority.js, first-take-phrase-offset.js, clear-reset-defaults.js, tools/ci-contract-check.js, test/status-fields-verify/verify-status-fields.js, run-controls.js, check-hardware-verifier-names.js, test/control-surface/verify-lpslope-binding.js, tools/timing/origin-wrap-regression.js, parent-alsa-roundtrip-analyze.js, alsa-roundtrip-peer-shift-analysis.js.
+Comment sweep (INVARIANT 4) with gm.grep mode:regex scope:'all' on test/hardware/run-restart-control.js, tools/timing/parent-alsa-roundtrip-analyze.js and tools/timing/alsa-roundtrip-peer-shift-analysis.js: each returned "(0 matches; showing 0 to 0; no more)". An earlier sweep of 16 newer JS/YAML files found zero real comments; the only two pattern hits were path strings containing '/' (src/link/** and test/status-fields-verify/**). Shebangs are exempt. No comment-sweep subagent needed.
+CI health read from GitHub only (gh api repos/AnEntrypoint/mc-420/actions/runs?per_page=15): last 15 runs all completed/success except 42170515317 test-phrase-anchor cancelled (superseded by workflow_dispatch 42170655975 success under the same concurrency group). No red runs. Pages 42172601565 success on a159c3ca; test-status-fields 42170753533 success; test-loop-sim 42170515436 success; build-image 42170447428 and 42170349995 success; build-lv2 42170081288 success; granulator-patches 42170081258 and effect-parity-test 42170081249 success on ff7c946e.
+gm MCP health: claude mcp list -> "gm: /config/.gmnew/current/gm serve - ✔ Connected". AGENTS.md 27,588 bytes (<30 KB compaction ceiling).
+No device reading, poll, deploy, restart, flash, revert, LTMP or LRST. No threshold changed and no acceptance weakened.
