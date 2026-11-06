@@ -5,6 +5,8 @@ on:
     paths:
       - 'dsp/loop.dsp'
       - 'test/phrase-anchor/**'
+      - 'src/control/midi_clock.cpp'
+      - 'src/link/**'
       - '.github/workflows/test-phrase-anchor.yml'
   workflow_dispatch:
 
