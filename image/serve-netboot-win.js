@@ -97,7 +97,7 @@ const REPO           = 'AnEntrypoint/aloop';
 const GITHUB_TOKEN    = arg('--token', process.env.GITHUB_TOKEN || process.env.ALOOP_GITHUB_TOKEN || '');
 const AUTO_UPDATE     = process.env.ALOOP_NO_AUTO_UPDATE !== '1';
 const UPDATE_INTERVAL_MS = parseInt(arg('--update-interval', '30000'));
-const SHA_FILE  = path.join(path.dirname(ROOT), '.netboot-update-sha');
+const SHA_FILE  = path.resolve(arg('--sha-file', path.join(path.dirname(ROOT), '.netboot-update-sha')));
 const PI_HOST   = arg('--pi', process.env.ALOOP_PI_HOST || '192.168.137.132');
 const PI_TOKEN  = arg('--pi-token', process.env.PI_TOKEN || '');
 const NETBOOT_SERVER = SERVER_IP;
@@ -351,7 +351,27 @@ const silentWireTimer = setInterval(() => {
 let currentSha = null, rateLimitedUntil = 0;
 const EXPIRED_SHA_RETRY_MS = 5 * 60 * 1000;
 const knownExpiredShas = new Map();
-try { currentSha = fs.readFileSync(SHA_FILE, 'utf8').trim(); console.log('[update] last-built sha: ' + currentSha); } catch (e) {}
+function asCommitSha(value) {
+  const text = String(value || '').trim();
+  return /^[0-9a-f]{7,40}$/i.test(text) ? text.toLowerCase() : null;
+}
+let shaFileText = null;
+try { shaFileText = fs.readFileSync(SHA_FILE, 'utf8').trim(); } catch (e) {}
+const filePin = shaFileText && !shaFileText.includes(':') ? asCommitSha(shaFileText) : null;
+const envPin = asCommitSha(arg('--pin', process.env.NETBOOT_PIN || ''));
+const PIN = envPin || filePin || null;
+const PIN_SOURCE = envPin ? (process.argv.indexOf('--pin') > 0 ? '--pin' : 'NETBOOT_PIN') : filePin ? SHA_FILE : null;
+const BUILT_SHA_FILE = SHA_FILE + '.built';
+let resolvedPin = null;
+let lastNewerNotice = null;
+if (PIN) {
+  try { currentSha = fs.readFileSync(BUILT_SHA_FILE, 'utf8').trim() || null; } catch (e) {}
+  console.log('[update] pin ' + PIN + ' from ' + PIN_SOURCE + ' -- serving only that sha, auto-advance to newer green main DISABLED');
+  if (currentSha) console.log('[update] last-built pinned sha: ' + currentSha);
+} else if (shaFileText) {
+  currentSha = shaFileText;
+  console.log('[update] last-built sha: ' + currentSha);
+}
 
 function ghGet(apiPath) {
   return new Promise((resolve, reject) => {
@@ -384,12 +404,34 @@ function downloadArtifactZip(archiveUrl, destZip) {
     follow(archiveUrl);
   });
 }
-async function latestGreenRun(workflowFile) {
-  const r = await ghGet('/repos/' + REPO + '/actions/workflows/' + workflowFile + '/runs?status=success&branch=main&per_page=1');
+async function latestGreenRun(workflowFile, headSha) {
+  const query = headSha
+    ? 'status=success&head_sha=' + encodeURIComponent(headSha) + '&per_page=1'
+    : 'status=success&branch=main&per_page=1';
+  const r = await ghGet('/repos/' + REPO + '/actions/workflows/' + workflowFile + '/runs?' + query);
   if (r.status === 403 || r.status === 429) { rateLimitedUntil = Date.now() + (parseInt(r.headers['retry-after'] || '60') * 1000); console.error('[update] rate-limited'); return null; }
   if (r.status !== 200) { console.log('[update] ' + workflowFile + ' runs: GitHub status ' + r.status); return null; }
   const runs = JSON.parse(r.body).workflow_runs;
   return runs && runs[0] ? runs[0] : null;
+}
+async function resolvePinSha(pin) {
+  if (/^[0-9a-f]{40}$/i.test(pin)) return pin.toLowerCase();
+  const r = await ghGet('/repos/' + REPO + '/commits/' + encodeURIComponent(pin));
+  if (r.status === 403 || r.status === 429) { rateLimitedUntil = Date.now() + (parseInt(r.headers['retry-after'] || '60') * 1000); console.error('[update] rate-limited resolving pin ' + pin); return null; }
+  if (r.status !== 200) { console.error('[update] pin ' + pin + ' does not resolve to a commit (GitHub status ' + r.status + ') -- refusing to serve the newest main build'); return null; }
+  let full = null;
+  try { full = JSON.parse(r.body).sha; } catch (e) {}
+  if (!/^[0-9a-f]{40}$/i.test(full || '')) { console.error('[update] pin ' + pin + ' did not resolve to a full sha -- refusing to serve the newest main build'); return null; }
+  return full.toLowerCase();
+}
+async function reportNewerMain(pinnedPair) {
+  const [binRun, lv2Run] = await Promise.all([latestGreenRun('build-binary.yml'), latestGreenRun('build-lv2.yml')]);
+  if (!binRun || !lv2Run) return;
+  const newer = binRun.head_sha + ':' + lv2Run.head_sha;
+  if (newer === pinnedPair || newer === lastNewerNotice) return;
+  lastNewerNotice = newer;
+  console.log('[update] newer green main ' + newer.slice(0, 16) + '... available; pin ' + resolvedPin.slice(0, 7) +
+              ' holds, served payload unchanged');
 }
 class ArtifactExpiredError extends Error {}
 async function downloadRunArtifact(runId, artifactName, destDir) {
@@ -431,12 +473,39 @@ async function checkAndUpdate() {
   updateInFlight = true;
   updateInFlightSince = Date.now();
   let sha = null;
+  let binRun = null, lv2Run = null;
   try {
     if (Date.now() < rateLimitedUntil) { console.log('[update] rate-limited, skipping this tick'); return; }
-    const [binRun, lv2Run] = await Promise.all([latestGreenRun('build-binary.yml'), latestGreenRun('build-lv2.yml')]);
-    if (!binRun || !lv2Run) { console.log('[update] no green build-binary/build-lv2 run found yet'); return; }
-    sha = binRun.head_sha + ':' + lv2Run.head_sha;
-    if (sha === currentSha) { console.log('[update] up to date (sha ' + sha.slice(0, 16) + '...)'); return; }
+    if (PIN) {
+      if (!resolvedPin) {
+        resolvedPin = await resolvePinSha(PIN);
+        if (!resolvedPin) return;
+        console.log('[update] pin resolved to ' + resolvedPin);
+      }
+      const pinnedPair = resolvedPin + ':' + resolvedPin;
+      await reportNewerMain(pinnedPair);
+      if (currentSha === pinnedPair) { console.log('[update] pinned build already served (' + pinnedPair.slice(0, 16) + '...)'); return; }
+      [binRun, lv2Run] = await Promise.all([
+        latestGreenRun('build-binary.yml', resolvedPin),
+        latestGreenRun('build-lv2.yml', resolvedPin)
+      ]);
+      if (!binRun || !lv2Run) {
+        console.error('[update] pin ' + resolvedPin + ' has no green build-binary/build-lv2 run -- refusing to serve the newest main build');
+        return;
+      }
+      if (binRun.head_sha.toLowerCase() !== resolvedPin || lv2Run.head_sha.toLowerCase() !== resolvedPin) {
+        console.error('[update] pin ' + resolvedPin + ' run head_sha mismatch (' + binRun.head_sha + ':' + lv2Run.head_sha + ') -- refusing to serve');
+        return;
+      }
+      sha = binRun.head_sha.toLowerCase() + ':' + lv2Run.head_sha.toLowerCase();
+      console.log('[update] rebuilding pinned build ' + sha.slice(0, 16) + '... (was ' + (currentSha ? currentSha.slice(0, 16) + '...' : 'none') + ')');
+    } else {
+      [binRun, lv2Run] = await Promise.all([latestGreenRun('build-binary.yml'), latestGreenRun('build-lv2.yml')]);
+      if (!binRun || !lv2Run) { console.log('[update] no green build-binary/build-lv2 run found yet'); return; }
+      sha = binRun.head_sha + ':' + lv2Run.head_sha;
+      if (sha === currentSha) { console.log('[update] up to date (sha ' + sha.slice(0, 16) + '...)'); return; }
+      console.log('[update] new build found: ' + sha.slice(0, 16) + '... (was ' + (currentSha ? currentSha.slice(0, 16) + '...' : 'none') + ')');
+    }
     const expiredAt = knownExpiredShas.get(sha);
     if (expiredAt !== undefined) {
       const retryInMs = expiredAt + EXPIRED_SHA_RETRY_MS - Date.now();
@@ -446,7 +515,6 @@ async function checkAndUpdate() {
       }
       knownExpiredShas.delete(sha);
     }
-    console.log('[update] new build found: ' + sha.slice(0, 16) + '... (was ' + (currentSha ? currentSha.slice(0, 16) + '...' : 'none') + ')');
 
     const work = path.join(path.dirname(ROOT), '.netboot-update-work');
     fs.rmSync(work, { recursive: true, force: true });
@@ -497,8 +565,9 @@ async function checkAndUpdate() {
     } catch (e) {
       console.error('[update] WARNING: could not stat the served apkovl after rebuild: ' + e.message);
     }
-    currentSha = sha; fs.writeFileSync(SHA_FILE, sha);
-    console.log('[update] netboot root rebuilt with the new build; sending REBOOT so the Pi re-fetches it');
+    currentSha = sha;
+    fs.writeFileSync(PIN ? BUILT_SHA_FILE : SHA_FILE, sha);
+    console.log('[update] netboot root rebuilt with the selected build; sending REBOOT so the Pi re-fetches it');
     sendPiReboot();
   } catch (e) {
     if (e instanceof ArtifactExpiredError && sha) {
