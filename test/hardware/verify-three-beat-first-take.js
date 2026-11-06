@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const net = require('net');
 const dgram = require('dgram');
-const { Client } = require('C:/dev/mc-420/node_modules/ssh2');
+const { Client } = require('ssh2');
 
 const HOST = process.argv[2] || process.env.ALOOP_PI_HOST || '192.168.137.132';
 const HOLD_MS = Number(process.argv[3] || 1500);
