@@ -1,0 +1,11 @@
+ROW STORE AND REMOTE-TIP HYGIENE, 2026-11-06 (offline, no device access).
+Tool: gm.run_shell with python3 -I and yaml.safe_load over .gm/prd/*.yml.
+  ROWS=33
+  BAD=0
+  []
+  STATUS_COUNTS={"pending": 33, "resolved": 0, "parked": 0}
+Every open row parses as a YAML mapping with an id and a subject; no malformed rows are silently skipped by gm (the earlier single-quoted-apostrophe parse failure was an authoring error, not a gm bug, and it is not repeated here).
+Tool: gm.run_shell gh api repos/AnEntrypoint/gm/commits/main --jq ".sha" -> 98850431a2081f4525a1d3b982e2a17ba9eec9b6
+Tool: gm.run_shell git ls-remote origin refs/heads/main (mc-420) -> b704c904c3be3f96853310507447acc1317c8ac0	refs/heads/main
+The gm-upstream checkout tip read earlier was 9885043 (child_context task fix), with 88e50d3 from another lane between 84b7cd6 and it; the push:true change is not yet present. An earlier gh api attempt failed with "accepts 1 arg(s), received 3" because of my jq expression quoting; the corrected single-expression query above is the one that counts.
+No device reading, poll or action. No threshold changed.
