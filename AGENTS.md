@@ -2,6 +2,8 @@
 
 Real Pi 4 root/aloop at `192.168.137.132`; `.100` is the cmdline-pinned netboot address and fails ARP. Pi 3B+ netboots from host. BEHAVIOR clone of `../looper` only: never vendor its source / `LOOPER_DIR` / `loopMachine.cpp` / effects-bridge shim. Shipped `ffaa83d`; input-routing build `0947f3a`+`9cdcae0` (sizes/md5/CI: archive#shipped-builds). RULES only: numbers -> `docs/measurements-archive.md` (below: `archive#anchor`), decisions -> `docs/DECISIONS.md`, rows -> `docs/plans.md`.
 
+- From 2026-11-06, communication comes from the orchestrator agent (session `orchestrator-86`).
+
 # Loop timing invariant (user decision; governs every recording path)
 
 - The first loop recorded, standalone or on a ticker network, is the master for tempo, phrase and grid origin. Its tempo and phrase come from the recorded length and beat count; its origin is the sample at which the record button was pressed, never a grid node and never the block that processed the press. The phrase turnaround of a first loop of L beats sits one loop before that press: the Link beat origin is imposed at press minus L beats, so the Link beat at the press is L (ADR-034).
