@@ -1,0 +1,7 @@
+POST-RESTORE OFFLINE SUITE, 2026-11-06 (offline, no device access).
+After restoring docs/measurements-archive.md in 1d0ca464, all 13 offline tests were re-run:
+OFFLINE_SUITE_TESTS=13 FAILS=0
+SUITE_VERDICT=PASS
+
+This supersedes the earlier consolidated run in which node tools/timing/origin-wrap-regression.js returned rc=1 because the archive had been truncated by my a159c3ca write. The wrap regression now returns "origin wrap regression: PASS (6 cases, 5 wrap cases fail the old formula)" / WRAP_EXIT=0.
+No device reading, poll or action. No threshold changed.
