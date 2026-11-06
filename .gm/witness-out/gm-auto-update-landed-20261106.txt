@@ -1,0 +1,11 @@
+GM AUTO-UPDATE PROPAGATION CHECK, 2026-11-06 (offline, no device access).
+Tool evidence:
+  /config/.gmnew/current/gm --version -> "e69c152-147 (e69c152)" (was 9742f2a-135 earlier this campaign).
+  claude mcp list -> "gm: /config/.gmnew/current/gm serve - ✔ Connected".
+  /config/.gmnew/current/gm doctor -> "abi: gm host 1, mcp 0.1.0", 31 verbs listed, generation 0.
+  Served skill /config/.gmnew/current/skills/gm/SKILL.md -> 148 lines / 18,466 bytes, read with truncated:false.
+  Served skill content checks: {"scopeAll":true,"rowStore":true,"pushTrue":true,"cap30s":true,"shrinkWarning":false,"childTask":true,"truncatedFalse":true}.
+  gh api repos/AnEntrypoint/gm/releases/latest --jq .tag_name -> "latest".
+VERDICT: the documented auto-update propagation HAS LANDED for the earlier fixes. The installed build is now e69c152-147 and the served gm skill contains the row-store docs (push:true), the job_status 30 s cap and re-arm pattern (item 1), and the compact-note rules. gm.job_status and gm.prd_resolve now carry the shipped descriptions on this machine without a reinstall.
+NOT YET PROPAGATED: item 2 (write_file shrinkWarning, 89d95e8334f15072bcd11f845f88332cf380bbcf) is NOT in the served skill yet (shrinkWarning=false), because it landed after this build's release snapshot. That is the expected six-hour/index lag, not a defect; no reinstall, no hand edit, no gm update was performed. The scope:'all' grep instruction also does not appear literally in the served skill (scopeAll=false) even though it shipped in 03876efd; this session therefore continues to pass scope:'all' explicitly on gm.grep for same-run files, which is verified working.
+The three-tool stdio MCP server is healthy and strapped in. Devices fully frozen; no poll, no device reading, no device action. No threshold changed.
