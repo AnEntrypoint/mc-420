@@ -1,0 +1,266 @@
+ALSA ROUNDTRIP PEER-SHIFT ANALYSIS - offline pre-registered witness 2026-11-06
+Subagent of orchestrator-86. OFFLINE ONLY: no Pi SSH, no UDP 4445/4446, no 20813,
+no serial, no MIDI injection, no telemetry polling, no deploy, no restart, no flash,
+no power cycle. No device work was performed by this agent. No device verdict is
+claimed. The 7 ms end-to-end invariant is NOT decided here.
+
+PRE-REGISTRATION (committed BEFORE any analysis run)
+  path: tools/timing/alsa-roundtrip-peer-shift-preregistration.md
+  sha:  54f179e94a20c8a89428645a234386038b485169 (main; pushed; remote tip matched)
+  Case (2) of the orchestrator-86 compliance ruling: before that commit ONLY
+  read-only reconnaissance ran (gm.read_file, gm.grep, gm.stat_file,
+  git show --name-only, git log -1, git fetch). No analysis script ran, no number
+  was computed, no threshold or verdict existed. There are therefore NO exploratory
+  results to relabel. Everything here is the FIRST analysis, run strictly under
+  the prereg; no hypothesis, threshold, comparison or pass/fail line was added
+  after results. The prereg "Status of prior runs" section was verified by the
+  coordinator on 54f179e9 (44 lines).
+
+RUNNABLE ANALYSIS
+  path: tools/timing/alsa-roundtrip-peer-shift-analysis.js
+  command: cd /config/workspace/mc-420 && node --check tools/timing/alsa-roundtrip-peer-shift-analysis.js && node tools/timing/alsa-roundtrip-peer-shift-analysis.js
+  The script reads src/dsp/audio_thread.cpp and asserts the code facts at fixed
+  line numbers; it hardcodes only the observed readings from the frozen comparison.
+
+QUOTED OUTPUT (exact stdout of the above command, re-run for this witness)
+
+NODE_CHECK_OK
+{
+  "preregSha": "54f179e94a20c8a89428645a234386038b485169",
+  "identity": "audio_thread.cpp:1503 bias = N + roundTripEst + trim; :1501 rt = roundTripEst",
+  "baseline": {
+    "bias": 185.4,
+    "rt": 121.4,
+    "peers": 0
+  },
+  "plateauBias": 237.2667,
+  "plateauRt": 173.2667,
+  "dBias": 51.8667,
+  "dRt": 51.8667,
+  "dTrim": 0,
+  "shiftMs": 1.0806,
+  "fracPeriod": 0.8104,
+  "fracBuffer": 0.4052,
+  "fracN": 0.8104,
+  "quantaTest": [
+    {
+      "quantum": 32,
+      "absDiff": 19.87,
+      "within10pct": false
+    },
+    {
+      "quantum": 64,
+      "absDiff": 12.13,
+      "within10pct": false
+    },
+    {
+      "quantum": 128,
+      "absDiff": 76.13,
+      "within10pct": false
+    },
+    {
+      "quantum": 256,
+      "absDiff": 204.13,
+      "within10pct": false
+    }
+  ],
+  "quantumHits": [],
+  "codeFacts": {
+    "capDelay648": true,
+    "playDelay1472": true,
+    "roundTripNow1485": true,
+    "window4s1494": true,
+    "alsa1501": true,
+    "bias1503": true,
+    "period1558": true,
+    "buffer2559": true,
+    "startThreshold577": true,
+    "trimTerm1500": true
+  },
+  "codeFactsAllHold": true,
+  "roundTripLinkHits": [],
+  "alsaParamLinkHits": [],
+  "peerLowControls": [
+    {
+      "bias": 190.3,
+      "rt": 126.3,
+      "tag": "window3 BEFORE peers=1"
+    }
+  ],
+  "everyPeers1Elevated": false,
+  "postDeployPeerless": {
+    "bias": 184.7,
+    "rt": 120.7,
+    "tag": "post-deploy peerless peers=0"
+  },
+  "structural": {
+    "claim": "Link phase-trim / varispeed CAN change snd_pcm_delay",
+    "verdict": "REFUTED",
+    "roundTripLinkHits": [],
+    "alsaParamLinkHits": []
+  },
+  "ranked": [
+    {
+      "id": "H1_DISCRETE_ALSA_QUANTUM",
+      "verdict": "REFUTED",
+      "number": "dRt=51.867 not within 10pct of {32,64,128,256}",
+      "evidence": "audio_thread.cpp:558-560,1485"
+    },
+    {
+      "id": "H2_LINK_PHASE_TRIM_CAUSE",
+      "verdict": "REFUTED",
+      "number": "dTrim=0.000 roundTripLinkHits=0",
+      "evidence": "audio_thread.cpp:1485-1503,540-608,837-1082"
+    },
+    {
+      "id": "H3_PEER_PRESENCE_SUFFICIENT",
+      "verdict": "REFUTED",
+      "number": "peers=1 LOW controls=1",
+      "evidence": "esp window3 witness window2/3 BEFORE"
+    },
+    {
+      "id": "H4_BUILD_OR_REVERT",
+      "verdict": "REFUTED",
+      "number": "referenced 69e47f66, corroborated by diff",
+      "evidence": "git diff 77bd050c..6abaacee -- src/ dsp/ effects/"
+    },
+    {
+      "id": "H5_RESTART_ALSA_BUFFER_STATE",
+      "verdict": "NOT_MEASURABLE_OFFLINE",
+      "number": "needs device restart control",
+      "evidence": "audio_thread.cpp:577,578,648,1472,1485-1495"
+    }
+  ],
+  "compositeClaimC": "PASS"
+}
+
+INTERPRETATION OF THE QUOTED OUTPUT
+
+THE +51.9-SAMPLE SHIFT, QUANTIFIED (deliverable 1)
+  Fixed comparison (frozen): peerless t+00 (peers=0 bpm=124.2 bias=185.4 rt=121.4)
+  vs peer-present plateau mean(t+15,t+30,t+45) (bias=237.2667 rt=173.2667).
+  dBias = dRt = +51.8667 samples = 1.0806 ms at 48 kHz.
+  Fractions: 0.8104 of ALSA period (64), 0.4052 of buffer (period*2 = 128),
+  0.8104 of N (block 64). It is NOT one period (64), NOT one block (64), NOT one
+  buffer (128), NOT any whole quantum in {32,64,128,256}: the nearest candidate is
+  64 with |51.8667-64| = 12.13 = 18.9% of 64, outside the frozen 10% pass line.
+  It is a FRACTIONAL-period change in the steady-state snd_pcm_delay average.
+  Precedent: the 2026-11-05 buffer_size period*4 -> period*2 lever dropped
+  alsa_roundtrip_samples 355.4 -> 126.9 (docs/measurements-archive.md:417,422,423;
+  docs/witness/solad-read-lag/breakdown.txt:60-75) and the WHOLE 228.5-sample drop
+  was in alsa_roundtrip_samples with N and trim unchanged - also a non-integer-
+  quantum change to the SAME quantity. So ALSA buffer/start state changes move
+  roundTripEstSamples by non-integer amounts; +51.9 has that signature.
+
+WHERE THE SHIFT LIVES (identity, code-witnessed)
+  src/dsp/audio_thread.cpp:1503 latencyBiasSamples = N + roundTripEstSamples + trimSamples
+  src/dsp/audio_thread.cpp:1501 alsaRoundTripSamples = roundTripEstSamples
+  src/dsp/audio_thread.cpp:1485 roundTripNow = capDelayFrames + playDelayFrames + N
+  src/dsp/audio_thread.cpp:648  snd_pcm_delay(cap, &capDelayFrames)
+  src/dsp/audio_thread.cpp:1472 snd_pcm_delay(play, &playDelayFrames)
+  src/dsp/audio_thread.cpp:1487-1497 / :1494  4 s window (blocks*N >= 4.0*sampleRate), never a fast EMA
+  src/dsp/audio_thread.cpp:1500 trimSamples = g_cfg.latencyTrimSamples + g_liveLatencyTrimSamples
+  src/control/telemetry.cpp:131 field list (alsa_roundtrip_samples,
+  latency_bias_samples, latency_trim_samples); :150 values; :126 link synced/bpm/peers/phase_err_beats
+  bias - rt = 64.0 = N in EVERY reading (185.4-121.4 and 237.3-173.3 and the
+  t+30/t+45 samples), so trimSamples = 0 throughout and dTrim = 0. The entire
+  +51.8667 sits in roundTripEstSamples (alsa_roundtrip_samples), i.e. the ALSA
+  snd_pcm_delay average - NOT in the phase-trim telemetry term and NOT in N.
+  Because bias feeds the derived engaged figure (bias + 127)/48, the +51.9 is
+  ADDITIVE to that figure (+1.0806 ms).
+
+CAN A LINK PHASE-TRIM / VARISPEED PATH CHANGE snd_pcm_delay AT ALL? NO (structural)
+  The roundTrip block :1485-1503 and the ALSA parameter block :540-608 contain
+  ZERO of {masterPhaseSamples, linkSpeedRatio, effSpeed, linkPhaseTrim, linkSnap,
+  rebaseSeq, phaseAtTime, forceBeatAtTime, imposeTempo, linkTargetSamples,
+  masterPhaseSlope} (script: roundTripLinkHits=[], alsaParamLinkHits=[]).
+  roundTripEstSamples depends ONLY on snd_pcm_delay(cap :648), snd_pcm_delay(play :1472),
+  N and the 4 s window. ALSA params are fixed at open: :558 period=N=64,
+  :559 buffer=period*2=128, :560 set_buffer_size_near, :577 start_threshold=period,
+  :578 avail_min=period; none reference a Link variable.
+  Link variables live elsewhere and feed DSP sample counters / telemetry only:
+  :837/:842 linkSpeedRatio, :847 linkPhaseTrim, :849 effSpeed (g_telem.effSpeed :852),
+  :856/:902/:974-982/:1011 masterPhaseSamples (g_telem.masterPhaseSamples :1014),
+  :1076 masterPhaseBuf; src/link/link_bridge.cpp:126 forceBeatAtTime, :128/:162
+  rebaseSeq, :136 publishSnapshot, :151/:157 phaseAtTime, :167 audioRead, :193
+  requestPhaseImpose, :205 beatNow; src/link/link_bridge.h:11 LinkSnapshot, :35
+  audioRead, :40 requestPhaseImpose, :69 publishSnapshot, :72 buf_[2]. None reach
+  snd_pcm_delay or the hw/sw params. AGENTS.md:63 phase trim applies to
+  masterPhaseSamples ONLY; AGENTS.md:74 latency bias is MEASURED via snd_pcm_delay,
+  4 s average, never a fast EMA. The telemetry trimSamples (:1500) is a
+  config/live-trim term, NOT the Link phase trim; even if g_liveLatencyTrimSamples
+  were Link-driven it would move bias, not rt, and dBias=dRt excludes that route.
+
+RANKED HYPOTHESES (each with path:line evidence and the deciding number)
+  H1 DISCRETE_ALSA_QUANTUM - REFUTED. dRt=51.8667 = 0.8104*period, not within 10%
+     of {32,64,128,256}; quantaTest all false (script output). audio_thread.cpp:558-560,1485.
+  H2 LINK_PHASE_TRIM_CAUSE - REFUTED. dTrim=0.0000, roundTripLinkHits=0,
+     alsaParamLinkHits=0; entire shift in roundTripEstSamples. audio_thread.cpp:1485-1503,
+     :540-608, :837-1082; link_bridge.cpp:123-205. AGENTS.md:63,74.
+  H3 PEER_PRESENCE_SUFFICIENT - REFUTED. Pre-deploy peers=1 readings are LOW
+     (window 2 BEFORE rt=132.7; window 3 BEFORE rt=126.3, within 6.4 samples of
+     the peerless 121.4) and post-deploy peerless peers=0 is LOW (rt=120.7), while
+     only the post-window-3-restart peers=1 series is HIGH (rt=173.x). peers=1
+     appears with both LOW and HIGH rt, so presence alone is not sufficient;
+     structurally there is NO Link->snd_pcm_delay path and bpm/phase/peers are
+     telemetry (telemetry.cpp:126). esp window-3 witness.
+  H4 BUILD_OR_REVERT - REFUTED on source evidence, REFERENCED (not duplicated).
+     The 77bd050c..6abaacee source-level check is the parent's pre-registered
+     investigation: prereg 02c64a78, verdict 25f46b92, source-diff verdict
+     69e47f66522c765600b921254072b364bc57821b
+     (REVERT_TO_77bd050c_CANNOT_CLEAR_ON_SOURCE_EVIDENCE), witness
+     .gm/witness-out/alsa-roundtrip-77bd050c-vs-6abaacee-source-check-20261106.txt,
+     prereg tools/timing/peer-path-diff-preregistration.md. It is NOT re-derived
+     or re-verdicted here. Stated plainly (attributed to that verdict): the source
+     evidence does NOT support "revert to 77bd050c clears the derived engaged
+     figure" - the diff is telemetry-only, requestPhaseImpose at :916 is
+     byte-identical, and the fold patch remains IN 77bd050c. Combined with the
+     pre-deploy peers=1 LOW readings, the code points to a device/ALSA state effect.
+  H5 RESTART_ALSA_BUFFER_STATE - highest-ranked PLAUSIBLE class, verdict
+     NOT_MEASURABLE_OFFLINE. dRt=+51.8667 is a 0.8104-period fractional change
+     confined to the snd_pcm_delay average (audio_thread.cpp:648,1472,1485,
+     1494-1495,1501,1503); ALSA start state is set at :557-578; xruns flat at 1
+     (one startup xrun, esp window-3 witness); the 2026-11-05 buffer lever moved
+     the SAME quantity by a non-integer amount (archive:420,423). The elevation
+     appeared only after the window-3 restart + peer re-acquisition; the parent's
+     source-diff witness records that restart + peer re-acquisition happened TWICE
+     (after window 2 and after window 3) and only the SECOND produced the elevated
+     roundtrip. A device restart control with the peer held constant is required
+     to confirm causation; offline this stays NOT_MEASURABLE_OFFLINE, not SUPPORTED.
+
+AGREEMENT WITH THE PARENT VERDICT
+  AGREES. Parent verdict (prereg 02c64a78, verdict 25f46b92): a device/ALSA state
+  effect, additive to the derived engaged figure. This independent pre-registered
+  analysis reaches the same class: H1-H4 REFUTED (no discrete quantum, no Link
+  phase-trim path, peer presence alone not sufficient, build/revert not supported),
+  H5 (restart / ALSA-buffer state) is the only remaining plausible class and is
+  NOT_MEASURABLE_OFFLINE; the +51.8667 lives entirely in roundTripEstSamples and
+  flows through bias into the derived engaged figure, so it is additive (+1.0806 ms).
+  The 7 ms end-to-end invariant is NOT decided here; it is the owner's live call.
+
+WHAT CANNOT BE RESOLVED OFFLINE (explicit)
+  - A DEVICE RESTART CONTROL: holding the peer constant across an aloop service
+    restart (or restarting with peers=0 vs peers=1) is needed to separate the
+    restart / ALSA-buffer-state effect from peer re-acquisition. The two window
+    restarts had different outcomes, but no controlled restart exists in this
+    offline data. The owner cleared exactly ONE device action - a single restart
+    control, which the parent is running; that control will supply this data.
+  - A PEER-PRESENT END-TO-END MEASUREMENT: the ~7 ms budget and the derived
+    engaged figure are hardware verdicts. This analysis computes only the ALSA-delay
+    shift; it does NOT decide the 7 ms invariant. The esp window-3 witness computed
+    engaged_ms 7.585-7.617 and e2e 8.54-8.60 ms, but that belongs to the parent's
+    live measurement, not this offline file.
+  - Whether g_liveLatencyTrimSamples (:1500) was ever written from a Link path is
+    not measured here; it is excluded as a cause of THIS shift by dTrim=0 regardless.
+
+PARENT'S WINDOW 4a PRE-REGISTRATION (referenced by path, owner-controlled, not edited)
+  test/hardware/window4a-peer-present-latency-preregistration.md
+  test/hardware/verify-peer-present-latency.js
+  (commit 8ac272b2 "witness: window 4a peer-present latency pre-registration,
+  before any measurement").
+
+OTHER SOURCES
+  /config/workspace/esp-idf-link/.gm/witness-out/window3-adr034-witness-20261106.txt
+  docs/measurements-archive.md:417-430; docs/witness/solad-read-lag/breakdown.txt:60-75
+  AGENTS.md:20,63,74; src/control/telemetry.cpp:126-170
+  src/link/link_bridge.cpp:36-205; src/link/link_bridge.h:11-72
