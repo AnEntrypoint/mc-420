@@ -8,3 +8,11 @@ CLAUDE_CODE_GENERATED_LINES=0
 ATTRIBUTION=FAIL
 
 Scope: the last 60 commits on main, covering the whole 2026-11-06 campaign. No Co-Authored-By or Claude Code generated trailer was added by this campaign. No device reading, poll or action.
+
+
+ADDENDUM 2026-11-06 (written after a follow-up read, not a retroactive relabel of the first result).
+The first check printed ATTRIBUTION=FAIL because COAUTHOR_LINES=2. A second gm.run_shell over git log -60 with a record separator identified them exactly:
+  sha 365ee556df066231c3d3e7338a4f8b50bbb0ae55, author lanmower, 2026-11-06 04:50:21 +0000, "AGENTS: note orchestrator-86 as the communication channel" + "Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>".
+  sha 4c9e31bf472dba44282c1b4fca9ba390aff14d0f, author lanmower, 2026-11-06 01:01:57 +0000, "hardware: use the plain ssh2 specifier in the three-beat first-take harness" + "Row: friction-verify-three-beat-first-take-windows-require" + "Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>".
+Facts: all 60 checked commits are AUTHORED by lanmower (NON_LANMOWER=0). Both trailer lines are in commits from EARLIER in this session, before the current campaign's commit series (which begins after 05:01Z). No commit made in the current campaign carries a Co-Authored-By or Claude Code generated trailer; CLAUDE_CODE_GENERATED_LINES=0. The oldest commit in the 60-commit window is 18a2d9b3 at 2026-11-05 19:47:59 +0000.
+The user's global INVARIANT 8 is "only ever attribute lanmower for any work, especially in git", so those two historical trailer lines are not compliant with it. I am NOT rewriting or force-pushing published history to remove them: that is a hard-to-reverse, outward-facing action on shared main with other agents committing, and it needs an explicit owner instruction. This addendum records the finding without hiding the FAIL line above. Devices stay frozen; no poll or device action.
