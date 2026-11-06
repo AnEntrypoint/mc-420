@@ -1,0 +1,18 @@
+GM UPSTREAM ITEM 1 LANDED, 2026-11-06 (offline verification, no device access).
+ITEM 1 SHA: e69c152c9c70a418396192a1d62bf46e5f2db45c
+  gh api repos/AnEntrypoint/gm/commits/main --jq .sha -> e69c152c9c70a418396192a1d62bf46e5f2db45c
+  git ls-remote origin refs/heads/main -> e69c152c9c70a418396192a1d62bf46e5f2db45c	refs/heads/main
+  AN=lanmower, SUBJECT="job_status: document the 30 s waitMs cap and re-arm pattern, pin with tests"
+  PARENT=ba5fee3b22665cc866034635831dadb53f2c33aa — confirms the rebase onto ba5fee3, which sits on 59243f44 (owner decisions) and b4ef35a6 (push:true).
+  git show --stat -> 5 files, 67 insertions(+), 3 deletions(-): native/components/mcp/tests/mcp_test.cpp (+21), native/components/verbs/verbs.cpp, native/leaves/tests/job-status-cap.test.mjs (+43), skills/gm/SKILL.md, src/mcp.mjs.
+  Working tree DIRTY=0.
+INTENTIONAL BRANCH, verified: the cap is an explicit declared clamp in BOTH trees and was NOT changed.
+  native/components/mcp/server.cpp:45 "constexpr double kMaxJobWaitMs = 30000;" and :1356 std::clamp(..., 0.0, kMaxJobWaitMs).
+  native/components/verbs/job.cpp:37 "constexpr double max_wait_ms = 30000;" and :473 std::clamp.
+  src/tools.mjs:92 "const MAX_WAIT_MS = 30000;" and :223 Math.min(Math.max(...), MAX_WAIT_MS).
+  Distinct next_context caps left alone: src/mcp.mjs:149 300000, server.cpp:44 kMaxWaitMs 100000.
+SERVED DESCRIPTIONS: git show shows verbs.cpp job_status description changed from "waitMs polls until the job leaves running, at most 30000 ms" to "waitMs polls until the job leaves running, capped at 30000 ms (30 s; a larger waitMs is clamped); re-arm gm.job_status({ job, waitMs: 30000 }) while state is running." The native served description is generated from verbs.list() (server.cpp:208-222), so the edit correctly lands in verbs.cpp:55, not a literal in server.cpp. skills/gm/SKILL.md:42 and src/mcp.mjs:165 carry the same compact rule; the skill line explicitly distinguishes next_context's 300000 ms cap.
+TESTS (quoted): node --test native/leaves/tests/*.test.mjs -> "ℹ tests 29 / ℹ pass 29 / ℹ fail 0", LEAVES_EXIT=0 (24 baseline + 4 new cap tests + 1 added by ba5fee3). The four new Node tests: cap/clamp/re-arm in both trees, distinct next_context cap, both served descriptions name the cap/clamp/re-arm, and the served skill states all four. Agent reported g++ json_test ok, mcp_test.cpp -fsyntax-only exit=0 with GMNEW_MCP_VERSION defined, and the honest limit that full ctest / linking gm_mcp_test needs cmake/Ninja-built vendored quickjs-ng (cmake/ninja/ctest MISSING on this host), so the C++ test's full execution is a CI-ONLY witness locally.
+FIX TYPE: BOTH instruction (served skill + two served verb descriptions) and code (two regression tests), with NO runtime behaviour change: cap unchanged, larger-waitMs clamping unchanged, no-waitMs default unchanged.
+RECOVERY / ATTRIBUTION: pre-rebase commit 480ebf4 rebased onto ba5fee3 -> final e69c152; push accepted on attempt 1 (no rejection recovery needed). Author lanmower, no Co-Authored-By or generated trailers; explicit-path commit of 5 files, no git add -A, no force-push, no branches/worktrees. Item 2 (write_file shrink warning) files UNTOUCHED; the four shipped fixes 03876efd / 84b7cd6 / 98850431 / b4ef35a6 plus 59243f44 and ba5fee3 remain intact.
+STATUS: ITEM 1 COMPLETE. ITEM 2 is UNSTARTED and waits for orchestrator-86's go in its own separate lane (brief .gm/witness-out/gm-next-lane-handoff-20261106.txt). Devices fully frozen; no poll, no device reading, no device action. No threshold changed.
