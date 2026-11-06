@@ -768,8 +768,6 @@ Witness lane: drain-defect-rb3-link-target-fold-origin-drift, one take on aloop 
 - Earlier take run2 (2026-10-25) reached +234.9 samples in the same window. Run3 reached 64.0.
 - Reading: the origin sits inside the arm block (archive#first-loop-origin-sub-block), so the steady +45 to +50 is block offset, not drift. Only the pre-impose window is a creation defect. Fix: the Link target is not used until the creation impose is consumed (edit in src/dsp/audio_thread.cpp; sim mirror in tools/loop-quantization-sim/world.js). Acceptance (origin within 64 samples over 10 s, 6 restarts) is open until a fresh witness.
 
-
-
 ## Peer-present ALSA roundtrip and derived end-to-end, 2026-11-06 (archive#peer-present-alsa-rise)
 
 Window 4a: read-only, no deploy, no restart, no flash. Pre-registration 8ac272b2 + 50d781d8; raw .gm/witness-out/window4a-peer-present-latency-20261106.txt and .jsonl; verdict .gm/witness-out/window4a-end-to-end-verdict-20261106.txt. Device build 6abaacee, link.synced=true peers=1 in all 29 samples, xruns flat at 1, phase_err ~0.

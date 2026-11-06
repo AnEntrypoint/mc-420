@@ -15,3 +15,17 @@ Before ANY future write-back of a file read with gm.read_file, check the read re
 This rule is applied in the restore of docs/plans.md below: the reconstruction used `git show` to temp files (full content, no partial read), and the archive anchor verification used a paged full-read helper that refuses to proceed while `truncated` is true.
 
 No device reading, poll or action. No threshold changed.
+
+
+ADDENDUM 2026-11-06, after a byte-level comparison against the pre-truncation git versions.
+  ARCHIVE_PREFIX_IDENTICAL=true
+CUR_BYTES=107480
+CUR_LINES=783
+WRAP_EXIT=0
+
+  PLANS_HISTORICAL_DUMP_IDENTICAL=true (20,769 bytes of historical dump byte-for-byte identical to dd7f74f9^), docs/plans.md restored to 25,690 bytes with the 33-row current-state table intact.
+  ARCHIVE_ORIG_ANCHOR_OCCURRENCES=17, ARCHIVE_CURRENT=18 (17 original + the new archive#peer-present-alsa-rise). The 58 archive# anchors referenced by AGENTS.md + docs/DECISIONS.md were ALREADY mostly undefined in the pre-truncation file (17 occurrences, 15 definitions). That is a PRE-EXISTING documentation gap, not damage from my truncation; I am reporting it rather than silently adding 40+ anchors to a measurements archive.
+  ORIGIN-FORMULA REGRESSION: formula string present = true; node tools/timing/origin-wrap-regression.js -> PASS (6 cases, 5 wrap cases fail the old formula) / WRAP_EXIT=0.
+  ADR-034 ARCHIVE ANCHOR: there is NO archive# anchor for ADR-034 in docs/measurements-archive.md (gm.grep for ADR-034 returned 0 matches in both the original and restored file). ADR-034's decision is docs/DECISIONS.md:723-727 and its hardware evidence is .gm/witness-out/item3-window3-adr034-20261106.txt. I state this plainly instead of inventing an anchor.
+  The extra newline introduced by my first restore was removed so the archive's historical prefix is byte-identical to a159c3ca^.
+The working rule in .gm/witness-out/write-back-rule-20261106.txt is now in force: check truncated:true and refuse to write if set; page with offset:next until truncated is false. No device reading, poll or action.
