@@ -1,7 +1,7 @@
 'use strict';
 
 const { initLooperDsp, stepSample, MAXLEN } = require('./looper');
-const { createLinkWorld, LINK_QUANTUM, beatAtTime, requestPhaseImpose, applyPendingPhaseImpose } = require('./link');
+const { createLinkWorld, LINK_QUANTUM, beatAtTime, phaseAtTime, requestPhaseImpose, applyPendingPhaseImpose } = require('./link');
 
 const PARAM_DEFAULTS = Object.freeze({
   'cmd/input1_recordable': 1.0,
@@ -148,6 +148,7 @@ function createWorld(opts) {
     linkPhaseTrim: 0.0,
     phaseLockEnabled: true,
     loopPhaseCapture: true,
+    absolutePhaseFold: false,
     varispeedOnAnchor: true,
     resnapOnReconnect: true,
     resnapAfterRebase: true,
@@ -212,6 +213,8 @@ function linkTargetSamplesAt(w, nowMicros) {
   if (s.loopQuantumBeats > 0 && Math.abs(s.loopQuantumBeats - beats) < 1e-3) {
     const beatsAbs = s.loopPhaseMicroBeats / 1e6 + (elapsed / 1e6) * (s.bpm / 60.0);
     loopBeatPos = ((beatsAbs % beats) + beats) % beats;
+  } else if (w.absolutePhaseFold === true) {
+    loopBeatPos = phaseAtTime(w.link.session, nowMicros / 1000, beats);
   } else {
     let frac = phaseMicroBeats / s.quantumMicroBeats;
     frac -= Math.floor(frac);
@@ -686,5 +689,5 @@ module.exports = {
   onPadPress, onPadRelease, onClearAll, onShiftPress, onShiftRelease,
   msToSimSamples, SIM_SAMPLE_RATE, SIM_MAXLEN,
   snapshotWriteIdx, snapshotWrapLen, linkAudioRead, deriveTempoQuant, snapBeatsToPow2,
-  effSpeedNow, beatsFoldBasis,
+  effSpeedNow, beatsFoldBasis, refreshLinkSnapshot, linkTargetSamplesAt,
 };

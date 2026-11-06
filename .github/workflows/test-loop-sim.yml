@@ -106,5 +106,8 @@ jobs:
       - name: Fold error on the 128-quantum capture
         run: node tools/loop-quantization-sim/loop-quantum-fold.js
 
+      - name: 128-beat phase capture folds at the loop quantum for rb=3/5/6/7
+        run: node tools/loop-quantization-sim/phase-capture-128-fold.js
+
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50
