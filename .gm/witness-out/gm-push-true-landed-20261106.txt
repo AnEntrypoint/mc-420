@@ -1,0 +1,18 @@
+GM UPSTREAM PUSH:TRUE LANDED, 2026-11-06 (offline verification, no device access).
+Repository: /config/workspace/gm-upstream (https://github.com/AnEntrypoint/gm), main only.
+TOOL EVIDENCE, quoted:
+  gh api repos/AnEntrypoint/gm/commits/main --jq ".sha" -> b4ef35a6eba304bce4f4d2b658765826541d167b
+  git ls-remote origin refs/heads/main -> b4ef35a6eba304bce4f4d2b658765826541d167b	refs/heads/main
+  git log -1 -> AN=lanmower, SUBJECT="rows: prd_resolve gains optional push:true so a close needs one call"
+  BODY="push:true pushes the close commit by full sha to origin/main in the same call and recovers a rejected push with fetch and rebase. Both row trees advertise the option and the Node parity tree keeps its store behaviour, with one skill line and a local-bare-remote regression test."
+  git show --stat -> 4 files, 132 insertions(+), 8 deletions(-): native/leaves/rows.mjs, native/leaves/tests/rows-push.test.mjs, skills/gm/SKILL.md, src/rows.mjs. Working tree DIRTY=0.
+  gm.grep on skills/gm/SKILL.md -> line 109: "Shared tree: resolve in one call with `gm.prd_resolve({ id, witness, push: true })`; the close commits and pushes by full sha, so a second push call is not needed."
+REGRESSION TEST OUTPUT (node --test native/leaves/tests/rows-push.test.mjs, TEST_EXIT=0):
+  ✔ prd_resolve with push:true closes and pushes by full sha in one call (143.373861ms)
+  ✔ prd_resolve without push leaves the close commit local (98.984922ms)
+  ✔ prd_resolve with push:true recovers a rejected push by fetch and rebase (198.971442ms)
+  ℹ tests 3, pass 3, fail 0
+FULL LEAVES SUITE (node --test native/leaves/tests/*.test.mjs, LEAVES_EXIT=0): ℹ tests 24, ℹ pass 24, ℹ fail 0.
+Previous gm tip 98850431a2081f4525a1d3b982e2a17ba9eec9b6; the three earlier shipped fixes 03876efd / 84b7cd6 / 98850431 are ancestors and untouched. Attribution lanmower only, no Co-Authored-By.
+STATUS: the push:true change is COMPLETE. The two queued gm items (job_status waitMs 30 s cap, write_file shrink warning) remain HELD pending orchestrator-86's ruling; handoff brief .gm/witness-out/gm-next-lane-handoff-20261106.txt. The installed/served gm skill still lags by the documented auto-update propagation; no reinstall or hand edit was done.
+Devices fully frozen; no poll, no device reading, no device action. No threshold changed.
