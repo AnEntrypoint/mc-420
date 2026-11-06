@@ -1,6 +1,6 @@
 # Open plans (mirror of gm PRD rows)
 
-## Current state, 2026-11-06 (33 open rows)
+## Current state, 2026-11-06 (34 open rows)
 
 Generated from `.gm/prd/*.yml`, the gitignored gm row store. This section is the tracked copy of the CURRENT open rows; the historical `prd-list` dump below is preserved unchanged. Full campaign shas, verdicts and holds: `.gm/witness-out/campaign-ledger-20261106.txt`.
 
@@ -17,6 +17,7 @@ Generated from `.gm/prd/*.yml`, the gitignored gm row store. This section is the
 | defect-rb3-origin-level-per-run-offset | rb 3 origin settles at a per-run level from -3 to +78 samples off the arm edge |
 | defect-rb3-origin-rate-41ppm | rb 3 origin drifts 41-49 ppm after creation (constant slope in every run) |
 | defect-sine-2093-subharmonic | sine_2093 settles at 700.24 Hz, a 3:1 subharmonic (-1895.6 c), at both correlation taus |
+| docs-archive-anchor-references-unresolved | AGENTS.md references 58 archive# anchors but the measurements archive defines only 15 |
 | esp-no-realign-on-phase-rebase-without-ltmp | ESP does not queue a realign on a Pi phase rebase that arrives without an LTMP |
 | filter-chain-swap-lp-before-hp | swap filter chain order to low-pass then high-pass |
 | first-loop-master-timing | First loop sets master tempo, phrase and origin on every path, predictably |
