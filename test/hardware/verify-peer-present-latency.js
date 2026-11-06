@@ -33,12 +33,15 @@ function query() {
   });
 }
 function brief(t) {
-  return { bias: t.latency_bias_samples, rt: t.alsa_roundtrip_samples, trim: t.latency_trim_samples, peers: t.link && t.link.peers, synced: t.link && t.link.synced, bpm: t.link && t.link.bpm, phaseErr: t.link && t.link.phase_err_beats, xruns: t.xruns, mlen: t.master_len_samples, rb: t.recorded_beats };
+  const bias = t.latency_bias_samples;
+  const engagedSamples = bias + 127;
+  return { bias: bias, rt: t.alsa_roundtrip_samples, trim: t.latency_trim_samples, peers: t.link && t.link.peers, synced: t.link && t.link.synced, bpm: t.link && t.link.bpm, phaseErr: t.link && t.link.phase_err_beats, xruns: t.xruns, mlen: t.master_len_samples, rb: t.recorded_beats, idleMs: +(bias / 48).toFixed(3), engagedSamples: engagedSamples, engagedMs: +(engagedSamples / 48).toFixed(3) };
 }
 function median(a) { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; }
 function stats(recs) {
   const b = recs.map((r) => r.bias); const rt = recs.map((r) => r.rt);
-  return { n: recs.length, biasMin: Math.min(...b), biasMedian: median(b), biasMax: Math.max(...b), rtMin: Math.min(...rt), rtMedian: median(rt), rtMax: Math.max(...rt), peerViolations: recs.filter((r) => !(r.peers >= 1 && r.synced === true)).length, xrunsMin: Math.min(...recs.map((r) => r.xruns)), xrunsMax: Math.max(...recs.map((r) => r.xruns)) };
+  const em = recs.map((r) => r.engagedMs);
+  return { n: recs.length, biasMin: Math.min(...b), biasMedian: median(b), biasMax: Math.max(...b), rtMin: Math.min(...rt), rtMedian: median(rt), rtMax: Math.max(...rt), idleMsMedian: +(median(b) / 48).toFixed(3), engagedSamplesMedian: median(b) + 127, engagedMsMin: Math.min(...em), engagedMsMedian: median(em), engagedMsMax: Math.max(...em), over7ms: recs.filter((r) => r.engagedMs > 7).length, peerViolations: recs.filter((r) => !(r.peers >= 1 && r.synced === true)).length, xrunsMin: Math.min(...recs.map((r) => r.xruns)), xrunsMax: Math.max(...recs.map((r) => r.xruns)) };
 }
 async function collect(phase, count, gapMs, out) {
   const recs = [];

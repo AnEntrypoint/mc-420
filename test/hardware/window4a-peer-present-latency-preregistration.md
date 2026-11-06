@@ -13,3 +13,28 @@ DECISION RULE, fixed now:
   - Any peer loss, any bias/rt growth > 16 samples across before -> during -> after, or any xrun growth is BUILD_OR_PATH_SUSPECT: STOP and report before window 4.
   - A FAIL is a FAIL; no tolerance is widened after results and no verdict is reinterpreted.
 No device change occurs in this window beyond the MIDI take itself. START and END markers go to esp; esp holds its polls.
+
+ADDENDUM 2026-11-06, orchestrator-86 ruling, written BEFORE any window 4a measurement.
+END-TO-END IS THE DECIDING NUMBER. The invariant is about end-to-end latency, not just bias and
+roundtrip. test/hardware/verify-peer-present-latency.js now reports, for every sample and phase:
+idleMs = latency_bias_samples / 48; engagedSamples = latency_bias_samples + 127; engagedMs =
+engagedSamples / 48; and over7ms counts samples whose engagedMs > 7. The +127 engaged free-transpose
+stage is the repo's documented decomposition (docs/measurements-archive.md:418 and
+docs/witness/solad-read-lag/breakdown.txt:71-72: idle 190.9 = 3.977 ms, engaged end-to-end
+317.9 samples = 6.623 ms = 190.9 + 127; 128 samples = 64 DUBFX_BS buffering at
+effects/home/faust/pitch_ffi.h:24 plus 64 SOLA read lag at
+effects/home/faust/soladSnacOctaver.h:251, derived form engaged latency = 63 + gap = 127 at gap 64).
+The engaged wet-effect latency is EXEMPT per AGENTS.md, so BOTH the non-exempt idleMs and the
+headline engagedMs are reported; the owner decides which governs. This is a derived end-to-end
+figure from live telemetry plus a verified shipped constant, NOT a fresh audio loopback capture;
+a live USB audio round-trip capture is a separate measurement and is not claimed here.
+DECISION RULE ADDITION, fixed now: if the median engagedMs in ANY of the three phases exceeds
+7.000 ms, or any single sample does, the verdict is END_TO_END_OVER_7MS: STOP, report to
+orchestrator-86, and do NOT open window 4, 5 or 6. If the median engagedMs is <= 7.000 ms in all
+three phases, report the numbers and the earlier bias/rt verdict; the invariant is then not breached
+by this measurement. No tolerance is widened after results.
+The device changes (windows 4, 5, 6) are ALL ON HOLD until orchestrator-86 clears the latency
+interpretation. Window 4a itself has NO deploy, NO restart, NO flash, NO power cycle.
+NETBOOT PIN, fixed by orchestrator-86: pin 6abaaceee97cd8a53ec10d533b6fa2db031fb52c (fully green
+CI), NOT the stale served sha a0e08fb3... and NOT the old 5acb7d3b default. The served payload is
+NOT refreshed until the latency interpretation clears.
