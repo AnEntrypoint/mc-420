@@ -1,0 +1,11 @@
+ITEM 1 CORRECTED CLEAR-RESET GATE HARDWARE WITNESS, 2026-11-06.
+Pre-registration committed BEFORE this run at sha 4da2ebccbfc7ad3de7449bf519a53cd8d7f3dba1 (test/hardware/clear-reset-corrected-gate-preregistration.md). Command exactly as pre-registered, with the gate argument:
+  node test/hardware/verify-clear-reset-first-take.js 192.168.137.132 1250 corrected
+Tool output: CORRECTED_EXIT=0 and [clear-reset] ALL PASS. Raw: .gm/witness-out/item1-corrected-gate-run-20261106.txt. 20 of 20 rules PASS.
+The original item 1 run (ITEM1_EXIT=1, SOME FAILED, 13/14) stands untouched; no threshold was lowered, no rule reinterpreted.
+Precondition: the previous item 1 run left a loop on the device, so ONE CLEAR_ALL (note 0x5b press+release) was sent BEFORE the pre-registered sequence to restore the required empty state. Precondition telemetry: mlen=0 rb=0 wlen0=72000 xruns=5 latency_bias_samples=197 alsa_roundtrip_samples=133 link synced bpm=120 peers=1. The pre-registered command and every rule were unchanged.
+REGRESSION GATE: xruns 5 -> 5; latency_bias_samples 197 -> 197.2 (+0.2, tolerance 16); alsa_roundtrip_samples 133 -> 133.2 (+0.2, tolerance 16). Zero regression. No code shipped, so the ~7 ms end-to-end invariant cannot grow.
+TAKE 1: arm 990830400 span 69056 master_len 72000 recorded_beats 3 bpm 120.000. TAKE 2: arm 991002560 span 69632 master_len 72000 recorded_beats 3 bpm 120.000. Fresh origin per take, tempo and phrase parity across the clear.
+CORRECTED R3 (all PASS): cleared.master_len_samples=0, cleared.recorded_beats=0, cleared.master_phase_beats=0, sustain_cmd=0, eff_speed=1, monitor_mode=false, glitch_engaged=false, loopers.rec=0, loopers.play=0. loopers.wraplen[0]=72000 was REPORTED ONLY, not gated, as the pre-registration requires (AGENTS.md: wraplen>1 is not proof of content; m_looperWrapLenStaleAfterWipe).
+ADR-034 OBSERVATION unchanged: impose_target_samples = -1 in all nine samples -> NOT_PUBLISHED for both takes; link_target_samples published (36373.2, 32675, 32867.8, 33763.6, 43437.1). Expected arm-minus-L: 990758400 and 990930560.
+Window: START marker sent to esp -> END marker sent to esp; esp held all device polls. No restart, no ssh, no flash, no power cycle, no LTMP/LRST, no hot-deploy.

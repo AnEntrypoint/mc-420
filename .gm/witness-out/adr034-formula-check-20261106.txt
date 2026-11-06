@@ -1,0 +1,12 @@
+ADR-034 FORMULA CHECK, 2026-11-06 (required by orchestrator-86 BEFORE the ADR-034 telemetry commit).
+ADR line, quoted verbatim from docs/DECISIONS.md:724 (gm.grep / gm.read_file):
+  "Decision: when the first loop is created with length L beats, the Link beat origin is imposed at (record press - L), so the phrase turnaround is one loop before the press. The loop grid origin (DSP phase 0) stays at the press."
+Also docs/DECISIONS.md:727: "Evidence: src/dsp/audio_thread.cpp master creation block (requestPhaseImpose at press minus loopMicros, loopMicros = masterLen / sampleRate); ..."
+Also AGENTS.md:9: "The phrase turnaround of a first loop of L beats sits one loop before that press: the Link beat origin is imposed at press minus L beats, so the Link beat at the press is L (ADR-034)."
+And the loop timing invariant's first clause: "its origin is the sample at which the record button was pressed, never a grid node and never the block that processed the press."
+
+COMPARISON. ADR-034 measures L in BEATS (a loop of L beats), and the impose origin sits one whole loop before the press. In the sample domain one whole loop is masterLenSamples = recordedBeatsShared * beatLenSamplesShared (src/dsp/audio_thread.cpp:886-888), so (record press - L beats) = (record press - masterLenSamples). The shipped code's impose is requestPhaseImpose(0.0, pressMicros - loopMicros, (double)recordedBeatsShared) with loopMicros = masterLen / sampleRate * 1e6 (audio_thread.cpp creation block), i.e. the same offset in MONOTONIC time. lastTakeArmSample is the audio sample count at the ARM press (src/dsp/audio_thread.h:99, published as sample_clock.last_take_arm_sample), so lastTakeArmSample - masterLen is exactly ADR-034's impose origin expressed in samples.
+
+VERDICT: THEY MATCH. lastTakeArmSample - masterLen is ADR-034's press-minus-L origin in the sample domain; no difference to report, so the commit may proceed. Measured arm-minus-L values: item 1 run 955975616 and 956148480; corrected-gate run 990758400 and 990930560 (arm 990830400 / 991002560, masterLen 72000 in all four takes).
+
+DISTINCTION PRESERVED: ADR-034 says the LOOP GRID ORIGIN (DSP phase 0) stays at the press; that is a different quantity from the LINK BEAT ORIGIN at press minus L. This telemetry field witnesses the latter only. No wording changed, no acceptance lowered.

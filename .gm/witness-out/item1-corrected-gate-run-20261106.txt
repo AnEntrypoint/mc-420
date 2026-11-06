@@ -1,0 +1,37 @@
+[clear-reset] host=192.168.137.132 holdMs=1250 pad0=2 clear=0x5b SR=48000
+[clear-reset] tolerances latTol=16 xrunTol=1 spanTolBeats=1.05 imposeTol=4096 bpmTol=0.05
+[clear-reset] gate=corrected
+[telemetry] before {"xruns":5,"lat":197,"rt":133,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":0,"rb":0,"phase":0,"grid":4,"wlen0":72000,"sustainCmd":0,"effSpeed":1,"monitorMode":false,"glitchEngaged":false,"recBits":0,"playBits":0,"audio":990829120,"arm":956220480,"span":69760,"mphase":0,"linkTarget":36373.2,"createAudio":956290240,"createSpan":69760,"createMlen":72000,"createPhase":69760,"imposeAudio":956290240,"imposeTarget":-1}
+[telemetry] take1-arm {"xruns":5,"lat":197,"rt":133,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":0,"rb":0,"phase":0,"grid":5,"wlen0":72000,"sustainCmd":0,"effSpeed":1,"monitorMode":false,"glitchEngaged":false,"recBits":1,"playBits":0,"audio":990838784,"arm":956220480,"span":69760,"mphase":0,"linkTarget":36373.2,"createAudio":956290240,"createSpan":69760,"createMlen":72000,"createPhase":69760,"imposeAudio":956290240,"imposeTarget":-1}
+[telemetry] take1-settled {"xruns":5,"lat":197.8,"rt":133.8,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":-0.001},"mlen":72000,"rb":3,"phase":1.36197,"grid":9,"wlen0":72000,"sustainCmd":0,"effSpeed":1,"monitorMode":false,"glitchEngaged":false,"recBits":0,"playBits":1,"audio":990935040,"arm":990830400,"span":69056,"mphase":32687.2,"linkTarget":32675,"createAudio":990899456,"createSpan":69056,"createMlen":72000,"createPhase":69056,"imposeAudio":990899456,"imposeTarget":-1}
+[telemetry] cleared {"xruns":5,"lat":197.8,"rt":133.8,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":0,"rb":0,"phase":0,"grid":12,"wlen0":72000,"sustainCmd":0,"effSpeed":1,"monitorMode":false,"glitchEngaged":false,"recBits":0,"playBits":0,"audio":991002368,"arm":990830400,"span":69056,"mphase":0,"linkTarget":32867.8,"createAudio":990899456,"createSpan":69056,"createMlen":72000,"createPhase":69056,"imposeAudio":990899456,"imposeTarget":-1}
+[telemetry] take2-arm {"xruns":5,"lat":197.8,"rt":133.8,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":0,"rb":0,"phase":0,"grid":13,"wlen0":72000,"sustainCmd":0,"effSpeed":1,"monitorMode":false,"glitchEngaged":false,"recBits":1,"playBits":0,"audio":991012032,"arm":990830400,"span":69056,"mphase":0,"linkTarget":32867.8,"createAudio":990899456,"createSpan":69056,"createMlen":72000,"createPhase":69056,"imposeAudio":990899456,"imposeTarget":-1}
+[telemetry] take2-settled {"xruns":5,"lat":197.2,"rt":133.2,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":72000,"rb":3,"phase":1.40671,"grid":0,"wlen0":72000,"sustainCmd":0,"effSpeed":1,"monitorMode":false,"glitchEngaged":false,"recBits":0,"playBits":1,"audio":991108288,"arm":991002560,"span":69632,"mphase":33761.1,"linkTarget":33763.6,"createAudio":991072192,"createSpan":69632,"createMlen":72000,"createPhase":69632,"imposeAudio":991072192,"imposeTarget":-1}
+[telemetry] after {"xruns":5,"lat":197.2,"rt":133.2,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":72000,"rb":3,"phase":1.80938,"grid":0,"wlen0":72000,"sustainCmd":0,"effSpeed":1,"monitorMode":false,"glitchEngaged":false,"recBits":0,"playBits":1,"audio":991117952,"arm":991002560,"span":69632,"mphase":43425.1,"linkTarget":43437.1,"createAudio":991072192,"createSpan":69632,"createMlen":72000,"createPhase":69632,"imposeAudio":991072192,"imposeTarget":-1}
+===== RULES =====
+[PASS] R1-xruns after=5 before=5
+[PASS] R1-lat after=197.2 before=197
+[PASS] R1-rt after=133.2 before=133
+[PASS] R2-take1 mlen=72000 rb=3 wlen0=72000
+[PASS] R2-take2 mlen=72000 rb=3 wlen0=72000
+[PASS] R3-cleared-mlen cleared.mlen=0
+[PASS] R3-cleared-rb cleared.rb=0
+[PASS] R4-arm-advances arm1=990830400 arm2=991002560
+[PASS] R4-audio-advances audio1=990935040 audio2=991108288
+[PASS] R5-span1 err=2944.0 beat=24000.0
+[PASS] R5-span2 err=2368.0 beat=24000.0
+[PASS] R6-tempo-parity bpm1=120.000 bpm2=120.000
+[PASS] R6-phrase-parity rb1=3 rb2=3
+[PASS] R3c-phase-zero cleared.phase=0
+[PASS] R3c-sustain cleared.sustain_cmd=0
+[PASS] R3c-effspeed cleared.eff_speed=1
+[PASS] R3c-monitor cleared.monitor_mode=false
+[PASS] R3c-glitch cleared.glitch_engaged=false
+[PASS] R3c-rec cleared.loopers.rec=0
+[PASS] R3c-play cleared.loopers.play=0
+[clear-reset] derived bpm1=120.000 bpm2=120.000
+[clear-reset] imposeTarget1=-1 imposeTarget2=-1
+[clear-reset] expected impose at arm-minus-L: 1=990758400 2=990930560
+[clear-reset] take1 ADR034 NOT_PUBLISHED
+[clear-reset] take2 ADR034 NOT_PUBLISHED
+[clear-reset] ALL PASS
