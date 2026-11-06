@@ -1,0 +1,49 @@
+ITEM 11 OFFLINE WITNESS, gaps 38+52 and 76, 2026-11-06 (orchestrator-86).
+Offline only: no Pi SSH, no UDP 4445/4446, no 20813, no serial, no MIDI injection, no flash, no restart, no power cycle, no hot-deploy. No device verifier executed and no device execution is claimed.
+
+FIXES WITH EXACT PATH:LINE
+gap 38+52 (host-side verifier): test/status-fields-verify/verify-status-fields.js:81 trailing newline, :86 single JSON line, :92 bounded 20813 length, :97 bounded aloop length, :104 20813 field types, :109 aloop link field types, :115 distinct playing trees, :124 independent playing quantities, :132 aloop local-transport semantics source, :143 ESP session semantics docs, :153 query-only poll.
+gap 38+52 (controls): test/status-fields-verify/run-controls.js:38 eight cases, :76 verdict.
+gap 38+52 (fixtures): test/status-fields-verify/fixtures/positive/esp-20813-reply.json:1 and aloop-status-reply.json:1; provenance at test/status-fields-verify/fixtures/provenance.json:1.
+gap 38+52 (CI): .github/workflows/test-status-fields.yml:43 positive verifier step, :45 positive and negative controls step.
+gap 76 (recorded decision): docs/DECISIONS.md:731 ADR-035 states the four verifiers are device-only and names the gate.
+gap 76 (gate and name check): .github/workflows/test-status-fields.yml:20 workflow_dispatch gate input, :47 hardware-verifiers job, :52 name-check step, :53-59 gated step naming verify-two-device-sync.js, verify-quantization.js, verify-transport-stays-running.js, verify-peer-follows-loop.js. test/status-fields-verify/check-hardware-verifier-names.js:8 four script names, :14 gate expression, :26 PASS line.
+
+RECORDED REPLIES (offline fixtures, no live capture): ESP 20813 values recorded at .gm/witness-out/period2-hot-deploy-20261105.txt:13 (playing=false, Link SESSION transport); aloop status reply recorded at .gm/witness-out/item2-hotdeploy-20261106.txt:6 (link.playing=true, LOCAL transport). The two playing fields are different quantities and are never required to be equal.
+
+LOCAL POSITIVE CONTROL (gm.run_shell, node test/status-fields-verify/verify-status-fields.js):
+PASS esp-reply-ends-in-newline: trailing newline byte present
+PASS esp-reply-single-json-line: 217 bytes of one JSON line
+PASS esp-reply-bounded-length: 217 <= 1024
+PASS aloop-reply-bounded-length: 220 <= 8192
+PASS esp-20813-field-types: peers/bpm/beat/phase/quantum numbers, playing/ap/link booleans
+PASS aloop-link-field-types: link synced/bpm/peers/playing/phase_err_beats typed
+PASS playing-trees-distinct: esp top-level playing vs aloop link.playing
+PASS playing-values-are-independent-quantities: aloop link.playing=true LOCAL transport; esp playing=false LINK SESSION transport; equality NOT required
+PASS aloop-playing-semantics-source: src/control/telemetry.cpp:126,143 -> src/dsp/audio_thread.cpp:816 -> src/link/link_bridge.cpp:59,160,213
+PASS esp-playing-semantics-docs: docs/LINK-MESH-TESTING.md:31,66,165-172
+PASS poll-query-only: one 1-byte 20813 query, one read-only cat, no session write in src/ (25 source files scanned)
+status-fields-verify: PASS (11/11 assertions, case=test/status-fields-verify/fixtures/positive)
+POSITIVE_EXIT=0
+
+LOCAL POSITIVE AND NEGATIVE CONTROLS (gm.run_shell, node test/status-fields-verify/run-controls.js):
+CONTROL positive: PASS exit=0
+  status-fields-verify: PASS (11/11 assertions, case=test/status-fields-verify/fixtures/positive)
+CONTROL negative/playing-type: FAIL as expected exit=1 failing=[esp-20813-field-types, playing-values-are-independent-quantities]
+CONTROL negative/missing-newline: FAIL as expected exit=1 failing=[esp-reply-ends-in-newline]
+CONTROL negative/overlong: FAIL as expected exit=1 failing=[esp-reply-bounded-length]
+CONTROL negative/conflated-trees: FAIL as expected exit=1 failing=[esp-20813-field-types, aloop-link-field-types, playing-trees-distinct, playing-values-are-independent-quantities]
+CONTROL negative/session-equals-local: FAIL as expected exit=1 failing=[playing-values-are-independent-quantities]
+CONTROL negative/mutating-poll: FAIL as expected exit=1 failing=[poll-query-only]
+CONTROL negative/mutating-semantics-source: FAIL as expected exit=1 failing=[aloop-playing-semantics-source]
+status-fields-controls: PASS (1 positive, 7 negative controls)
+CONTROLS_EXIT=0
+
+LOCAL FOUR-NAME JOB CHECK (gm.run_shell, node test/status-fields-verify/check-hardware-verifier-names.js):
+hardware-verifier-names: PASS (4 scripts named in the hardware-verifiers job, gate=workflow_dispatch/run_device_verifiers, no device execution)
+NAMES_EXIT=0
+
+LOCAL SYNTAX AND YAML (gm.run_shell): node --check x3 = SYNTAX_OK; python3 yaml.safe_load = JOBS ['hardware-verifiers', 'status-fields'].
+
+CI RUN IDS AND CONCLUSIONS: PENDING, filled after the push below.
+COMMIT SHA: PENDING, filled after the push below.

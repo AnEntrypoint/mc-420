@@ -1,0 +1,16 @@
+{
+  "offline_only": true,
+  "device_access": "none",
+  "esp_20813": {
+    "source": ".gm/witness-out/period2-hot-deploy-20261105.txt:13",
+    "form": "JSON-line rendering of the recorded 20813 read values",
+    "recorded_values": "link=true peers=1 bpm=120.000 playing=false ap=false quantum=16.0 beat=15785.063 phase=9.063; metro fired=378949 late_last=18us late_worst=14897us late_mean=228.6us late_rms=787.4us"
+  },
+  "aloop_status": {
+    "source": ".gm/witness-out/item2-hotdeploy-20261106.txt:6",
+    "form": "exact recorded aloop status reply JSON from the BEFORE capture",
+    "note": "reduced status reply whose link subtree is the src/control/telemetry.cpp:126 link object"
+  },
+  "field_lists": ["docs/LINK-MESH-TESTING.md:165-172", "src/control/telemetry.cpp:126,143"],
+  "semantics": "aloop link.playing = local transport (g_localTransportRunning); esp playing = Link session isPlaying, always false with enableStartStopSync(false)"
+}
