@@ -1,0 +1,15 @@
+ITEM 1 PRE-REGISTRATION, 2026-11-06 (written BEFORE any MIDI injection).
+Run: test/hardware/verify-clear-reset-first-take.js 192.168.137.132 1250
+Owner decision under test: the first loop recorded is the master for tempo, phrase and grid origin, its origin is the sample at which record was pressed, and clearing the last loop resets the entire device to startup defaults as if reset.
+Device state at baseline (UDP 4445 status, 2026-11-06, uptime 12:31): xruns=5, latency_bias_samples=197.6 then 197.4, alsa_roundtrip_samples=133.6, link synced=true bpm=120 peers=1 playing=true phase_err_beats=0, master_len_samples=0, recorded_beats=0, master_phase_beats=0, loopers.wraplen[0]=1. Booted and EMPTY, so take 1 is a boot-first take and take 2 is a post-clear first take. NO restart, NO ssh, NO device code change; this run is read-only apart from MIDI injection over tcp/9401.
+Injection sequence: press pad0 (note 2) -> sample origin telemetry -> hold 1250 ms -> press pad0 again (FINISH) -> settle; press CLEAR_ALL (note 0x5b) + release -> settle 1200 ms -> sample cleared state; repeat the identical take. Read UDP 4445 after every phase.
+THRESHOLDS FIXED NOW, not changeable after results:
+R1 xruns_after <= xruns_before + 1; latency_bias_samples_after <= before + 16 samples; alsa_roundtrip_samples_after <= before + 16 samples. Any growth beyond this is a regression and the run stops. The ~7 ms end-to-end invariant cannot grow because this run ships no code.
+R2 each take must be a real first take: master_len_samples > 0, recorded_beats >= 1, loopers.wraplen[0] > 1.
+R3 the cleared state must equal the startup default on the device-owned params: master_len_samples == 0, recorded_beats == 0, loopers.wraplen[0] == 1.
+R4 the second first take must own a NEW origin: last_take_arm_sample(take2) > last_take_arm_sample(take1), and audio_samples(take2) > audio_samples(take1).
+R5 |last_take_span_samples - master_len_samples| <= 1.05 * (master_len_samples / recorded_beats) for each take.
+R6 tempo/phrase parity across the clear: |derivedBpm(take2) - derivedBpm(take1)| <= 0.05 bpm and recorded_beats(take2) == recorded_beats(take1), derivedBpm = 60*SR/(master_len_samples/recorded_beats).
+ADR-034 OBSERVATION, NOT A GATE: impose_target_samples is reported against (last_take_arm_sample - master_len_samples) with a 4096-sample reference window; if the field is not published the verdict is NOT_PUBLISHED, neither PASS nor FAIL. sample_clock.create_* and impose_audio_samples are reported as raw observations because stale creation fields are the suspected cleared-state defect.
+Link bpm and peer count are REPORTED, never gated: resetTempoAuthority() clears ownership, not the session tempo held by the peer.
+All raw telemetry is printed. A FAIL is a FAIL; no threshold is lowered after results and no rule is reinterpreted.

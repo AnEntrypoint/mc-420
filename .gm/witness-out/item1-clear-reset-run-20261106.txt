@@ -1,0 +1,30 @@
+[clear-reset] host=192.168.137.132 holdMs=1250 pad0=2 clear=0x5b SR=48000
+[clear-reset] tolerances latTol=16 xrunTol=1 spanTolBeats=1.05 imposeTol=4096 bpmTol=0.05
+[telemetry] before {"xruns":5,"lat":197.6,"rt":133.6,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":0,"rb":0,"phase":0,"grid":11,"wlen0":1,"audio":956047104,"arm":0,"span":0,"mphase":0,"linkTarget":-1,"createAudio":0,"createSpan":0,"createMlen":0,"createPhase":0,"imposeAudio":-1,"imposeTarget":-1}
+[telemetry] take1-arm {"xruns":5,"lat":197.6,"rt":133.6,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":0,"rb":0,"phase":0,"grid":12,"wlen0":1,"audio":956056768,"arm":0,"span":0,"mphase":0,"linkTarget":-1,"createAudio":0,"createSpan":0,"createMlen":0,"createPhase":0,"imposeAudio":-1,"imposeTarget":-1}
+[telemetry] take1-settled {"xruns":5,"lat":197.6,"rt":133.6,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":-0.001},"mlen":72000,"rb":3,"phase":1.3911,"grid":0,"wlen0":72000,"audio":956152960,"arm":956047616,"span":69440,"mphase":33386.5,"linkTarget":33388.7,"createAudio":956117056,"createSpan":69440,"createMlen":72000,"createPhase":69440,"imposeAudio":956117056,"imposeTarget":-1}
+[telemetry] cleared {"xruns":5,"lat":197.9,"rt":133.9,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":0,"rb":0,"phase":0,"grid":3,"wlen0":72000,"audio":956220352,"arm":956047616,"span":69440,"mphase":0,"linkTarget":33509.3,"createAudio":956117056,"createSpan":69440,"createMlen":72000,"createPhase":69440,"imposeAudio":956117056,"imposeTarget":-1}
+[telemetry] take2-arm {"xruns":5,"lat":197.9,"rt":133.9,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":0,"rb":0,"phase":0,"grid":4,"wlen0":72000,"audio":956229952,"arm":956047616,"span":69440,"mphase":0,"linkTarget":33509.3,"createAudio":956117056,"createSpan":69440,"createMlen":72000,"createPhase":69440,"imposeAudio":956117056,"imposeTarget":-1}
+[telemetry] take2-settled {"xruns":5,"lat":197.9,"rt":133.9,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":72000,"rb":3,"phase":1.40958,"grid":7,"wlen0":72000,"audio":956326272,"arm":956220480,"span":69760,"mphase":33830,"linkTarget":33817.2,"createAudio":956290240,"createSpan":69760,"createMlen":72000,"createPhase":69760,"imposeAudio":956290240,"imposeTarget":-1}
+[telemetry] after {"xruns":5,"lat":197.9,"rt":133.9,"trim":0,"link":{"synced":true,"bpm":120,"peers":1,"playing":true,"phase_err_beats":0},"mlen":72000,"rb":3,"phase":1.80958,"grid":7,"wlen0":72000,"audio":956335872,"arm":956220480,"span":69760,"mphase":43430,"linkTarget":43418.5,"createAudio":956290240,"createSpan":69760,"createMlen":72000,"createPhase":69760,"imposeAudio":956290240,"imposeTarget":-1}
+===== RULES =====
+[PASS] R1-xruns after=5 before=5
+[PASS] R1-lat after=197.9 before=197.6
+[PASS] R1-rt after=133.9 before=133.6
+[PASS] R2-take1 mlen=72000 rb=3 wlen0=72000
+[PASS] R2-take2 mlen=72000 rb=3 wlen0=72000
+[PASS] R3-cleared-mlen cleared.mlen=0
+[PASS] R3-cleared-rb cleared.rb=0
+[FAIL] R3-cleared-wlen cleared.wlen0=72000
+[PASS] R4-arm-advances arm1=956047616 arm2=956220480
+[PASS] R4-audio-advances audio1=956152960 audio2=956326272
+[PASS] R5-span1 err=2560.0 beat=24000.0
+[PASS] R5-span2 err=2240.0 beat=24000.0
+[PASS] R6-tempo-parity bpm1=120.000 bpm2=120.000
+[PASS] R6-phrase-parity rb1=3 rb2=3
+[clear-reset] derived bpm1=120.000 bpm2=120.000
+[clear-reset] imposeTarget1=-1 imposeTarget2=-1
+[clear-reset] expected impose at arm-minus-L: 1=955975616 2=956148480
+[clear-reset] take1 ADR034 NOT_PUBLISHED
+[clear-reset] take2 ADR034 NOT_PUBLISHED
+[clear-reset] SOME FAILED
