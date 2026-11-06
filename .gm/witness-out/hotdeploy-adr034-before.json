@@ -1,0 +1,21 @@
+{
+  "label": "adr034",
+  "phase": "before",
+  "at": "2026-11-06T05:39:56.752Z",
+  "host": "192.168.137.132",
+  "telemetry": {
+    "xruns": 1,
+    "latency_bias_samples": 190.3,
+    "alsa_roundtrip_samples": 126.3,
+    "latency_trim_samples": 0,
+    "link": {
+      "synced": true,
+      "bpm": 120,
+      "peers": 1,
+      "playing": true,
+      "phase_err_beats": 0
+    },
+    "master_len_samples": 0,
+    "recorded_beats": 0
+  }
+}
