@@ -1,0 +1,35 @@
+CAMPAIGN LEDGER 2026-11-06, mc-420 / gm. Owner decisions live in docs/DECISIONS.md; numbers in docs/measurements-archive.md; rows in .gm/prd/. All commits lanmower only, all on main.
+OWNER / ORCHESTRATOR-86 STATE: devices FULLY FROZEN, no polls of any kind including read-only, no device readings until the owner clears them. Windows 4 (item 9 flash), 5 (six-restart rb3 soak), 6 (peer-present ADR-034 witness) and any revert are CLOSED. The ~7 ms invariant call and all owner-only items stay with the owner. The one cleared device action (single remote restart control) is COMPLETE and devices were frozen again.
+
+DEVICE WINDOWS, each with START/END to esp and one change per window:
+  W1  corrected clear-reset gate, no code change -> ALL PASS 20/20, precondition deviation recorded at 979a13e9. Witness 7a24ed77.
+  W2  item 2 fold hot-deploy 77bd050c -> latency gate PASS (196.7/132.7/5 -> 193.1/129.1/1). Witness d18f53c1.
+  W3  ADR-034 telemetry hot-deploy 6abaacee + corrected-gate hardware re-run -> gate PASS, ALL PASS 20/20, imposeTarget1=676737 / 2=850113 exactly arm-minus-L, delta 0.0, ADR034 judge PASS. Witness 60634d18. Peer-loss caveat: peers 1->0 across restart.
+  W4a read-only peer-present measurement -> END_TO_END_OVER_7MS, 29/29 samples over 7 ms on the derived engaged figure, peers=1 throughout. Witness 69e2cfca.
+  RESTART CONTROL (one owner-cleared device action) -> PEER_NOT_REACQUIRED peerless=180, RECOVERY_PATH=REMOTE_RESTART_VIA_SSH2, no fallback. Witness 7dc4b2f3. State-effect hypothesis untested by this control.
+
+PRE-REGISTERED VERDICTS, each with its own label:
+  parent ALSA prereg 02c64a78 -> verdict 25f46b92: DEVICE/ALSA STATE EFFECT, not a build effect, additive to derived engaged figure.
+  agent ALSA prereg 54f179e9 -> witness/verdict d606da70 (compositeClaimC PASS, dBias=dRt=+51.8667, 1.0806 ms, 0.8104 period / 0.4052 buffer, zero Link hits in snd_pcm_delay path). Agrees with parent.
+  peer-path diff prereg 71adb371 -> verdict 69e47f66: REVERT_TO_77bd050c_CANNOT_CLEAR_ON_SOURCE_EVIDENCE (diff telemetry-only, fold patch in both shas).
+  restart control prereg 4e09e0e5 -> verdict 7dc4b2f3: PEER_NOT_REACQUIRED.
+
+CODE / CI SHAS:
+  14904803 sim 128-fold model fix (test-loop-sim 42166249324 success).
+  f667b8ba netboot pin + atomic apkovl refresh (build-image 42166774299 success, pin harness 14/14).
+  a5f2a1ad docs origin formula modulo centring + wrap regression (pages 42167842232 success).
+  77bd050c device loop-quantum phase capture (build-binary 42168438254, test-loop-sim 42168438223, build-lv2 42168438193 all success).
+  6abaacee ADR-034 telemetry publish at master creation (build-binary 42169282272, test-loop-sim 42169282270, build-lv2 42169282276, build-image 42169282256 all success).
+  ff7c946e CC56 -> fx/lpslope LPSLOPE binding (build-binary 42170081176 success, 21/21 checks).
+  da6193bd gap-80/81/51 offline fixes (test-loop-sim 42170515436 success; test-phrase-anchor workflow_dispatch 42170655975 success).
+  5438cf8f gap-38/76 offline verifier + device-only gate (test-status-fields 42170753533 success, 11/11 positive + 7 genuinely failing negatives).
+  a159c3ca docs/measurements-archive.md anchor archive#peer-present-alsa-rise.
+
+GM UPSTREAM (AnEntrypoint/gm, lanmower only):
+  03876efd grep scope:'all' instruction + 4 regression tests.
+  84b7cd6 row-store documentation (prd_list legacy rows lack kind; Node-tree parity gap stays open under DESIGN.md:483).
+  98850431 child_context refuses task; regression + skill line skills/gm/SKILL.md:127; C++ ALL PASSED, node --test 21/21.
+
+CLOSED ROWS: docs-origin-formula-misses-phase-wrap (46c44db6), phrase-gap-triage-mc420-gm-scope-23 (473904a5), gap-38-20813-status-field-semantics + gap-76-ci-hardware-verifiers (0ee53e1f), gap-80-duplicate-sim-step + gap-81-phrase-anchor-path-gate + gap-51-join-race-tempo-authority (b1f76fa0), clear-reset-corrected-gate (437185df).
+OPEN ROWS: 33. New this campaign: adr034-impose-target-not-published, adr034-peer-present-hardware-witness, peer-reacquisition-alsa-roundtrip-rise, decision-7ms-invariant-peer-present-engaged-figure, link-peer-not-reacquired-after-aloop-restart-180s. Held by owner/device: four gate rows, resonode round 5, netboot flash rows, all device-witness rows, all dawdreamer-bd pitch rows.
+STANDING CAVEATS: the derived engaged figure (bias + 127) is NOT a live USB loopback capture; AGENTS.md exempts engaged wet-effect latency; non-exempt idle bias 4.935..4.973 ms is under 7 ms. No threshold was lowered and no acceptance weakened anywhere in this campaign.
