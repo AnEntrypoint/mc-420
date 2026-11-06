@@ -1,0 +1,18 @@
+GM ITEM 1 LANE RESTART AND INTENTIONAL-BRANCH EVIDENCE, 2026-11-06 (offline, no device access).
+DECISION: orchestrator-86 ruled that if the first lane agent did not confirm active work on item 1 at the next check, stop it and start a fresh narrow lane for item 1 only. Evidence at the check:
+  ListAgents -> abeb85410554c053c general-purpose running, started ~5 min earlier.
+  /config/workspace/gm-upstream -> TIP=b4ef35a (one commit BEHIND origin 59243f44), DIRTY=0, BRANCH=main, no edits.
+  gh api repos/AnEntrypoint/gm/commits/main --jq .sha -> 59243f44b7a452bf2c6dd60b82c1887be35e7b48 (unchanged), so no item 1 sha landed.
+  My gm run log showed no events from that agent in the window; a one-line status request got no answer.
+  TaskStop on abeb85410554c053c -> "Successfully stopped task". Its final partial result was only "the handoff brief has grown since I first read it ... let me re-read it fully", i.e. read-only reconnaissance, no edits.
+A fresh item-1-only agent was started with the narrow brief: INTENTIONAL branch only, one commit, one push by full sha, rebase onto 59243f44 first, report as item 1. Item 2 (write_file shrink warning) stays in a SEPARATE later lane.
+
+INTENTIONAL-BRANCH CODE EVIDENCE (gm.grep, quoted):
+  native/components/mcp/server.cpp:44 "constexpr double kMaxWaitMs = 100000;" (next_context)
+  native/components/mcp/server.cpp:45 "constexpr double kMaxJobWaitMs = 30000;" (job_status)
+  native/components/mcp/server.cpp:49 "constexpr int kMaxTimeoutMs = 300000;"
+  native/components/mcp/server.cpp:1356 "double wait = std::clamp(args.find(\"waitMs\") ? args.find(\"waitMs\")->as_number(0) : 0.0, 0.0, kMaxJobWaitMs);"
+  src/mcp.mjs:149 "const MAX_WAIT_MS = 300000;" (next_context, NOT job_status)
+  skills/gm/SKILL.md:42 and :70 already use gm.job_status({ job: 'build', waitMs: 30000 }) with "Call it again only if the job is still running" — the re-arm pattern exists but is not stated as a cap.
+So the 30 s cap is an explicit declared clamp in the native server, distinct from next_context's 300000 ms cap. orchestrator-86 approved the INTENTIONAL branch: documentation plus a regression test that pins the cap and the re-arm pattern, with NO change to the cap or to default behaviour.
+Devices fully frozen; no poll, no device reading, no device action. No threshold changed. Lanmower-only attribution on every commit.
