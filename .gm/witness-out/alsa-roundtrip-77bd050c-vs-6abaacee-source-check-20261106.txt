@@ -1,0 +1,27 @@
+SOURCE-LEVEL CHECK 77bd050c..6abaacee ON THE PEER PATH, 2026-11-06 (orchestrator-86 request, OFFLINE, NO deploy).
+Question: would a revert to 77bd050c clear the derived engaged end-to-end figure?
+TOOL EVIDENCE (git log / git diff, quoted verbatim):
+  ==== LOG ==== (commits strictly between the two shas, plus 6abaacee)
+   6abaacee telemetry: publish ADR-034 press-minus-L impose target at master creation
+   d18f53c1 witness: item 2 fold hot-deploy latency gate PASS, item 5 and 11 ledgers
+   473904a5 close phrase-gap-triage-mc420-gm-scope-23
+   2ea600f5 witness: ADR-034 pre-registration, source check and hotdeploy latency gate
+  ==== STAT ==== (src/ dsp/ effects/ config/)
+   src/dsp/audio_thread.cpp | 3 +--
+   1 file changed, 1 insertion(+), 2 deletions(-)
+  ==== SRC DIFF ====
+   @@ -917,7 +917,7 @@ static void* worker(void*) {
+    -                        g_telem.imposeTargetSamples = -1.0;
+    +                        g_telem.imposeTargetSamples = (double)g_telem.lastTakeArmSample - (double)masterLen;
+   @@ -946,7 +946,6 @@ static void* worker(void*) {
+    -                            if (masterJustCreated) g_telem.imposeTargetSamples = linkTargetSamples;
+CLASSIFICATION: every changed line is TELEMETRY-ONLY. Zero changed lines touch ALSA open/params, period_size, buffer_size, snd_pcm_delay, capDelay/playDelay, roundTripEstSamples, latencyBiasSamples, latency_trim, Link phase target, phase trim, linkSpeedRatio, resnapAfterRebasePending, requestPhaseImpose, or any peer-path computation. requestPhaseImpose at src/dsp/audio_thread.cpp:916 is BYTE-IDENTICAL across the two shas. The deleted line was provably unreachable (nested under !awaitingImposeRebase while the creation branch sets awaitingImposeRebase=true and clears it one controlTick later). The new line is one double subtraction per master creation, writing a field read only by src/control/telemetry.cpp:167.
+FOLD-PATCH CONTEXT (77bd050c itself, which is the PROPOSED REVERT TARGET, not part of the diff above): it changed src/link/link_bridge.cpp:153-158 to always capture phaseAtTime at the loop quantum (fallback kLinkQuantum=16) and src/dsp/audio_thread.cpp:942-944 to compute loopBeatPos from loopPhaseMicroBeats instead of folding the 128-beat capture. That IS a peer-path change, but it is PRESENT IN BOTH shas, so reverting to 77bd050c KEEPS it. A revert to 77bd050c cannot remove the fold patch.
+DEVICE-EVIDENCE CROSS-CHECK (already witnessed, not re-measured):
+  - window 2 AFTER (77bd050c deployed, restart, peers=0): bias 193.1 / rt 129.1 — LOW.
+  - window 3 BEFORE (still the 77bd050c build, peers=1 after re-acquisition): bias 190.3 / rt 126.3 — LOW.
+  - window 3 AFTER (6abaacee deployed, restart, peers=0): bias 184.7 / rt 120.7 — LOW.
+  - esp window-3 AFTER series + window 4a (6abaacee, peers=1 after re-acquisition): bias 236.9..238.7 / rt 172.9..174.7 — ELEVATED and stable.
+  So restart + peer re-acquisition happened TWICE (after window 2 and after window 3) and only the second produced the elevated ALSA roundtrip. A code diff that is telemetry-only cannot explain that asymmetry.
+VERDICT: ON SOURCE EVIDENCE, reverting to 77bd050c would NOT clear the derived engaged figure, because the reverted diff contains no ALSA, buffer, snd_pcm_delay, phase-trim or peer-path change, and the fold patch remains in 77bd050c. The elevated alsa_roundtrip_samples is a DEVICE/ALSA STATE EFFECT associated with the restart and peer re-acquisition, not with the 6abaacee code. NOT_MEASURABLE_OFFLINE: proving that conclusively requires a device restart control on identical code, which is a device change and is explicitly NOT deployed here per orchestrator-86. No device action was taken and nothing was deployed to test this.
+CAVEAT, stated plainly: the derived engaged figure (bias + 127) is over 7 ms in window 4a, but the +127 engaged wet-effect latency is EXEMPT under AGENTS.md and the non-exempt idle bias is 4.935..4.973 ms, under 7 ms. The invariant call belongs to the owner, not to this offline check.
