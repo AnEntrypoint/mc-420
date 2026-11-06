@@ -9,3 +9,13 @@ First pass (gm.run_code) printed plansTableRows=34 and rowCount=33 with consiste
   campaign ledger records esp series stop PID 2685983 = true
 VERDICT: INCONSISTENT.
 The earlier consistent=false line stands as recorded in the run log; this witness explains it rather than hiding it. No device reading, poll or action. No threshold changed.
+
+
+ADDENDUM 2026-11-06 (second correction, written after re-reading the file).
+The previous VERDICT: INCONSISTENT was ALSO my own parsing error, not a real mismatch: I split each table line on " | " and kept a trailing " |" on every id, so every id failed to match the .gm/prd filenames and the header row was mis-handled. Correct parse with /^\| ([^|]+?) \|/ and exclusion of the "id" header and "---" separator gives:
+  .gm/prd/*.yml files = 33
+  docs/plans.md table data rows = 33
+  missing from plans.md = []
+  extra in plans.md = []
+  CORRECTED VERDICT = CONSISTENT
+The row table and the 33 open rows agree exactly. Both earlier flags (consistent=false and INCONSISTENT) are kept above as the record of my own two parsing mistakes, explained rather than hidden. No device reading, poll or action. No threshold changed.
