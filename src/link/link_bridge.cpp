@@ -153,13 +153,9 @@ void LinkBridge::publishSnapshot() {
     s.beatPhaseMicroBeats = (int64_t)(phase * 1e6);
     s.quantumMicroBeats   = (int64_t)(kLinkPhaseQuantumBeats * 1e6);
     const double loopQuantum = g_loopPhaseQuantumBeats.load(std::memory_order_relaxed);
-    if (loopQuantum >= 1.0) {
-        s.loopPhaseMicroBeats = (int64_t)(state.phaseAtTime(now, loopQuantum) * 1e6);
-        s.loopQuantumBeats    = loopQuantum;
-    } else {
-        s.loopPhaseMicroBeats = 0;
-        s.loopQuantumBeats    = 0.0;
-    }
+    const double captureQuantum = loopQuantum >= 1.0 ? loopQuantum : kLinkQuantum;
+    s.loopPhaseMicroBeats = (int64_t)(state.phaseAtTime(now, captureQuantum) * 1e6);
+    s.loopQuantumBeats    = captureQuantum;
     s.captureMicros       = (int64_t)capTs.tv_sec * 1000000 + capTs.tv_nsec / 1000;
     s.isPlaying           = g_localTransportRunning.load(std::memory_order_relaxed);
     s.weOwnTempo          = g_weSetTempo.load(std::memory_order_relaxed);

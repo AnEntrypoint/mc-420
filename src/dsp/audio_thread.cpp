@@ -939,21 +939,9 @@ static void* worker(void*) {
                             double elapsedMicros = nowMicros - (double)linkSnap.captureMicros;
                             if (elapsedMicros < 0.0) elapsedMicros = 0.0;
                             if (elapsedMicros > 4e6) elapsedMicros = 4e6;
-                            double phaseMicroBeats = (double)linkSnap.beatPhaseMicroBeats
-                                                   + elapsedMicros * (linkSnap.bpm / 60.0);
-                            double loopBeatPos;
-                            if (linkSnap.loopQuantumBeats >= 1.0
-                                && std::fabs(linkSnap.loopQuantumBeats - (double)recordedBeatsShared) < 0.001) {
-                                double beats = (double)linkSnap.loopPhaseMicroBeats / 1e6
-                                             + (elapsedMicros / 1e6) * (linkSnap.bpm / 60.0);
-                                loopBeatPos = std::fmod(beats, (double)recordedBeatsShared);
-                            } else {
-                                double linkQuantumFrac = phaseMicroBeats / (double)linkSnap.quantumMicroBeats;
-                                linkQuantumFrac -= std::floor(linkQuantumFrac);
-                                double linkBeatWithinQuantum = linkQuantumFrac
-                                                             * ((double)linkSnap.quantumMicroBeats / 1e6);
-                                loopBeatPos = std::fmod(linkBeatWithinQuantum, (double)recordedBeatsShared);
-                            }
+                            double beats = (double)linkSnap.loopPhaseMicroBeats / 1e6
+                                         + (elapsedMicros / 1e6) * (linkSnap.bpm / 60.0);
+                            double loopBeatPos = std::fmod(beats, (double)recordedBeatsShared);
                             if (loopBeatPos < 0.0) loopBeatPos += recordedBeatsShared;
                             linkTargetSamples = loopBeatPos * beatLenSamplesShared;
                             haveLinkTarget = true;
