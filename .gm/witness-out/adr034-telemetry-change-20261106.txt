@@ -1,0 +1,16 @@
+ADR-034 TELEMETRY-ONLY CHANGE WITNESS, 2026-11-06 (owner option (a), window 3 prep).
+Formula check BEFORE the commit, quoted verbatim from docs/DECISIONS.md:724: "Decision: when the first loop is created with length L beats, the Link beat origin is imposed at (record press - L), so the phrase turnaround is one loop before the press. The loop grid origin (DSP phase 0) stays at the press." MATCH: L beats = masterLenSamples = recordedBeatsShared * beatLenSamplesShared (src/dsp/audio_thread.cpp:886-888), so press minus L = last_take_arm_sample - master_len_samples. Full witness .gm/witness-out/adr034-formula-check-20261106.txt.
+Offline hunt: gm.grep located the writers at src/dsp/audio_thread.h:112 (default -1.0), src/dsp/audio_thread.cpp:920 (reset in the creation branch) and :949 (only non-reset writer, nested under !awaitingImposeRebase and therefore unreachable on the creation tick), src/control/telemetry.cpp:139 and :167. All nine UDP 4445 samples of the two item 1 hardware runs showed impose_target_samples = -1. Full witness .gm/witness-out/adr034-impose-target-pathline-20261106.txt.
+CHANGE (two lines in src/dsp/audio_thread.cpp, one line in the source-check tool):
+  BEFORE :920 "                        g_telem.imposeTargetSamples = -1.0;"
+           :949 "                            if (masterJustCreated) g_telem.imposeTargetSamples = linkTargetSamples;"
+  AFTER  :920 "                        g_telem.imposeTargetSamples = (double)g_telem.lastTakeArmSample - (double)masterLen;"
+           :949 DELETED (the unreachable writer)
+  :916 "g_link->requestPhaseImpose(0.0, pressMicros - loopMicros, (double)recordedBeatsShared);" is BYTE-IDENTICAL. No impose logic, no audio-path code, no ALSA setting, no blocking work changed, so the ~7 ms end-to-end invariant cannot grow.
+VARIABLE SCOPE, discovered by running code (gm.grep) rather than guessing: lastTakeArmSample is a field of AudioThread::Telemetry (src/dsp/audio_thread.h:99), not a bare local; the in-scope local is uint64_t lastTakeArmLocal declared at src/dsp/audio_thread.cpp:297 and set at :777, published to g_telem.lastTakeArmSample at :779. The shipped expression uses g_telem.lastTakeArmSample, the same audio sample count at the ARM press that the hardware harness reads as sample_clock.last_take_arm_sample. The press-minus-L formula and every pre-registered threshold are UNCHANGED; only the identifier qualification was resolved. The header default -1.0 remains the not-yet-created sentinel.
+SOURCE CHECK (tools/timing/adr034-impose-target-source-check.js):
+  AFTER  "adr034 source check: state=PUBLISHED_AT_CREATION expected=PUBLISHED_AT_CREATION publish=true deadWriter=false resetAtCreation=false imposeUntouched=true / adr034 source check: PASS / AFTER_EXIT=0"
+  CONTROL "adr034 source check: state=PUBLISHED_AT_CREATION expected=DEAD_CODE ... / adr034 source check: FAIL / BEFORE_CONTROL_EXIT=1"
+  The pre-change control at sha 2ea600f5 was "state=DEAD_CODE expected=DEAD_CODE ... PASS / SOURCE_CHECK_EXIT=0".
+gm.grep on the shipped file now returns exactly two impose lines: :916 requestPhaseImpose and :920 the publish.
+NOT done here: CI, hot-deploy, and the pre-registered hardware re-run (its own window 3). No verdict on ADR-034 hardware behaviour is claimed from this code change alone.

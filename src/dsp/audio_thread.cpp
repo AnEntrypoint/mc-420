@@ -917,7 +917,7 @@ static void* worker(void*) {
                         awaitingImposeRebase = true;
                         imposeRebaseSeqAtRequest = linkSnap.rebaseSeq;
                         g_telem.imposeAudioSamples = (double)audioSampleCount;
-                        g_telem.imposeTargetSamples = -1.0;
+                        g_telem.imposeTargetSamples = (double)g_telem.lastTakeArmSample - (double)masterLen;
                     }
                 }
 
@@ -946,7 +946,6 @@ static void* worker(void*) {
                             linkTargetSamples = loopBeatPos * beatLenSamplesShared;
                             haveLinkTarget = true;
                             g_telem.linkTargetSamples = linkTargetSamples;
-                            if (masterJustCreated) g_telem.imposeTargetSamples = linkTargetSamples;
                             g_telem.linkCaptureUs = (double)linkSnap.captureMicros;
                             g_telem.linkNowUs = nowMicros;
                             g_telem.linkLoopPhaseBeats = (double)linkSnap.loopPhaseMicroBeats / 1e6;
