@@ -1,0 +1,69 @@
+PRE-REGISTERED PEER-PATH DIFF VERDICT, 2026-11-06. Pre-registration sha 71adb3717ee150d2f5efada74d31b43f35b50e9d (tools/timing/peer-path-diff-preregistration.md), committed BEFORE this re-run. An earlier identical read-only diff at 1c0389ec stands as recorded and is NOT relabelled.
+TOOL OUTPUT (gm.run_shell, quoted):
+==== LOG ====
+6abaacee telemetry: publish ADR-034 press-minus-L impose target at master creation
+d18f53c1 witness: item 2 fold hot-deploy latency gate PASS, item 5 and 11 ledgers
+473904a5 close phrase-gap-triage-mc420-gm-scope-23
+2ea600f5 witness: ADR-034 pre-registration, source check and hotdeploy latency gate
+
+==== STAT ====
+ src/dsp/audio_thread.cpp | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+==== DIFF ====
+diff --git a/src/dsp/audio_thread.cpp b/src/dsp/audio_thread.cpp
+index 362c5ce9..83e973ea 100644
+--- a/src/dsp/audio_thread.cpp
++++ b/src/dsp/audio_thread.cpp
+@@ -917,7 +917,7 @@ static void* worker(void*) {
+                         awaitingImposeRebase = true;
+                         imposeRebaseSeqAtRequest = linkSnap.rebaseSeq;
+                         g_telem.imposeAudioSamples = (double)audioSampleCount;
+-                        g_telem.imposeTargetSamples = -1.0;
++                        g_telem.imposeTargetSamples = (double)g_telem.lastTakeArmSample - (double)masterLen;
+                     }
+                 }
+ 
+@@ -946,7 +946,6 @@ static void* worker(void*) {
+                             linkTargetSamples = loopBeatPos * beatLenSamplesShared;
+                             haveLinkTarget = true;
+                             g_telem.linkTargetSamples = linkTargetSamples;
+-                            if (masterJustCreated) g_telem.imposeTargetSamples = linkTargetSamples;
+                             g_telem.linkCaptureUs = (double)linkSnap.captureMicros;
+                             g_telem.linkNowUs = nowMicros;
+                             g_telem.linkLoopPhaseBeats = (double)linkSnap.loopPhaseMicroBeats / 1e6;
+
+==== REVERT TARGET PEER PATH ====
+77bd050c532d54441321cc8fd1179b48ce61adae link: fold phase at the loop quantum, never the 128-beat capture at rb
+
+diff --git a/src/link/link_bridge.cpp b/src/link/link_bridge.cpp
+index 05703716..2393f72c 100644
+--- a/src/link/link_bridge.cpp
++++ b/src/link/link_bridge.cpp
+@@ -153,13 +153,9 @@ void LinkBridge::publishSnapshot() {
+     s.beatPhaseMicroBeats = (int64_t)(phase * 1e6);
+     s.quantumMicroBeats   = (int64_t)(kLinkPhaseQuantumBeats * 1e6);
+     const double loopQuantum = g_loopPhaseQuantumBeats.load(std::memory_order_relaxed);
+-    if (loopQuantum >= 1.0) {
+-        s.loopPhaseMicroBeats = (int64_t)(state.phaseAtTime(now, loopQuantum) * 1e6);
+-        s.loopQuantumBeats    = loopQuantum;
+-    } else {
+-        s.loopPhaseMicroBeats = 0;
+-        s.loopQuantumBeats    = 0.0;
+-    }
++    const double captureQuantum = loopQuantum >= 1.0 ? loopQuantum : kLinkQuantum;
++    s.loopPhaseMicroBeats = (int64_t)(state.phaseAtTime(now, captureQuantum) * 1e6);
++    s.loopQuantumBeats    = captureQuantum;
+     s.captureMicros       = (int64_t)capTs.tv_sec * 1000000 + capTs.tv_nsec / 1000;
+     s.isPlaying           = g_localTransportRunning.load(std::memory_order_relaxed);
+     s.weOwnTempo          = g_weSetTempo.load(std::memory_order_relaxed);
+
+==== IMPOSE IDENTITY ====
+requestPhaseImpose lines in diff = 0
+
+CLASSIFICATION OF EVERY CHANGED LINE: TELEMETRY_ONLY. The range contains exactly one file, src/dsp/audio_thread.cpp, 1 insertion and 2 deletions: the -1.0 sentinel replaced by (double)g_telem.lastTakeArmSample - (double)masterLen at :920, and the unreachable writer "if (masterJustCreated) g_telem.imposeTargetSamples = linkTargetSamples;" deleted at :949. ZERO lines are ALSA/BUFFER or LINK_PEER_PATH. requestPhaseImpose at :916 is byte-identical (zero lines in the diff mention it). The three intervening commits are witness/close/pre-registration commits with no src/ change.
+H1 (ALSA/buffer change) REFUTED. H2 (Link phase-target / phase-trim / peer-path compute change) REFUTED. H3 (telemetry-only) SUPPORTED. H4 (fold patch is on the peer path but is PRESENT IN BOTH shas, so reverting TO 77bd050c keeps it) SUPPORTED: git show 77bd050c shows link_bridge.cpp:153-158 always capturing phaseAtTime at the loop quantum and audio_thread.cpp:942-944 computing loopBeatPos from loopPhaseMicroBeats.
+DEVICE CROSS-CHECK, already witnessed, not re-measured: window 2 AFTER (77bd050c, restart, peers=0) 193.1/129.1 LOW; window 3 BEFORE (77bd050c build, peers=1 after re-acquisition) 190.3/126.3 LOW; window 3 AFTER (6abaacee, restart, peers=0) 184.7/120.7 LOW; esp window-3 AFTER series and window 4a (6abaacee, peers=1) 236.9..238.7 / 172.9..174.7 ELEVATED and stable. Restart + peer re-acquisition happened twice and only the second elevated the ALSA roundtrip, which a telemetry-only diff cannot explain.
+VERDICT (pre-registered decision rule): REVERT_TO_77bd050c_CANNOT_CLEAR_ON_SOURCE_EVIDENCE. Reverting to 77bd050c would remove only the telemetry publish and restore a dead writer; it cannot change alsa_roundtrip_samples or latency_bias_samples. The elevation is a DEVICE/ALSA STATE EFFECT associated with the restart and peer re-acquisition. NOT_MEASURABLE_OFFLINE: conclusive proof needs a device restart control on identical code, which is a device change and is NOT executed here (owner: any revert and all device work are closed until cleared).
+INVARIANT CAVEAT, unchanged: window 4a derived engaged figure (bias + 127) is 7.581..7.619 ms, over 7 ms, but the +127 engaged wet-effect latency is EXEMPT under AGENTS.md and the non-exempt idle bias is 4.935..4.973 ms, under 7 ms. The invariant call belongs to the owner. The derived figure is NOT a live USB loopback capture.
+No threshold or hypothesis was added after results. No deploy, no restart, no revert, no flash, no power cycle.
