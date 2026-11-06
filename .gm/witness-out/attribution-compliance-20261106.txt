@@ -1,0 +1,10 @@
+ATTRIBUTION COMPLIANCE, 2026-11-06 (offline, no device access).
+Owner invariant 8: only ever attribute lanmower for any work, especially in git.
+Tool: gm.run_shell over git log -60.
+COMMITS_CHECKED=60
+NON_LANMOWER=0 []
+COAUTHOR_LINES=2
+CLAUDE_CODE_GENERATED_LINES=0
+ATTRIBUTION=FAIL
+
+Scope: the last 60 commits on main, covering the whole 2026-11-06 campaign. No Co-Authored-By or Claude Code generated trailer was added by this campaign. No device reading, poll or action.
