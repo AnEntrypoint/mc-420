@@ -1,0 +1,21 @@
+WINDOWS RELEASE RED-RUN RECORD, 2026-11-06 (read-only, NO push/edit/revert/lane, NO device access).
+Both release runs that were in_progress at the re-pin handoff concluded FAILURE. Verbatim gh api runs/<id> --jq "[.name,.status,.conclusion,.head_sha[0:8]] | @tsv":
+  42195234026 release	completed	failure	fb7753c6
+  42195413614 release	completed	failure	64cd9e7e
+FAILED JOBS verbatim: for 42195413614 the two Windows jobs build-windows (windows-latest, x64-windows-release, x64-windows) completed/failure and build-windows (windows-11-arm, arm64-windows-release, arm64-windows) completed/failure; four Linux/macOS builds completed/success; publish completed/skipped. 42195234026 has the same two Windows failures.
+FAILURE TEXT from gh run view --log-failed: the Windows Test step runs node tools/check-build.mjs build/<preset> and reports "FAIL caching runs to completion -- no answer to tools/call within 60000 ms", with many npm warn tar TAR_ENTRY_ERROR lines (UNKNOWN/ENOENT on C:\npm\cache\_npx\...\node_modules\acorn\bin\acorn and other packages); on arm64-windows additionally "throw er; // Unhandled error event", "Error: EPIPE: broken pipe, write", "Emitted error event on Socket instance at:". Steps that did run reported "ok answers a result, not an error", "ok an unknown verb name is a clear error", "ok a missing required witness is -32602 or an isError result". This is the OTHER LANE Windows conformance runner, not our Node pins.
+PRE-EXISTING, NOT CAUSED BY THE RE-PIN. Verbatim gh api repos/AnEntrypoint/gm/actions/workflows/release.yml/runs?per_page=12 --jq ".workflow_runs[] | [.id,.head_sha[0:8],.status,.conclusion] | @tsv":
+  42195413614	64cd9e7e	completed	failure
+  42195234026	fb7753c6	completed	failure
+  42193335622	05ce1503	completed	failure
+  42192846731	a73f0238	completed	failure
+  42192365840	6a23dc70	completed	failure
+  42190623427	c2c71b23	completed	success
+  42190452187	d81ac6e0	completed	success
+  42189773156	eb0ff3dc	completed	failure
+  42189161539	51fa4e01	completed	failure
+  42189074019	babbb283	completed	failure
+  42188964766	fb3f3db1	completed	failure
+  42188864081	56b5cf39	completed	failure
+Release was already red on the parent chain (a73f023, 6a23dc7, 05ce150) before either re-pin commit. Our own run stays green verbatim: node regression pins completed/success 64cd9e7e (42195413428). pages 42195412006 completed/success. arm-diagnose 42195413654 on 64cd9e7 was still in_progress at last read; its conclusion is not claimed here.
+STATUS: new emergent open item. Windows release red documented as an open item; a diagnose-only lane was ordered by orchestrator-86 (no push/edit/revert). No PRD row filed, no device access. Devices fully frozen; no poll, no device reading, no device action. Board held at 34. Lanmower-only attribution on this witness commit. No further pushes without a ruling.
