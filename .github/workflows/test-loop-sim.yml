@@ -133,6 +133,17 @@ jobs:
           fi
           node tools/loop-quantization-sim/visual-beat-cue.js --assert-control
 
+      - name: First-take metronome beat index locks to the take grid
+        run: node tools/loop-quantization-sim/first-take-beat-index.js
+
+      - name: First-take metronome shared-grid control must fail
+        run: |
+          if node tools/loop-quantization-sim/first-take-beat-index.js --no-fix; then
+            echo "negative control unexpectedly passed"
+            exit 1
+          fi
+          node tools/loop-quantization-sim/first-take-beat-index.js --assert-no-fix
+
       - name: Visual beat cue one-step-behind LED index control must fail
         run: |
           if node tools/loop-quantization-sim/visual-beat-cue.js --no-index-fix; then

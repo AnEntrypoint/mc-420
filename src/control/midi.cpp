@@ -13,6 +13,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <ctime>
+#include <cmath>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -85,6 +86,33 @@ static int millisToNextBeat(const LinkBridge::BeatMark& bm, int capMs) {
     if (ms < 1) ms = 1;
     if (ms > capMs) ms = capMs;
     return (int)ms;
+}
+
+static int takeBeatIndex(const AudioThread::Telemetry& t, const LinkBridge* link) {
+    const int takeSpan = (int)(t.recordedBeats + 0.5f);
+    if (takeSpan < 1 || t.masterLenSamples <= 0.0f) return -1;
+    const double beatLenSamples = (double)t.masterLenSamples / (double)takeSpan;
+    double beats = beatLenSamples > 0.0 ? (double)t.masterPhaseSamples / beatLenSamples : 0.0;
+    if (link) {
+        const LinkSnapshot snap = link->audioRead();
+        if (snap.phaseValid && snap.captureMicros > 0 && snap.bpm > 1.0
+            && std::fabs(snap.loopQuantumBeats - (double)takeSpan) < 0.25) {
+            struct timespec ts{};
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            const int64_t nowMonoUs = (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+            double elapsedUs = (double)(nowMonoUs - snap.captureMicros);
+            if (elapsedUs < 0.0) elapsedUs = 0.0;
+            if (elapsedUs > 4e6) elapsedUs = 4e6;
+            beats = (double)snap.loopPhaseMicroBeats / 1e6
+                  + (elapsedUs / 1e6) * (snap.bpm / 60.0);
+        }
+    }
+    double phase = std::fmod(beats, (double)takeSpan);
+    if (phase < 0.0) phase += (double)takeSpan;
+    int idx = (int)phase;
+    if (idx < 0) idx = 0;
+    if (idx >= takeSpan) idx = takeSpan - 1;
+    return idx;
 }
 
 void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBridge* link) {
@@ -236,11 +264,17 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         int pr = poll(pfds.data(), (nfds_t)pfds.size(), waitMs);
 
         int beatIndex = beatTelem.gridBeatIndex;
+        const int takeSpan = (int)(beatTelem.recordedBeats + 0.5f);
+        const int takeIdx = takeBeatIndex(beatTelem, link);
+        if (takeIdx >= 0 && takeSpan >= 1) beatIndex = takeIdx;
         if (beatClockLive) {
             LinkBridge::BeatMark bm = link->beatMarkNow();
             if (bm.valid) {
                 const bool leadOpen = bm.nextBeatMicros - bm.nowMicros <= static_cast<int64_t>(kBeatLeadMs) * 1000;
                 beatIndex = leadOpen ? (bm.index + 1) % static_cast<int>(kLinkQuantum) : bm.index;
+                if (takeIdx >= 0 && takeSpan >= 1) {
+                    beatIndex = leadOpen ? (takeIdx + 1) % takeSpan : takeIdx;
+                }
                 if (bm.index != lastPadBeatIndex) {
                     lastPadBeatIndex = bm.index;
                     publishBeatPadMark(bm.index, bm.nowMicros - bm.curBeatMicros, bm.bpm);

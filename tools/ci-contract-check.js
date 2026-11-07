@@ -8,6 +8,7 @@ const kPhraseOffsetScript = 'tools/loop-quantization-sim/first-take-phrase-offse
 const kJoinRaceScript = 'tools/loop-quantization-sim/join-race-tempo-authority.js';
 const kCheckScript = 'tools/ci-contract-check.js';
 const kVisualBeatCueScript = 'tools/loop-quantization-sim/visual-beat-cue.js';
+const kFirstTakeBeatIndexScript = 'tools/loop-quantization-sim/first-take-beat-index.js';
 const kPhraseRebaseScript = 'tools/loop-quantization-sim/phrase-rebase-backwards.js';
 
 function readLines(path) {
@@ -31,6 +32,7 @@ function main() {
     requireExactlyOnce(loopLines, kJoinRaceScript),
     requireExactlyOnce(loopLines, kCheckScript),
     requireExactlyOnce(loopLines, kVisualBeatCueScript),
+    requireExactlyOnce(loopLines, kFirstTakeBeatIndexScript),
     requireExactlyOnce(loopLines, kPhraseRebaseScript),
   ];
   const phraseText = phraseLines.join(String.fromCharCode(10));
@@ -42,6 +44,7 @@ function main() {
     { path: 'workflow_dispatch', ok: phraseText.includes('workflow_dispatch:') },
     { path: 'visual-beat-cue negative control', ok: loopText.includes('visual-beat-cue.js --control') },
     { path: 'visual-beat-cue one-step index negative control', ok: loopText.includes('visual-beat-cue.js --no-index-fix') },
+    { path: 'first-take beat index negative control', ok: loopText.includes('first-take-beat-index.js --no-fix') },
     { path: 'phrase-rebase-backwards negative control', ok: loopText.includes('phrase-rebase-backwards.js --no-fix') },
     { path: 'phrase-rebase-backwards stale-hold negative control', ok: loopText.includes('phrase-rebase-backwards.js --stale-hold') },
   ];
