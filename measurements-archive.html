@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=3f150bde639985460f55617d952588b875bcc592">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=da45056f172f67f63a833d4a48502add8d79face">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -58,6 +58,13 @@
       <h1 id="measurement-archive">Measurement archive</h1>
 
 <p>Numeric evidence relocated verbatim from AGENTS.md. Each section is one bullet; the one-line rule for it stays in AGENTS.md with a pointer back here.</p>
+
+<h2 id="anchor-convention-archiveanchor">Anchor convention (archive#anchor)</h2>
+
+<ul>
+  <li>An <code class="language-plaintext highlighter-rouge">archive#name</code> pointer in AGENTS.md or docs/DECISIONS.md resolves to exactly one heading here: the heading’s lowercase slug, or an explicit <code class="language-plaintext highlighter-rouge">(archive#name)</code> marker in the heading when the prose title slugs differently. tools/check-archive-anchors.js parses both pointer files and this archive and fails on an unresolved or duplicated name; .github/workflows/test-archive-anchors.yml runs it.</li>
+  <li>Headings with an explicit marker are historical measurement sections whose names predate the slug rule; the marker keeps their pointers stable without rewording the recorded evidence.</li>
+</ul>
 
 <h2 id="clean-ingress-focusrite-loopback">Clean ingress (Focusrite loopback)</h2>
 
@@ -673,7 +680,7 @@ the same 17 blocks.</p>
   <li><code class="language-plaintext highlighter-rouge">confidenceGate = 0.85</code> (<code class="language-plaintext highlighter-rouge">multitranspose.dsp</code>) gates re-tracking only; <code class="language-plaintext highlighter-rouge">kContGate = 0.50</code> (<code class="language-plaintext highlighter-rouge">snacPeriodTracker.h</code>) gates whether <code class="language-plaintext highlighter-rouge">confidence()</code> reports it. <code class="language-plaintext highlighter-rouge">updateContinuity</code> uses window <code class="language-plaintext highlighter-rouge">min(2p+128, SNAC_WIN)</code> and the best r over ±6%: <code class="language-plaintext highlighter-rouge">confidence()</code> &gt;=0.50 on 96.3% of real-audio blocks with a good lock.</li>
 </ul>
 
-<h2 id="refine-spread-is-lag-proportional">Refine spread is lag-proportional</h2>
+<h2 id="refine-spread-is-lag-proportional-archiverefine-spread-lag-proportional">Refine spread is lag-proportional (archive#refine-spread-lag-proportional)</h2>
 
 <ul>
   <li><code class="language-plaintext highlighter-rouge">dfd4871a</code>: a 3-point parabola fitted at +-K around a lag sitting d samples off the true period returns a vertex biased by about d<em>(1 - x</em>cot(x)) with x = pi*K/period, so the bias grows as (K/period)^2. The old fixed +-16-sample window spanned about 70% of a period at C6, where the period is 46 samples. Measured offline (pinned flags, 64-sample blocks, 34-file corpus, gain 1.0, median of voiced frames from t&gt;=1s, scored against each file’s own measured spectral peak): soprano_sax_high_C6 -34.2 -&gt; -3.2 c, clarinet_high_C6B6 -36.2 -&gt; -0.5 c, trumpet_high_C6 -73.4 -&gt; -6.8 c, cello_low_sulC_A2 -0.4 -&gt; -0.4 c.</li>

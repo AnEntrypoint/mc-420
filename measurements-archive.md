@@ -2,6 +2,11 @@
 
 Numeric evidence relocated verbatim from AGENTS.md. Each section is one bullet; the one-line rule for it stays in AGENTS.md with a pointer back here.
 
+## Anchor convention (archive#anchor)
+
+- An `archive#name` pointer in AGENTS.md or docs/DECISIONS.md resolves to exactly one heading here: the heading's lowercase slug, or an explicit `(archive#name)` marker in the heading when the prose title slugs differently. tools/check-archive-anchors.js parses both pointer files and this archive and fails on an unresolved or duplicated name; .github/workflows/test-archive-anchors.yml runs it.
+- Headings with an explicit marker are historical measurement sections whose names predate the slug rule; the marker keeps their pointers stable without rewording the recorded evidence.
+
 ## Clean ingress (Focusrite loopback)
 
 - A clean ingress now exists via the Focusrite loopback (ADR-029); the bare AIR 192 reads silent (`in` 0.0001). #4 hiss WITNESSED absent (silent input -> `out` 0.0001). `snd-pcm-oss` 8000 Hz U8 no resampling (~150 xruns/s at 48k; 8k stalls aloop); `snd-aloop` jiffies-paced + TEARS -> ANY click/tear witness through it INVALID (17 glitches vs host 0; drift ±15 > effect); `period_size=64`+HZ=250 -> xruns 125/s, tears 0.25-7/s, only timer `G0` (4000 µs), unfixable.
@@ -474,7 +479,7 @@ the same 17 blocks.
 
 - `confidenceGate = 0.85` (`multitranspose.dsp`) gates re-tracking only; `kContGate = 0.50` (`snacPeriodTracker.h`) gates whether `confidence()` reports it. `updateContinuity` uses window `min(2p+128, SNAC_WIN)` and the best r over ±6%: `confidence()` >=0.50 on 96.3% of real-audio blocks with a good lock.
 
-## Refine spread is lag-proportional
+## Refine spread is lag-proportional (archive#refine-spread-lag-proportional)
 
 - `dfd4871a`: a 3-point parabola fitted at +-K around a lag sitting d samples off the true period returns a vertex biased by about d*(1 - x*cot(x)) with x = pi*K/period, so the bias grows as (K/period)^2. The old fixed +-16-sample window spanned about 70% of a period at C6, where the period is 46 samples. Measured offline (pinned flags, 64-sample blocks, 34-file corpus, gain 1.0, median of voiced frames from t>=1s, scored against each file's own measured spectral peak): soprano_sax_high_C6 -34.2 -> -3.2 c, clarinet_high_C6B6 -36.2 -> -0.5 c, trumpet_high_C6 -73.4 -> -6.8 c, cello_low_sulC_A2 -0.4 -> -0.4 c.
 
