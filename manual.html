@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC-420 CONTROLS</title>
+<style>
+  @page { size: A4; margin: 8mm; }
+  * { box-sizing: border-box; border-radius: 0; }
+  body {
+    margin: 0; padding: 16px;
+    background: #fff; color: #000;
+    font: 12px/1.3 "Courier New", Courier, monospace;
+    overflow-wrap: anywhere;
+  }
+  h1 { font-size: 30px; line-height: 1; margin: 0 0 6px; text-transform: uppercase; letter-spacing: -1px; }
+  h2 {
+    font-size: 14px; text-transform: uppercase; margin: 9px 0 4px;
+    border-top: 4px solid #000; padding-top: 4px;
+  }
+  p { margin: 0 0 4px; }
+  table { width: 100%; border-collapse: collapse; border: 3px solid #000; table-layout: fixed; margin: 3px 0; }
+  th, td { border: 2px solid #000; padding: 2px 4px; text-align: left; vertical-align: top; }
+  th { background: #000; color: #fff; text-transform: uppercase; font-size: 11px; }
+  .rule { border: 3px solid #000; padding: 4px 6px; margin: 3px 0; }
+  .rule b { text-transform: uppercase; }
+  .key { font-weight: 700; text-transform: uppercase; }
+  .foot { margin-top: 8px; font-size: 10px; border-top: 4px solid #000; padding-top: 3px; }
+  @media print {
+    body { padding: 0; font-size: 9.5px; }
+    h1 { font-size: 24px; }
+    h2 { font-size: 12px; margin: 6px 0 3px; padding-top: 3px; }
+    p { margin: 0 0 3px; }
+    th { font-size: 8.5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    th, td { padding: 1px 3px; }
+    table { margin: 2px 0; }
+    .rule { padding: 3px 5px; margin: 2px 0; }
+    .foot { font-size: 8px; margin-top: 5px; }
+    h2, table, .rule { page-break-inside: avoid; }
+  }
+  @media (max-width: 480px) {
+    body { font-size: 11.5px; }
+    h1 { font-size: 26px; }
+    th { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>MC-420 controls</h1>
+<p>APC Key25 on MIDI channel 1, keybed on channel 2. Pad note = 8 &times; row + column. Buttons are shown as [note].</p>
+
+<h2>1 &middot; Pads</h2>
+<div class="rule">
+  <b>Loops</b> are the 20 pads in columns 2&ndash;5. <b>Presets</b> are the 10 pads in columns 0&ndash;1. LEDs: red blink recording, green playing, yellow blink paused, off empty.<br>
+  <b>Empty loop:</b> press = ARM. Press again = FINISH. The take closes at its snapped length, and presses are ignored until then.<br>
+  <b>Loop with content:</b> release toggles pause and play. Press does nothing. <b>Hold 1 s</b> erases it. Erasing the last loop resets the phrase length.<br>
+  <b>Presets:</b> tap applies a set (yellow = saved). Hold 1 s saves the loops playing now. Erasing a loop removes it from presets.<br>
+  <b>Guitar [68] held + loop:</b> toggles it as sidechain source. Other loops duck with its level.<br>
+  <b>Shuffle pads [15] [23] [31] [39]:</b> tap = shuffle mode 1&ndash;4, tap again to clear. With <b>Gate [7]</b> held = gate mode. They also show the 16-beat phrase: dark idle, green while any loop plays, yellow for passed quarters, red for now.
+</div>
+
+<h2>2 &middot; Banks and knobs</h2>
+<p><span class="key">[67] Dub fx, [68] Guitar fx, [69] Lofi fx</span> select the bank. Knobs k1&ndash;k8 send CC 48, 49, 50, 51, 54, 55, 57, 53 in that order. A knob applies as soon as it moves. Selecting a bank does not re-send stored values.</p>
+<table>
+  <tr><th>Knob</th><th>Dub fx</th><th>Guitar fx</th><th>Lofi fx</th></tr>
+  <tr><td>k1 &middot; 48</td><td>reverb 0&ndash;2</td><td>flanger</td><td>bitcrush</td></tr>
+  <tr><td>k2 &middot; 49</td><td>delay</td><td>tremolo</td><td>Glass weight</td></tr>
+  <tr><td>k3 &middot; 50</td><td>time</td><td>bank speed</td><td>Cloud weight</td></tr>
+  <tr><td>k4 &middot; 51</td><td>high-pass</td><td>phaser</td><td>Chop weight</td></tr>
+  <tr><td>k5 &middot; 54</td><td>low-pass resonance</td><td>distortion</td><td>Shatter weight</td></tr>
+  <tr><td>k6 &middot; 55</td><td>low-pass</td><td>vinyl</td><td>scan rate; bottom eighth freezes</td></tr>
+  <tr><td>k7 &middot; 57</td><td>pitch</td><td>flutter</td><td>grain density 2&ndash;200 Hz</td></tr>
+  <tr><td>k8 &middot; 53</td><td>formant (below)</td><td>gate</td><td>spray: bottom half 0&ndash;1200 cents; middle band &plusmn;12 semitones; top eighth interval sets</td></tr>
+</table>
+<div class="rule">
+  <b>SHIFT held while pressing a bank</b> selects that bank&rsquo;s SHIFT page until the bank is pressed again without SHIFT.<br>
+  <b>Dub:</b> k1 gate amount, k2 gate pattern, k3 LFO rate, k4 LFO depth, k5 LFO shape, k6 LFO target, k7 LFO phase.<br>
+  <b>Guitar:</b> k1&ndash;k4 filter attack, decay, sustain, release; k5&ndash;k8 amp attack, decay, sustain, release.<br>
+  <b>Lofi:</b> k1 Resonode input (0 = keys self-sounding, 1 = live signal only); k2&ndash;k5 Resonode weights Percussive, Metal/Glass, Strings, Dance Bass; k6 tone 200&ndash;18000 Hz; k7 level; k8 couple.<br>
+  <b>Formant</b> (k8 on Dub, CC 53): centre 60&ndash;68 is off, range &plusmn;1.5. Active only while live pitch is on, in multi-key mode, or while a pitch-lock key is held.
+</div>
+
+<h2>3 &middot; Lofi pad, Resonode and keybed</h2>
+<div class="rule">
+  <b>[69] tap</b> toggles the granulator (green = on). It layers a grain cloud from the live input under everything else.<br>
+  <b>SHIFT + [69]</b> toggles Resonode (red blink = on). Toggling Resonode also turns the granulator off.<br>
+  <b>Lofi knob page</b> follows SHIFT on the last Lofi press, not whether Resonode is on. A plain tap shows the granulator page even while Resonode stays on.<br>
+  <b>Keys (channel 2):</b> with Resonode on, keys play 4 Resonode voices. Else a key with a sample loaded plays it. Otherwise the 6-voice pitch-lock lands the output on the held key and replaces the input. Velocity sets loudness.<br>
+  <b>[64] transpose</b> toggles live pitch (lit = on). While on, the mod wheel (CC 1, &plusmn;12 semitones, centre dead) and CC 52 (0&ndash;127 = &minus;12 to +12) bend pitch. A pitch-lock key press also turns it on.<br>
+  <b>SHIFT + [64]</b> toggles multi-key mode (yellow blink). Mod wheel and CC 52 are ignored, and key presses do not turn live pitch on.<br>
+  <b>Sustain pedal</b> (CC 64) holds keys. SHIFT + press latches.<br>
+  <b>[70] / [71]</b> half / double speed while held. <b>[81]</b> stops all loops while held. <b>SHIFT + [81]</b> stops immediately: takes close and every loop pauses.<br>
+  <b>[65] held</b> records a sample; release stops. <b>[66] held</b> records a drum hit into each key pressed; release [66] stops.
+</div>
+
+<h2>4 &middot; Record</h2>
+<div class="rule">
+  <b>Record</b> is ARM and FINISH on a loop pad (section 1). <b>[93] Record</b> exports a clip to the USB drive.<br>
+  <b>First take after boot</b> sets the phrase, its length in beats. With no Link peers it sets the session tempo to the whole-beat tempo nearest 120 BPM (60&ndash;240). With peers, the phrase is whole beats at the session tempo.<br>
+  <b>Later takes</b> snap to a power-of-two beat grid inside the phrase. Within 0.4 beat of 1 becomes 1. A take that overshoots its grid point by up to 1 beat is cut back to it. Otherwise it runs to the next grid point. A take shorter than two phrases never exceeds one phrase.
+</div>
+
+<h2>5 &middot; Reset</h2>
+<div class="rule">
+  <b>Hold Play [91]</b> = CLEAR ALL. On press every DSP setting returns to its default. All loops, presets, pitch-lock and Resonode voices, the Resonode latch and the phrase length are cleared. The audio wipe runs while Play is held.
+</div>
+
+<h2>6 &middot; Loop</h2>
+<div class="rule">
+  A loop is one take on its own pad. Release pauses or resumes it without changing its length. A loop with content must be erased (hold 1 s) before its pad records again. A take started with SHIFT held pauses the other playing loops when it finishes.
+</div>
+
+<div class="foot">MC-420 &middot; APC KEY25 CONTROLS &middot; SOURCE src/control/apc_grid.cpp &middot; SIMULATOR <a href="demo/">demo/</a> &middot; DESIGN RECORD <a href="docs.html">docs.html</a></div>
+
+</body>
+</html>
