@@ -9,6 +9,7 @@ on:
       - 'src/dsp/audio_thread.cpp'
       - 'src/control/apc_grid.cpp'
       - 'src/control/apc_grid.h'
+      - 'src/control/midi.cpp'
       - 'src/link/**'
       - '.github/workflows/test-loop-sim.yml'
   pull_request:
@@ -19,6 +20,7 @@ on:
       - 'src/dsp/audio_thread.cpp'
       - 'src/control/apc_grid.cpp'
       - 'src/control/apc_grid.h'
+      - 'src/control/midi.cpp'
       - 'src/link/**'
       - '.github/workflows/test-loop-sim.yml'
   workflow_dispatch:
@@ -131,6 +133,14 @@ jobs:
           fi
           node tools/loop-quantization-sim/visual-beat-cue.js --assert-control
 
+      - name: Visual beat cue one-step-behind LED index control must fail
+        run: |
+          if node tools/loop-quantization-sim/visual-beat-cue.js --no-index-fix; then
+            echo "negative control unexpectedly passed"
+            exit 1
+          fi
+          node tools/loop-quantization-sim/visual-beat-cue.js --assert-no-index-fix
+
       - name: Backwards phrase rebase does not emit a false boundary under the shipped ESP guard
         run: node tools/loop-quantization-sim/phrase-rebase-backwards.js
 
@@ -141,6 +151,14 @@ jobs:
             exit 1
           fi
           node tools/loop-quantization-sim/phrase-rebase-backwards.js --no-fix --assert-control
+
+      - name: Backwards phrase rebase stale-hold one-step control must fail
+        run: |
+          if node tools/loop-quantization-sim/phrase-rebase-backwards.js --stale-hold; then
+            echo "negative control unexpectedly passed"
+            exit 1
+          fi
+          node tools/loop-quantization-sim/phrase-rebase-backwards.js --stale-hold --assert-stale-hold
 
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50
