@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d670c1412085169b67ff088bc53fbce6596d2679">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fab3065a7b1156ff462cba2ad007343bcce3353f">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -261,12 +261,20 @@ top of the unshifted signal.</li>
 
 <h2 id="grid-beat-visualization">Grid-beat visualization</h2>
 
-<p>The 4 top-right otherwise-unassigned pads show the shared 16-beat Link phrase
-position live, read from <code class="language-plaintext highlighter-rouge">AudioThread::Telemetry::gridBeatIndex</code>. Each pad is
-one quarter of the 16-beat phrase. Dark when nothing is playing; green
-whenever any looper is playing; a quarter already passed turns yellow; the
-red position marker cycles across the 4 pads once per beat, landing on the
-pad matching the current position within the active quarter.</p>
+<p>The 4 top-right otherwise-unassigned pads show the first take’s beat position
+live: beat 0 is the record press and the index folds at <code class="language-plaintext highlighter-rouge">recorded_beats</code> (rb),
+not at the shared 16-beat Link transport quantum. <code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>
+derives <code class="language-plaintext highlighter-rouge">takeBeatIndex</code> from the take’s press-origin loop phase
+(<code class="language-plaintext highlighter-rouge">AudioThread::Telemetry::masterPhaseSamples</code>, or the extrapolated
+<code class="language-plaintext highlighter-rouge">LinkSnapshot::loopPhaseMicroBeats</code> captured at the loop quantum), folded at
+rb; the shared 16-beat <code class="language-plaintext highlighter-rouge">gridBeatIndex</code> is only the fallback before a take
+exists. The 30 ms <code class="language-plaintext highlighter-rouge">leadOpen</code> flip also advances modulo rb. The 4 pads still
+address 4 beat positions within a group (<code class="language-plaintext highlighter-rouge">posInGroup = index &amp; 3</code>,
+<code class="language-plaintext highlighter-rouge">activeGroup = index &gt;&gt; 2</code>), so a take shorter than 4 beats lights only its
+own rb positions. Dark when nothing is playing; green whenever any looper is
+playing; a quarter already passed turns yellow; the red position marker cycles
+across the 4 pads once per beat, landing on the pad matching the current
+position within the active quarter.</p>
 
 <h2 id="3-bank-fx-knob-surface">3-bank FX knob surface</h2>
 

@@ -194,12 +194,20 @@ output lands on the exact held key regardless of the input's actual pitch.
 
 ## Grid-beat visualization
 
-The 4 top-right otherwise-unassigned pads show the shared 16-beat Link phrase
-position live, read from `AudioThread::Telemetry::gridBeatIndex`. Each pad is
-one quarter of the 16-beat phrase. Dark when nothing is playing; green
-whenever any looper is playing; a quarter already passed turns yellow; the
-red position marker cycles across the 4 pads once per beat, landing on the
-pad matching the current position within the active quarter.
+The 4 top-right otherwise-unassigned pads show the first take's beat position
+live: beat 0 is the record press and the index folds at `recorded_beats` (rb),
+not at the shared 16-beat Link transport quantum. `src/control/midi.cpp`
+derives `takeBeatIndex` from the take's press-origin loop phase
+(`AudioThread::Telemetry::masterPhaseSamples`, or the extrapolated
+`LinkSnapshot::loopPhaseMicroBeats` captured at the loop quantum), folded at
+rb; the shared 16-beat `gridBeatIndex` is only the fallback before a take
+exists. The 30 ms `leadOpen` flip also advances modulo rb. The 4 pads still
+address 4 beat positions within a group (`posInGroup = index & 3`,
+`activeGroup = index >> 2`), so a take shorter than 4 beats lights only its
+own rb positions. Dark when nothing is playing; green whenever any looper is
+playing; a quarter already passed turns yellow; the red position marker cycles
+across the 4 pads once per beat, landing on the pad matching the current
+position within the active quarter.
 
 ## 3-bank FX knob surface
 
