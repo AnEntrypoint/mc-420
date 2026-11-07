@@ -31,7 +31,7 @@ sock.on('message', (m) => {
     const i = j && j.audio_peak ? j.audio_peak.in : null;
     if (typeof o === 'number') { if (o > peak.out) peak.out = o; peak.n++; }
     if (typeof i === 'number') { if (i > peak.in) peak.in = i; }
-  } catch (e) { /* ignore */ }
+  } catch (e) {}
 });
 setInterval(() => { sock.send(Buffer.from('status'), 0, 6, 4445, HOST, () => {}); }, 120);
 
