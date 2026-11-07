@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Flashing aloop to an SD card and testing from it","url":"https://anentrypoint.github.io/mc-420/FLASHING.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e2f17eda0e080bb78fc9349475b18473f929cb01">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fc380da2152081616ecc2d746a7738f6a314c135">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -180,7 +180,7 @@ booted Pi:</p>
 latency, Link no-glitch, AP multicast) and the pass criteria. If RT jitter misses
 the target with the stock kernel, the OPTIONAL PREEMPT_RT build is the next
 step (ADR-011); <code class="language-plaintext highlighter-rouge">kernel/build-rt-kernel.sh</code> writes only the config fragment
-(<code class="language-plaintext highlighter-rouge">KVER</code> defaults to 6.12) and the CI job compiles it.</p>
+(<code class="language-plaintext highlighter-rouge">KVER</code> defaults to 6.12) — it does not build a kernel, and no CI job does.</p>
 
 <h2 id="dropping-in-a-user-effect">Dropping in a user effect</h2>
 

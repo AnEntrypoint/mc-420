@@ -113,7 +113,7 @@ See **docs/HARDWARE-TESTS.md** for what each measures (RT jitter, f_uac2 round-t
 latency, Link no-glitch, AP multicast) and the pass criteria. If RT jitter misses
 the target with the stock kernel, the OPTIONAL PREEMPT_RT build is the next
 step (ADR-011); `kernel/build-rt-kernel.sh` writes only the config fragment
-(`KVER` defaults to 6.12) and the CI job compiles it.
+(`KVER` defaults to 6.12) — it does not build a kernel, and no CI job does.
 
 ## Dropping in a user effect
 
