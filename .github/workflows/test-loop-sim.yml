@@ -131,5 +131,16 @@ jobs:
           fi
           node tools/loop-quantization-sim/visual-beat-cue.js --assert-control
 
+      - name: Backwards phrase rebase does not emit a false boundary under the shipped ESP guard
+        run: node tools/loop-quantization-sim/phrase-rebase-backwards.js
+
+      - name: Backwards phrase rebase no-fix control must fail
+        run: |
+          if node tools/loop-quantization-sim/phrase-rebase-backwards.js --no-fix; then
+            echo "negative control unexpectedly passed"
+            exit 1
+          fi
+          node tools/loop-quantization-sim/phrase-rebase-backwards.js --no-fix --assert-control
+
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50
