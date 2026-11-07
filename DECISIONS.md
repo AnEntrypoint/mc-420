@@ -736,3 +736,62 @@ Evidence: test/hardware/link-mesh-status.js:4,31,76,91 (query and two playing pr
 CI-run clause: the sentence "The change ships with a CI run id whose conclusion is success and a check that the job names all four scripts" belongs to the SECOND sentence of gap-76 acceptance (the run-id and name-check requirement), NOT to the first clause "a workflow or an explicit gated runner invokes the four verifiers". The green run witnesses the name-check job and the status-field verifier, not a device execution.
 Alternatives rejected: running the four verifiers on a hosted runner (no mesh, no device, would be a false pass); widening the acceptance to "names the scripts" without the gate (loses the recorded decision); asserting the two playing values must be equal (conflates local transport with the Link session transport).
 Revisit if: a self-hosted runner with the real mesh is added, or the device publishes Link session transport (which would need its own decision).
+
+## ADR-036 — Idle bias governs the ~7 ms budget (2026-11-07, owner ruling decision-7ms-invariant-peer-present-engaged-figure)
+
+Decision: Owner ruling 2026-11-07 (orchestrator-86), verbatim:
+
+> Owner ruling on the ~7 ms budget: "Idle bias governs (Recommended)". The 7 ms budget applies to non-exempt idle bias, which is 4.95 ms and passes. Engaged wet-effect latency stays exempt per AGENTS.md. A live loopback run is optional, not required.
+
+The ~7 ms budget therefore governs NON-EXEMPT IDLE BIAS ONLY. With a Link peer
+present, window 4a measured idleMs medians 4.950 / 4.971 / 4.960 ms before /
+during / after a take, i.e. 4.95 ms nominal, which PASSES. The headline ~7.6 ms
+engaged figure includes the engaged free-transpose wet stage, whose own
+algorithmic latency AGENTS.md exempts. A LIVE USB audio loopback capture with a
+peer present is OPTIONAL and is NOT required to close decision-7ms-invariant-
+peer-present-engaged-figure; no live round-trip was run for this decision.
+Devices stay frozen; this ADR records a decision, no device work.
+
+Why: the two quantities answer different questions. Idle bias is the non-exempt
+end-to-end figure that the ~7 ms invariant protects; the derived engaged figure
+adds a wet-effect stage that the invariant explicitly exempts. Requiring a live
+loopback before the owner could decide would keep windows 4/5/6 and any revert
+blocked on a measurement the owner has now ruled optional. The row's
+acceptance asks for an explicit owner decision naming which quantity governs;
+that decision is recorded above in the owner's own words.
+
+Evidence: `.gm/witness-out/window4a-end-to-end-verdict-20261106.txt` (verdict
+END_TO_END_OVER_7MS, 29 samples, peerViolations 0 in all three phases,
+synced=true, bpm 120, xruns flat at 1, idleMsMedian before 4.950 / during
+4.971 / after 4.960 ms, engagedMsMedian before 7.596 / during 7.617 / after
+7.606 ms, 29/29 samples over 7 ms). Pre-registrations 8ac272b2 / 50d781d8 and
+`test/hardware/window4a-peer-present-latency-preregistration.md`. AGENTS.md:
+"Never add audio-path latency: ~7 ms must never grow, even temporarily;
+stop + ask first. Exempt: engaged wet effect's own algorithmic latency."
+Row `.gm/prd/decision-7ms-invariant-peer-present-engaged-figure.yml`
+acceptance: "An explicit owner decision stating which quantity governs the
+~7 ms budget (non-exempt idle bias versus the headline derived engaged
+figure), recorded in docs/DECISIONS.md with the owner's wording; plus, if the
+owner requires it, a pre-registered LIVE USB loopback end-to-end measurement".
+
+CAVEATS, carried forward unchanged: (1) the ~7.6 ms engaged figure is DERIVED
+from live telemetry (`latency_bias_samples`) plus the shipped +127-sample
+free-transpose constant (63 DUBFX_BS + 64 SOLA read lag), NOT a live USB audio
+loopback capture; no live round-trip has been measured with a peer present.
+(2) The +51.9-sample ALSA roundtrip rise at peer re-acquisition is a
+DEVICE/ALSA STATE EFFECT, additive to the derived engaged figure: parent
+pre-registered verdict 25f46b92 (prereg 02c64a78), and a revert to 77bd050c
+cannot clear it on source evidence (69e47f66 / peer-path-diff verdict
+71adb371). It is not a code-caused latency regression. (3) The ~7 ms value is
+an owner-decided budget; no threshold is lowered or widened by this ADR, and
+no device verdict is claimed here.
+
+Alternatives rejected: making the derived engaged figure govern (would treat
+an exempt wet-effect stage as an invariant breach and keep all device windows
+frozen); requiring a live loopback capture before deciding (the owner ruled it
+optional, and it would leave the row open on a device action the owner has not
+approved); widening the 7 ms budget to accommodate 7.6 ms (a threshold change
+after results, forbidden by the row and AGENTS.md).
+
+Revisit if: the owner orders a live peer-present USB loopback capture, or a
+future build changes the non-exempt idle bias so that it exceeds 7 ms.
