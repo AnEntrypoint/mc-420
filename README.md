@@ -2,23 +2,28 @@
 
 **aloop** is the codebase behind the **MC-420**: a world-first right-to-repair
 live-performance workstation built for punch-in live musicians — looping,
-polyphonic pitch-lock, a granular/modal-resonator synth engine, and hot-swappable
-effects, all on a Raspberry Pi 4 running **pure Linux** (Alpine + PREEMPT_RT).
+polyphonic pitch-lock, a granular/modal-resonator synth engine, and swappable
+effects, all on a Raspberry Pi 4 running **pure Linux** (Alpine with the stock
+`linux-rpi` kernel and userspace RT tuning; a PREEMPT_RT kernel is OPTIONAL,
+ADR-011).
 
 Right-to-repair is not a marketing label here — it is the actual architecture:
 
 - **The DSP is Faust source, not a firmware blob.** Every algorithm — the loop
   engine (`dsp/loop.dsp`), the effects chain, the polyphonic pitch-lock
   (`multitranspose.dsp`), the Resonode modal-resonator synth
-  (`resonode_synth.dsp`), the granulator patches — is readable, editable `.dsp`
+  (`resonode_synth.dsp`) — is readable, editable `.dsp`
   text a repair tech or a curious musician can open, change, and recompile.
-  There is no sealed DSP core.
-- **The control surface is a plain-text mapping, not a hardcoded binding.**
-  Every pad, knob, and CC on the controller maps through a name-keyed control
-  store a technician can re-map with a text editor, no recompile, no vendor
-  tool.
-- **The effects chain is hot-swappable LV2, not a locked plugin slot.** Drop
-  your own `.lv2` bundle onto the flash storage and it loads on the free core —
+  There is no sealed DSP core; the granulator is the exception, C++
+  `Sampler` rather than Faust.
+- **The control surface has a plain-text remap layer.** Four note/CC bindings
+  in `config/controls.conf` (stop-all, half/double speed, lpslope) can be
+  re-mapped with a text editor, no recompile, no vendor tool; the remaining
+  pads, knobs and CCs are handled in `src/control/apc_grid.cpp` and
+  `src/control/midi.cpp`.
+- **The user effect is a plain LV2 directory, not a locked plugin slot.** Drop
+  your own `.lv2` bundle onto the flash storage and it loads at service start
+  (a restart; `Lv2Host::rescanUser()` has no caller) —
   write it in Faust or use any existing LV2 plugin.
 - **The whole runtime is standard Linux**, debuggable with the same tools that
   work on any Linux box — SSH, `/proc`, ALSA, standard cross-compilers — instead
@@ -38,15 +43,15 @@ hardware/DSP/build constraints from real device testing live in
 ## The idea in one picture
 
 ```
-Raspberry Pi 4  ·  Alpine Linux (diskless/RAM)  ·  PREEMPT_RT kernel
+Raspberry Pi 4  ·  Alpine Linux (diskless/RAM)  ·  stock kernel + RT tuning
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Core 0  USB audio I/O   — kernel f_uac2 gadget (Pi is a USB audio device) │
-│ Core 1  home stack      — loop/pitch-lock/Resonode/granulator/FX, compiled  │  compiled into
-│                           straight into the binary, no dynamic loading   │  the aloop binary
-│ Core 3  user-FX LV2     — drop your own .lv2 on flash, hot-swapped        │─┐ in-process
-│ Core 2  control         — Ableton Link · WiFi/AP (autoAP) · MIDI · telem  │─┘ host, NO graph
+│ Core 0  USB gadget/IRQ — f_uac2 mirror; net/USB IRQs → Core 2           │
+│ Core 1  ONE RT worker — Faust halves + LV2 hosts, all serial            │  compiled into
+│                         loaded by directory at boot                     │  the aloop binary
+│ Core 3  reserved label — user_fx = 3 is a log label only                │─┐ in-process
+│ Core 2  control        — Link · WiFi/AP · MIDI · telemetry              │─┘ host, NO graph
 └─────────────────────────────────────────────────────────────────────────┘   (zero added latency)
-   Home stack = ONE Faust program: dsp/aloop.dsp (loop.dsp : effects_runtime.dsp), no Circle source
+   Home stack = aloop_pre.dsp + delayverb.lv2 + aloop_post.dsp, no Circle source
 ```
 
 ## What this buys you (the four goals, all feasible on Pi 4)
@@ -54,9 +59,9 @@ Raspberry Pi 4  ·  Alpine Linux (diskless/RAM)  ·  PREEMPT_RT kernel
 | Goal | How aloop does it | Why it works |
 |------|-------------------|--------------|
 | **Ableton Link over WiFi, no audio glitch** | Official Link lib on the control core; audio reads a lock-free snapshot | Link carries *timing*, not audio — and the kernel WiFi stack fixes the bare-metal once-a-second glitch |
-| **Home FX + your own FX, each on its own core** | Two LV2 plugins, in-process host, pinned to Core 1 and the (previously idle) Core 3 | Multi-core without a JACK/PipeWire graph |
+| **Home FX + your own FX, one worker** | Two LV2 hosts loaded by directory and processed serially on the single RT worker pinned to Core 1 (`home_fx = 1`); `user_fx = 3` is a label | No JACK/PipeWire graph |
 | **No added latency vs bare-metal** | In-process LV2 hosting; the chain fits one core inside the 1.333 ms block | A graph host would add a full period — so aloop never uses one |
-| **Pi is its own Link AP when offline** | autoAP mode-switching (STA when a network exists, AP otherwise) | The bare-metal looper already did this; Linux does it with `hostapd`/`wpa_supplicant` |
+| **Pi is its own Link AP when offline** | autoAP MAC-ordered election on the single `ticker` SSID (STA only for a lower-key peer) | The bare-metal looper already did this; Linux does it with `hostapd`/`wpa_supplicant` |
 
 ## The instrument, not just the looper
 
@@ -74,10 +79,11 @@ punch-in-live performance instrument:
   Its five material shapes each carry their own per-partial decay and gain
   curves, so string/bell/plate/membrane/bar read as distinct objects rather
   than variations on one tone.
-  Both live in the always-on home stack, never gated behind an LV2 host
-  round-trip.
+  Both run on the same audio worker; Resonode is a separate LV2 bundle
+  (`resonode.lv2`) processed only while engaged, and the granulator is C++.
 - **A 4-patch granulator** (Glass/Cloud/Chop/Shatter) blended as a
-  continuous convex morph across 6 knob slots, with real velocity-sensitive
+  continuous convex morph across four patch-weight knobs (plus three direct
+  parameter knobs), with real velocity-sensitive
   grain density, a freeze gesture on the bottom eighth of the scan-rate dial
   that holds the live ring and draws every grain from that snapshot, and
   integer-semitone grain transposition (−12..+12) on the middle band of the
@@ -90,23 +96,27 @@ punch-in-live performance instrument:
   phrase position live.
 - **Continuous USB-drive ring recording** of the fully-effected mix, and an
   Ableton Link mesh (the `ticker` AP) that lets multiple aloop/ESP32 devices
-  share tempo and transport with no manual pairing.
+  share tempo and phase with no manual pairing (Link transport is NEVER shared;
+  `enableStartStopSync(false)`).
 
 See [`docs/CONTROLS.md`](docs/CONTROLS.md) for the full control-surface
 reference and [`AGENTS.md`](AGENTS.md) for the technical constraints behind each
 of these.
 
-## Hot-swappable effects — the moddability story
+## Swappable effects — the moddability story
 
 The user-extension slot is a **plain LV2 plugin directory on flash**, not
 compiled into the firmware:
 
-- The **home stack** (loop engine, pitch-lock, Resonode, granulator, the verified
-  [dubfx](../dubfx)-derived effects chain) is Faust source compiled straight
-  into the `aloop` binary and runs on Core 1 every block.
+- The **home stack** is two Faust halves (`dsp/aloop_pre.dsp` and
+  `dsp/aloop_post.dsp`) compiled into the `aloop` binary around the
+  `delayverb.lv2` split, plus LV2 bundles loaded by directory at boot
+  (`/effects/home`, `/effects/resonode`, `/effects/pitchtracker`). The
+  granulator is C++ `Sampler`. All of it runs on the one RT worker on Core 1.
 - **You** drop your own `.lv2` bundle into `/effects/user/` on the SD card and it
-  loads on the free core (Core 3) — write it in [Faust](https://faust.grame.fr),
-  or use any of the thousands of existing LV2 plugins. See
+  loads at service start on that same worker — write it in
+  [Faust](https://faust.grame.fr), or use any of the thousands of existing LV2
+  plugins. A restart is needed; `Lv2Host::rescanUser()` has no caller. See
   [`effects/README.md`](effects/README.md).
 
 This is only possible because Linux gives us a filesystem and a dynamic linker —
@@ -124,9 +134,9 @@ firmware image.
 | [`docs/`](docs/) | The design record — architecture, the migration map, the decision log, the control-surface reference, and the feasibility study that justifies it all |
 | [`AGENTS.md`](AGENTS.md) | The living technical-constraints reference — hardware quirks, DSP gotchas, deploy/netboot mechanics, all discovered through real-device testing |
 | [`src/`](src/) | The audio thread, in-process LV2 host, Link integration, WiFi/AP control, MIDI/control-surface handling |
-| [`dsp/`](dsp) + [`effects/`](effects/) | The Faust source for the home stack (loop engine, pitch-lock, Resonode, granulator, effects) and the user-drop-in LV2 directory |
+| [`dsp/`](dsp) + [`effects/`](effects/) | The Faust source for the home stack (loop engine, pitch-lock, Resonode, effects) and the user-drop-in LV2 directory; the granulator is C++ in `src/` |
 | [`image/`](image/) | The Alpine diskless image build, multi-board (Pi 3/4/5, Orange Pi Prime) |
-| [`kernel/`](kernel/) | PREEMPT_RT kernel config + RT tuning |
+| [`kernel/`](kernel/) | cmdline + `rt-tune.sh` userspace RT tuning; optional PREEMPT_RT build fragment (ADR-011, not shipped) |
 | [`ci/`](ci/) + [`.github/workflows/`](.github/workflows/) | GitHub Actions that build the LV2 bundles, cross-compile the binary, and assemble each board's image |
 
 ## Status
@@ -138,7 +148,8 @@ granulator, grid-LED visualization, and USB ring-recording work above all
 shipped *after* the migration, each as its own real-hardware-tested change (see
 `git log` for the full history, and [`docs/PLAN.md`](docs/PLAN.md) for the
 current state summary). Work continues as a live, PRD-driven queue
-(`.gm/prd.yml`) rather than a fixed pre-planned list; the queue currently also
+(`.gm/prd/*.yml`, summarized in [`docs/plans.md`](docs/plans.md)) rather than
+a fixed pre-planned list; the queue currently also
 carries an in-progress hardware bring-up effort for a second board target
 (Orange Pi Prime, Allwinner H5) alongside the Pi 4/pi3/pi5 boards already
 supported by the shared boot-tree tooling — see `AGENTS.md`'s Boards section for

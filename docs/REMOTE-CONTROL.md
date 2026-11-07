@@ -18,12 +18,18 @@ looper's UDP `REBOOT` (port 4444) and syslog capture (port 514) are:
 
 ## Enabling it
 
-Unset (no `token=` line) = the listener is **disabled** — the safe default.
-To enable, add to `/etc/aloop.conf`:
+An empty `token` disables the listener: `RemoteControl::start()` returns before
+binding `udp/4446` when the token string is empty
+(`src/control/remote_control.cpp:25-28`). The shipped `config/aloop.conf` sets a
+non-empty `token =` under `[remote]`, and `image/lib-boot-tree.sh` copies that
+file verbatim into the image, so the listener is ENABLED by default — an empty
+token is the opt-out, not the default. `src/main.cpp` parses `token =` as a FLAT
+key (section headers are inert), and that value is committed to the repo:
+REPLACE it before deploying.
 
 ```
 [remote]
-token = <a real secret, not the example below>
+token = <your own secret>
 ```
 
 Anyone who knows this token can reboot the device over the network. Treat it
