@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Glossary","url":"https://anentrypoint.github.io/mc-420/GLOSSARY.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=62ff47b1da45baed2f4a990ebcc25f4e36f0f565">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e2f17eda0e080bb78fc9349475b18473f929cb01">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -67,9 +67,10 @@ multicast). It syncs <em>timing</em>, not audio samples.</li>
 codebase behind the MC-420.</li>
   <li><strong>ALSA</strong> — Advanced Linux Sound Architecture; the Linux kernel audio API. aloop
 reads/writes audio through an ALSA PCM.</li>
-  <li><strong>autoAP</strong> — a mode-switching pattern: a device runs as a WiFi <em>station</em> when a
-known network is available and hosts its own <em>access point</em> when none is,
-switching automatically.</li>
+  <li><strong>autoAP</strong> — <code class="language-plaintext highlighter-rouge">src/net/autoap.sh</code> elects exactly one host for the single open
+<code class="language-plaintext highlighter-rouge">ticker</code> SSID by lowest MAC: a device runs as a WiFi <em>station</em> only when it sees
+a lower-key <code class="language-plaintext highlighter-rouge">ticker</code> BSSID, otherwise it hosts its own <em>access point</em> — even
+while another <code class="language-plaintext highlighter-rouge">ticker</code> network exists.</li>
   <li><strong>block / period</strong> — the batch of audio samples processed at once. aloop uses
 64 samples at 48 kHz = a <strong>1.333 ms</strong> block; all per-block work must finish
 inside that budget.</li>
@@ -84,27 +85,32 @@ effects are written in Faust.</li>
   <li><strong>ffunction</strong> — a Faust mechanism to call an external C function; used to link
 the exact C++ pitch engine into the Faust chain.</li>
   <li><strong>fork-join</strong> — running two tasks on two cores and waiting for both to finish
-within the same block; how aloop can use two cores for <em>parallel</em> effects with
-zero added latency.</li>
+within the same block. A <code class="language-plaintext highlighter-rouge">FEASIBILITY.md</code> design option for <em>parallel</em> effects,
+NOT implemented: the shipped worker processes all LV2 chains serially on one
+pinned core.</li>
   <li><strong>in-process host</strong> — running plugins by calling their code directly inside
 aloop’s own audio callback (as opposed to a separate graph-server process).</li>
   <li><strong>isolcpus</strong> — a Linux boot parameter that removes CPUs from the general
 scheduler so only pinned threads run on them (used for the audio cores).</li>
   <li><strong>LV2</strong> — an open standard plugin format (a <code class="language-plaintext highlighter-rouge">.so</code> + a <code class="language-plaintext highlighter-rouge">.ttl</code> metadata file).
-aloop’s effects are LV2 plugins.</li>
+aloop’s user effect and the resonode/pitchtracker/delayverb bundles are LV2;
+the loop engine is Faust compiled into the binary.</li>
   <li><strong>lilv</strong> — the reference library for discovering and loading LV2 plugins.</li>
   <li><strong>MC-420</strong> — the right-to-repair live-performance workstation this codebase
 implements: looping, polyphonic pitch-lock, Resonode, and the granulator, on a
-Pi 4 running Alpine + PREEMPT_RT.</li>
+Pi 4 running Alpine with the stock <code class="language-plaintext highlighter-rouge">linux-rpi</code> kernel and userspace RT tuning
+(PREEMPT_RT is OPTIONAL, ADR-011).</li>
   <li><strong>mlockall</strong> — a syscall that locks a process’s memory into RAM so it never
 page-faults (page faults would blow the audio deadline).</li>
   <li><strong>Resonode</strong> — the 4-voice, 16-mode-per-voice modal-resonator synth mode
 engaged instantly by SHIFT+tap on the LofiFx pad (edge-triggered, not a
-hold-duration gesture); excited by the
-live input signal (“reactor mode”), not a synthetic oscillator, and replaces
-(never layers over) the dry signal while engaged.</li>
+hold-duration gesture); excited by a blend of live input and its own internal
+mallet/bow exciter (<code class="language-plaintext highlighter-rouge">fx/resonode/input</code> defaults to 0.5), and replaces (never
+layers over) the dry signal while engaged.</li>
   <li><strong>PREEMPT_RT</strong> — the Linux real-time preemption patch/config that bounds
-worst-case scheduling latency to the tens of microseconds.</li>
+worst-case scheduling latency to the tens of microseconds. OPTIONAL here: ADR-011
+ships Alpine’s stock kernel; <code class="language-plaintext highlighter-rouge">kernel/build-rt-kernel.sh</code> writes only a config
+fragment.</li>
   <li><strong>RP1</strong> — the Pi 5 I/O controller; its IRQ handling breaks the audio-core
 isolation aloop relies on, which is why aloop targets Pi 4 (ADR-006).</li>
   <li><strong>SCHED_FIFO</strong> — a Linux real-time scheduling policy; the audio threads run
@@ -112,18 +118,22 @@ under it at high priority.</li>
   <li><strong>pitch-lock (multitranspose)</strong> — the 6-voice polyphonic harmonizer (SHIFT +
 keybed) that locks the input’s pitch to whichever keys are held, Whammy/
 Manipulator-style, replacing the original pitch rather than layering over it.</li>
-  <li><strong>right-to-repair</strong> — the MC-420’s core design premise: every DSP algorithm
-is readable/editable Faust source, every control binding is a plain-text
-mapping, and the runtime is standard Linux — no sealed firmware blob or
-proprietary tooling gates modifying or repairing the instrument.</li>
-  <li><strong>snapshot (double-buffered atomic)</strong> — the lock-free handoff of control
-parameters (Link tempo, MIDI values) from the control core to the audio core:
-a single writer flips between two buffers, the reader always sees a complete
-one. No locks, no tearing.</li>
-  <li><strong>SPSC ring</strong> — single-producer/single-consumer lock-free queue; how audio work
-is dispatched between cores.</li>
+  <li><strong>right-to-repair</strong> — the MC-420’s core design premise: the DSP algorithms are
+readable/editable Faust source (the granulator is C++ <code class="language-plaintext highlighter-rouge">Sampler</code>), four control
+bindings are a plain-text mapping in <code class="language-plaintext highlighter-rouge">config/controls.conf</code>, and the runtime is
+standard Linux — no sealed firmware blob or proprietary tooling gates modifying
+or repairing the instrument.</li>
+  <li><strong>snapshot (double-buffered atomic)</strong> — the lock-free handoff of Link session
+state: <code class="language-plaintext highlighter-rouge">LinkBridge</code> fills the inactive <code class="language-plaintext highlighter-rouge">LinkSnapshot</code> off-thread and flips an
+index, and <code class="language-plaintext highlighter-rouge">audioRead()</code> extrapolates the active one at session tempo. MIDI /
+knob values instead use <code class="language-plaintext highlighter-rouge">ParamStore</code>’s named <code class="language-plaintext highlighter-rouge">std::atomic&lt;float&gt;</code> slots. No
+locks, no tearing.</li>
+  <li><strong>SPSC ring</strong> — single-producer/single-consumer lock-free queue; a bare-metal
+concept. No audio work is dispatched between cores in <code class="language-plaintext highlighter-rouge">src/</code>: the only ring is
+<code class="language-plaintext highlighter-rouge">Sampler</code>’s volatile event queue, and the only lock-free cross-thread handoff
+is the double-buffered <code class="language-plaintext highlighter-rouge">LinkSnapshot</code>.</li>
   <li><strong>STA / AP</strong> — WiFi <em>station</em> (client, joins a network) vs <em>access point</em>
-(hosts a network). autoAP switches between them.</li>
+(hosts a network). autoAP elects between them by lowest MAC on <code class="language-plaintext highlighter-rouge">ticker</code>.</li>
   <li><strong>ticker</strong> — the open SSID hosted by whichever device (aloop or the paired
 <code class="language-plaintext highlighter-rouge">esp-idf-link</code> ESP32 project) wins MAC-ordered host election, forming the
 ad-hoc mesh Ableton Link’s multicast discovery needs.</li>

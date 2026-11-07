@@ -10,13 +10,14 @@ how ongoing work is tracked, rather than a pre-build task list.
 ## What shipped (the original migration, steps 1–11 + on-hardware verify)
 
 - **DSP core**: the loop engine (`dsp/loop.dsp`) and the [dubfx](../dubfx)-derived
-  effects chain, composed into one home-FX Faust program (`dsp/aloop.dsp`),
-  compiled straight into the `aloop` binary — no Circle source anywhere in this
-  tree.
+  effects chain, compiled into the `aloop` binary as two Faust halves
+  (`dsp/aloop_pre.dsp` / `dsp/aloop_post.dsp`) around `delayverb.lv2` — no
+  Circle source anywhere in this tree.
 - **LV2 host**: an in-process host (`src/host/lv2_host.cpp`) that `dlopen`s LV2
   bundles and calls `run()` inside the audio callback directly — no JACK/PipeWire
-  graph, zero added latency. The home stack runs compiled-in on Core 1; a
-  user-supplied `.lv2` bundle runs on Core 3.
+  graph, zero added latency. The compiled-in Faust halves and the
+  user-supplied `.lv2` bundle are both processed serially on the single RT
+  worker pinned to Core 1; `user_fx = 3` is a config label, not a second core.
 - **Ableton Link**: the official Link library integrated via a lock-free
   double-buffered snapshot (`LinkSnapshot`) so the audio thread never touches a
   lock.
@@ -28,7 +29,8 @@ how ongoing work is tracked, rather than a pre-build task list.
   form one ad-hoc mesh for Link discovery with no manual pairing.
 - **USB gadget (f_uac2)**: a real UAC2 gadget on Pi 4/CM4/Zero2 boards, opened
   NONBLOCK as a best-effort mirror of the real instrument-device audio path.
-- **Alpine image + RT kernel + CI**: diskless/RAM Alpine image, PREEMPT_RT with
+- **Alpine image + RT tuning + CI**: diskless/RAM Alpine image shipping the
+  stock `linux-rpi` kernel (PREEMPT_RT is OPTIONAL, ADR-011) with
   `isolcpus`/IRQ-affinity/`SCHED_FIFO`/`mlockall`, built and cross-compiled by
   GitHub Actions for real musl/aarch64 targets.
 - **On-hardware verification**: all of the above has run and been debugged live
@@ -51,8 +53,10 @@ landed. In roughly chronological order (see `git log` for exact commits):
 - A 3-bank FX control surface (dub / guitar / lofi) with per-bank knob
   targets.
 - **Resonode**: a 4-voice, 16-mode-per-voice modal-resonator synth excited by
-  the live input, reachable via a real-hold gesture on the LofiFx pad,
-  replacing (never layering over) the dry/pitch-lock signal while engaged,
+  a blend of live input and its own mallet/bow exciter (`fx/resonode/input`
+  defaults to 0.5), engaged by SHIFT+tap on the LofiFx pad (edge-triggered, not
+  a hold gesture), replacing (never layering over) the dry/pitch-lock signal
+  while engaged,
   with velocity-scaled exciter gain, alias-guarded higher modes, and
   click-free voice stealing.
 - A 4-patch granulator (Glass/Cloud/Chop/Shatter) blended as a
@@ -70,19 +74,22 @@ landed. In roughly chronological order (see `git log` for exact commits):
   apkovl/userspace layer, but the board's Armbian-sourced boot chain
   (BootROM → SPL/U-Boot → boot.scr → kernel) is still being brought up on real
   hardware. This is genuinely open, real diagnostic work, not a placeholder —
-  see the `opi-*` rows in `.gm/prd.yml` for the current live diagnosis state
+  see `docs/plans.md` (generated from `.gm/prd/*.yml`) for the current rows;
+  no `opi-*` rows remain in the live store
   (most recently: a kernel-compile failure in vendored, unrelated Realtek WiFi
   drivers was root-caused and fixed; boot-chain silence after the U-Boot→kernel
   handoff is still being isolated).
-- Whatever else is currently pending in `.gm/prd.yml` — that file, not this
-  document, is the live source of truth for open work. This document is updated
-  periodically to summarize state, not to track it in real time.
+- Whatever else is currently pending in `.gm/prd/*.yml` — that row store,
+  summarized in `docs/plans.md`, not this document, is the live source of truth
+  for open work. This document is updated periodically to summarize state, not
+  to track it in real time.
 
 ## How work is tracked now
 
 There is no fixed drain-order DAG anymore — the migration that DAG described is
 complete. Ongoing work (bug fixes, new DSP features, board ports, doc updates)
-is tracked as rows in `.gm/prd.yml`, added as discovered and resolved with real
+is tracked as rows in `.gm/prd/*.yml` (summarized in `docs/plans.md`),
+added as discovered and resolved with real
 on-device or DawDreamer-JIT witness evidence, per the discipline in
 [`DECISIONS.md`](DECISIONS.md) and `AGENTS.md`. Anything genuinely blocked on
 real Pi 4/board hardware is marked as such rather than claimed done from a dev

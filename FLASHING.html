@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Flashing aloop to an SD card and testing from it","url":"https://anentrypoint.github.io/mc-420/FLASHING.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=62ff47b1da45baed2f4a990ebcc25f4e36f0f565">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e2f17eda0e080bb78fc9349475b18473f929cb01">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -58,28 +58,33 @@
       <h1 id="flashing-aloop-to-an-sd-card-and-testing-from-it">Flashing aloop to an SD card and testing from it</h1>
 
 <blockquote>
-  <p><strong>Testing before you commit to a card?</strong> Pi boards can boot the <em>same</em> aloop tree
-over the network (TFTP/DHCP) with zero reflashing — see
+  <p><strong>Testing before you commit to a card?</strong> Pi boards can boot the served netboot
+root over the network (DHCP + TFTP + HTTP :8080) with zero reflashing — see
 <strong><a href="/mc-420/NETBOOT.html">docs/NETBOOT.md</a></strong>. That’s the fastest way to shake out boot
-issues on a Pi; come back here to burn a card. Orange Pi Prime has no netboot
+issues on a Pi; come back here to burn a card. The served apkovl is PINNED to
+a build (<code class="language-plaintext highlighter-rouge">tools/netboot/refresh-apkovl.sh</code>, <code class="language-plaintext highlighter-rouge">NETBOOT_PIN</code>) and can be STALE —
+check its mtime/md5 against the latest CI build before trusting a boot.
+Orange Pi Prime has no netboot
 path (see <code class="language-plaintext highlighter-rouge">docs/BOOT.md</code>’s board matrix) — it’s SD-card-flash-only.</p>
 </blockquote>
 
 <p>This is the card-test procedure, worked through for the Pi 4 (the best-supported,
 gadget-capable board) — the same steps apply to pi3/pi5/opi-prime with the board’s
 own image filename substituted; see <code class="language-plaintext highlighter-rouge">docs/BOOT.md</code>’s board matrix for what differs
-per board (USB-audio gadget availability, WiFi chip). The CI <code class="language-plaintext highlighter-rouge">build-image</code> workflow
-builds one image PER BOARD (<code class="language-plaintext highlighter-rouge">aloop-&lt;board&gt;-image</code> artifacts: pi3, pi4, pi5,
-opi-prime); flash the one matching your hardware and it comes up as the aloop
-appliance.</p>
+per board (USB-audio gadget availability, WiFi chip). The CI <code class="language-plaintext highlighter-rouge">build-image</code> workflow matrix is <code class="language-plaintext highlighter-rouge">[pi3, pi4, pi5]</code> and uploads one
+<code class="language-plaintext highlighter-rouge">aloop-&lt;board&gt;-image</code> artifact per board; the Orange Pi Prime image comes from
+the separate <code class="language-plaintext highlighter-rouge">build-opi-armbian-source</code> workflow (artifact
+<code class="language-plaintext highlighter-rouge">armbian-opi-prime-pre618-image</code>). Flash the one matching your hardware and it
+comes up as the aloop appliance.</p>
 
 <h2 id="1-get-the-image">1. Get the image</h2>
 
 <ul>
-  <li><strong>From CI:</strong> open the latest green <code class="language-plaintext highlighter-rouge">build-image</code> run on <code class="language-plaintext highlighter-rouge">AnEntrypoint/aloop</code> and
-download the <strong><code class="language-plaintext highlighter-rouge">aloop-&lt;board&gt;-image</code></strong> artifact for your board (e.g.
+  <li><strong>From CI:</strong> open the latest green <code class="language-plaintext highlighter-rouge">build-image</code> run on <code class="language-plaintext highlighter-rouge">AnEntrypoint/mc-420</code>
+and download the <strong><code class="language-plaintext highlighter-rouge">aloop-&lt;board&gt;-image</code></strong> artifact for your board (e.g.
 <code class="language-plaintext highlighter-rouge">aloop-pi4-image</code> → <code class="language-plaintext highlighter-rouge">aloop-pi4.img.gz</code>) — or grab it straight from the
-auto-updated <code class="language-plaintext highlighter-rouge">latest</code> GitHub Release, which carries every board’s image.</li>
+auto-updated <code class="language-plaintext highlighter-rouge">latest</code> GitHub Release, which carries the pi3/pi4/pi5 images
+(its body also names opi-prime, supplied by the separate workflow above).</li>
   <li><strong>Locally</strong> (on a Linux/Alpine host with <code class="language-plaintext highlighter-rouge">mtools dosfstools fdisk curl</code>; Orange Pi
 Prime additionally needs <code class="language-plaintext highlighter-rouge">e2fsprogs xz-utils util-linux</code> and real root for
 <code class="language-plaintext highlighter-rouge">losetup</code>/<code class="language-plaintext highlighter-rouge">mount</code>):
@@ -102,11 +107,13 @@ Prime additionally needs <code class="language-plaintext highlighter-rouge">e2fs
 <ul>
   <li><strong>Raspberry Pi Imager</strong> → “Use custom image” → <code class="language-plaintext highlighter-rouge">aloop-pi4.img</code> → your SD card.</li>
   <li><strong>balenaEtcher</strong> → select the image → the card → Flash.</li>
-  <li><strong><code class="language-plaintext highlighter-rouge">dd</code></strong> (Linux/macOS, double-check the device — this erases it):
+  <li><strong><code class="language-plaintext highlighter-rouge">dd</code></strong> (double-check the device — this erases it):
     <div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># find the card first (lsblk / diskutil list); then, replacing sdX:</span>
-<span class="nb">sudo dd </span><span class="k">if</span><span class="o">=</span>aloop-pi4.img <span class="nv">of</span><span class="o">=</span>/dev/sdX <span class="nv">bs</span><span class="o">=</span>4M <span class="nv">conv</span><span class="o">=</span>fsync <span class="nv">status</span><span class="o">=</span>progress
+<span class="nb">sudo dd </span><span class="k">if</span><span class="o">=</span>aloop-pi4.img <span class="nv">of</span><span class="o">=</span>/dev/sdX <span class="nv">bs</span><span class="o">=</span>4M <span class="nv">conv</span><span class="o">=</span>fsync
 <span class="nb">sync</span>
 </code></pre></div>    </div>
+    <p><code class="language-plaintext highlighter-rouge">status=progress</code> is GNU <code class="language-plaintext highlighter-rouge">dd</code>-only; macOS <code class="language-plaintext highlighter-rouge">dd</code> rejects it. The CI
+instructions use the portable <code class="language-plaintext highlighter-rouge">bs=4M conv=fsync</code> form.</p>
   </li>
 </ul>
 
@@ -140,14 +147,16 @@ GPIO header lets you watch boot without a display —
   <li>Alpine boots diskless into RAM and restores the <code class="language-plaintext highlighter-rouge">aloop.apkovl.tar.gz</code> overlay.</li>
   <li><code class="language-plaintext highlighter-rouge">/etc/local.d/*.start</code> run in order: <strong>10</strong> RT-tune (isolcpus already applied via
 cmdline; sets IRQ affinity + rt limits), <strong>20</strong> brings up the <code class="language-plaintext highlighter-rouge">f_uac2</code> USB-audio
-gadget, then the <strong>aloop</strong> + <strong>autoap</strong> OpenRC services start (supervised —
-they respawn on crash; logs in <code class="language-plaintext highlighter-rouge">/var/log/aloop.log</code>).</li>
+gadget, <strong>25</strong> installs USB automount, then the <strong>aloop</strong> + <strong>autoap</strong> OpenRC
+services start (supervised — they respawn on crash; logs in
+<code class="language-plaintext highlighter-rouge">/var/log/aloop.log</code>).</li>
   <li>The host should enumerate the <code class="language-plaintext highlighter-rouge">aloop</code> USB soundcard within a few seconds of the
 OTG cable being connected.</li>
-  <li><strong>WiFi / Ableton Link:</strong> <code class="language-plaintext highlighter-rouge">autoap</code> joins a known network if <code class="language-plaintext highlighter-rouge">wpa_supplicant.conf</code>
-has one; otherwise it hosts an AP (SSID <code class="language-plaintext highlighter-rouge">ticker</code>, <code class="language-plaintext highlighter-rouge">ap_isolate=0</code> so Link
-multicast works). Put a Link-enabled app on the same network and it should
-sync tempo.</li>
+  <li><strong>WiFi / Ableton Link:</strong> <code class="language-plaintext highlighter-rouge">autoap</code> elects one host for the single <code class="language-plaintext highlighter-rouge">ticker</code> SSID
+by lowest MAC (STA only when a lower-key peer AP is visible; AP otherwise,
+<code class="language-plaintext highlighter-rouge">ap_isolate=0</code>), and installs the <code class="language-plaintext highlighter-rouge">224.0.0.0/4 dev wlan0</code> route Link multicast
+needs. Put a Link-enabled app on the same network and it should sync tempo;
+transport is never shared.</li>
 </ul>
 
 <h2 id="5-verify-its-alive">5. Verify it’s alive</h2>
@@ -169,14 +178,16 @@ booted Pi:</p>
 </code></pre></div></div>
 <p>See <strong>docs/HARDWARE-TESTS.md</strong> for what each measures (RT jitter, f_uac2 round-trip
 latency, Link no-glitch, AP multicast) and the pass criteria. If RT jitter misses
-the target with the stock kernel, build the PREEMPT_RT kernel
-(<code class="language-plaintext highlighter-rouge">kernel/build-rt-kernel.sh</code>, ADR-011) and re-flash.</p>
+the target with the stock kernel, the OPTIONAL PREEMPT_RT build is the next
+step (ADR-011); <code class="language-plaintext highlighter-rouge">kernel/build-rt-kernel.sh</code> writes only the config fragment
+(<code class="language-plaintext highlighter-rouge">KVER</code> defaults to 6.12) and the CI job compiles it.</p>
 
 <h2 id="dropping-in-a-user-effect">Dropping in a user effect</h2>
 
-<p>The free core runs a swappable user LV2. Drop an <code class="language-plaintext highlighter-rouge">.lv2</code> bundle into <code class="language-plaintext highlighter-rouge">/effects/user</code>
-(mount the card’s boot FAT partition on any computer, or <code class="language-plaintext highlighter-rouge">lbu add</code> on the device)
-and reboot — the in-process host loads it after the home stack, zero added latency.</p>
+<p>The single audio worker runs a swappable user LV2. Drop an <code class="language-plaintext highlighter-rouge">.lv2</code> bundle into
+<code class="language-plaintext highlighter-rouge">/effects/user</code> (mount the card’s boot FAT partition on any computer, or <code class="language-plaintext highlighter-rouge">lbu
+add</code> on the device) and reboot — the in-process host loads it at startup and
+processes it serially after <code class="language-plaintext highlighter-rouge">homeFx</code>, zero added latency. There is no live rescan.</p>
 
 
       </section>

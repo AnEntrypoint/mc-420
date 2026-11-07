@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Current state and how work is tracked","url":"https://anentrypoint.github.io/mc-420/PLAN.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=62ff47b1da45baed2f4a990ebcc25f4e36f0f565">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e2f17eda0e080bb78fc9349475b18473f929cb01">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -68,13 +68,14 @@ how ongoing work is tracked, rather than a pre-build task list.</p>
 
 <ul>
   <li><strong>DSP core</strong>: the loop engine (<code class="language-plaintext highlighter-rouge">dsp/loop.dsp</code>) and the <a href="../dubfx">dubfx</a>-derived
-effects chain, composed into one home-FX Faust program (<code class="language-plaintext highlighter-rouge">dsp/aloop.dsp</code>),
-compiled straight into the <code class="language-plaintext highlighter-rouge">aloop</code> binary — no Circle source anywhere in this
-tree.</li>
+effects chain, compiled into the <code class="language-plaintext highlighter-rouge">aloop</code> binary as two Faust halves
+(<code class="language-plaintext highlighter-rouge">dsp/aloop_pre.dsp</code> / <code class="language-plaintext highlighter-rouge">dsp/aloop_post.dsp</code>) around <code class="language-plaintext highlighter-rouge">delayverb.lv2</code> — no
+Circle source anywhere in this tree.</li>
   <li><strong>LV2 host</strong>: an in-process host (<code class="language-plaintext highlighter-rouge">src/host/lv2_host.cpp</code>) that <code class="language-plaintext highlighter-rouge">dlopen</code>s LV2
 bundles and calls <code class="language-plaintext highlighter-rouge">run()</code> inside the audio callback directly — no JACK/PipeWire
-graph, zero added latency. The home stack runs compiled-in on Core 1; a
-user-supplied <code class="language-plaintext highlighter-rouge">.lv2</code> bundle runs on Core 3.</li>
+graph, zero added latency. The compiled-in Faust halves and the
+user-supplied <code class="language-plaintext highlighter-rouge">.lv2</code> bundle are both processed serially on the single RT
+worker pinned to Core 1; <code class="language-plaintext highlighter-rouge">user_fx = 3</code> is a config label, not a second core.</li>
   <li><strong>Ableton Link</strong>: the official Link library integrated via a lock-free
 double-buffered snapshot (<code class="language-plaintext highlighter-rouge">LinkSnapshot</code>) so the audio thread never touches a
 lock.</li>
@@ -86,7 +87,8 @@ host election so aloop and the paired <code class="language-plaintext highlighte
 form one ad-hoc mesh for Link discovery with no manual pairing.</li>
   <li><strong>USB gadget (f_uac2)</strong>: a real UAC2 gadget on Pi 4/CM4/Zero2 boards, opened
 NONBLOCK as a best-effort mirror of the real instrument-device audio path.</li>
-  <li><strong>Alpine image + RT kernel + CI</strong>: diskless/RAM Alpine image, PREEMPT_RT with
+  <li><strong>Alpine image + RT tuning + CI</strong>: diskless/RAM Alpine image shipping the
+stock <code class="language-plaintext highlighter-rouge">linux-rpi</code> kernel (PREEMPT_RT is OPTIONAL, ADR-011) with
 <code class="language-plaintext highlighter-rouge">isolcpus</code>/IRQ-affinity/<code class="language-plaintext highlighter-rouge">SCHED_FIFO</code>/<code class="language-plaintext highlighter-rouge">mlockall</code>, built and cross-compiled by
 GitHub Actions for real musl/aarch64 targets.</li>
   <li><strong>On-hardware verification</strong>: all of the above has run and been debugged live
@@ -111,8 +113,10 @@ pitch-synchronous shift windows and round-robin voice stealing.</li>
   <li>A 3-bank FX control surface (dub / guitar / lofi) with per-bank knob
 targets.</li>
   <li><strong>Resonode</strong>: a 4-voice, 16-mode-per-voice modal-resonator synth excited by
-the live input, reachable via a real-hold gesture on the LofiFx pad,
-replacing (never layering over) the dry/pitch-lock signal while engaged,
+a blend of live input and its own mallet/bow exciter (<code class="language-plaintext highlighter-rouge">fx/resonode/input</code>
+defaults to 0.5), engaged by SHIFT+tap on the LofiFx pad (edge-triggered, not
+a hold gesture), replacing (never layering over) the dry/pitch-lock signal
+while engaged,
 with velocity-scaled exciter gain, alias-guarded higher modes, and
 click-free voice stealing.</li>
   <li>A 4-patch granulator (Glass/Cloud/Chop/Shatter) blended as a
@@ -132,20 +136,23 @@ AUDIOENGINE cases).</li>
 apkovl/userspace layer, but the board’s Armbian-sourced boot chain
 (BootROM → SPL/U-Boot → boot.scr → kernel) is still being brought up on real
 hardware. This is genuinely open, real diagnostic work, not a placeholder —
-see the <code class="language-plaintext highlighter-rouge">opi-*</code> rows in <code class="language-plaintext highlighter-rouge">.gm/prd.yml</code> for the current live diagnosis state
+see <code class="language-plaintext highlighter-rouge">docs/plans.md</code> (generated from <code class="language-plaintext highlighter-rouge">.gm/prd/*.yml</code>) for the current rows;
+no <code class="language-plaintext highlighter-rouge">opi-*</code> rows remain in the live store
 (most recently: a kernel-compile failure in vendored, unrelated Realtek WiFi
 drivers was root-caused and fixed; boot-chain silence after the U-Boot→kernel
 handoff is still being isolated).</li>
-  <li>Whatever else is currently pending in <code class="language-plaintext highlighter-rouge">.gm/prd.yml</code> — that file, not this
-document, is the live source of truth for open work. This document is updated
-periodically to summarize state, not to track it in real time.</li>
+  <li>Whatever else is currently pending in <code class="language-plaintext highlighter-rouge">.gm/prd/*.yml</code> — that row store,
+summarized in <code class="language-plaintext highlighter-rouge">docs/plans.md</code>, not this document, is the live source of truth
+for open work. This document is updated periodically to summarize state, not
+to track it in real time.</li>
 </ul>
 
 <h2 id="how-work-is-tracked-now">How work is tracked now</h2>
 
 <p>There is no fixed drain-order DAG anymore — the migration that DAG described is
 complete. Ongoing work (bug fixes, new DSP features, board ports, doc updates)
-is tracked as rows in <code class="language-plaintext highlighter-rouge">.gm/prd.yml</code>, added as discovered and resolved with real
+is tracked as rows in <code class="language-plaintext highlighter-rouge">.gm/prd/*.yml</code> (summarized in <code class="language-plaintext highlighter-rouge">docs/plans.md</code>),
+added as discovered and resolved with real
 on-device or DawDreamer-JIT witness evidence, per the discipline in
 <a href="/mc-420/DECISIONS.html"><code class="language-plaintext highlighter-rouge">DECISIONS.md</code></a> and <code class="language-plaintext highlighter-rouge">AGENTS.md</code>. Anything genuinely blocked on
 real Pi 4/board hardware is marked as such rather than claimed done from a dev

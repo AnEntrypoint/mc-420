@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Remote control — reboot + log-tail over the network","url":"https://anentrypoint.github.io/mc-420/REMOTE-CONTROL.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=62ff47b1da45baed2f4a990ebcc25f4e36f0f565">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=e2f17eda0e080bb78fc9349475b18473f929cb01">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -77,11 +77,17 @@ Linux: <code class="language-plaintext highlighter-rouge">reboot(2)</code> is a 
 
 <h2 id="enabling-it">Enabling it</h2>
 
-<p>Unset (no <code class="language-plaintext highlighter-rouge">token=</code> line) = the listener is <strong>disabled</strong> — the safe default.
-To enable, add to <code class="language-plaintext highlighter-rouge">/etc/aloop.conf</code>:</p>
+<p>An empty <code class="language-plaintext highlighter-rouge">token</code> disables the listener: <code class="language-plaintext highlighter-rouge">RemoteControl::start()</code> returns before
+binding <code class="language-plaintext highlighter-rouge">udp/4446</code> when the token string is empty
+(<code class="language-plaintext highlighter-rouge">src/control/remote_control.cpp:25-28</code>). The shipped <code class="language-plaintext highlighter-rouge">config/aloop.conf</code> sets a
+non-empty <code class="language-plaintext highlighter-rouge">token =</code> under <code class="language-plaintext highlighter-rouge">[remote]</code>, and <code class="language-plaintext highlighter-rouge">image/lib-boot-tree.sh</code> copies that
+file verbatim into the image, so the listener is ENABLED by default — an empty
+token is the opt-out, not the default. <code class="language-plaintext highlighter-rouge">src/main.cpp</code> parses <code class="language-plaintext highlighter-rouge">token =</code> as a FLAT
+key (section headers are inert), and that value is committed to the repo:
+REPLACE it before deploying.</p>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[remote]
-token = &lt;a real secret, not the example below&gt;
+token = &lt;your own secret&gt;
 </code></pre></div></div>
 
 <p>Anyone who knows this token can reboot the device over the network. Treat it

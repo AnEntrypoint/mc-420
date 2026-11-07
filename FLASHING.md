@@ -1,25 +1,30 @@
 # Flashing aloop to an SD card and testing from it
 
-> **Testing before you commit to a card?** Pi boards can boot the *same* aloop tree
-> over the network (TFTP/DHCP) with zero reflashing — see
+> **Testing before you commit to a card?** Pi boards can boot the served netboot
+> root over the network (DHCP + TFTP + HTTP :8080) with zero reflashing — see
 > **[docs/NETBOOT.md](NETBOOT.md)**. That's the fastest way to shake out boot
-> issues on a Pi; come back here to burn a card. Orange Pi Prime has no netboot
+> issues on a Pi; come back here to burn a card. The served apkovl is PINNED to
+> a build (`tools/netboot/refresh-apkovl.sh`, `NETBOOT_PIN`) and can be STALE —
+> check its mtime/md5 against the latest CI build before trusting a boot.
+> Orange Pi Prime has no netboot
 > path (see `docs/BOOT.md`'s board matrix) — it's SD-card-flash-only.
 
 This is the card-test procedure, worked through for the Pi 4 (the best-supported,
 gadget-capable board) — the same steps apply to pi3/pi5/opi-prime with the board's
 own image filename substituted; see `docs/BOOT.md`'s board matrix for what differs
-per board (USB-audio gadget availability, WiFi chip). The CI `build-image` workflow
-builds one image PER BOARD (`aloop-<board>-image` artifacts: pi3, pi4, pi5,
-opi-prime); flash the one matching your hardware and it comes up as the aloop
-appliance.
+per board (USB-audio gadget availability, WiFi chip). The CI `build-image` workflow matrix is `[pi3, pi4, pi5]` and uploads one
+`aloop-<board>-image` artifact per board; the Orange Pi Prime image comes from
+the separate `build-opi-armbian-source` workflow (artifact
+`armbian-opi-prime-pre618-image`). Flash the one matching your hardware and it
+comes up as the aloop appliance.
 
 ## 1. Get the image
 
-- **From CI:** open the latest green `build-image` run on `AnEntrypoint/aloop` and
-  download the **`aloop-<board>-image`** artifact for your board (e.g.
+- **From CI:** open the latest green `build-image` run on `AnEntrypoint/mc-420`
+  and download the **`aloop-<board>-image`** artifact for your board (e.g.
   `aloop-pi4-image` → `aloop-pi4.img.gz`) — or grab it straight from the
-  auto-updated `latest` GitHub Release, which carries every board's image.
+  auto-updated `latest` GitHub Release, which carries the pi3/pi4/pi5 images
+  (its body also names opi-prime, supplied by the separate workflow above).
 - **Locally** (on a Linux/Alpine host with `mtools dosfstools fdisk curl`; Orange Pi
   Prime additionally needs `e2fsprogs xz-utils util-linux` and real root for
   `losetup`/`mount`):
@@ -41,12 +46,14 @@ Pick one:
 
 - **Raspberry Pi Imager** → "Use custom image" → `aloop-pi4.img` → your SD card.
 - **balenaEtcher** → select the image → the card → Flash.
-- **`dd`** (Linux/macOS, double-check the device — this erases it):
+- **`dd`** (double-check the device — this erases it):
   ```sh
   # find the card first (lsblk / diskutil list); then, replacing sdX:
-  sudo dd if=aloop-pi4.img of=/dev/sdX bs=4M conv=fsync status=progress
+  sudo dd if=aloop-pi4.img of=/dev/sdX bs=4M conv=fsync
   sync
   ```
+  `status=progress` is GNU `dd`-only; macOS `dd` rejects it. The CI
+  instructions use the portable `bs=4M conv=fsync` form.
 
 ## 3. Wire it up
 
@@ -72,14 +79,16 @@ Pick one:
 - Alpine boots diskless into RAM and restores the `aloop.apkovl.tar.gz` overlay.
 - `/etc/local.d/*.start` run in order: **10** RT-tune (isolcpus already applied via
   cmdline; sets IRQ affinity + rt limits), **20** brings up the `f_uac2` USB-audio
-  gadget, then the **aloop** + **autoap** OpenRC services start (supervised —
-  they respawn on crash; logs in `/var/log/aloop.log`).
+  gadget, **25** installs USB automount, then the **aloop** + **autoap** OpenRC
+  services start (supervised — they respawn on crash; logs in
+  `/var/log/aloop.log`).
 - The host should enumerate the `aloop` USB soundcard within a few seconds of the
   OTG cable being connected.
-- **WiFi / Ableton Link:** `autoap` joins a known network if `wpa_supplicant.conf`
-  has one; otherwise it hosts an AP (SSID `ticker`, `ap_isolate=0` so Link
-  multicast works). Put a Link-enabled app on the same network and it should
-  sync tempo.
+- **WiFi / Ableton Link:** `autoap` elects one host for the single `ticker` SSID
+  by lowest MAC (STA only when a lower-key peer AP is visible; AP otherwise,
+  `ap_isolate=0`), and installs the `224.0.0.0/4 dev wlan0` route Link multicast
+  needs. Put a Link-enabled app on the same network and it should sync tempo;
+  transport is never shared.
 
 ## 5. Verify it's alive
 
@@ -102,11 +111,13 @@ booted Pi:
 ```
 See **docs/HARDWARE-TESTS.md** for what each measures (RT jitter, f_uac2 round-trip
 latency, Link no-glitch, AP multicast) and the pass criteria. If RT jitter misses
-the target with the stock kernel, build the PREEMPT_RT kernel
-(`kernel/build-rt-kernel.sh`, ADR-011) and re-flash.
+the target with the stock kernel, the OPTIONAL PREEMPT_RT build is the next
+step (ADR-011); `kernel/build-rt-kernel.sh` writes only the config fragment
+(`KVER` defaults to 6.12) and the CI job compiles it.
 
 ## Dropping in a user effect
 
-The free core runs a swappable user LV2. Drop an `.lv2` bundle into `/effects/user`
-(mount the card's boot FAT partition on any computer, or `lbu add` on the device)
-and reboot — the in-process host loads it after the home stack, zero added latency.
+The single audio worker runs a swappable user LV2. Drop an `.lv2` bundle into
+`/effects/user` (mount the card's boot FAT partition on any computer, or `lbu
+add` on the device) and reboot — the in-process host loads it at startup and
+processes it serially after `homeFx`, zero added latency. There is no live rescan.
