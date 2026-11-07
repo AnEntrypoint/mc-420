@@ -62,3 +62,47 @@ unbounded; that degraded path needs its own on-device capture.
    before any hot-deploy, and restart `rc-service aloop` between MIDI scenarios.
 
 Clause B is held; this document does not close the row.
+
+## Clause B - APC Key25 own latency measurement method (fixed before the run)
+
+NOT RUN until the owner explicitly approves a quiet device window. The 30 ms
+`kBeatLeadMs` lead (`src/control/midi.cpp:82`) is a COMPENSATION ASSUMPTION:
+it assumes the APC Key25 own LED/MIDI latency is ~30 ms. Clause A proves only
+the lead-compensated SOFTWARE send (max error 0.667 ms), so the APC latency
+must be measured, not assumed.
+
+Method, fixed now:
+
+1. Instrument the software send at `snd_rawmidi_write` (`src/control/midi.cpp:132-135`)
+   with a `CLOCK_MONOTONIC` timestamp in a diagnostic build; the audio path is
+   unchanged and no audio-path latency may grow.
+2. Place a photodiode on the beat-pad LED and sample it at >= 1000 Hz on the
+   same host clock; a >= 1000 fps camera is the fallback. Record the LED onset
+   as the first sample above a same-run dark baseline by >= 10 dB.
+3. For EACH covered case (60, 90, 120, 157.2 and 180 BPM; rb 3, 5, 6 and 7;
+   before and after a Pi phase rebase), collect >= 30 beat cues. For each cue
+   compute: software send offset = send time - Link beat origin; APC own
+   latency = LED onset - software send; end-to-end visual onset = LED onset -
+   Link beat origin.
+4. Report per case: count, HOP-LEVEL MEDIAN, max and p95 of all three
+   quantities. Replace the assumed 30 ms with the measured median and record
+   the numbers in `docs/measurements-archive.md`; decisions in
+   `docs/DECISIONS.md`; rows stay in `docs/plans.md`.
+5. Negative control, fixed now: inject a deliberate +20 ms send delay in a
+   separate diagnostic arm. It must make the end-to-end gate FAIL.
+   If it PASSES, the measurement is INVALID: stop and report.
+
+## Clause B pass gate, fixed before the run
+
+- PASS only when the HOP-LEVEL MEDIAN end-to-end visual onset is within 7 ms
+  of the Link beat origin at EVERY covered case, and no single cue exceeds
+  7 ms. The measured APC own latency must be consistent with the 30 ms lead
+  within the 7 ms budget, i.e. |measured median APC latency - 30 ms| <= 7 ms.
+- A run whose segment RMS is not >= 10 dB over a same-run silent control is
+  INVALID, as is any click/tear witness through `snd-aloop`. Clean ingress is
+  the Focusrite loopback. Telemetry is QUERY-ONLY over UDP 4445; never cache a
+  snapshot. The Pi clock is UNSET, so cross-device correlation needs an offset.
+- A FAIL is a FAIL: no threshold is widened after results and no verdict is
+  reinterpreted. The owner ~7 ms invariant decision is NOT made here.
+- This plan does not run until the owner approves a window; Clause B stays
+  HELD and it does not close `.gm/prd/visual-metronome-beat-cue-onset.yml`.
