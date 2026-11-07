@@ -30,7 +30,9 @@ jobs:
           mkdir -p _site_src
           cp -r docs/. _site_src/
           cp AGENTS.md _site_src/AGENTS.md
-          cp -r docs/demo/. _site_src/
+          cp docs/manual.html _site_src/index.html
+          mkdir -p _site_src/demo
+          cp -r docs/demo/. _site_src/demo/
           mkdir -p _site_src/dsp _site_src/effects
           cp -r dsp/. _site_src/dsp/
           cp -r effects/. _site_src/effects/
@@ -43,7 +45,8 @@ jobs:
 
           Real-time C++/Faust audio looper for Raspberry Pi / Orange Pi hardware.
 
-          [Control surface demo](.)
+          [Printable manual](index.html)
+          [Control surface simulator](demo/)
 
           - [Design record index](README.md)
           - [AGENTS.md — technical constraints reference](AGENTS.md)
@@ -54,8 +57,6 @@ jobs:
           markdown: kramdown
           include:
             - AGENTS.md
-          exclude:
-            - demo
           CFGEOF
 
       - name: Build with Jekyll
