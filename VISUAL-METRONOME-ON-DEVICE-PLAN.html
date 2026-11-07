@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Visual beat cue - on-device measurement plan (HELD) | aloop</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Visual beat cue - on-device measurement plan (HELD)" />
+<meta property="og:locale" content="en_US" />
+<link rel="canonical" href="https://anentrypoint.github.io/mc-420/VISUAL-METRONOME-ON-DEVICE-PLAN.html" />
+<meta property="og:url" content="https://anentrypoint.github.io/mc-420/VISUAL-METRONOME-ON-DEVICE-PLAN.html" />
+<meta property="og:site_name" content="aloop" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Visual beat cue - on-device measurement plan (HELD)" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","headline":"Visual beat cue - on-device measurement plan (HELD)","url":"https://anentrypoint.github.io/mc-420/VISUAL-METRONOME-ON-DEVICE-PLAN.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=9744ee98fca6cc5cb5f3b9ca721ca0033ae738bb">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/mc-420/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1><a href="https://anentrypoint.github.io/mc-420/">aloop</a></h1>
+
+        
+
+        <p></p>
+
+        
+        <p class="view"><a href="https://github.com/AnEntrypoint/mc-420">View the Project on GitHub <small>AnEntrypoint/mc-420</small></a></p>
+        
+
+        
+
+        
+      </header>
+      <section>
+
+      <h1 id="visual-beat-cue---on-device-measurement-plan-held">Visual beat cue - on-device measurement plan (HELD)</h1>
+
+<p>This is a plan document only. No device work, no polls, no MIDI injection and no
+rc-service restarts have been performed for it. Clause B of
+<code class="language-plaintext highlighter-rouge">.gm/prd/visual-metronome-beat-cue-onset.yml</code> stays held until an owner-approved
+quiet Pi window.</p>
+
+<h2 id="what-is-already-proven-offline-clause-a">What is already proven offline (Clause A)</h2>
+
+<p><code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim/visual-beat-cue.js</code> injects a clock, schedules beat
+cues from the Link beat grid, and measures the software send against the beat
+origin it marks. Coverage: 60/90/120/157.2/180 BPM, rb 3/5/6/7, and three rebase
+modes (none, exact +134-beat impose, snap). Fixed arm: 60/60 cases pass, maximum
+software send error 0.667 ms against the 7 ms gate. A deliberate +20 ms delay
+control fails 60/60 cases (20.667 ms) and is asserted by CI.</p>
+
+<p>The sim models <code class="language-plaintext highlighter-rouge">src/control/midi.cpp:82</code> <code class="language-plaintext highlighter-rouge">kBeatLeadMs = 30</code> as a compensation
+for an <strong>assumed</strong> APC Key25 LED/MIDI latency of 30 ms. The raw software send
+therefore sits 30 ms early by design, and the offline gate is on the
+lead-compensated software cue onset. The sim cannot measure the APC real
+latency, so it proves no end-to-end number.</p>
+
+<h2 id="cue-path-to-instrument-fileline">Cue path to instrument (file:line)</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Stage</th>
+      <th>Location</th>
+      <th>Clock / delay</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Poll wake</td>
+      <td><code class="language-plaintext highlighter-rouge">src/control/midi.cpp:223-228</code></td>
+      <td><code class="language-plaintext highlighter-rouge">waitMs = millisToNextBeat(bm, 100) - 30</code>, clamped to &gt;= 1 ms</td>
+    </tr>
+    <tr>
+      <td>Beat index</td>
+      <td><code class="language-plaintext highlighter-rouge">src/control/midi.cpp:239-246</code></td>
+      <td><code class="language-plaintext highlighter-rouge">LinkBridge::beatMarkNow()</code>, Link clock micros, quantum 16 (<code class="language-plaintext highlighter-rouge">link_bridge.cpp:234-253</code>)</td>
+    </tr>
+    <tr>
+      <td>Telemetry mark</td>
+      <td><code class="language-plaintext highlighter-rouge">src/control/telemetry.cpp:41-46</code></td>
+      <td><code class="language-plaintext highlighter-rouge">CLOCK_MONOTONIC</code> stamp, query-only UDP 4445</td>
+    </tr>
+    <tr>
+      <td>LED flash</td>
+      <td><code class="language-plaintext highlighter-rouge">src/control/apc_leds.h:136-160</code></td>
+      <td><code class="language-plaintext highlighter-rouge">beatEdgeMs_ = now_ms</code> on index change, 100 ms flash</td>
+    </tr>
+    <tr>
+      <td>Throttle bypass</td>
+      <td><code class="language-plaintext highlighter-rouge">src/control/apc_leds.h:94-98,165-168</code></td>
+      <td>beat pads skip the 33 ms full-grid refresh</td>
+    </tr>
+    <tr>
+      <td>MIDI write</td>
+      <td><code class="language-plaintext highlighter-rouge">src/control/midi.cpp:132-135</code></td>
+      <td>synchronous <code class="language-plaintext highlighter-rouge">snd_rawmidi_write</code>, 0x90 note + colour</td>
+    </tr>
+    <tr>
+      <td>Coalescing</td>
+      <td><code class="language-plaintext highlighter-rouge">src/control/apc_leds.h</code> <code class="language-plaintext highlighter-rouge">sendCoalesced</code></td>
+      <td>128-entry change cache, not a queue</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>There is no queue, ring, mutex or UDP hop between the beat grid and MIDI out. The
+200 ms control tick (<code class="language-plaintext highlighter-rouge">src/main.cpp:188-192</code>) drives Link snapshot and telemetry
+only. With Link unusable the fallback is a 100 ms poll reading the audio-thread
+<code class="language-plaintext highlighter-rouge">gridBeatIndex</code> (<code class="language-plaintext highlighter-rouge">src/dsp/audio_thread.cpp:1092-1115</code>), whose jitter is
+unbounded; that degraded path needs its own on-device capture.</p>
+
+<h2 id="clause-b-measurement-to-be-run-in-the-quiet-window">Clause B measurement (to be run in the quiet window)</h2>
+
+<ol>
+  <li>Record the Link beat origin independently at the same wall clock as the LED,
+using a photodiode or high-speed camera on the APC beat pad and a
+<code class="language-plaintext highlighter-rouge">CLOCK_MONOTONIC</code>-stamped trace of <code class="language-plaintext highlighter-rouge">beatMarkNow()</code> / UDP 4445
+<code class="language-plaintext highlighter-rouge">beat_pad_mark</code> from the same Pi. Never cache the telemetry snapshot.</li>
+  <li>Timestamp the software send at <code class="language-plaintext highlighter-rouge">snd_rawmidi_write</code> (<code class="language-plaintext highlighter-rouge">midi.cpp:132-135</code>) in a
+diagnostic build; the difference between that instant and the beat origin
+gives the software send offset, and the difference between the photodiode
+onset and the beat origin gives the end-to-end visual onset.</li>
+  <li>Measure the APC own latency separately as (photodiode onset - software send)
+so the assumed 30 ms can be replaced with a measured value. Report both
+numbers into <code class="language-plaintext highlighter-rouge">docs/measurements-archive.md</code> and any decision into
+<code class="language-plaintext highlighter-rouge">docs/DECISIONS.md</code>; rows stay in <code class="language-plaintext highlighter-rouge">docs/plans.md</code>.</li>
+  <li>Cover 60, 90, 120, 157.2 and 180 BPM; rb 3, 5, 6 and 7; before and after a Pi
+phase rebase. Judge the HOP-LEVEL MEDIAN, not a whole-segment estimate.</li>
+  <li>PASS only when the end-to-end visual onset is within 7 ms of the Link beat
+origin at every covered case. A run whose segment RMS is not &gt;= 10 dB over a
+same-run silent control is INVALID, as is any click/tear witness through
+<code class="language-plaintext highlighter-rouge">snd-aloop</code>.</li>
+  <li>Device is single-writer: take <code class="language-plaintext highlighter-rouge">.gm/locks/mc-420.writer</code> with <code class="language-plaintext highlighter-rouge">noclobber</code>
+before any hot-deploy, and restart <code class="language-plaintext highlighter-rouge">rc-service aloop</code> between MIDI scenarios.</li>
+</ol>
+
+<p>Clause B is held; this document does not close the row.</p>
+
+
+      </section>
+      <footer>
+        
+        <p>This project is maintained by <a href="https://github.com/AnEntrypoint">AnEntrypoint</a></p>
+        
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="/mc-420/assets/js/scale.fix.js"></script>
+  </body>
+</html>
