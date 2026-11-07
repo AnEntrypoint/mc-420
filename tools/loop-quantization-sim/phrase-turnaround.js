@@ -10,6 +10,13 @@ const kSettleMs = 2000;
 const kPhraseToleranceBeats = 1e-3;
 
 function main() {
+  console.log('phrase turnaround: DELIBERATE FAIL DEMO, excluded from CI by design');
+  console.log('  reason: commit 5acb7d3b reverted the ALOOP-PHRASE/1 UDP mesh listener; Link is the only sync transport');
+  console.log('  Link SDK 3.1.3 session state carries no quantum, so a slave cannot adopt the master phrase length');
+  console.log('  this case stays excluded from .github/workflows/test-loop-sim.yml and exits 1 until a Link-carried phrase exists');
+  console.log('  scenario uses the model-only remote-transport path from remote-join.js; it is not a device witness');
+  console.log('  rows phrase-length-and-quantum-alignment, phrase-adopted-slave-own-take-overwrites-phrase and');
+  console.log('  reset-slave-take-moves-network-origin were resolved by owner-decision-Link-only-defaults (see closes/)');
   setPhaseQuantum(LINK_PHASE_QUANTUM);
   const { a, b } = makeJoinPair();
   initRemoteTransport(b, true);

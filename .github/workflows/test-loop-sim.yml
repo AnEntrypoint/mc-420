@@ -120,5 +120,16 @@ jobs:
       - name: Shipped C++ captures phase at the loop quantum
         run: node tools/loop-quantization-sim/device-loop-quantum-capture.js
 
+      - name: Visual beat cue software send stays on the Link beat grid
+        run: node tools/loop-quantization-sim/visual-beat-cue.js
+
+      - name: Visual beat cue +20 ms negative control must fail
+        run: |
+          if node tools/loop-quantization-sim/visual-beat-cue.js --control; then
+            echo "negative control unexpectedly passed"
+            exit 1
+          fi
+          node tools/loop-quantization-sim/visual-beat-cue.js --assert-control
+
       - name: Fuzz
         run: node tools/loop-quantization-sim/fuzz.js --trials=3000 --events=50

@@ -7,6 +7,7 @@ const kPhraseAnchorWorkflow = '.github/workflows/test-phrase-anchor.yml';
 const kPhraseOffsetScript = 'tools/loop-quantization-sim/first-take-phrase-offset.js';
 const kJoinRaceScript = 'tools/loop-quantization-sim/join-race-tempo-authority.js';
 const kCheckScript = 'tools/ci-contract-check.js';
+const kVisualBeatCueScript = 'tools/loop-quantization-sim/visual-beat-cue.js';
 
 function readLines(path) {
   return fs.readFileSync(path, 'utf8').split(/\r?\n/);
@@ -28,12 +29,15 @@ function main() {
     requireExactlyOnce(loopLines, kPhraseOffsetScript),
     requireExactlyOnce(loopLines, kJoinRaceScript),
     requireExactlyOnce(loopLines, kCheckScript),
+    requireExactlyOnce(loopLines, kVisualBeatCueScript),
   ];
   const phraseText = phraseLines.join('\n');
+  const loopText = loopLines.join('\n');
   const pathChecks = [
     { path: 'src/control/midi_clock.cpp', ok: phraseText.includes("- 'src/control/midi_clock.cpp'") },
     { path: 'src/link/**', ok: phraseText.includes("- 'src/link/**'") },
     { path: 'workflow_dispatch', ok: phraseText.includes('workflow_dispatch:') },
+    { path: 'visual-beat-cue negative control', ok: loopText.includes('visual-beat-cue.js --control') },
   ];
   const failed = [];
   for (const c of checks) {
