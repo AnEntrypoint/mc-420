@@ -53,8 +53,11 @@ Momentary semantics match the hardware exactly: `HALFSPEED`/`DOUBLESPEED` and
 block from the atomic ParamStore the MIDI thread writes. `speed` composes with the
 Link-set `len`: Link sets the base loop length, `speed` divides it (loop stays
 grid-locked, plays at 0.5×/2×). The `TRACK_BASE 0x20` / `STOP_TRACK_BASE 0x40` /
-`ERASE_TRACK_BASE 0x60` families are 20 contiguous per-track slots — the default
-`config/controls.conf` binds all 20 of each; remap freely (no recompile).
+`ERASE_TRACK_BASE 0x60` families are 20 contiguous per-track slots, decoded directly in
+`ApcGrid`/`midi.cpp`. `config/controls.conf` currently binds only four controls:
+`note81 cmd/stopall`, `note70 cmd/halfspeed`, `note71 cmd/doublespeed`,
+`cc56 fx/lpslope`. Those four are remappable without a recompile; the pad and
+knob decoding lives in C++.
 
 **`clear`/`speed` are process() signal inputs, not Faust UI zones (fixed in
 commit 9806835, 2nd-generation fix on top of 382e775's incomplete attempt):**
@@ -76,9 +79,12 @@ per-block-constant buffers and passes them as the matching `fins[]` slots to
 `compute()` instead of calling `fui.set("clear"/"speed", ...)`.
 
 ## APC Key25 controls (the exact mapping — src/control/midi.cpp, param_mapping.md)
-- CC48–55 → reverb/delay/time/HP/LP/resonance (all `/127`)
-- CC53 → formant depth (deadzone 60–68, flat ±1 range always — SHIFT does not
-  expand it) — `ApcGrid::onFormantCC`
+- CC48/49/50/51/54/55/57/53 → the eight fx knobs (see the bank tables
+  below); all normalized `data2/127`.
+- CC53 → formant depth on the Dub page — `ApcGrid::applyFormantCC`: deadzone
+  60–68 → 0, otherwise `((data2-64)/63)*1.5` clamped to ±3. SHIFT does not
+  expand it. It applies only while live pitch is on, in multi-key mode, or
+  while a pitch-lock key is held.
 - CC52 / keybed / mod-wheel → live pitch semitones
 - notes 82–86 → microrepeat divisors {1,2,4,8,16}
 - notes 70/71 → global speed-scrub (varispeed)
@@ -87,8 +93,10 @@ per-block-constant buffers and passes them as the matching `fins[]` slots to
   effect input (`fx/monitorfold` → Faust `MONITORFOLD`, `dsp/aloop.dsp`'s
   `foldMix`) with the dry loop contribution complementarily suppressed, so the
   loops are heard once, through the effects — `ApcGrid::onShiftPress/Release`,
-  `AudioThread::Telemetry::monitorMode`. Drum-record-mode (looper's per-key
-  keybed sampler) is NOT ported — see `docs/DECISIONS.md` ADR-012.
+  `AudioThread::Telemetry::monitorMode`. Drum-record-mode IS ported: holding
+  note 66 (`ApcGrid::onSamplerBtn66Press`) sets `m_drumRecordMode`, and each
+  keybed key press records into that key's drum slot (`EV_REC_START` with the
+  key index); releasing note 66 sends `EV_REC_STOP`. See `docs/manual.html`.
 - the 8×5 grid → track/clip select + state display
 
 ## 3-bank fx control-surface (LOFI feature — src/control/apc_grid.h/.cpp, midi.cpp)
@@ -108,84 +116,97 @@ so is every bank's own effect chain — all 3 banks are simultaneously live.
   left of the two varispeed controls" exactly as originally specified).
 - Tap-to-select, radio-button style — no cycling, no hold-preview. Pressing one
   makes it the `activeBank()` immediately (`ApcGrid::onDubFxPress`/
-  `onLofiFxPress`/`onGuitarFxPress`) and re-pushes every one of that bank's 8
-  stored knob values into the shared Faust zones right away
-  (`pushBankValuesToZones`) — otherwise switching banks would leave the audible
-  effect showing the PREVIOUS bank's values until every knob was retouched,
-  which reads as the switch silently failing.
+  `onLofiFxPress`/`onGuitarFxPress`). There is no `pushBankValuesToZones`: a
+  bank press sets the active bank, records whether SHIFT was held (which selects
+  that bank's SHIFT knob page until the bank is pressed again without SHIFT),
+  and starts the 150 ms LED flash. Stored knob values are NOT re-sent on bank
+  select; a knob applies as soon as it moves. A plain lofi-fx tap toggles the
+  granulator; SHIFT + lofi-fx toggles Resonode and also turns the granulator off.
 - Selecting a bank starts a `bankFlashActive()` window (150ms, `kBankFlashMs`),
   cleared by `pollHolds` — a **transient** LED flash on selection, not a
   persistent "which bank is active" indicator.
-- CC48/49/50/51/54/55/57/53 (the 8 physical fx knobs; CC53 double-duties as
-  Formant on the Dub page, intercepted before the table lookup) are intercepted
-  directly in `midi.cpp`, ahead of the flat `config/controls.conf` map — that
-  flat map no longer binds any of these 8 targets at all (see its own comment
-  block: a flat binding here would race `ApcGrid`'s bank-aware write with no
-  defined winner).
-  `ApcGrid::onFxKnobCC` writes the normalized `data2/127` value into the
-  **currently active bank's own stored slot** for that knob position, AND into
-  the shared Faust zone, so turning a knob still has the usual instant effect.
+- CC48/49/50/51/54/55/57/53 (the 8 physical fx knobs) are intercepted in
+  `midi.cpp` and routed to `ApcGrid::onFxKnobCC`, ahead of the flat
+  `config/controls.conf` map. That file binds none of these 8 CCs — it holds
+  only the four entries listed above — so a flat binding cannot race
+  `ApcGrid`'s bank-aware write. CC53 on the Dub page goes to `applyFormantCC`
+  instead of the knob table. `onFxKnobCC` writes the normalized `data2/127`
+  value into the active bank's stored slot and then to the selected target
+  (Faust zone, LV2 port, or Sampler setter), so a knob applies immediately.
 
 ### Per-bank independent knob storage
 Each bank stores its own value per physical knob position — switching banks
 changes what the 8 knobs currently mean/show without touching any other bank's
-stored values (`m_fxBankValues[bank][knob]`, seeded in `ApcGrid::bindAll`).
+stored values (`m_fxBankValues[bank][knob]`, initialized in `apc_grid.h`).
 
 **REDESIGN (Core-3 move, superseding an earlier in-Faust 3-bank crossfade
 design — see "Guitar/LofiFx bank DSP wiring" below for why that was
-abandoned):** each bank's 8 knob positions now have their OWN permanent
-target (`FxKnobTarget`/`kDubTargets`/`kGuitarTargets`/`kLofiFxTargets` in
-apc_grid.cpp) — Dub's targets are unchanged Core-1 Faust zones; Guitar/LofiFx
-targets are either an `fx2/*` LV2 control port on the new permanent Core-3
-`guitar_lofi_fx.dsp` bundle, or (for attack/release/granulator) a native
-`Sampler` setter call. All 3 banks' targets are simultaneously, permanently
-live — switching banks is now a pure UI/state change (which bank's stored
-values the physical knobs currently show/edit), never a DSP-routing change:
+abandoned):** each bank's 8 knob positions have their OWN permanent target
+(`FxKnobTarget` and the `k*Targets` tables in `apc_grid.cpp`): Dub's targets
+are Core-1 Faust zones, Guitar's are `fx2/*` LV2 control ports on the permanent
+Core-3 `guitar_lofi_fx.dsp` bundle, and LofiFx's are the bitcrush port plus the
+granulator patch-morph and direct knobs. Each bank also has a SHIFT table
+(`kDubShiftTargets`, `kGuitarShiftTargets`) or a SHIFT branch (Resonode for
+LofiFx). All 3 chains are simultaneously, permanently live — switching banks
+is a pure UI/state change (which page the physical knobs currently show/edit),
+never a DSP-routing change:
 
 | CC | Dub target | Guitar target | LofiFx target |
 |---|---|---|---|
-| 48 | `fx/reverb` (Faust) | `fx2/FLANGEAMT` (LV2) | `fx2/BITCRUSHAMT` (LV2) |
-| 49 | `fx/delay` (Faust) | `fx2/TREMOLOAMT` (LV2) | grain size ms (Sampler) |
-| 50 | `fx/time` (Faust) | `fx2/BANKSPEED` (LV2) | grain density Hz (Sampler) |
-| 51 | `fx/hp` (Faust) | `fx2/PHASERAMT` (LV2) | scan rate (Sampler) |
-| 54 | `fx/lpres` (Faust) | attack ms (Sampler) | pitch-spray cents (Sampler) |
-| 55 | `fx/lp` (Faust) | release ms (Sampler) | position-jitter ms (Sampler) |
-| 57 | `fx/pitch` (Faust) | `fx2/COMPRESSAMT` (LV2) | reverse-grain probability (Sampler) |
+| 48 | `fx/reverb` (Faust, scale 2.0) | `fx2/FLANGEAMT` (LV2) | `fx2/BITCRUSHAMT` (LV2) |
+| 49 | `fx/delay` (Faust) | `fx2/TREMOLOAMT` (LV2) | Glass patch weight |
+| 50 | `fx/time` (Faust) | `fx2/BANKSPEED` (LV2) | Cloud patch weight |
+| 51 | `fx/hp` (Faust) | `fx2/PHASERAMT` (LV2) | Chop patch weight |
+| 54 | `fx/lpres` (Faust) | `fx2/DISTAMT` (LV2) | Shatter patch weight |
+| 55 | `fx/lp` (Faust) | `fx2/VINYLAMT` (LV2) | scan rate 0–3; bottom eighth freezes |
+| 57 | `fx/pitch` (Faust) | `fx2/FLUTTERAMT` (LV2) | grain density 2–200 Hz (log) |
+| 53 | formant (`applyFormantCC`) | `fx2/GATEAMT` (LV2) | spray: 0–1200 cents / ±12 semitones / interval sets |
 
-(CC53/formant is handled separately by `onFormantCC`, unaffected by bank
-switching — same as before this feature.)
+CC53 on the Dub page is handled separately by `applyFormantCC`; on the
+Guitar and LofiFx pages it is the eighth knob.
 
-**"Super music granulator" rework (LOFI feature, superseding the earlier
-3-knob granulator above):** LofiFx keeps `BITCRUSHAMT` as its one surviving
-lofi audio-effect knob (explicit user decision: "keep the bitcrusher") and
-hands every other knob position to the granulator — all 6 of its
-meaningful runtime parameters are now directly controllable (grain size,
-grain density, scan rate, pitch spray, position jitter, and a new
-reverse-grain probability control), instead of the previous 3 (grain
-size/density/scan rate only, with pitch-spray/position-jitter fixed at
-their passthrough defaults and no reverse-probability control existing at
-all). `VINYLAMT`/`FLUTTERAMT`/`SRRAMT` are dropped from the bank's own
-control surface — `guitar_lofi_fx.dsp`'s Faust zones for them still exist
-and default to their own passthrough values, so the DSP stages themselves
-are unaffected, only the physical knob no longer reaches them.
+**"Super music granulator" rework (LOFI feature):** LofiFx keeps
+`fx2/BITCRUSHAMT` on knob 1 (CC48) as its one surviving audio-effect knob.
+Knobs 2–5 (CC49/50/51/54) are the blend weights of four named grain
+patches — Glass, Cloud, Chop, Shatter — each a full point in
+grain-size/density/pitch-spray/position-jitter/scan-rate/reverse-probability/envelope-shape/live-source/live-tone space. `applyGranulatorMorph`
+forms the convex blend and calls `Sampler::setGrainPatch`, falling back to
+Glass when all four weights are zero. Knobs 6–8 (CC55/57/53) are direct
+controls: scan rate 0–3 with the bottom eighth (v01 <= 0.125) engaging
+freeze; grain density 2–200 Hz on a log taper; and a spray dial whose bottom
+half is 0–1200 cents of continuous spray, middle band ±12 semitones of grain
+transposition (`setGrainTransposeCents`), top eighth selects a pitch-quantize
+interval set (`setGrainPitchQuantize`). Freeze (`Sampler::setGrainFreeze`)
+holds the live ring snapshot and draws every grain from it; turning the
+scan-rate dial back up releases it. Reverse probability is a field of each
+named patch, not a separate knob and not a `Sampler::setReverseProbability`
+API. `VINYLAMT` and `FLUTTERAMT` are not dropped: they are Guitar-bank targets
+(CC55 and CC57 on that page).
 
-`Sampler::setReverseProbability(float)` (new): per-grain probability
-[0,1] of spawning in reverse (negative playback rate, tail-to-head
-instead of head-to-tail) — a reversed grain keeps the exact same
-raised-cosine window and lifespan as a forward one, so reversal is purely
-a read-direction flip, orthogonal to grain size/rate/scan.
+**Granulator / Resonode gesture:** a plain tap on lofi-fx (note 69) toggles the
+granulator (`m_granulatorLatched` -> `Sampler::setGranulatorEnabled`) and also
+selects the LofiFx page. Holding SHIFT while pressing lofi-fx instead toggles
+Resonode (`toggleResonodeEngage`), which releases all Resonode voices when
+disengaged and turns the granulator off when engaged. The LofiFx knob page
+follows SHIFT on the last lofi-fx press (`m_lofiShiftMode = m_shift`), not
+whether Resonode is engaged: a plain tap shows the granulator page even while
+Resonode stays on. SHIFT held while pressing any bank selects that bank's SHIFT
+page until the bank is pressed again without SHIFT (`m_dubShiftMode`,
+`m_guitarShiftMode`, `m_lofiShiftMode`).
 
-**Un-granulating: SHIFT + lofi-fx toggles the granulator on/off.** Every
-granulator knob's `applySamplerFxKnob` case unconditionally calls
-`setGranulatorEnabled(true)` (turning any knob on the bank engages
-granulation), but nothing ever called `setGranulatorEnabled(false)` --
-once touched, there was no way back to a plain (non-granulated) sample
-without a full service restart. Fixed: holding SHIFT (`fx/monitorfold`)
-while pressing lofi-fx toggles `granulatorEnabled()` instead of selecting
-the bank (a plain tap, SHIFT not held, still selects the bank exactly as
-before) — mirrors guitar-fx's own dual-gesture precedent (tap = normal
-action, modifier-held = alternate action) rather than inventing a new
-gesture shape.
+### SHIFT pages
+- Dub: `fx/dubgate/amt`, `fx/dubgate/pattern`, `fx/dublfo/rate`, `depth`,
+  `shape`, `target`, `phase`; knob 8 unused.
+- Guitar: filter attack/decay/sustain/release and amp attack/decay/sustain/release
+  (`SamplerFilter*`/`SamplerAmp*` targets).
+- LofiFx / Resonode: knob 1 is `fx/resonode/input` (0 = keys self-sounding,
+  1 = live signal only); knobs 2–5 are the four named material patches
+  Percussive, Metal/Glass, Strings, Dance Bass blended by
+  `applyResonodePatchMorph`; knobs 6–8 are direct ranges `fx/resonode/tone`
+  200–18000 Hz (log), `fx/resonode/level` 2–60 (log), `fx/resonode/couple`
+  0–1 (linear). With Resonode engaged the keybed drives up to four Resonode
+  voices (`kResonodeVoices = 4`), bound as `fx/resonodevoice<N>/note|gate|vel`.
+  See `docs/manual.html` and `docs/CONTROLS.md`.
 
 ### guitar-fx's dual gesture
 guitar-fx is the one bank button with a second, independent gesture layered on
@@ -240,19 +261,20 @@ redistribution: all 3 banks' effects are now simultaneously, permanently
 active (never gated by bank selection), matching "Both guitar and lofi-fx
 always stack together with dub."
 
-- `guitar_lofi_fx.dsp`'s chain: `flanger -> tremolo -> phaser -> compressor ->
-  bitcrush -> vinyl -> flutter -> samplerate`, each stage reading its own
-  permanent `fx2/*` zone directly (no shared-zone reinterpretation).
+- `guitar_lofi_fx.dsp`'s chain: `flanger -> tremolo -> phaser -> distortion ->
+  bitcrush -> vinyl -> flutter -> gate`, each stage reading its own permanent
+  `fx2/*` zone directly (no shared-zone reinterpretation). The bundle exposes
+  ten `fx2/*` zones, including `fx2/GATEPHASE` and the shared `fx2/BANKSPEED`.
 - `Lv2Host::setControl(symbol, value)` (new) pushes a live control value into
   every loaded plugin's matching LV2 port by symbol — `ApcGrid::onFxKnobCC`
   calls this for every Guitar/LofiFx knob whose target is `FxKnobKind::
   Lv2Control` (see the per-bank target table above), the same way it calls
   `ParamStore::setByName` for Dub's Faust zones.
-- `effects/home/faust/compressor.dsp` (guitar bank's "compress" control) is
-  now wired to CC57/`fx2/COMPRESSAMT`, filling the 7th guitar-bank knob slot
-  the earlier design left unassigned.
+- `effects/home/faust/distortion.dsp` is wired to CC54/`fx2/DISTAMT` and the
+  gate stage to CC53/`fx2/GATEAMT`; CC57 is `fx2/FLUTTERAMT`. There is no
+  `fx2/COMPRESSAMT` zone in the shipped bundle.
 - Verified via `dsp_cli`: `guitar_lofi_fx.dsp` compiles clean, exposes
-  exactly the 9 expected `fx2/*` zones, byte-exact passthrough at all
+  ten `fx2/*` zones, byte-exact passthrough at all
   defaults, and audibly engages when driven (flange+bitcrush test case).
   CI-built and confirmed green (`guitar-lofi-fx-lv2` artifact uploads
   alongside the existing `home-fx-lv2` job).
@@ -281,5 +303,10 @@ Ableton Link tempo/phase drives the loop grid; loop record start quantizes to th
 Link phase; the first loop can propose the tempo to the session (ported logic).
 
 Every one of these behaviors is the *ported looper logic* — same code, same
-result. The mapping table above is the same one dubfx verified against the real
-control plane (param_mapping.md).
+result. `docs/manual.html` is the printable control manual that follows the
+shipped code; `effects/home/faust/param_mapping.md` still records an older
+control-plane normalization for formant (range 1, or 3 with SHIFT). The bank
+tables above are taken from `kDubTargets`/`kGuitarTargets`/`kLofiFxTargets` in
+`src/control/apc_grid.cpp` and the SHIFT tables alongside them. The
+`config/controls.conf` file is deliberately tiny: the pad/knob decoding lives
+in `ApcGrid` and `midi.cpp`, not in the flat map.
