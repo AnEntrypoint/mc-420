@@ -1,0 +1,26 @@
+name: test-archive-anchors
+
+on:
+  push:
+    paths:
+      - 'AGENTS.md'
+      - 'docs/DECISIONS.md'
+      - 'docs/measurements-archive.md'
+      - 'tools/check-archive-anchors.js'
+      - '.github/workflows/test-archive-anchors.yml'
+  pull_request:
+    paths:
+      - 'AGENTS.md'
+      - 'docs/DECISIONS.md'
+      - 'docs/measurements-archive.md'
+      - 'tools/check-archive-anchors.js'
+      - '.github/workflows/test-archive-anchors.yml'
+  workflow_dispatch:
+
+jobs:
+  archive-anchors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive anchors resolve
+        run: node tools/check-archive-anchors.js
