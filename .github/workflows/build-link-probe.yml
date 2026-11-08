@@ -1,0 +1,36 @@
+name: build-link-probe
+
+on:
+  push:
+    paths:
+      - '.github/workflows/build-link-probe.yml'
+      - 'test/hardware/link-peer.cpp'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  link-peer-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the Ableton Link SDK with its asio submodule
+        run: git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/Ableton/link.git "$RUNNER_TEMP/link"
+
+      - name: Build the Linux Link peer probe
+        run: |
+          g++ -std=c++14 -O1 -Wall -DLINK_PLATFORM_LINUX -DASIO_STANDALONE \
+            -I "$RUNNER_TEMP/link/include" \
+            -I "$RUNNER_TEMP/link/modules/asio-standalone/asio/include" \
+            test/hardware/link-peer.cpp -o link-peer -pthread
+          ls -la link-peer
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: link-peer-linux-x64
+          path: link-peer
+          retention-days: 3
