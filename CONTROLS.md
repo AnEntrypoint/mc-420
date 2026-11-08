@@ -194,20 +194,17 @@ output lands on the exact held key regardless of the input's actual pitch.
 
 ## Grid-beat visualization
 
-The 4 top-right otherwise-unassigned pads show the first take's beat position
-live: beat 0 is the record press and the index folds at `recorded_beats` (rb),
-not at the shared 16-beat Link transport quantum. `src/control/midi.cpp`
-derives `takeBeatIndex` from the take's press-origin loop phase
-(`AudioThread::Telemetry::masterPhaseSamples`, or the extrapolated
-`LinkSnapshot::loopPhaseMicroBeats` captured at the loop quantum), folded at
-rb; the shared 16-beat `gridBeatIndex` is only the fallback before a take
-exists. The 30 ms `leadOpen` flip also advances modulo rb. The 4 pads still
-address 4 beat positions within a group (`posInGroup = index & 3`,
-`activeGroup = index >> 2`), so a take shorter than 4 beats lights only its
-own rb positions. Dark when nothing is playing; green whenever any looper is
-playing; a quarter already passed turns yellow; the red position marker cycles
-across the 4 pads once per beat, landing on the pad matching the current
-position within the active quarter.
+The top-right pad at note 15 (`kApcBeatPadNotes[0]`) is the metronome: one
+light that flashes once per Link beat. The flash starts 30 ms before the beat
+(`kBeatLeadMs`) and lasts 100 ms (`kApcBeatFlashMs`). Its colour follows the
+Link beat modulo 16: beats 0-3 green, 4-7 yellow (APC velocity 5), 8-15 red.
+The metronome runs whenever Link is synced, with or without a take
+(`beatClockUsable` in `src/control/midi.cpp`); the flash timing and colour
+come from the Link timeline, not from the poll cadence. The other three pads
+of that row stay dark unless the shuffle or gate-mode displays are active.
+With a take, the take's beat position (`takeBeatIndex`, folded at
+`recorded_beats`) still drives the flash edges, but the colour stays on the
+Link beat modulo 16.
 
 ## 3-bank FX knob surface
 

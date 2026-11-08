@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=abd6cad6a150864e97cc8eb30d80ee17f6dec281">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=627029178ab0e007e3ded891af351afa3b12aeb6">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -261,20 +261,17 @@ top of the unshifted signal.</li>
 
 <h2 id="grid-beat-visualization">Grid-beat visualization</h2>
 
-<p>The 4 top-right otherwise-unassigned pads show the first take’s beat position
-live: beat 0 is the record press and the index folds at <code class="language-plaintext highlighter-rouge">recorded_beats</code> (rb),
-not at the shared 16-beat Link transport quantum. <code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>
-derives <code class="language-plaintext highlighter-rouge">takeBeatIndex</code> from the take’s press-origin loop phase
-(<code class="language-plaintext highlighter-rouge">AudioThread::Telemetry::masterPhaseSamples</code>, or the extrapolated
-<code class="language-plaintext highlighter-rouge">LinkSnapshot::loopPhaseMicroBeats</code> captured at the loop quantum), folded at
-rb; the shared 16-beat <code class="language-plaintext highlighter-rouge">gridBeatIndex</code> is only the fallback before a take
-exists. The 30 ms <code class="language-plaintext highlighter-rouge">leadOpen</code> flip also advances modulo rb. The 4 pads still
-address 4 beat positions within a group (<code class="language-plaintext highlighter-rouge">posInGroup = index &amp; 3</code>,
-<code class="language-plaintext highlighter-rouge">activeGroup = index &gt;&gt; 2</code>), so a take shorter than 4 beats lights only its
-own rb positions. Dark when nothing is playing; green whenever any looper is
-playing; a quarter already passed turns yellow; the red position marker cycles
-across the 4 pads once per beat, landing on the pad matching the current
-position within the active quarter.</p>
+<p>The top-right pad at note 15 (<code class="language-plaintext highlighter-rouge">kApcBeatPadNotes[0]</code>) is the metronome: one
+light that flashes once per Link beat. The flash starts 30 ms before the beat
+(<code class="language-plaintext highlighter-rouge">kBeatLeadMs</code>) and lasts 100 ms (<code class="language-plaintext highlighter-rouge">kApcBeatFlashMs</code>). Its colour follows the
+Link beat modulo 16: beats 0-3 green, 4-7 yellow (APC velocity 5), 8-15 red.
+The metronome runs whenever Link is synced, with or without a take
+(<code class="language-plaintext highlighter-rouge">beatClockUsable</code> in <code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>); the flash timing and colour
+come from the Link timeline, not from the poll cadence. The other three pads
+of that row stay dark unless the shuffle or gate-mode displays are active.
+With a take, the take’s beat position (<code class="language-plaintext highlighter-rouge">takeBeatIndex</code>, folded at
+<code class="language-plaintext highlighter-rouge">recorded_beats</code>) still drives the flash edges, but the colour stays on the
+Link beat modulo 16.</p>
 
 <h2 id="3-bank-fx-knob-surface">3-bank FX knob surface</h2>
 
