@@ -173,6 +173,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
     }
     bool warnedNoDevice = false;
     constexpr int kPollTimeoutMs = 100;
+    constexpr int kBeatPadWakeMaxMs = 33;
     for (;;) {
     snd_rawmidi_t* in = nullptr;
     out = nullptr;
@@ -241,7 +242,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         if (waitClock.live) {
             const int64_t untilUs = beatPadNextChangeMicros(waitClock) - waitClock.nowMicros - kFlashSpinUs;
             waitMs = untilUs >= 1000 ? (int)(untilUs / 1000) : 1;
-            if (waitMs > kPollTimeoutMs) waitMs = kPollTimeoutMs;
+            if (waitMs > kBeatPadWakeMaxMs) waitMs = kBeatPadWakeMaxMs;
         }
 
         pfds[(size_t)kListenSlot].fd = injectListenFd;
