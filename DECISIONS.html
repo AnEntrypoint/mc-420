@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Decision log (ADRs)","url":"https://anentrypoint.github.io/mc-420/DECISIONS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=4bc3b73b4c91929cd3997bf50e53afca1b7bf2c4">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=71432b51044a35ba4db66a8d87600d870bfd847e">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -773,6 +773,16 @@ loaded, so ordinary sampler playback is untouched.</p>
   <li>Change: <code class="language-plaintext highlighter-rouge">src/control/apc_leds.h</code>. The current beat pad turns red only for <code class="language-plaintext highlighter-rouge">kBeatFlashMs</code> (100 ms) after each beat edge, then shows its normal colour. Shuffle blink and gate-mod colours are unchanged.</li>
   <li>Witness: CI for <code class="language-plaintext highlighter-rouge">ae38d08b</code> (build-binary and build-image success), read by verify session <code class="language-plaintext highlighter-rouge">verify-metronome-red-flash-brief</code>, dispatch <code class="language-plaintext highlighter-rouge">1792934651896-4262-df1e901ecd1f5ab</code>.</li>
   <li>Not yet observed on the device: the image is not deployed to the Pi.</li>
+</ul>
+
+<h2 id="metronome-beat-pad-16-beat-colour-cycle-2026-11-08-orchestrator-dispatch-16-beat-metronome">Metronome beat pad: 16-beat colour cycle, 2026-11-08 (orchestrator dispatch, 16-beat metronome)</h2>
+
+<ul>
+  <li>Change: <code class="language-plaintext highlighter-rouge">src/control/apc_leds.h</code> <code class="language-plaintext highlighter-rouge">kMetronomeStates</code> is a 16-entry table indexed by Link beat modulo 16 (<code class="language-plaintext highlighter-rouge">kLinkQuantum</code>), in four stages of four beats: red over black, red over green, red over yellow, green over red. <code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim/led-flash-schedule.js</code> checks the owner spec and asserts exactly one invisible tick, at beat 0: beat 15 leaves a red background that the red flash at beat 0 matches, so no send is made. Commit <code class="language-plaintext highlighter-rouge">4bc3b73b</code>.</li>
+  <li>Witness, CI: build-binary and test-loop-sim success on <code class="language-plaintext highlighter-rouge">4bc3b73b</code> (runs 42479784546 and 42479784459).</li>
+  <li>Witness, local: <code class="language-plaintext highlighter-rouge">led-flash-schedule.js</code> PASS, 15 of 16 beats visible, NOT visible: beat 0; <code class="language-plaintext highlighter-rouge">--assert-no-fix</code> PASS; <code class="language-plaintext highlighter-rouge">ci-contract-check.js</code> PASS; the constexpr table compiled with <code class="language-plaintext highlighter-rouge">g++ -std=c++17</code> and static_asserts, <code class="language-plaintext highlighter-rouge">metronomeStateFor</code> wraps at 16.</li>
+  <li>Witness, device: <code class="language-plaintext highlighter-rouge">aloop-aarch64-musl</code> of <code class="language-plaintext highlighter-rouge">4bc3b73b</code> (md5 <code class="language-plaintext highlighter-rouge">8d7b2fe8726aa3211bf6e4571f4ebe22</code>) hot-deployed to <code class="language-plaintext highlighter-rouge">/opt/aloop/aloop</code> after the looper gate read empty twice (rec 0, play 0, levels 0, wraplen 1, master_len 0, recorded_beats 0), then one <code class="language-plaintext highlighter-rouge">rc-service aloop restart</code>. Link re-joined 15 s after restart. 32 consecutive <code class="language-plaintext highlighter-rouge">beat_pad_mark</code> marks, seq 58 to 89, table match 32/32. Stage changes: index 4 background 0 to 1 (seq 65 to 66), index 8 background 1 to 5 (seq 69 to 70), index 12 background 5 to 3 (seq 73 to 74). <code class="language-plaintext highlighter-rouge">late_ms</code> max 0.389, min 0.</li>
+  <li>Invisible tick on device data: seq 77 (index 15, flash 1, background 3) is followed by seq 78 (index 0, flash 3); the previous background (3) equals the flash (3), so the pad shows no change at beat 0.</li>
 </ul>
 
 <h2 id="status-json-buffer-headroom-2026-10-25-row-telemetry-status-json-buffer-headroom">Status JSON buffer headroom, 2026-10-25 (row telemetry-status-json-buffer-headroom)</h2>

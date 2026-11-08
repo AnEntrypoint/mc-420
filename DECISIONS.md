@@ -639,6 +639,14 @@ Kept open, with the blocker:
 - Witness: CI for `ae38d08b` (build-binary and build-image success), read by verify session `verify-metronome-red-flash-brief`, dispatch `1792934651896-4262-df1e901ecd1f5ab`.
 - Not yet observed on the device: the image is not deployed to the Pi.
 
+## Metronome beat pad: 16-beat colour cycle, 2026-11-08 (orchestrator dispatch, 16-beat metronome)
+
+- Change: `src/control/apc_leds.h` `kMetronomeStates` is a 16-entry table indexed by Link beat modulo 16 (`kLinkQuantum`), in four stages of four beats: red over black, red over green, red over yellow, green over red. `tools/loop-quantization-sim/led-flash-schedule.js` checks the owner spec and asserts exactly one invisible tick, at beat 0: beat 15 leaves a red background that the red flash at beat 0 matches, so no send is made. Commit `4bc3b73b`.
+- Witness, CI: build-binary and test-loop-sim success on `4bc3b73b` (runs 42479784546 and 42479784459).
+- Witness, local: `led-flash-schedule.js` PASS, 15 of 16 beats visible, NOT visible: beat 0; `--assert-no-fix` PASS; `ci-contract-check.js` PASS; the constexpr table compiled with `g++ -std=c++17` and static_asserts, `metronomeStateFor` wraps at 16.
+- Witness, device: `aloop-aarch64-musl` of `4bc3b73b` (md5 `8d7b2fe8726aa3211bf6e4571f4ebe22`) hot-deployed to `/opt/aloop/aloop` after the looper gate read empty twice (rec 0, play 0, levels 0, wraplen 1, master_len 0, recorded_beats 0), then one `rc-service aloop restart`. Link re-joined 15 s after restart. 32 consecutive `beat_pad_mark` marks, seq 58 to 89, table match 32/32. Stage changes: index 4 background 0 to 1 (seq 65 to 66), index 8 background 1 to 5 (seq 69 to 70), index 12 background 5 to 3 (seq 73 to 74). `late_ms` max 0.389, min 0.
+- Invisible tick on device data: seq 77 (index 15, flash 1, background 3) is followed by seq 78 (index 0, flash 3); the previous background (3) equals the flash (3), so the pad shows no change at beat 0.
+
 ## Status JSON buffer headroom, 2026-10-25 (row telemetry-status-json-buffer-headroom)
 
 - Change: `src/control/telemetry.cpp`, status buffer 8192 bytes with an overflow guard (commit `a3016211`).
