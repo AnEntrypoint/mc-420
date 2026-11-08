@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=627029178ab0e007e3ded891af351afa3b12aeb6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=17c048891741ee5b2a41822f83050066a07c6b56">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -262,9 +262,15 @@ top of the unshifted signal.</li>
 <h2 id="grid-beat-visualization">Grid-beat visualization</h2>
 
 <p>The top-right pad at note 15 (<code class="language-plaintext highlighter-rouge">kApcBeatPadNotes[0]</code>) is the metronome: one
-light that flashes once per Link beat. The flash starts 30 ms before the beat
-(<code class="language-plaintext highlighter-rouge">kBeatLeadMs</code>) and lasts 100 ms (<code class="language-plaintext highlighter-rouge">kApcBeatFlashMs</code>). Its colour follows the
-Link beat modulo 16: beats 0-3 green, 4-7 yellow (APC velocity 5), 8-15 red.
+light that flashes once per Link beat over a background colour. The flash
+starts 30 ms before the beat (<code class="language-plaintext highlighter-rouge">kBeatLeadMs</code>, held to within about 50 µs by a
+short spin before the poll wake) and lasts 100 ms (<code class="language-plaintext highlighter-rouge">kApcBeatFlashMs</code>). The
+flash and background colours come from <code class="language-plaintext highlighter-rouge">kMetronomeStates</code> in
+<code class="language-plaintext highlighter-rouge">src/control/apc_leds.h</code>, indexed by the Link beat modulo 4: beat 0 red on
+black, beat 1 red on green, beat 2 red on black, beat 3 green on red. Black is
+APC velocity 0. Beat 0’s red flash sits on beat 3’s red background, so that
+flash has no visible colour change on the pad; the table is the owner’s
+spec and is unchanged.
 The metronome runs whenever Link is synced, with or without a take
 (<code class="language-plaintext highlighter-rouge">beatClockUsable</code> in <code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>); the flash timing and colour
 come from the Link timeline, not from the poll cadence. The other three pads
