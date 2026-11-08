@@ -1,4 +1,5 @@
 #include "telemetry.h"
+#include "json_number.h"
 #include "../dsp/audio_thread.h"
 
 #include <sys/socket.h>
@@ -177,6 +178,12 @@ void Telemetry::publish() {
         t.createAudioSamples, t.createSpanSamples, t.createMasterLen, t.createPhaseSamples,
         t.imposeAudioSamples, t.imposeTargetSamples);
     if (n < 0 || (size_t)n >= sizeof json) return;
+
+    char safe[sizeof json + 64];
+    const size_t safeN = aloop::sanitizeJsonNonFinite(json, (size_t)n, safe, sizeof safe);
+    if (safeN == 0 || safeN >= sizeof json) return;
+    memcpy(json, safe, safeN + 1);
+    n = (int)safeN;
 
     FILE* statusFile = fopen("/run/aloop/status.json", "w");
     if (statusFile) { fwrite(json, 1, (size_t)n, statusFile); fclose(statusFile); }

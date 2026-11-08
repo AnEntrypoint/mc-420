@@ -10,6 +10,8 @@ on:
       - 'test/hardware/verify-transport-stays-running.js'
       - 'test/hardware/verify-peer-follows-loop.js'
       - 'src/control/telemetry.cpp'
+      - 'src/control/json_number.h'
+      - 'test/telemetry-json/**'
       - 'src/link/link_bridge.cpp'
       - 'src/dsp/audio_thread.cpp'
       - 'docs/LINK-MESH-TESTING.md'
@@ -43,6 +45,11 @@ jobs:
         run: node test/status-fields-verify/verify-status-fields.js
       - name: Positive and negative controls
         run: node test/status-fields-verify/run-controls.js
+      - name: Non-finite telemetry numbers print as JSON null
+        run: |
+          set -o pipefail
+          g++ -std=c++17 -Wall -Wextra -Werror -o "$RUNNER_TEMP/nonfinite-harness" test/telemetry-json/nonfinite-harness.cpp
+          "$RUNNER_TEMP/nonfinite-harness" | node test/telemetry-json/verify-nonfinite.js
 
   hardware-verifiers:
     runs-on: ubuntu-latest
