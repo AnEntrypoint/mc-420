@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=71432b51044a35ba4db66a8d87600d870bfd847e">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=51d510cdb75c929b7750528cbb8d36537998a912">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -268,20 +268,20 @@ short spin before the poll wake) and lasts 100 ms (<code class="language-plainte
 flash and background colours come from <code class="language-plaintext highlighter-rouge">kMetronomeStates</code> in
 <code class="language-plaintext highlighter-rouge">src/control/apc_leds.h</code>, a 16-entry table indexed by the Link beat modulo 16, in four
 stages of four beats: beats 0-3 red over black, beats 4-7 red over green,
-beats 8-11 red over yellow (APC velocity 5), beats 12-15 green over red. Black
-is APC velocity 0. Beat 15’s red background persists into beat 0, so beat 0’s
-red flash is red on red and shows no change at its start; that is the one
-invisible tick of the cycle, and the other fifteen beats change colour at their
-start. <code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim/led-flash-schedule.js</code> models this and
-asserts exactly that one tick. The only visible change at beat 0 is red to
-black at 70 ms.
-The metronome runs whenever Link is synced, with or without a take
-(<code class="language-plaintext highlighter-rouge">beatClockUsable</code> in <code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>); the flash timing and colour
-come from the Link timeline, not from the poll cadence. The other three pads
-of that row stay dark unless the shuffle or gate-mode displays are active.
-With a take, the take’s beat position (<code class="language-plaintext highlighter-rouge">takeBeatIndex</code>, folded at
-<code class="language-plaintext highlighter-rouge">recorded_beats</code>) still drives the flash edges, but the colour stays on the
-Link beat modulo 16.</p>
+beats 8-11 red over yellow (APC velocity 5), beats 12-15 green over red
+(background red). Black is APC velocity 0. The flash is on every beat. A
+flash whose colour equals the lit background (beat 0: red over beat 15’s red)
+is preceded by a 15 ms black gap, so every beat is a visible change. The LED
+state is a pure function of the Link clock (<code class="language-plaintext highlighter-rouge">beatPadVelocity</code> in
+<code class="language-plaintext highlighter-rouge">src/control/apc_leds.h</code>): it depends on the Link beat and the tempo only,
+never on the peer count or on a take. <code class="language-plaintext highlighter-rouge">tools/loop-quantization-sim/led-flash-schedule.js</code>
+models the gap and asserts all 16 beats visible. <code class="language-plaintext highlighter-rouge">test/led-beat-pad</code> (CI
+<code class="language-plaintext highlighter-rouge">test-led-beat-pad</code>) drives the real <code class="language-plaintext highlighter-rouge">ApcLeds</code> on a simulated clock through a
+join and a leave, and dumps every note-15 message.
+The metronome runs whenever the Link object exists and its tempo is above 1
+(<code class="language-plaintext highlighter-rouge">beatPadClockFrom</code> in <code class="language-plaintext highlighter-rouge">src/control/midi.cpp</code>), with or without peers and with
+or without a take, so a join or a leave never stops it. The other three pads of
+that row stay dark unless the shuffle or gate-mode displays are active.</p>
 
 <h2 id="3-bank-fx-knob-surface">3-bank FX knob surface</h2>
 
