@@ -30,10 +30,10 @@ function deviceSourceChecks() {
   const src = fs.readFileSync(kDeviceMidiSrc, 'utf8');
   return [
     ['kBeatLeadMs is 30 ms', src.includes('constexpr int kBeatLeadMs = 30;')],
-    ['leadOpen window uses kBeatLeadMs', src.includes('leadOpen = bm.nextBeatMicros - bm.nowMicros <= static_cast<int64_t>(kBeatLeadMs) * 1000;')],
-    ['lead-open index maps to the upcoming beat', src.includes('beatIndex = leadOpen ? (bm.index + 1) % static_cast<int>(kLinkQuantum) : bm.index;')],
+    ['leadOpen window uses kBeatLeadMs', src.includes('const int64_t leadMicros = static_cast<int64_t>(kBeatLeadMs) * 1000;') && src.includes('const bool leadOpen = bm.nextBeatMicros - bm.nowMicros <= leadMicros;')],
+    ['lead-open index maps to the upcoming beat', src.includes('colourBeat = leadOpen ? (bm.index + 1) % static_cast<int>(kLinkQuantum) : bm.index;')],
     ['beat pads refresh with beatIndex', src.includes('leds.refreshBeatPads(n, grid, beatIndex, ledWrite);')],
-    ['pad mark publishes bm.index', src.includes('publishBeatPadMark(bm.index, bm.nowMicros - bm.curBeatMicros, bm.bpm);')],
+    ['flash mark publishes the colour beat at the flash start', src.includes('publishBeatPadMark(colourBeat, bm.nowMicros - flashStartMicros, bm.bpm, metronomeColour(colourBeat));')],
   ];
 }
 
