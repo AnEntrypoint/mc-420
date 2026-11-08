@@ -44,6 +44,7 @@ function main() {
     { path: 'src/control/midi.cpp CI path filter', ok: loopText.includes("- 'src/control/midi.cpp'") },
     { path: 'src/control/midi_clock.cpp loop-sim path filter', ok: loopText.includes("- 'src/control/midi_clock.cpp'") },
     { path: 'midi-clock pre-fix negative control', ok: loopText.includes('midi-clock-pulse-resync.js --no-fix') },
+    { path: 'led flash schedule negative control', ok: loopText.includes('led-flash-schedule.js --no-fix') },
     { path: 'src/link/**', ok: phraseText.includes("- 'src/link/**'") },
     { path: 'workflow_dispatch', ok: phraseText.includes('workflow_dispatch:') },
     { path: 'visual-beat-cue negative control', ok: loopText.includes('visual-beat-cue.js --control') },

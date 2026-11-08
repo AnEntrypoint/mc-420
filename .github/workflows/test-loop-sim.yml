@@ -12,6 +12,7 @@ on:
       - 'src/control/midi.cpp'
       - 'src/control/midi_clock.cpp'
       - 'src/control/midi_clock.h'
+      - 'src/control/apc_leds.h'
       - 'src/link/**'
       - '.github/workflows/test-loop-sim.yml'
   pull_request:
@@ -158,6 +159,17 @@ jobs:
             exit 1
           fi
           node tools/loop-quantization-sim/midi-clock-pulse-resync.js --assert-no-fix
+
+      - name: Metronome flash starts and ends on the Link timeline with a bar colour
+        run: node tools/loop-quantization-sim/led-flash-schedule.js
+
+      - name: Metronome refresh-cadence control must fail
+        run: |
+          if node tools/loop-quantization-sim/led-flash-schedule.js --no-fix; then
+            echo "negative control unexpectedly passed"
+            exit 1
+          fi
+          node tools/loop-quantization-sim/led-flash-schedule.js --assert-no-fix
 
       - name: Visual beat cue one-step-behind LED index control must fail
         run: |
