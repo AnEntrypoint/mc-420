@@ -33,8 +33,8 @@ constexpr int kMetronomeCycleBeats = 4;
 constexpr MetronomeState kMetronomeStates[kMetronomeCycleBeats] = {
     {kLedRed,   kLedOff},
     {kLedRed,   kLedGreen},
-    {kLedRed,   kLedOff},
-    {kLedGreen, kLedRed},
+    {kLedRed,   kLedYellow},
+    {kLedOff,   kLedRed},
 };
 
 constexpr MetronomeState metronomeStateFor(int linkBeat) {

@@ -12,13 +12,23 @@ const SPIN_RESIDUAL_US = 50;
 const TOLERANCE_US = 1000;
 const BEATS = 64;
 
-const STATE_TABLE = [
+const kVelocityName = { kLedOff: 'black', kLedGreen: 'green', kLedRed: 'red', kLedYellow: 'yellow' };
+const kOwnerSpec = [
   { flash: 'red', background: 'black' },
   { flash: 'red', background: 'green' },
-  { flash: 'red', background: 'black' },
-  { flash: 'green', background: 'red' },
+  { flash: 'red', background: 'yellow' },
+  { flash: 'black', background: 'red' },
 ];
-const CYCLE = STATE_TABLE.length;
+
+function parseStateTable(src) {
+  const block = src.match(/kMetronomeStates\[kMetronomeCycleBeats\]\s*=\s*\{([\s\S]*?)\};/);
+  if (!block) throw new Error('kMetronomeStates not found in apc_leds.h');
+  const rows = [];
+  for (const m of block[1].matchAll(/\{\s*(kLed\w+)\s*,\s*(kLed\w+)\s*\}/g)) {
+    rows.push({ flash: kVelocityName[m[1]], background: kVelocityName[m[2]] });
+  }
+  return rows;
+}
 
 function timeline(segments) {
   return (beat) => {
@@ -38,16 +48,13 @@ function fireOnRefresh(targetUs, startUs) {
   return startUs + ticks * REFRESH_US;
 }
 
-function stateForBeat(linkBeat) {
-  return STATE_TABLE[((linkBeat % CYCLE) + CYCLE) % CYCLE];
-}
-
-function padSends(beats) {
+function padSends(table, beats) {
+  const cycle = table.length;
   let last = null;
   const sends = [];
   const visible = [];
   for (let k = 0; k < beats; k += 1) {
-    const st = stateForBeat(k);
+    const st = table[k % cycle];
     visible.push(st.flash !== last);
     if (st.flash !== last) {
       sends.push({ beat: k, kind: 'flash', colour: st.flash });
@@ -58,8 +65,7 @@ function padSends(beats) {
       last = st.background;
     }
   }
-  const steady = visible.slice(CYCLE, 2 * CYCLE).filter(Boolean).length;
-  return { sends, visibleFlashes: steady };
+  return { sends, visible };
 }
 
 function beatClockUsable(t) {
@@ -70,7 +76,7 @@ function oldBeatClockUsable(t) {
   return t.linkSynced && t.bpm > 1 && t.masterLenSamples > 0;
 }
 
-function evaluate(scenario, fix) {
+function evaluate(scenario, table, fix) {
   const beatUs = timeline(scenario.segments);
   const start = beatUs(0) - LEAD_US - 5 * REFRESH_US;
   const rows = [];
@@ -79,31 +85,22 @@ function evaluate(scenario, fix) {
     const fired = fix ? fireSpun(edgeTarget) : fireOnRefresh(edgeTarget, start);
     const endTarget = beatUs(k) - LEAD_US + FLASH_US;
     const ended = fix ? fireSpun(endTarget) : fireOnRefresh(endTarget, fired);
-    rows.push({
-      beat: k,
-      edgeErrUs: fired - edgeTarget,
-      endErrUs: ended - endTarget,
-      state: stateForBeat(k),
-    });
+    rows.push({ beat: k, edgeErrUs: fired - edgeTarget, endErrUs: ended - endTarget });
   }
   const maxEdge = Math.max(...rows.map((r) => Math.abs(r.edgeErrUs)));
   const maxEnd = Math.max(...rows.map((r) => Math.abs(r.endErrUs)));
-  const last = rows[rows.length - 1];
-  const stateBad = rows.filter((r) => r.state !== STATE_TABLE[r.beat % CYCLE]).length;
-  const cycle = rows.slice(0, CYCLE);
-  const flashCounts = { red: 0, green: 0 };
-  const backgroundCounts = { black: 0, green: 0, red: 0 };
-  for (const r of cycle) {
-    flashCounts[r.state.flash] += 1;
-    backgroundCounts[r.state.background] += 1;
+  const lastEdge = rows[rows.length - 1].edgeErrUs;
+  return { maxEdge, maxEnd, lastEdge };
+}
+
+function cycleCounts(table) {
+  const flash = {};
+  const background = {};
+  for (const st of table) {
+    flash[st.flash] = (flash[st.flash] || 0) + 1;
+    background[st.background] = (background[st.background] || 0) + 1;
   }
-  const cycleOk = flashCounts.red === 3 && flashCounts.green === 1
-    && backgroundCounts.black === 2 && backgroundCounts.green === 1 && backgroundCounts.red === 1;
-  const { sends, visibleFlashes } = padSends(BEATS);
-  const perBeat = {};
-  for (const s of sends) perBeat[s.beat] = (perBeat[s.beat] || 0) + 1;
-  const sendsOk = Object.values(perBeat).every((n) => n <= 2);
-  return { maxEdge, maxEnd, lastEdge: last.edgeErrUs, stateBad, flashCounts, backgroundCounts, cycleOk, sendsOk, visibleFlashes, sendCount: sends.length, rows };
+  return { flash, background };
 }
 
 function scenarios() {
@@ -130,7 +127,7 @@ function gateCases() {
   ];
 }
 
-function sourceProbe() {
+function sourceProbe(src) {
   const apc = fs.readFileSync(kApcSrc, 'utf8');
   const mid = fs.readFileSync(kMidiSrc, 'utf8');
   const needles = [
@@ -143,38 +140,66 @@ function sourceProbe() {
     [mid, 'while (monotonicMicros() < spinUntil) {}'],
     [mid, 'constexpr int64_t kFlashSpinUs = 2000;'],
   ];
-  return needles.map(([src, n]) => ({ needle: n, found: src.includes(n) }));
+  return needles.map(([s, n]) => ({ needle: n, found: s.includes(n) }));
 }
 
 function main() {
   const args = new Set(process.argv.slice(2));
   const fix = !args.has('--no-fix') && !args.has('--assert-no-fix');
+  const apcSrc = fs.readFileSync(kApcSrc, 'utf8');
+  const table = parseStateTable(apcSrc);
   let failed = false;
   const lines = [];
-  let firstResult = null;
+
+  const specOk = JSON.stringify(table) === JSON.stringify(kOwnerSpec);
+  if (!specOk) failed = true;
+  lines.push(`  table in apc_leds.h matches the owner spec: ${specOk ? 'ok' : 'FAIL'} (${table.map((s) => `${s.flash} over ${s.background}`).join(' | ')})`);
+
+  const counts = cycleCounts(table);
+  const countsOk = counts.flash.red === 3 && counts.flash.black === 1
+    && counts.background.black === 1 && counts.background.green === 1
+    && counts.background.yellow === 1 && counts.background.red === 1;
+  if (!countsOk) failed = true;
+  lines.push(`  cycle: flash red ${counts.flash.red || 0} black ${counts.flash.black || 0}; background black ${counts.background.black || 0} green ${counts.background.green || 0} yellow ${counts.background.yellow || 0} red ${counts.background.red || 0} ${countsOk ? 'ok' : 'FAIL'}`);
+
+  const model = padSends(table, BEATS);
+  const steady = model.visible.slice(table.length, 2 * table.length);
+  const expectVisible = [false, true, true, true];
+  const visOk = steady.every((v, i) => v === expectVisible[i]);
+  if (!visOk) failed = true;
+  const persist = table[table.length - 1].background === table[0].flash;
+  lines.push(`  beat ${table.length - 1} background (${table[table.length - 1].background}) persists into beat 0 flash (${table[0].flash}): ${persist ? 'yes, the pad already shows that colour, so no send' : 'no'}`);
+  lines.push(`  visibility against the previous beat's background (steady cycle, beats 0-3): ${steady.map((v, i) => `beat ${i} ${v ? 'visible' : 'NOT visible'}`).join(', ')} ${visOk ? 'ok' : 'FAIL'}`);
+
+  const sendsPerBeat = {};
+  for (const s of model.sends) sendsPerBeat[s.beat] = (sendsPerBeat[s.beat] || 0) + 1;
+  const sendsOk = Object.values(sendsPerBeat).every((n) => n <= 2);
+  if (!sendsOk) failed = true;
+  lines.push(`  sends per beat <= 2 (flash then background, no off-then-on): ${sendsOk ? 'ok' : 'FAIL'}; ${model.sends.length} sends over ${BEATS} beats`);
+
   for (const sc of scenarios()) {
-    const r = evaluate(sc, fix);
-    if (!firstResult) firstResult = r;
-    const ok = r.maxEdge <= TOLERANCE_US && r.maxEnd <= TOLERANCE_US && r.stateBad === 0
-      && Math.abs(r.lastEdge) <= TOLERANCE_US && r.cycleOk && r.sendsOk;
+    const r = evaluate(sc, table, fix);
+    const ok = r.maxEdge <= TOLERANCE_US && r.maxEnd <= TOLERANCE_US && Math.abs(r.lastEdge) <= TOLERANCE_US;
     if (!ok) failed = true;
-    lines.push(`  ${sc.name}: 64 beats, max flash-start err ${r.maxEdge} us, max flash-end err ${r.maxEnd} us, last-beat start err ${r.lastEdge} us, state mismatches ${r.stateBad}, cycle red ${r.flashCounts.red} green ${r.flashCounts.green} bg black ${r.backgroundCounts.black} green ${r.backgroundCounts.green} red ${r.backgroundCounts.red}, sends per beat <=2 ${r.sendsOk} ${ok ? 'ok' : 'FAIL'}`);
+    lines.push(`  ${sc.name}: 64 beats, max flash-start err ${r.maxEdge} us, max flash-end err ${r.maxEnd} us, last-beat start err ${r.lastEdge} us ${ok ? 'ok' : 'FAIL'}`);
   }
+
   for (const g of gateCases()) {
     const got = beatClockUsable(g.t);
     const ok = got === g.expect;
     if (!ok) failed = true;
     lines.push(`  metronome gate ${g.name}: usable ${got} (expect ${g.expect}, old gate ${oldBeatClockUsable(g.t)}) ${ok ? 'ok' : 'FAIL'}`);
   }
+
   if (fix) {
-    for (const p of sourceProbe()) {
+    for (const p of sourceProbe(apcSrc)) {
       if (!p.found) {
         failed = true;
         lines.push(`  source MISS ${p.needle}`);
       }
     }
   }
-  lines.push(`  pad 15 table (flash/background per beat mod 4): ${STATE_TABLE.map((s) => `${s.flash}/${s.background}`).join(' ')}; visible flashes per cycle ${firstResult.visibleFlashes} of ${CYCLE} sends ${firstResult.sendCount} over ${BEATS} beats`);
+
   console.log(`led flash schedule (${fix ? 'fixed' : 'pre-fix refresh cadence'}), lead ${LEAD_US / 1000} ms, flash ${FLASH_US / 1000} ms, tolerance ${TOLERANCE_US} us`);
   for (const l of lines) console.log(l);
   if (args.has('--assert-no-fix')) {
@@ -195,4 +220,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { evaluate, scenarios, stateForBeat, beatClockUsable, padSends, STATE_TABLE };
+module.exports = { parseStateTable, padSends, kOwnerSpec, evaluate, scenarios, beatClockUsable };
