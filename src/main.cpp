@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
     remote.start(4446, cfg.remoteToken);
 
     aloop::MidiClock midiClock;
-    midiClock.start(&link);
+    midiClock.start(&link, cfg.rtPriority);
 
     printf("[aloop] ready.\n");
 

@@ -7,6 +7,8 @@
 #include <cstring>
 #include <cmath>
 #include <dirent.h>
+#include <pthread.h>
+#include <sched.h>
 #include <time.h>
 
 namespace aloop {
@@ -17,10 +19,11 @@ constexpr int    kPulsesPerQuarter   = 24;
 constexpr int    kMaxOutputs         = 8;
 constexpr double kRescanSeconds      = 2.0;
 constexpr double kSurfaceGraceSeconds = 15.0;
-constexpr int64_t kResyncLogPulses   = 2;
+constexpr int64_t kBurstMaxPulses    = kPulsesPerQuarter;
 constexpr long   kSleepFloorNs       = 250000;
 constexpr long   kSleepCeilingNs     = 5000000;
-constexpr long   kSpinNs             = 500000;
+constexpr long   kIdleSleepNs        = 50000000;
+constexpr long   kSpinNs             = 200000;
 
 constexpr unsigned char kClockTick = 0xF8;
 constexpr unsigned char kClockStart = 0xFA;
@@ -29,6 +32,7 @@ constexpr unsigned char kSongPosition = 0xF2;
 constexpr double kPhraseBeats = 64.0;
 constexpr int kSppUnitsPerBeat = 4;
 constexpr int kSppMask = 0x3FFF;
+constexpr int64_t kPulsesPerSppUnit = kPulsesPerQuarter / kSppUnitsPerBeat;
 
 double monotonicSeconds() {
     timespec t{};
@@ -107,6 +111,33 @@ void writeSongPosition(OutputSet& outs, double beat, int from = 0, int to = -1) 
     outs.write(msg, 3, from, to);
 }
 
+void writeTicks(OutputSet& outs, int64_t count) {
+    unsigned char tick = kClockTick;
+    for (int64_t i = 0; i < count; i++) outs.write(&tick, 1);
+}
+
+int64_t remainderPulses(double beat, int64_t pulseIdx) {
+    const int64_t sppPulse = (int64_t)std::floor(beat * (double)kSppUnitsPerBeat) * kPulsesPerSppUnit;
+    int64_t remainder = pulseIdx - sppPulse;
+    if (remainder < 0) remainder = 0;
+    if (remainder >= kPulsesPerSppUnit) remainder = kPulsesPerSppUnit - 1;
+    return remainder;
+}
+
+void relocate(OutputSet& outs, double beat, int64_t pulseIdx) {
+    writeSongPosition(outs, beat);
+    writeTicks(outs, remainderPulses(beat, pulseIdx));
+}
+
+void raiseClockPriority(int audioPriority) {
+    const int prio = audioPriority - 1;
+    if (prio < 1) return;
+    sched_param sp{};
+    sp.sched_priority = prio;
+    if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0)
+        fprintf(stderr, "[midi-clock] SCHED_FIFO prio %d failed (need rtprio limit), running at normal priority\n", prio);
+}
+
 bool cardHasRawmidi(int card) {
     char path[64];
     snprintf(path, sizeof path, "/proc/asound/card%d", card);
@@ -153,9 +184,10 @@ void rescan(OutputSet& outs, int excludeCard) {
 
 }
 
-void MidiClock::start(LinkBridge* link) {
+void MidiClock::start(LinkBridge* link, int audioPriority) {
     if (threadStarted_) return;
     link_ = link;
+    audioPriority_ = audioPriority;
     run_.store(true, std::memory_order_release);
     if (pthread_create(&thread_, nullptr, &MidiClock::trampoline, this) == 0) {
         threadStarted_ = true;
@@ -179,10 +211,10 @@ void* MidiClock::trampoline(void* self) {
 }
 
 void MidiClock::run() {
+    raiseClockPriority(audioPriority_);
     OutputSet outs;
     double   nextRescan   = 0.0;
     bool     sentStart    = false;
-    bool     havePulseRef = false;
     int64_t  lastPulseIdx = 0;
     int64_t  lastPhraseIdx = -1;
 
@@ -210,40 +242,41 @@ void MidiClock::run() {
         }
 
         if (!b.valid || outs.count == 0) {
-            timespec ts{0, kSleepCeilingNs};
+            timespec ts{0, kIdleSleepNs};
             nanosleep(&ts, nullptr);
             continue;
         }
 
         const int64_t pulseIdx = (int64_t)std::floor(b.beat * (double)kPulsesPerQuarter);
         const int64_t phraseIdx = (int64_t)std::floor(b.beat / kPhraseBeats);
-        if (phraseIdx != lastPhraseIdx) {
-            writeSongPosition(outs, b.beat);
-            lastPhraseIdx = phraseIdx;
-        }
+        const bool phraseTurned = phraseIdx != lastPhraseIdx;
+        lastPhraseIdx = phraseIdx;
 
         if (!sentStart) {
+            if (phraseTurned) writeSongPosition(outs, b.beat);
             unsigned char startByte = kClockStart;
             outs.write(&startByte, 1);
             sentStart = true;
-            havePulseRef = true;
+            writeTicks(outs, remainderPulses(b.beat, pulseIdx));
             lastPulseIdx = pulseIdx;
             fprintf(stderr, "[midi-clock] transport started, sent 0xFA to %d output(s)\n", outs.count);
-        } else if (!havePulseRef) {
-            havePulseRef = true;
-            lastPulseIdx = pulseIdx;
-        }
-
-        if (pulseIdx > lastPulseIdx) {
-            if (pulseIdx - lastPulseIdx > kResyncLogPulses)
-                fprintf(stderr, "[midi-clock] dropped %lld pulse(s) to stay on the Link phase\n",
-                        (long long)(pulseIdx - lastPulseIdx - 1));
-            unsigned char tick = kClockTick;
-            outs.write(&tick, 1);
-            lastPulseIdx = pulseIdx;
-        } else if (pulseIdx < lastPulseIdx) {
-            fprintf(stderr, "[midi-clock] session phase moved back %lld pulse(s), re-anchoring on the new phase\n",
-                    (long long)(lastPulseIdx - pulseIdx));
+        } else {
+            const int64_t gap = pulseIdx - lastPulseIdx;
+            if (gap < 0) {
+                fprintf(stderr, "[midi-clock] session phase moved back %lld pulse(s), relocating with SPP\n",
+                        (long long)(-gap));
+                relocate(outs, b.beat, pulseIdx);
+            } else if (gap > kBurstMaxPulses) {
+                fprintf(stderr, "[midi-clock] session phase jumped %lld pulse(s), relocating with SPP\n",
+                        (long long)gap);
+                relocate(outs, b.beat, pulseIdx);
+            } else if (phraseTurned) {
+                relocate(outs, b.beat, pulseIdx);
+            } else if (gap > 0) {
+                if (gap > 1)
+                    fprintf(stderr, "[midi-clock] caught up %lld missed pulse(s) in one burst\n", (long long)gap);
+                writeTicks(outs, gap);
+            }
             lastPulseIdx = pulseIdx;
         }
 

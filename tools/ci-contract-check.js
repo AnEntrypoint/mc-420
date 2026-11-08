@@ -10,6 +10,7 @@ const kCheckScript = 'tools/ci-contract-check.js';
 const kVisualBeatCueScript = 'tools/loop-quantization-sim/visual-beat-cue.js';
 const kFirstTakeBeatIndexScript = 'tools/loop-quantization-sim/first-take-beat-index.js';
 const kPhraseRebaseScript = 'tools/loop-quantization-sim/phrase-rebase-backwards.js';
+const kMidiClockResyncScript = 'tools/loop-quantization-sim/midi-clock-pulse-resync.js';
 
 function readLines(path) {
   return fs.readFileSync(path, 'utf8').split(String.fromCharCode(10)).map((line) => line.replace(String.fromCharCode(13), ''));
@@ -34,12 +35,15 @@ function main() {
     requireExactlyOnce(loopLines, kVisualBeatCueScript),
     requireExactlyOnce(loopLines, kFirstTakeBeatIndexScript),
     requireExactlyOnce(loopLines, kPhraseRebaseScript),
+    requireExactlyOnce(loopLines, kMidiClockResyncScript),
   ];
   const phraseText = phraseLines.join(String.fromCharCode(10));
   const loopText = loopLines.join(String.fromCharCode(10));
   const pathChecks = [
     { path: 'src/control/midi_clock.cpp', ok: phraseText.includes("- 'src/control/midi_clock.cpp'") },
     { path: 'src/control/midi.cpp CI path filter', ok: loopText.includes("- 'src/control/midi.cpp'") },
+    { path: 'src/control/midi_clock.cpp loop-sim path filter', ok: loopText.includes("- 'src/control/midi_clock.cpp'") },
+    { path: 'midi-clock pre-fix negative control', ok: loopText.includes('midi-clock-pulse-resync.js --no-fix') },
     { path: 'src/link/**', ok: phraseText.includes("- 'src/link/**'") },
     { path: 'workflow_dispatch', ok: phraseText.includes('workflow_dispatch:') },
     { path: 'visual-beat-cue negative control', ok: loopText.includes('visual-beat-cue.js --control') },

@@ -10,7 +10,7 @@ class LinkBridge;
 
 class MidiClock {
 public:
-    void start(LinkBridge* link);
+    void start(LinkBridge* link, int audioPriority);
     void stop();
 
 private:
@@ -18,6 +18,7 @@ private:
     void run();
 
     LinkBridge*      link_ = nullptr;
+    int              audioPriority_ = 0;
     pthread_t        thread_{};
     bool             threadStarted_ = false;
     std::atomic<bool> run_{false};

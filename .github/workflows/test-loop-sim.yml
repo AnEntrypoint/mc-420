@@ -10,6 +10,8 @@ on:
       - 'src/control/apc_grid.cpp'
       - 'src/control/apc_grid.h'
       - 'src/control/midi.cpp'
+      - 'src/control/midi_clock.cpp'
+      - 'src/control/midi_clock.h'
       - 'src/link/**'
       - '.github/workflows/test-loop-sim.yml'
   pull_request:
@@ -21,6 +23,8 @@ on:
       - 'src/control/apc_grid.cpp'
       - 'src/control/apc_grid.h'
       - 'src/control/midi.cpp'
+      - 'src/control/midi_clock.cpp'
+      - 'src/control/midi_clock.h'
       - 'src/link/**'
       - '.github/workflows/test-loop-sim.yml'
   workflow_dispatch:
@@ -143,6 +147,17 @@ jobs:
             exit 1
           fi
           node tools/loop-quantization-sim/first-take-beat-index.js --assert-no-fix
+
+      - name: MIDI clock resync holds every stall and jump on the Link grid
+        run: node tools/loop-quantization-sim/midi-clock-pulse-resync.js
+
+      - name: MIDI clock pre-fix pulse emission control must fail
+        run: |
+          if node tools/loop-quantization-sim/midi-clock-pulse-resync.js --no-fix; then
+            echo "negative control unexpectedly passed"
+            exit 1
+          fi
+          node tools/loop-quantization-sim/midi-clock-pulse-resync.js --assert-no-fix
 
       - name: Visual beat cue one-step-behind LED index control must fail
         run: |
