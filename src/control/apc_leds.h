@@ -23,6 +23,8 @@ constexpr int kApcBtnPlay    = 0x5B;
 constexpr int kApcLiveLedNote = 0x40;
 constexpr int kApcBtnSampleRec = 65;
 constexpr int kApcBtnDrumRec   = 66;
+constexpr unsigned kApcBeatFlashMs = 100;
+constexpr uint8_t kPhraseBarColour[4] = {kLedRed, kLedYellow, kLedGreen, kLedYellow};
 
 class ApcLeds {
 public:
@@ -43,7 +45,8 @@ public:
         bool clipFlashActive = clipFlashReleaseAt_ != 0 && now_ms < clipFlashReleaseAt_;
         if (clipFlashReleaseAt_ != 0 && now_ms >= clipFlashReleaseAt_) clipFlashReleaseAt_ = 0;
 
-        if (now_ms - lastMs_ < kRefreshMs) return;
+        const bool beatEdge = gridBeatIndex != lastBeatIndex_;
+        if (!beatEdge && now_ms - lastMs_ < kRefreshMs) return;
         lastMs_ = now_ms;
 
         if (clipFlashActive) {
@@ -102,7 +105,7 @@ private:
     static constexpr unsigned kBootDelayMs = 2000;
     static constexpr unsigned kRefreshMs = 33;
     static constexpr unsigned kClipFlashMs = 1200;
-    static constexpr unsigned kBeatFlashMs = 100;
+    static constexpr unsigned kBeatFlashMs = kApcBeatFlashMs;
 
     unsigned bootMs_ = 0;
     unsigned lastMs_ = 0;
@@ -138,8 +141,6 @@ private:
             lastBeatIndex_ = gridBeatIndex;
             beatEdgeMs_ = now_ms;
         }
-        const int activeGroup = gridBeatIndex >= 0 ? (gridBeatIndex >> 2) : -1;
-        const int posInGroup  = gridBeatIndex >= 0 ? (gridBeatIndex & 0x3) : 0;
         const bool havePhrase = gridBeatIndex >= 0;
         const bool beatFlash  = havePhrase && now_ms - beatEdgeMs_ < kBeatFlashMs;
         for (int g = 0; g < 4; g++) {
@@ -147,15 +148,9 @@ private:
             if (grid.gateModHeld()) {
                 color = (grid.gateMode() == g + 1) ? kLedRed : kLedOff;
             } else {
-                if (!havePhrase)             color = kLedOff;
-                else if (g < activeGroup)    color = kLedYellow;
-                else                         color = kLedGreen;
-                if (beatFlash && g == posInGroup) color = kLedRed;
-                if (grid.shuffleMode() == g + 1) {
-                    color = (color == kLedRed)    ? kLedRedBlink :
-                            (color == kLedYellow) ? kLedYellowBlink :
-                                                    kLedGreenBlink;
-                }
+                color = kLedOff;
+                if (beatFlash && g == 0) color = kPhraseBarColour[(gridBeatIndex >> 2) & 0x3];
+                if (grid.shuffleMode() == g + 1 && color == kLedOff) color = kLedGreen;
             }
             sendCoalesced(kApcBeatPadNotes[g], color, write);
         }

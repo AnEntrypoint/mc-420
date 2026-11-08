@@ -254,6 +254,12 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
                 beatClockLive = true;
                 const int leadWaitMs = millisToNextBeat(bm, kPollTimeoutMs) - kBeatLeadMs;
                 waitMs = leadWaitMs < 1 ? 1 : leadWaitMs;
+                const int64_t leadMicros = (int64_t)kBeatLeadMs * 1000;
+                const int64_t flashEndMicros = bm.nextBeatMicros - leadMicros + (int64_t)kApcBeatFlashMs * 1000;
+                if (bm.nowMicros >= bm.nextBeatMicros - leadMicros && bm.nowMicros < flashEndMicros) {
+                    const int flashWaitMs = (int)((flashEndMicros - bm.nowMicros + 999) / 1000);
+                    if (flashWaitMs < waitMs) waitMs = flashWaitMs < 1 ? 1 : flashWaitMs;
+                }
             }
         }
 
