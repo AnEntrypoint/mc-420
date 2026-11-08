@@ -97,7 +97,7 @@ function telemetryOnce(host = opts.host, port = kTelemPort, timeoutMs = 3000) {
     sock.on('message', (msg) => {
       clearTimeout(timer);
       sock.close();
-      try { resolve(JSON.parse(msg.toString())); }
+      try { resolve(JSON.parse(msg.toString().replace(/(?<=[\[,:])(-?nan|-?inf)(?=[,\]}])/gi, 'null'))); }
       catch (e) { reject(e); }
     });
     sock.on('error', (e) => { clearTimeout(timer); reject(e); });
