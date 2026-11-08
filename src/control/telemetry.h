@@ -9,13 +9,14 @@ class AudioThread;
 
 struct BeatPadMark {
     int      index       = -1;
+    int      colour      = 0;
     int64_t  lateMicros  = 0;
     int64_t  ageMs       = -1;
     uint64_t seq         = 0;
     double   bpm         = 0.0;
 };
 
-void publishBeatPadMark(int index, int64_t lateMicros, double bpm);
+void publishBeatPadMark(int index, int64_t lateMicros, double bpm, int colour);
 BeatPadMark beatPadMark();
 
 class Telemetry {

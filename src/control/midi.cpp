@@ -77,7 +77,7 @@ static std::atomic<int> g_controlSurfaceCard{-1};
 int controlSurfaceCard() { return g_controlSurfaceCard.load(std::memory_order_relaxed); }
 
 static bool beatClockUsable(const AudioThread::Telemetry& t) {
-    return t.linkSynced && t.bpm > 1.0f && t.masterLenSamples > 0.0f;
+    return t.linkSynced && t.bpm > 1.0f;
 }
 
 constexpr int kBeatLeadMs = 30;
@@ -243,7 +243,7 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
     bool haveProbeStatPath = probeStatPath[0] != '\0';
     constexpr unsigned kLivenessProbeMs = 1000;
     unsigned lastLivenessProbeMs = nowMs();
-    int lastPadBeatIndex = -1;
+    int64_t lastFlashNextMicros = -1;
     for (;;) {
         auto beatTelem = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
         int waitMs = kPollTimeoutMs;
@@ -270,23 +270,28 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         int pr = poll(pfds.data(), (nfds_t)pfds.size(), waitMs);
 
         int beatIndex = beatTelem.gridBeatIndex;
+        int colourBeat = -1;
         const int takeSpan = (int)(beatTelem.recordedBeats + 0.5f);
         const int takeIdx = takeBeatIndex(beatTelem, link);
         if (takeIdx >= 0 && takeSpan >= 1) beatIndex = takeIdx;
         if (beatClockLive) {
             LinkBridge::BeatMark bm = link->beatMarkNow();
             if (bm.valid) {
-                const bool leadOpen = bm.nextBeatMicros - bm.nowMicros <= static_cast<int64_t>(kBeatLeadMs) * 1000;
-                beatIndex = leadOpen ? (bm.index + 1) % static_cast<int>(kLinkQuantum) : bm.index;
+                const int64_t leadMicros = static_cast<int64_t>(kBeatLeadMs) * 1000;
+                const bool leadOpen = bm.nextBeatMicros - bm.nowMicros <= leadMicros;
+                colourBeat = leadOpen ? (bm.index + 1) % static_cast<int>(kLinkQuantum) : bm.index;
+                beatIndex = colourBeat;
                 if (takeIdx >= 0 && takeSpan >= 1) {
                     beatIndex = leadOpen ? (takeIdx + 1) % takeSpan : takeIdx;
                 }
-                if (bm.index != lastPadBeatIndex) {
-                    lastPadBeatIndex = bm.index;
-                    publishBeatPadMark(bm.index, bm.nowMicros - bm.curBeatMicros, bm.bpm);
+                if (leadOpen && bm.nextBeatMicros != lastFlashNextMicros) {
+                    lastFlashNextMicros = bm.nextBeatMicros;
+                    const int64_t flashStartMicros = bm.nextBeatMicros - leadMicros;
+                    publishBeatPadMark(colourBeat, bm.nowMicros - flashStartMicros, bm.bpm, metronomeColour(colourBeat));
                 }
             }
         }
+        leds.setColourBeat(colourBeat);
 
         if (pr > 0 && injectListenFd >= 0 && (pfds[(size_t)kListenSlot].revents & POLLIN)) {
             int c = accept(injectListenFd, nullptr, nullptr);

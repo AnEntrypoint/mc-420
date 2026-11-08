@@ -24,7 +24,10 @@ constexpr int kApcLiveLedNote = 0x40;
 constexpr int kApcBtnSampleRec = 65;
 constexpr int kApcBtnDrumRec   = 66;
 constexpr unsigned kApcBeatFlashMs = 100;
-constexpr uint8_t kPhraseBarColour[4] = {kLedRed, kLedYellow, kLedGreen, kLedYellow};
+constexpr uint8_t metronomeColour(int linkBeat) {
+    const int phase = ((linkBeat % 16) + 16) % 16;
+    return phase < 4 ? kLedGreen : (phase < 8 ? kLedYellow : kLedRed);
+}
 
 class ApcLeds {
 public:
@@ -93,6 +96,8 @@ public:
 
     void invalidate() { cacheValid_.fill(false); }
 
+    void setColourBeat(int linkBeat) { colourBeat_ = linkBeat; }
+
     template <typename WriteFn>
     void refreshBeatPads(unsigned now_ms, const ApcGrid& grid, int gridBeatIndex, WriteFn&& write) {
         if (!bootMs_) bootMs_ = now_ms ? now_ms : 1;
@@ -116,6 +121,7 @@ private:
     bool clipFlashIsError_ = false;
     int lastBeatIndex_ = -2;
     unsigned beatEdgeMs_ = 0;
+    int colourBeat_ = -1;
 
     static bool isBeatPadNote(int note) {
         for (int g = 0; g < 4; g++) if (note == kApcBeatPadNotes[g]) return true;
@@ -149,7 +155,7 @@ private:
                 color = (grid.gateMode() == g + 1) ? kLedRed : kLedOff;
             } else {
                 color = kLedOff;
-                if (beatFlash && g == 0) color = kPhraseBarColour[(gridBeatIndex >> 2) & 0x3];
+                if (beatFlash && g == 0) color = metronomeColour(colourBeat_ >= 0 ? colourBeat_ : gridBeatIndex);
                 if (grid.shuffleMode() == g + 1 && color == kLedOff) color = kLedGreen;
             }
             sendCoalesced(kApcBeatPadNotes[g], color, write);

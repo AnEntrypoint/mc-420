@@ -27,6 +27,7 @@ int64_t monoMs() {
 }
 
 std::atomic<int>      g_padIndex{-1};
+std::atomic<int>      g_padColour{0};
 std::atomic<int64_t>  g_padLateUs{0};
 std::atomic<int64_t>  g_padBpmMilli{0};
 std::atomic<int64_t>  g_padAtMonoMs{0};
@@ -38,8 +39,9 @@ void ensureStatusDirExists() {
 }
 }
 
-void publishBeatPadMark(int index, int64_t lateMicros, double bpm) {
+void publishBeatPadMark(int index, int64_t lateMicros, double bpm, int colour) {
     g_padIndex.store(index, std::memory_order_relaxed);
+    g_padColour.store(colour, std::memory_order_relaxed);
     g_padLateUs.store(lateMicros, std::memory_order_relaxed);
     g_padBpmMilli.store((int64_t)(bpm * 1000.0), std::memory_order_relaxed);
     g_padAtMonoMs.store(monoMs(), std::memory_order_release);
@@ -50,6 +52,7 @@ BeatPadMark beatPadMark() {
     BeatPadMark m;
     m.seq        = g_padSeq.load(std::memory_order_acquire);
     m.index      = g_padIndex.load(std::memory_order_relaxed);
+    m.colour     = g_padColour.load(std::memory_order_relaxed);
     m.lateMicros = g_padLateUs.load(std::memory_order_relaxed);
     m.bpm        = (double)g_padBpmMilli.load(std::memory_order_relaxed) / 1000.0;
     const int64_t at = g_padAtMonoMs.load(std::memory_order_acquire);
@@ -137,7 +140,7 @@ void Telemetry::publish() {
         "\"sustain_cmd\":%.2f,\"sustain_gate\":%.2f,"
         "\"grid_beat_index\":%d,\"master_phase_beats\":%.5f,\"master_len_samples\":%.1f,\"recorded_beats\":%.3f,"
         "\"beat_mark\":{\"valid\":%s,\"beat\":%.5f,\"index\":%d,\"ms_to_next\":%.1f,\"late_ms\":%.3f},"
-        "\"beat_pad_mark\":{\"seq\":%llu,\"index\":%d,\"late_ms\":%.3f,\"age_ms\":%lld,\"bpm\":%.3f},"
+        "\"beat_pad_mark\":{\"seq\":%llu,\"index\":%d,\"colour\":%d,\"late_ms\":%.3f,\"age_ms\":%lld,\"bpm\":%.3f},"
         "\"groove\":{\"shuffle\":%d,\"gate\":%d,\"beat_len_samples\":%.1f,\"gate_min\":%.3f,\"gate_max\":%.3f,\"swing_offset_samples\":%.1f,\"swing_grid_beats\":%.3f},"
         "\"loopers\":{\"rec\":%u,\"play\":%u,\"vol\":%s,\"level\":%s,\"wraplen\":%s,\"readpos\":%s,\"writeidx\":%s,\"stateflags\":%s,\"latencybias\":%s},\"sample_clock\":{\"audio_samples\":%llu,\"last_take_arm_sample\":%llu,\"last_take_span_samples\":%.1f,\"master_phase_samples\":%.1f,\"link_target_samples\":%.1f,\"link_capture_us\":%.0f,\"link_now_us\":%.0f,\"link_loop_phase_beats\":%.4f,\"create_audio_samples\":%.1f,\"create_span_samples\":%.1f,\"create_master_len\":%.1f,\"create_phase_samples\":%.1f,\"impose_audio_samples\":%.1f,\"impose_target_samples\":%.1f}}",
         t.coreBusyPct[0], t.coreBusyPct[1], t.coreBusyPct[2], t.coreBusyPct[3],
@@ -160,7 +163,7 @@ void Telemetry::publish() {
         t.masterLenSamples, t.recordedBeats,
         t.beatMarkValid ? "true" : "false", t.beatMarkBeat, t.beatMarkIndex,
         t.beatMarkMsToNext, t.beatMarkLateMs,
-        (unsigned long long)padMark.seq, padMark.index,
+        (unsigned long long)padMark.seq, padMark.index, padMark.colour,
         (double)padMark.lateMicros / 1000.0, (long long)padMark.ageMs, padMark.bpm,
         t.shuffleMode, t.gateMode, t.grooveBeatLenSamples, t.grooveGateMin, t.grooveGateMax,
         t.grooveSwingOffsetSamples, t.grooveSwingGridBeats,

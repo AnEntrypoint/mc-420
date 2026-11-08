@@ -11,7 +11,10 @@ const REFRESH_US = 33000;
 const POLL_US = 1000;
 const TOLERANCE_US = 1000;
 const BEATS = 64;
-const COLOURS = ['red', 'amber', 'green', 'amber'];
+const CYCLE = 16;
+const GREEN_BEATS = 4;
+const YELLOW_BEATS = 4;
+const RED_BEATS = 8;
 
 function timeline(segments) {
   return (beat) => {
@@ -33,8 +36,19 @@ function fireOnRefresh(targetUs, startUs) {
   return startUs + ticks * REFRESH_US;
 }
 
-function colourForBeat(beatIndex) {
-  return COLOURS[(beatIndex >> 2) & 0x3];
+function colourForBeat(linkBeat) {
+  const phase = ((linkBeat % CYCLE) + CYCLE) % CYCLE;
+  if (phase < GREEN_BEATS) return 'green';
+  if (phase < GREEN_BEATS + YELLOW_BEATS) return 'yellow';
+  return 'red';
+}
+
+function beatClockUsable(t) {
+  return t.linkSynced && t.bpm > 1;
+}
+
+function oldBeatClockUsable(t) {
+  return t.linkSynced && t.bpm > 1 && t.masterLenSamples > 0;
 }
 
 function evaluate(scenario, fix) {
@@ -57,8 +71,11 @@ function evaluate(scenario, fix) {
   const maxEdge = Math.max(...rows.map((r) => Math.abs(r.edgeErrUs)));
   const maxEnd = Math.max(...rows.map((r) => Math.abs(r.endErrUs)));
   const last = rows[rows.length - 1];
-  const colourBad = rows.filter((r) => r.colour !== COLOURS[(r.beat >> 2) & 0x3]).length;
-  return { maxEdge, maxEnd, lastEdge: last.edgeErrUs, colourBad, rows };
+  const colourBad = rows.filter((r) => r.colour !== colourForBeat(r.beat)).length;
+  const counts = { green: 0, yellow: 0, red: 0 };
+  for (const r of rows.slice(0, CYCLE)) counts[r.colour] += 1;
+  const countsOk = counts.green === GREEN_BEATS && counts.yellow === YELLOW_BEATS && counts.red === RED_BEATS;
+  return { maxEdge, maxEnd, lastEdge: last.edgeErrUs, colourBad, counts, countsOk, rows };
 }
 
 function scenarios() {
@@ -73,6 +90,15 @@ function scenarios() {
         { beat0: 32, us0: 1000000 + Math.round(32 * 60e6 / 120), bpm: 150 },
       ],
     },
+    { name: '174 BPM, no take (masterLenSamples 0)', segments: [{ beat0: 0, us0: 1000000, bpm: 174 }], take: false },
+  ];
+}
+
+function gateCases() {
+  return [
+    { name: 'linked, no take', t: { linkSynced: true, bpm: 174, masterLenSamples: 0 }, expect: true },
+    { name: 'linked, take', t: { linkSynced: true, bpm: 120, masterLenSamples: 72000 }, expect: true },
+    { name: 'not linked', t: { linkSynced: false, bpm: 120, masterLenSamples: 72000 }, expect: false },
   ];
 }
 
@@ -80,10 +106,12 @@ function sourceProbe() {
   const apc = fs.readFileSync(kApcSrc, 'utf8');
   const mid = fs.readFileSync(kMidiSrc, 'utf8');
   const needles = [
-    [apc, 'constexpr uint8_t kPhraseBarColour[4] = {kLedRed, kLedYellow, kLedGreen, kLedYellow};'],
-    [apc, 'if (beatFlash && g == 0) color = kPhraseBarColour[(gridBeatIndex >> 2) & 0x3];'],
+    [apc, 'constexpr uint8_t metronomeColour(int linkBeat) {'],
+    [apc, 'if (beatFlash && g == 0) color = metronomeColour(colourBeat_ >= 0 ? colourBeat_ : gridBeatIndex);'],
     [apc, 'if (!beatEdge && now_ms - lastMs_ < kRefreshMs) return;'],
-    [mid, 'const int64_t flashEndMicros = bm.nextBeatMicros - leadMicros + (int64_t)kApcBeatFlashMs * 1000;'],
+    [mid, 'return t.linkSynced && t.bpm > 1.0f;'],
+    [mid, 'if (leadOpen && bm.nextBeatMicros != lastFlashNextMicros) {'],
+    [mid, 'publishBeatPadMark(colourBeat, bm.nowMicros - flashStartMicros, bm.bpm, metronomeColour(colourBeat));'],
   ];
   return needles.map(([src, n]) => ({ needle: n, found: src.includes(n) }));
 }
@@ -96,9 +124,15 @@ function main() {
   for (const sc of scenarios()) {
     const r = evaluate(sc, fix);
     const ok = r.maxEdge <= TOLERANCE_US && r.maxEnd <= TOLERANCE_US && r.colourBad === 0
-      && Math.abs(r.lastEdge) <= TOLERANCE_US;
+      && Math.abs(r.lastEdge) <= TOLERANCE_US && r.countsOk;
     if (!ok) failed = true;
-    lines.push(`  ${sc.name}: 64 beats, max edge err ${r.maxEdge} us, max end err ${r.maxEnd} us, last-beat edge err ${r.lastEdge} us, colour mismatches ${r.colourBad} ${ok ? 'ok' : 'FAIL'}`);
+    lines.push(`  ${sc.name}: 64 beats, max edge err ${r.maxEdge} us, max end err ${r.maxEnd} us, last-beat edge err ${r.lastEdge} us, colour mismatches ${r.colourBad}, first 16 beats green ${r.counts.green} yellow ${r.counts.yellow} red ${r.counts.red} ${ok ? 'ok' : 'FAIL'}`);
+  }
+  for (const g of gateCases()) {
+    const got = beatClockUsable(g.t);
+    const ok = got === g.expect;
+    if (!ok) failed = true;
+    lines.push(`  metronome gate ${g.name}: usable ${got} (expect ${g.expect}, old gate ${oldBeatClockUsable(g.t)}) ${ok ? 'ok' : 'FAIL'}`);
   }
   if (fix) {
     for (const p of sourceProbe()) {
@@ -108,7 +142,7 @@ function main() {
       }
     }
   }
-  console.log(`led flash schedule (${fix ? 'fixed' : 'pre-fix refresh cadence'}), lead ${LEAD_US / 1000} ms, flash ${FLASH_US / 1000} ms, tolerance ${TOLERANCE_US} us`);
+  console.log(`led flash schedule (${fix ? 'fixed' : 'pre-fix refresh cadence'}), lead ${LEAD_US / 1000} ms, flash ${FLASH_US / 1000} ms, tolerance ${TOLERANCE_US} us, colour: green 0-3, yellow 4-7, red 8-15 (Link beat mod 16)`);
   for (const l of lines) console.log(l);
   if (args.has('--assert-no-fix')) {
     if (failed) {
@@ -128,4 +162,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { evaluate, scenarios };
+module.exports = { evaluate, scenarios, colourForBeat, beatClockUsable };
