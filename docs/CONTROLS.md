@@ -195,9 +195,15 @@ output lands on the exact held key regardless of the input's actual pitch.
 ## Grid-beat visualization
 
 The top-right pad at note 15 (`kApcBeatPadNotes[0]`) is the metronome: one
-light that flashes once per Link beat. The flash starts 30 ms before the beat
-(`kBeatLeadMs`) and lasts 100 ms (`kApcBeatFlashMs`). Its colour follows the
-Link beat modulo 16: beats 0-3 green, 4-7 yellow (APC velocity 5), 8-15 red.
+light that flashes once per Link beat over a background colour. The flash
+starts 30 ms before the beat (`kBeatLeadMs`, held to within about 50 µs by a
+short spin before the poll wake) and lasts 100 ms (`kApcBeatFlashMs`). The
+flash and background colours come from `kMetronomeStates` in
+`src/control/apc_leds.h`, indexed by the Link beat modulo 4: beat 0 red on
+black, beat 1 red on green, beat 2 red on black, beat 3 green on red. Black is
+APC velocity 0. Beat 0's red flash sits on beat 3's red background, so that
+flash has no visible colour change on the pad; the table is the owner's
+spec and is unchanged.
 The metronome runs whenever Link is synced, with or without a take
 (`beatClockUsable` in `src/control/midi.cpp`); the flash timing and colour
 come from the Link timeline, not from the poll cadence. The other three pads

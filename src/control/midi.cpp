@@ -81,6 +81,13 @@ static bool beatClockUsable(const AudioThread::Telemetry& t) {
 }
 
 constexpr int kBeatLeadMs = 30;
+constexpr int64_t kFlashSpinUs = 2000;
+
+static int64_t monotonicMicros() {
+    timespec ts{};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
 static int millisToNextBeat(const LinkBridge::BeatMark& bm, int capMs) {
     long ms = (long)((bm.nextBeatMicros - bm.nowMicros + 999) / 1000);
     if (ms < 1) ms = 1;
@@ -252,8 +259,9 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
             LinkBridge::BeatMark bm = link->beatMarkNow();
             if (bm.valid) {
                 beatClockLive = true;
-                const int leadWaitMs = millisToNextBeat(bm, kPollTimeoutMs) - kBeatLeadMs;
-                waitMs = leadWaitMs < 1 ? 1 : leadWaitMs;
+                const int64_t untilFlashUs = bm.nextBeatMicros - (int64_t)kBeatLeadMs * 1000 - bm.nowMicros;
+                const int flashStartWaitMs = untilFlashUs > kFlashSpinUs ? (int)((untilFlashUs - kFlashSpinUs) / 1000) : 1;
+                waitMs = flashStartWaitMs < 1 ? 1 : flashStartWaitMs;
                 const int64_t leadMicros = (int64_t)kBeatLeadMs * 1000;
                 const int64_t flashEndMicros = bm.nextBeatMicros - leadMicros + (int64_t)kApcBeatFlashMs * 1000;
                 if (bm.nowMicros >= bm.nextBeatMicros - leadMicros && bm.nowMicros < flashEndMicros) {
@@ -268,6 +276,16 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         pfds[(size_t)kConnSlot].fd = injectConnFd;
         pfds[(size_t)kConnSlot].events = POLLIN;
         int pr = poll(pfds.data(), (nfds_t)pfds.size(), waitMs);
+        if (link && beatClockUsable(beatTelem)) {
+            LinkBridge::BeatMark sb = link->beatMarkNow();
+            if (sb.valid) {
+                const int64_t remainUs = sb.nextBeatMicros - (int64_t)kBeatLeadMs * 1000 - sb.nowMicros;
+                if (remainUs > 0 && remainUs <= kFlashSpinUs) {
+                    const int64_t spinUntil = monotonicMicros() + remainUs;
+                    while (monotonicMicros() < spinUntil) {}
+                }
+            }
+        }
 
         int beatIndex = beatTelem.gridBeatIndex;
         int colourBeat = -1;
@@ -287,7 +305,8 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
                 if (leadOpen && bm.nextBeatMicros != lastFlashNextMicros) {
                     lastFlashNextMicros = bm.nextBeatMicros;
                     const int64_t flashStartMicros = bm.nextBeatMicros - leadMicros;
-                    publishBeatPadMark(colourBeat, bm.nowMicros - flashStartMicros, bm.bpm, metronomeColour(colourBeat));
+                    const MetronomeState state = metronomeStateFor(colourBeat);
+                    publishBeatPadMark(colourBeat, bm.nowMicros - flashStartMicros, bm.bpm, state.flash, state.background);
                 }
             }
         }

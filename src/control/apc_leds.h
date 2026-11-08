@@ -24,9 +24,22 @@ constexpr int kApcLiveLedNote = 0x40;
 constexpr int kApcBtnSampleRec = 65;
 constexpr int kApcBtnDrumRec   = 66;
 constexpr unsigned kApcBeatFlashMs = 100;
-constexpr uint8_t metronomeColour(int linkBeat) {
-    const int phase = ((linkBeat % 16) + 16) % 16;
-    return phase < 4 ? kLedGreen : (phase < 8 ? kLedYellow : kLedRed);
+struct MetronomeState {
+    uint8_t flash;
+    uint8_t background;
+};
+
+constexpr int kMetronomeCycleBeats = 4;
+constexpr MetronomeState kMetronomeStates[kMetronomeCycleBeats] = {
+    {kLedRed,   kLedOff},
+    {kLedRed,   kLedGreen},
+    {kLedRed,   kLedOff},
+    {kLedGreen, kLedRed},
+};
+
+constexpr MetronomeState metronomeStateFor(int linkBeat) {
+    const int phase = ((linkBeat % kMetronomeCycleBeats) + kMetronomeCycleBeats) % kMetronomeCycleBeats;
+    return kMetronomeStates[phase];
 }
 
 class ApcLeds {
@@ -155,7 +168,10 @@ private:
                 color = (grid.gateMode() == g + 1) ? kLedRed : kLedOff;
             } else {
                 color = kLedOff;
-                if (beatFlash && g == 0) color = metronomeColour(colourBeat_ >= 0 ? colourBeat_ : gridBeatIndex);
+                if (g == 0 && havePhrase) {
+                    const MetronomeState st = metronomeStateFor(colourBeat_ >= 0 ? colourBeat_ : gridBeatIndex);
+                    color = beatFlash ? st.flash : st.background;
+                }
                 if (grid.shuffleMode() == g + 1 && color == kLedOff) color = kLedGreen;
             }
             sendCoalesced(kApcBeatPadNotes[g], color, write);
