@@ -66,6 +66,14 @@ public:
         float    inPeak = 0.0f;
         float    outPeak = 0.0f;
         float    masterPeak = 0.0f;
+        float    stageFin = 0.0f;
+        float    stageFinFx = 0.0f;
+        float    stageResonode = 0.0f;
+        float    stageDryGate = 0.0f;
+        float    stagePre = 0.0f;
+        float    stagePost = 0.0f;
+        float    keysMultimode = 0.0f;
+        float    resonodeEngaged = 0.0f;
         float    effSpeed = 1.0f;
         float    sustainCmd = 0.0f;
         float    sustainGate = 0.0f;

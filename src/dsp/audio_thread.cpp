@@ -389,6 +389,7 @@ static void* worker(void*) {
     int doubleSpeedSlot = -1;
     int stopAllSlot = -1;
     int monitorFoldSlot = -1;
+    int keysMultimodeSlot = -1;
     int pitchSlot = -1;
     int pitchbendEngagedSlot = -1;
     int pitchbendSlot = -1;
@@ -716,6 +717,7 @@ static void* worker(void*) {
                     if (doubleSpeedSlot < 0) doubleSpeedSlot = g_params->getSlot("cmd/doublespeed");
                     if (stopAllSlot < 0) stopAllSlot = g_params->getSlot("cmd/stopall");
                     if (monitorFoldSlot < 0) monitorFoldSlot = g_params->getSlot("fx/monitorfold");
+                    if (keysMultimodeSlot < 0) keysMultimodeSlot = g_params->getSlot("fx/keys/multimode");
                     if (pitchSlot < 0) pitchSlot = g_params->getSlot("fx/pitch");
                     if (pitchbendEngagedSlot < 0) pitchbendEngagedSlot = g_params->getSlot("fx/pitchbend_engaged");
                     if (pitchbendSlot < 0) pitchbendSlot = g_params->getSlot("fx/pitchbend");
@@ -1233,12 +1235,19 @@ static void* worker(void*) {
                 }
                 std::fill(sidechainEnvBuf.begin(), sidechainEnvBuf.end(), sidechainEnv);
             }
+            auto stagePeakOf = [](const float* x, int n) {
+                float p = 0.0f;
+                for (int i = 0; i < n; i++) { float a = x[i] < 0.0f ? -x[i] : x[i]; if (a > p) p = a; }
+                return p;
+            };
+            g_telem.stageFin = stagePeakOf(fin.data(), N);
             timespec t0, t1;
             clock_gettime(CLOCK_MONOTONIC, &t0);
             if (!g_cfg.disableCore3Lv2) {
                 homeFx.process(fin.data(), N);
                 userFx.process(fin.data(), N);
             }
+            g_telem.stageFinFx = stagePeakOf(fin.data(), N);
             bool resonodeEngagedNow = g_params && resonodeEngagedSlot >= 0 &&
                                        g_params->getBySlot(resonodeEngagedSlot) > 0.5f;
             if (resonodeEngagedZone) *resonodeEngagedZone = resonodeEngagedNow ? 1.0f : 0.0f;
@@ -1392,7 +1401,20 @@ static void* worker(void*) {
                     }
                 }
             }
+            g_telem.resonodeEngaged = (g_params && resonodeEngagedSlot >= 0 && g_params->getBySlot(resonodeEngagedSlot) > 0.5f) ? 1.0f : 0.0f;
+            g_telem.keysMultimode = (g_params && keysMultimodeSlot >= 0 && g_params->getBySlot(keysMultimodeSlot) > 0.5f) ? 1.0f : 0.0f;
+            g_telem.stageResonode = g_telem.resonodeEngaged > 0.5f ? stagePeakOf(resonodeInBuf.data(), N) : 0.0f;
+            float stageDryMax = 0.0f;
+            for (int i = 0; i < N; i++) {
+                float anyVoice = 0.0f;
+                for (int v = 0; v < kTransposeVoices; v++) anyVoice += xposeGateBuf[v][(size_t)i];
+                if (anyVoice > 1.0f) anyVoice = 1.0f;
+                float dg = (1.0f - anyVoice) * (1.0f - g_telem.keysMultimode);
+                if (dg > stageDryMax) stageDryMax = dg;
+            }
+            g_telem.stageDryGate = stageDryMax;
             faustPre.compute(N, fins, preOuts);
+            g_telem.stagePre = stagePeakOf(preFilterOutBuf.data(), N);
             if (g_telem.gateMode > 0) {
                 for (int i = 0; i < N; i++) {
                     float grooveGate = grooveGateBuf[(size_t)i];
@@ -1424,6 +1446,7 @@ static void* worker(void*) {
                 delayVerbFxMaster.process(masterWetBuf.data(), N);
             }
             faustPost.compute(N, postIns, postOuts);
+            g_telem.stagePost = stagePeakOf(inputFxOut.data(), N);
             prevLoopSum = rawLoopSum;
             prevFiltOut = rawFiltTap;
             clock_gettime(CLOCK_MONOTONIC, &t1);
