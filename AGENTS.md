@@ -57,6 +57,7 @@ Real Pi 4 root/aloop at `192.168.137.132`; `.100` is the cmdline-pinned netboot 
 
 ## Ableton Link checklist
 
+- MIDI clock Song Position (`src/control/midi_clock.cpp`, 4 units/beat, absolute from Link beat 0) is a receiver-dependent assumption: a receiver that resets its position on Start rather than honouring SPP will not follow relocations. Verify on each receiver before relying on it.
 - `commitAppSessionState()` off-audio-thread (the only commit we make; `src/` has no audio-thread commit); the audio thread only calls `LinkBridge::audioRead()`, a lock-free double-buffered `LinkSnapshot` stamped `CLOCK_MONOTONIC`, extrapolated at session tempo.
 - `setTempo` rewrites EVERY peer; `imposeTempo(bpm)` is the only writer of `weOwnTempo`; never gate `linkSpeedRatio` on it; `imposeTempo()` republishes in the same call or the finish edge doubles the take. (archive#link-tempo-authority)
 - CLOCK-ONLY FOREVER (user decision: a localized stop must not stop the others): `enableStartStopSync(false)`, never `setIsPlaying`; tempo + phase shared, transport NEVER. `setIsPlaying*` exists ONLY in `tools/loop-quantization-sim/` -> peer `isPlaying()` ALWAYS false.
