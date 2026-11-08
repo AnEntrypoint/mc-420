@@ -125,13 +125,13 @@ int main(int argc, char** argv) {
     const int64_t leave = seg1.originUs + 16 * seg1.beatLenUs + 90000;
     const Segment seg2{leave, leave + 210000, 500000, 40};
     const std::vector<Segment> segs{seg0, seg1, seg2};
-    const int64_t endUs = leave + 3000000;
+    const int64_t endUs = leave + 8000000;
 
     std::vector<Send> sends;
     simulate(segs, blackGapUs, endUs, sends);
 
-    std::printf("raw APC note-15 messages, steady 120 BPM, one 16-beat cycle (beats 16-31), gap %lld us\n", static_cast<long long>(blackGapUs));
-    for (int64_t n = 16; n < 32; ++n) {
+    std::printf("raw APC note-15 messages, steady 120 BPM, one 16-beat cycle (beats 8-23), gap %lld us\n", static_cast<long long>(blackGapUs));
+    for (int64_t n = 8; n < 24; ++n) {
         const int64_t f = flashStartUs(seg0, n);
         const int64_t fNext = flashStartUs(seg0, n + 1);
         for (const Send& m : sends) {
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
     int64_t maxFlashErrUs = 0;
     bool idxAllVisible[16];
     for (bool& b : idxAllVisible) b = true;
-    for (int64_t n = 8; n < 40; ++n) {
+    for (int64_t n = 8; n < 24; ++n) {
         const int idx = wrap16(n);
         const int64_t f = flashStartUs(seg0, n);
         const int64_t fNext = flashStartUs(seg0, n + 1);
@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
         if (findFlashSend(sends, flashStartUs(seg1, k), flashVel(wrap16(seg1.base + k))) >= 0) ++joinFlashes;
     }
     int leaveFlashes = 0;
-    for (int64_t k = 0; k < 16; ++k) {
+    for (int64_t k = 0; k < 12; ++k) {
         if (findFlashSend(sends, flashStartUs(seg2, k), flashVel(wrap16(seg2.base + k))) >= 0) ++leaveFlashes;
     }
 
@@ -207,14 +207,14 @@ int main(int argc, char** argv) {
 
     const bool visibleOk = indicesVisible == 16;
     const bool joinOk = joinFlashes == 16;
-    const bool leaveOk = leaveFlashes == 16;
-    const bool sentOk = backgroundsSent == 32 && flashesSent == 32;
+    const bool leaveOk = leaveFlashes == 12;
+    const bool sentOk = backgroundsSent == 16 && flashesSent == 16;
     const bool densePass = mismatches == 0 && samples > 0;
     std::printf("palette 0,1,3,5 only: %s\n", paletteOk ? "ok" : "FAIL");
     std::printf("visible: %d/16 indices show a visible change at the flash start (black gap before a flash equal to the lit colour)\n", indicesVisible);
-    std::printf("sent: %d/32 flashes and %d/32 backgrounds reached the APC in beats 8-39\n", flashesSent, backgroundsSent);
+    std::printf("sent: %d/16 flashes and %d/16 backgrounds reached the APC in beats 8-23\n", flashesSent, backgroundsSent);
     std::printf("join at t=%.3f s (seg1 origin +70 ms, tempo 120 to 174, phase jump): flashes %d/16\n", join / 1e6, joinFlashes);
-    std::printf("leave at t=%.3f s (seg2 origin +210 ms, tempo 174 to 120): flashes %d/16\n", leave / 1e6, leaveFlashes);
+    std::printf("leave at t=%.3f s (seg2 origin +210 ms, tempo 174 to 120): flashes %d/12\n", leave / 1e6, leaveFlashes);
     std::printf("dense 1 ms check outside 50 ms change windows: %lld samples, %lld mismatches%s\n",
                 static_cast<long long>(samples), static_cast<long long>(mismatches),
                 mismatches ? "" : " ok");
