@@ -199,11 +199,12 @@ light that flashes once per Link beat over a background colour. The flash
 starts 30 ms before the beat (`kBeatLeadMs`, held to within about 50 µs by a
 short spin before the poll wake) and lasts 100 ms (`kApcBeatFlashMs`). The
 flash and background colours come from `kMetronomeStates` in
-`src/control/apc_leds.h`, indexed by the Link beat modulo 4: beat 0 red on
-black, beat 1 red on green, beat 2 red on black, beat 3 green on red. Black is
-APC velocity 0. Beat 0's red flash sits on beat 3's red background, so that
-flash has no visible colour change on the pad; the table is the owner's
-spec and is unchanged.
+`src/control/apc_leds.h`, indexed by the Link beat modulo 4: beat 0 red over
+black, beat 1 red over green, beat 2 red over yellow (APC velocity 5), beat 3
+black over red. Black is APC velocity 0. Beat 3's red background persists into
+beat 0, so beat 0's red flash is red on red and shows no change at its start;
+the only visible change at beat 0 is red to black at 70 ms. The sim models
+this and reports it; the owner decides whether to change the table.
 The metronome runs whenever Link is synced, with or without a take
 (`beatClockUsable` in `src/control/midi.cpp`); the flash timing and colour
 come from the Link timeline, not from the poll cadence. The other three pads
