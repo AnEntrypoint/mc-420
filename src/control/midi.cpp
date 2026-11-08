@@ -76,10 +76,6 @@ static std::atomic<int> g_controlSurfaceCard{-1};
 
 int controlSurfaceCard() { return g_controlSurfaceCard.load(std::memory_order_relaxed); }
 
-static bool beatClockUsable(const AudioThread::Telemetry& t) {
-    return t.linkSynced && t.bpm > 1.0f;
-}
-
 constexpr int kBeatLeadMs = 30;
 constexpr int64_t kFlashSpinUs = 2000;
 
@@ -95,31 +91,19 @@ static int millisToNextBeat(const LinkBridge::BeatMark& bm, int capMs) {
     return (int)ms;
 }
 
-static int takeBeatIndex(const AudioThread::Telemetry& t, const LinkBridge* link) {
-    const int takeSpan = (int)(t.recordedBeats + 0.5f);
-    if (takeSpan < 1 || t.masterLenSamples <= 0.0f) return -1;
-    const double beatLenSamples = (double)t.masterLenSamples / (double)takeSpan;
-    double beats = beatLenSamples > 0.0 ? (double)t.masterPhaseSamples / beatLenSamples : 0.0;
-    if (link) {
-        const LinkSnapshot snap = link->audioRead();
-        if (snap.phaseValid && snap.captureMicros > 0 && snap.bpm > 1.0
-            && std::fabs(snap.loopQuantumBeats - (double)takeSpan) < 0.25) {
-            struct timespec ts{};
-            clock_gettime(CLOCK_MONOTONIC, &ts);
-            const int64_t nowMonoUs = (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
-            double elapsedUs = (double)(nowMonoUs - snap.captureMicros);
-            if (elapsedUs < 0.0) elapsedUs = 0.0;
-            if (elapsedUs > 4e6) elapsedUs = 4e6;
-            beats = (double)snap.loopPhaseMicroBeats / 1e6
-                  + (elapsedUs / 1e6) * (snap.bpm / 60.0);
-        }
-    }
-    double phase = std::fmod(beats, (double)takeSpan);
-    if (phase < 0.0) phase += (double)takeSpan;
-    int idx = (int)phase;
-    if (idx < 0) idx = 0;
-    if (idx >= takeSpan) idx = takeSpan - 1;
-    return idx;
+static BeatPadClock beatPadClockFrom(const LinkBridge* link) {
+    BeatPadClock c;
+    if (!link) return c;
+    const LinkBridge::BeatMark bm = link->beatMarkNow();
+    if (!bm.valid || bm.bpm <= 1.0 || bm.nextBeatMicros <= bm.curBeatMicros) return c;
+    c.live = true;
+    c.bpm = bm.bpm;
+    c.beatIndex = bm.index;
+    c.nowMicros = bm.nowMicros;
+    c.beatStartMicros = bm.curBeatMicros;
+    c.beatLenMicros = bm.nextBeatMicros - bm.curBeatMicros;
+    c.leadMicros = static_cast<int64_t>(kBeatLeadMs) * 1000;
+    return c;
 }
 
 void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBridge* link) {
@@ -252,23 +236,12 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
     unsigned lastLivenessProbeMs = nowMs();
     int64_t lastFlashNextMicros = -1;
     for (;;) {
-        auto beatTelem = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
         int waitMs = kPollTimeoutMs;
-        bool beatClockLive = false;
-        if (link && beatClockUsable(beatTelem)) {
-            LinkBridge::BeatMark bm = link->beatMarkNow();
-            if (bm.valid) {
-                beatClockLive = true;
-                const int64_t untilFlashUs = bm.nextBeatMicros - (int64_t)kBeatLeadMs * 1000 - bm.nowMicros;
-                const int flashStartWaitMs = untilFlashUs > kFlashSpinUs ? (int)((untilFlashUs - kFlashSpinUs) / 1000) : 1;
-                waitMs = flashStartWaitMs < 1 ? 1 : flashStartWaitMs;
-                const int64_t leadMicros = (int64_t)kBeatLeadMs * 1000;
-                const int64_t flashEndMicros = bm.nextBeatMicros - leadMicros + (int64_t)kApcBeatFlashMs * 1000;
-                if (bm.nowMicros >= bm.nextBeatMicros - leadMicros && bm.nowMicros < flashEndMicros) {
-                    const int flashWaitMs = (int)((flashEndMicros - bm.nowMicros + 999) / 1000);
-                    if (flashWaitMs < waitMs) waitMs = flashWaitMs < 1 ? 1 : flashWaitMs;
-                }
-            }
+        const BeatPadClock waitClock = beatPadClockFrom(link);
+        if (waitClock.live) {
+            const int64_t untilUs = beatPadNextChangeMicros(waitClock) - waitClock.nowMicros - kFlashSpinUs;
+            waitMs = untilUs >= 1000 ? (int)(untilUs / 1000) : 1;
+            if (waitMs > kPollTimeoutMs) waitMs = kPollTimeoutMs;
         }
 
         pfds[(size_t)kListenSlot].fd = injectListenFd;
@@ -276,10 +249,10 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         pfds[(size_t)kConnSlot].fd = injectConnFd;
         pfds[(size_t)kConnSlot].events = POLLIN;
         int pr = poll(pfds.data(), (nfds_t)pfds.size(), waitMs);
-        if (link && beatClockUsable(beatTelem)) {
-            LinkBridge::BeatMark sb = link->beatMarkNow();
-            if (sb.valid) {
-                const int64_t remainUs = sb.nextBeatMicros - (int64_t)kBeatLeadMs * 1000 - sb.nowMicros;
+        if (waitClock.live) {
+            const BeatPadClock spinClock = beatPadClockFrom(link);
+            if (spinClock.live) {
+                const int64_t remainUs = beatPadNextChangeMicros(spinClock) - spinClock.nowMicros;
                 if (remainUs > 0 && remainUs <= kFlashSpinUs) {
                     const int64_t spinUntil = monotonicMicros() + remainUs;
                     while (monotonicMicros() < spinUntil) {}
@@ -287,30 +260,19 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
             }
         }
 
-        int beatIndex = beatTelem.gridBeatIndex;
-        int colourBeat = -1;
-        const int takeSpan = (int)(beatTelem.recordedBeats + 0.5f);
-        const int takeIdx = takeBeatIndex(beatTelem, link);
-        if (takeIdx >= 0 && takeSpan >= 1) beatIndex = takeIdx;
-        if (beatClockLive) {
-            LinkBridge::BeatMark bm = link->beatMarkNow();
-            if (bm.valid) {
-                const int64_t leadMicros = static_cast<int64_t>(kBeatLeadMs) * 1000;
-                const bool leadOpen = bm.nextBeatMicros - bm.nowMicros <= leadMicros;
-                colourBeat = leadOpen ? (bm.index + 1) % static_cast<int>(kLinkQuantum) : bm.index;
-                beatIndex = colourBeat;
-                if (takeIdx >= 0 && takeSpan >= 1) {
-                    beatIndex = leadOpen ? (takeIdx + 1) % takeSpan : takeIdx;
-                }
-                if (leadOpen && bm.nextBeatMicros != lastFlashNextMicros) {
-                    lastFlashNextMicros = bm.nextBeatMicros;
-                    const int64_t flashStartMicros = bm.nextBeatMicros - leadMicros;
-                    const MetronomeState state = metronomeStateFor(colourBeat);
-                    publishBeatPadMark(colourBeat, bm.nowMicros - flashStartMicros, bm.bpm, state.flash, state.background);
-                }
+        const BeatPadClock clock = beatPadClockFrom(link);
+        if (clock.live) {
+            const int64_t leadMicros = static_cast<int64_t>(kBeatLeadMs) * 1000;
+            const int64_t nextBeatMicros = clock.beatStartMicros + clock.beatLenMicros;
+            const bool leadOpen = nextBeatMicros - clock.nowMicros <= leadMicros;
+            const int colourBeat = leadOpen ? (clock.beatIndex + 1) % static_cast<int>(kLinkQuantum) : clock.beatIndex;
+            if (leadOpen && nextBeatMicros != lastFlashNextMicros) {
+                lastFlashNextMicros = nextBeatMicros;
+                const int64_t flashStartMicros = nextBeatMicros - leadMicros;
+                const MetronomeState state = metronomeStateFor(colourBeat);
+                publishBeatPadMark(colourBeat, clock.nowMicros - flashStartMicros, clock.bpm, state.flash, state.background);
             }
         }
-        leds.setColourBeat(colourBeat);
 
         if (pr > 0 && injectListenFd >= 0 && (pfds[(size_t)kListenSlot].revents & POLLIN)) {
             int c = accept(injectListenFd, nullptr, nullptr);
@@ -345,8 +307,8 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
                 unsigned n = nowMs();
                 grid.pollHolds(n, ps, link, audio);
                 auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, beatIndex, audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
-                leds.refreshBeatPads(n, grid, beatIndex, ledWrite);
+                leds.refresh(n, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, beatPadClockFrom(link), audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
+                leds.refreshBeatPads(n, grid, beatPadClockFrom(link), ledWrite);
                 continue;
             }
             if (!realReady) continue;
@@ -361,8 +323,8 @@ void runMidiLoop(ParamStore& ps, const char* device, AudioThread* audio, LinkBri
         grid.pollHolds(now, ps, link, audio);
         {
             auto t = audio ? audio->snapshotTelemetry() : AudioThread::Telemetry{};
-            leds.refresh(now, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, beatIndex, audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
-            leds.refreshBeatPads(now, grid, beatIndex, ledWrite);
+            leds.refresh(now, grid, grid.liveEngaged(), ledWrite, audio ? t.looperLevel : nullptr, beatPadClockFrom(link), audio ? t.clipExportState : 0, samplerPrepped(audio), samplerDrumsLoaded(audio));
+            leds.refreshBeatPads(now, grid, beatPadClockFrom(link), ledWrite);
         }
 
         if (type == 0xB0 && d1 == 64) { grid.onSustainPedal(d2 >= 64, ps); continue; }

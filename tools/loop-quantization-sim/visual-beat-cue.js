@@ -30,10 +30,10 @@ function deviceSourceChecks() {
   const src = fs.readFileSync(kDeviceMidiSrc, 'utf8');
   return [
     ['kBeatLeadMs is 30 ms', src.includes('constexpr int kBeatLeadMs = 30;')],
-    ['leadOpen window uses kBeatLeadMs', src.includes('const int64_t leadMicros = static_cast<int64_t>(kBeatLeadMs) * 1000;') && src.includes('const bool leadOpen = bm.nextBeatMicros - bm.nowMicros <= leadMicros;')],
-    ['lead-open index maps to the upcoming beat', src.includes('colourBeat = leadOpen ? (bm.index + 1) % static_cast<int>(kLinkQuantum) : bm.index;')],
-    ['beat pads refresh with beatIndex', src.includes('leds.refreshBeatPads(n, grid, beatIndex, ledWrite);')],
-    ['flash mark publishes the colour beat at the flash start', src.includes('publishBeatPadMark(colourBeat, bm.nowMicros - flashStartMicros, bm.bpm, state.flash, state.background);')],
+    ['leadOpen window uses kBeatLeadMs', src.includes('const int64_t leadMicros = static_cast<int64_t>(kBeatLeadMs) * 1000;') && src.includes('const bool leadOpen = nextBeatMicros - clock.nowMicros <= leadMicros;')],
+    ['lead-open index maps to the upcoming beat', src.includes('const int colourBeat = leadOpen ? (clock.beatIndex + 1) % static_cast<int>(kLinkQuantum) : clock.beatIndex;')],
+    ['beat pads refresh with the Link beat clock', src.includes('leds.refreshBeatPads(now, grid, beatPadClockFrom(link), ledWrite);')],
+    ['flash mark publishes the colour beat at the flash start', src.includes('publishBeatPadMark(colourBeat, clock.nowMicros - flashStartMicros, clock.bpm, state.flash, state.background);')],
   ];
 }
 

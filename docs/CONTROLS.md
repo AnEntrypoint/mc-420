@@ -201,20 +201,20 @@ short spin before the poll wake) and lasts 100 ms (`kApcBeatFlashMs`). The
 flash and background colours come from `kMetronomeStates` in
 `src/control/apc_leds.h`, a 16-entry table indexed by the Link beat modulo 16, in four
 stages of four beats: beats 0-3 red over black, beats 4-7 red over green,
-beats 8-11 red over yellow (APC velocity 5), beats 12-15 green over red. Black
-is APC velocity 0. Beat 15's red background persists into beat 0, so beat 0's
-red flash is red on red and shows no change at its start; that is the one
-invisible tick of the cycle, and the other fifteen beats change colour at their
-start. `tools/loop-quantization-sim/led-flash-schedule.js` models this and
-asserts exactly that one tick. The only visible change at beat 0 is red to
-black at 70 ms.
-The metronome runs whenever Link is synced, with or without a take
-(`beatClockUsable` in `src/control/midi.cpp`); the flash timing and colour
-come from the Link timeline, not from the poll cadence. The other three pads
-of that row stay dark unless the shuffle or gate-mode displays are active.
-With a take, the take's beat position (`takeBeatIndex`, folded at
-`recorded_beats`) still drives the flash edges, but the colour stays on the
-Link beat modulo 16.
+beats 8-11 red over yellow (APC velocity 5), beats 12-15 green over red
+(background red). Black is APC velocity 0. The flash is on every beat. A
+flash whose colour equals the lit background (beat 0: red over beat 15's red)
+is preceded by a 15 ms black gap, so every beat is a visible change. The LED
+state is a pure function of the Link clock (`beatPadVelocity` in
+`src/control/apc_leds.h`): it depends on the Link beat and the tempo only,
+never on the peer count or on a take. `tools/loop-quantization-sim/led-flash-schedule.js`
+models the gap and asserts all 16 beats visible. `test/led-beat-pad` (CI
+`test-led-beat-pad`) drives the real `ApcLeds` on a simulated clock through a
+join and a leave, and dumps every note-15 message.
+The metronome runs whenever the Link object exists and its tempo is above 1
+(`beatPadClockFrom` in `src/control/midi.cpp`), with or without peers and with
+or without a take, so a join or a leave never stops it. The other three pads of
+that row stay dark unless the shuffle or gate-mode displays are active.
 
 ## 3-bank FX knob surface
 

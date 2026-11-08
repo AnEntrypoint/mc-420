@@ -13,16 +13,12 @@ const kLoopPhaseToleranceSamples = 2;
 
 const kDeviceNeedles = [
   'takeBeatIndex(',
-  'masterPhaseSamples',
-  'loopPhaseMicroBeats',
-  'takeSpan',
-  '(bm.index + 1) % static_cast<int>(kLinkQuantum)',
 ];
 
 function sourceDerivation() {
   const src = fs.readFileSync(kMidiSrc, 'utf8');
-  const missing = kDeviceNeedles.filter((n) => !src.includes(n));
-  return { mode: missing.length === 0 ? 'take' : 'shared', missing };
+  const takeNeedles = kDeviceNeedles.filter((n) => src.includes(n));
+  return { mode: takeNeedles.length === 0 ? 'shared' : 'take', missing: takeNeedles };
 }
 
 function wrap(n, period) { return ((n % period) + period) % period; }
@@ -51,7 +47,7 @@ function runCase(holdMs, mode) {
     if (step > 0) W.advance(w, step);
     const tSamples = w.t;
     const tMs = (tSamples / W.SIM_SAMPLE_RATE) * 1000;
-    const expected = wrap(Math.floor(beatPos), rb);
+    const expected = wrap(Math.floor(beatAtTime(session, tMs)), kSharedQuantumBeats);
     const takeIndex = Math.min(rb - 1, Math.max(0, Math.floor(w.masterPhaseSamples / beatLen)));
     const shared = wrap(Math.floor(beatAtTime(session, tMs)), kSharedQuantumBeats);
     const device = mode === 'shared' ? shared : takeIndex;
@@ -71,11 +67,11 @@ function main() {
   const noFix = args.includes('--no-fix') || args.includes('--assert-no-fix');
   const assertControl = args.includes('--assert-no-fix');
   const derived = sourceDerivation();
-  const mode = noFix ? 'shared' : derived.mode;
-  console.log('first take metronome beat index: the LED follows the take beat 0 and rb');
+  const mode = noFix ? 'take' : derived.mode;
+  console.log('first take metronome beat index: the LED follows the Link beat modulo 16 at every sample (owner spec)');
   console.log('  device derivation read from src/control/midi.cpp: ' + derived.mode
-    + ' (missing needles: ' + derived.missing.length + ')');
-  console.log('  press origin is the take beat 0; the shared 16-beat Link grid reads rb at the press');
+    + ' (take needles found: ' + derived.missing.length + ')');
+  console.log('  the take does not drive the LED: the take-derived control must fail');
   let failed = 0;
   for (const holdMs of kHoldMs) {
     const r = runCase(holdMs, mode);
@@ -84,18 +80,18 @@ function main() {
       + ' worstLoopPhaseGap=' + r.worstPhaseSamples.toFixed(2) + ' samples ' + (r.ok ? 'ok' : 'FAIL'));
     if (!r.ok) failed++;
   }
-  const pass = mode === 'take' && failed === 0;
+  const pass = mode === 'shared' && failed === 0;
   if (pass) {
     console.log('first take metronome beat index: PASS (' + kHoldMs.length + '/' + kHoldMs.length
-      + ' takes, LED index equals the take beat at every sample)');
+      + ' takes, LED index equals the Link beat modulo 16 at every sample)');
     process.exit(0);
   }
   const reproduced = failed === kHoldMs.length;
   if (noFix) {
     if (assertControl) {
       console.log(reproduced
-        ? 'first take metronome beat index: shared-grid control correctly FAILS at ' + failed + '/' + kHoldMs.length + ' takes'
-        : 'first take metronome beat index: shared-grid control WEAK (' + (kHoldMs.length - failed) + ' takes passed)');
+        ? 'first take metronome beat index: take-derived control correctly FAILS at ' + failed + '/' + kHoldMs.length + ' takes'
+        : 'first take metronome beat index: take-derived control WEAK (' + (kHoldMs.length - failed) + ' takes passed)');
       process.exit(reproduced ? 0 : 1);
     }
     console.log(reproduced

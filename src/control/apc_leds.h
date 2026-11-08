@@ -24,6 +24,7 @@ constexpr int kApcLiveLedNote = 0x40;
 constexpr int kApcBtnSampleRec = 65;
 constexpr int kApcBtnDrumRec   = 66;
 constexpr unsigned kApcBeatFlashMs = 100;
+constexpr int64_t kBeatPadBlackGapUs = 15000;
 struct MetronomeState {
     uint8_t flash;
     uint8_t background;
@@ -54,10 +55,67 @@ constexpr MetronomeState metronomeStateFor(int linkBeat) {
     return kMetronomeStates[phase];
 }
 
+struct BeatPadClock {
+    bool live = false;
+    double bpm = 0.0;
+    int beatIndex = 0;
+    int64_t nowMicros = 0;
+    int64_t beatStartMicros = 0;
+    int64_t beatLenMicros = 0;
+    int64_t leadMicros = 0;
+    int64_t blackGapUs = kBeatPadBlackGapUs;
+};
+
+constexpr int beatPadIndex(int n) {
+    return ((n % kMetronomeCycleBeats) + kMetronomeCycleBeats) % kMetronomeCycleBeats;
+}
+
+constexpr bool beatPadNeedsGap(int nextIdx, int litIdx) {
+    return kMetronomeStates[nextIdx].flash == kMetronomeStates[litIdx].background;
+}
+
+struct BeatPadPhase {
+    int litIndex;
+    int64_t sinceFlashUs;
+    int64_t untilNextFlashUs;
+};
+
+inline BeatPadPhase beatPadPhase(const BeatPadClock& c) {
+    const int64_t firstFlashUs = c.beatStartMicros - c.leadMicros;
+    const int64_t offsetUs = c.nowMicros - firstFlashUs;
+    const int64_t beats = offsetUs >= 0
+        ? offsetUs / c.beatLenMicros
+        : -((-offsetUs + c.beatLenMicros - 1) / c.beatLenMicros);
+    const int64_t lastFlashUs = firstFlashUs + beats * c.beatLenMicros;
+    return BeatPadPhase{ beatPadIndex(c.beatIndex + static_cast<int>(beats)),
+                         c.nowMicros - lastFlashUs,
+                         lastFlashUs + c.beatLenMicros - c.nowMicros };
+}
+
+inline uint8_t beatPadVelocity(const BeatPadClock& c) {
+    const BeatPadPhase p = beatPadPhase(c);
+    if (p.untilNextFlashUs <= c.blackGapUs && beatPadNeedsGap(beatPadIndex(p.litIndex + 1), p.litIndex)) {
+        return kLedOff;
+    }
+    if (p.sinceFlashUs < static_cast<int64_t>(kApcBeatFlashMs) * 1000) return kMetronomeStates[p.litIndex].flash;
+    return kMetronomeStates[p.litIndex].background;
+}
+
+inline int64_t beatPadNextChangeMicros(const BeatPadClock& c) {
+    const BeatPadPhase p = beatPadPhase(c);
+    const int64_t nextFlashUs = c.nowMicros + p.untilNextFlashUs;
+    int64_t next = nextFlashUs;
+    const int64_t gapStartUs = nextFlashUs - c.blackGapUs;
+    if (c.blackGapUs > 0 && gapStartUs > c.nowMicros && gapStartUs < next) next = gapStartUs;
+    const int64_t flashEndUs = c.nowMicros - p.sinceFlashUs + static_cast<int64_t>(kApcBeatFlashMs) * 1000;
+    if (flashEndUs > c.nowMicros && flashEndUs < next) next = flashEndUs;
+    return next;
+}
+
 class ApcLeds {
 public:
     template <typename WriteFn>
-    void refresh(unsigned now_ms, const ApcGrid& grid, bool liveEngaged, WriteFn&& write, const float* looperLevels = nullptr, int gridBeatIndex = -1, int clipExportState = 0, bool samplePrepped = false, bool drumsLoaded = false) {
+    void refresh(unsigned now_ms, const ApcGrid& grid, bool liveEngaged, WriteFn&& write, const float* looperLevels = nullptr, const BeatPadClock& clock = BeatPadClock{}, int clipExportState = 0, bool samplePrepped = false, bool drumsLoaded = false) {
         if (!bootMs_) bootMs_ = now_ms ? now_ms : 1;
         if (now_ms - bootMs_ < kBootDelayMs) return;
 
@@ -73,8 +131,7 @@ public:
         bool clipFlashActive = clipFlashReleaseAt_ != 0 && now_ms < clipFlashReleaseAt_;
         if (clipFlashReleaseAt_ != 0 && now_ms >= clipFlashReleaseAt_) clipFlashReleaseAt_ = 0;
 
-        const bool beatEdge = gridBeatIndex != lastBeatIndex_;
-        if (!beatEdge && now_ms - lastMs_ < kRefreshMs) return;
+        if (now_ms - lastMs_ < kRefreshMs) return;
         lastMs_ = now_ms;
 
         if (clipFlashActive) {
@@ -94,7 +151,7 @@ public:
                 sendCoalesced(note, gridColor(row, col, grid, looperLevels), write);
             }
         }
-        drawBeatPads(now_ms, grid, gridBeatIndex, write);
+        drawBeatPads(grid, clock, write);
         drawInputRoutePads(grid, write);
         sendCoalesced(kApcPadGateMod, grid.gateModHeld() ? kLedYellow :
                                       grid.gateMode() > 0 ? kLedGreen : kLedOff, write);
@@ -121,21 +178,18 @@ public:
 
     void invalidate() { cacheValid_.fill(false); }
 
-    void setColourBeat(int linkBeat) { colourBeat_ = linkBeat; }
-
     template <typename WriteFn>
-    void refreshBeatPads(unsigned now_ms, const ApcGrid& grid, int gridBeatIndex, WriteFn&& write) {
+    void refreshBeatPads(unsigned now_ms, const ApcGrid& grid, const BeatPadClock& clock, WriteFn&& write) {
         if (!bootMs_) bootMs_ = now_ms ? now_ms : 1;
         if (now_ms - bootMs_ < kBootDelayMs) return;
         if (clipFlashReleaseAt_ != 0 && now_ms < clipFlashReleaseAt_) return;
-        drawBeatPads(now_ms, grid, gridBeatIndex, write);
+        drawBeatPads(grid, clock, write);
     }
 
 private:
     static constexpr unsigned kBootDelayMs = 2000;
     static constexpr unsigned kRefreshMs = 33;
     static constexpr unsigned kClipFlashMs = 1200;
-    static constexpr unsigned kBeatFlashMs = kApcBeatFlashMs;
 
     unsigned bootMs_ = 0;
     unsigned lastMs_ = 0;
@@ -144,9 +198,6 @@ private:
     int lastClipExportState_ = 0;
     unsigned clipFlashReleaseAt_ = 0;
     bool clipFlashIsError_ = false;
-    int lastBeatIndex_ = -2;
-    unsigned beatEdgeMs_ = 0;
-    int colourBeat_ = -1;
 
     static bool isBeatPadNote(int note) {
         for (int g = 0; g < 4; g++) if (note == kApcBeatPadNotes[g]) return true;
@@ -167,23 +218,13 @@ private:
     }
 
     template <typename WriteFn>
-    void drawBeatPads(unsigned now_ms, const ApcGrid& grid, int gridBeatIndex, WriteFn&& write) {
-        if (gridBeatIndex != lastBeatIndex_) {
-            lastBeatIndex_ = gridBeatIndex;
-            beatEdgeMs_ = now_ms;
-        }
-        const bool havePhrase = gridBeatIndex >= 0;
-        const bool beatFlash  = havePhrase && now_ms - beatEdgeMs_ < kBeatFlashMs;
+    void drawBeatPads(const ApcGrid& grid, const BeatPadClock& clock, WriteFn&& write) {
         for (int g = 0; g < 4; g++) {
-            uint8_t color;
+            uint8_t color = kLedOff;
             if (grid.gateModHeld()) {
                 color = (grid.gateMode() == g + 1) ? kLedRed : kLedOff;
             } else {
-                color = kLedOff;
-                if (g == 0 && havePhrase) {
-                    const MetronomeState st = metronomeStateFor(colourBeat_ >= 0 ? colourBeat_ : gridBeatIndex);
-                    color = beatFlash ? st.flash : st.background;
-                }
+                if (g == 0 && clock.live) color = beatPadVelocity(clock);
                 if (grid.shuffleMode() == g + 1 && color == kLedOff) color = kLedGreen;
             }
             sendCoalesced(kApcBeatPadNotes[g], color, write);

@@ -1,0 +1,44 @@
+name: test-led-beat-pad
+
+on:
+  push:
+    paths:
+      - 'src/control/apc_leds.h'
+      - 'src/control/apc_leds.cpp'
+      - 'src/control/apc_grid.h'
+      - 'src/control/midi.h'
+      - 'test/led-beat-pad/**'
+      - '.github/workflows/test-led-beat-pad.yml'
+  pull_request:
+    paths:
+      - 'src/control/apc_leds.h'
+      - 'src/control/apc_leds.cpp'
+      - 'src/control/apc_grid.h'
+      - 'src/control/midi.h'
+      - 'test/led-beat-pad/**'
+      - '.github/workflows/test-led-beat-pad.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  led-beat-pad:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the beat pad harness against the real apc_leds.h
+        run: g++ -std=c++17 -Wall -Wextra -I src/control -I src/storage test/led-beat-pad/led-beat-pad-harness.cpp src/control/apc_leds.cpp -o "$RUNNER_TEMP/led-beat-pad-harness"
+
+      - name: Every beat is a visible change, every flash and background is sent, join and leave keep flashing
+        run: "$RUNNER_TEMP/led-beat-pad-harness"
+
+      - name: Pre-gap control must fail the visibility check
+        run: |
+          if "$RUNNER_TEMP/led-beat-pad-harness" --no-gap; then
+            echo "negative control unexpectedly passed"
+            exit 1
+          fi
