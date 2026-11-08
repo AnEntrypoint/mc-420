@@ -14,10 +14,10 @@ const BEATS = 64;
 
 const kVelocityName = { kLedOff: 'black', kLedGreen: 'green', kLedRed: 'red', kLedYellow: 'yellow' };
 const kOwnerSpec = [
-  { flash: 'red', background: 'black' },
-  { flash: 'red', background: 'green' },
-  { flash: 'red', background: 'yellow' },
-  { flash: 'black', background: 'red' },
+  ...Array(4).fill({ flash: 'red', background: 'black' }),
+  ...Array(4).fill({ flash: 'red', background: 'green' }),
+  ...Array(4).fill({ flash: 'red', background: 'yellow' }),
+  ...Array(4).fill({ flash: 'green', background: 'red' }),
 ];
 
 function parseStateTable(src) {
@@ -156,20 +156,21 @@ function main() {
   lines.push(`  table in apc_leds.h matches the owner spec: ${specOk ? 'ok' : 'FAIL'} (${table.map((s) => `${s.flash} over ${s.background}`).join(' | ')})`);
 
   const counts = cycleCounts(table);
-  const countsOk = counts.flash.red === 3 && counts.flash.black === 1
-    && counts.background.black === 1 && counts.background.green === 1
-    && counts.background.yellow === 1 && counts.background.red === 1;
+  const countsOk = counts.flash.red === 12 && counts.flash.green === 4 && !counts.flash.black
+    && counts.background.black === 4 && counts.background.green === 4
+    && counts.background.yellow === 4 && counts.background.red === 4;
   if (!countsOk) failed = true;
-  lines.push(`  cycle: flash red ${counts.flash.red || 0} black ${counts.flash.black || 0}; background black ${counts.background.black || 0} green ${counts.background.green || 0} yellow ${counts.background.yellow || 0} red ${counts.background.red || 0} ${countsOk ? 'ok' : 'FAIL'}`);
+  lines.push(`  cycle of ${table.length}: flash red ${counts.flash.red || 0} green ${counts.flash.green || 0}; background black ${counts.background.black || 0} green ${counts.background.green || 0} yellow ${counts.background.yellow || 0} red ${counts.background.red || 0} ${countsOk ? 'ok' : 'FAIL'}`);
 
   const model = padSends(table, BEATS);
   const steady = model.visible.slice(table.length, 2 * table.length);
-  const expectVisible = [false, true, true, true];
+  const expectVisible = table.map((_, k) => k !== 0);
   const visOk = steady.every((v, i) => v === expectVisible[i]);
   if (!visOk) failed = true;
   const persist = table[table.length - 1].background === table[0].flash;
   lines.push(`  beat ${table.length - 1} background (${table[table.length - 1].background}) persists into beat 0 flash (${table[0].flash}): ${persist ? 'yes, the pad already shows that colour, so no send' : 'no'}`);
-  lines.push(`  visibility against the previous beat's background (steady cycle, beats 0-3): ${steady.map((v, i) => `beat ${i} ${v ? 'visible' : 'NOT visible'}`).join(', ')} ${visOk ? 'ok' : 'FAIL'}`);
+  const hidden = steady.flatMap((v, i) => (v ? [] : [`beat ${i}`]));
+  lines.push(`  steady cycle flash visibility: ${steady.length - hidden.length} of ${steady.length} beats visible; NOT visible: ${hidden.join(', ') || 'none'} ${visOk ? 'ok' : 'FAIL'}`);
 
   const sendsPerBeat = {};
   for (const s of model.sends) sendsPerBeat[s.beat] = (sendsPerBeat[s.beat] || 0) + 1;

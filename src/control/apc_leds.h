@@ -29,12 +29,24 @@ struct MetronomeState {
     uint8_t background;
 };
 
-constexpr int kMetronomeCycleBeats = 4;
+constexpr int kMetronomeCycleBeats = 16;
 constexpr MetronomeState kMetronomeStates[kMetronomeCycleBeats] = {
     {kLedRed,   kLedOff},
+    {kLedRed,   kLedOff},
+    {kLedRed,   kLedOff},
+    {kLedRed,   kLedOff},
+    {kLedRed,   kLedGreen},
+    {kLedRed,   kLedGreen},
+    {kLedRed,   kLedGreen},
     {kLedRed,   kLedGreen},
     {kLedRed,   kLedYellow},
-    {kLedOff,   kLedRed},
+    {kLedRed,   kLedYellow},
+    {kLedRed,   kLedYellow},
+    {kLedRed,   kLedYellow},
+    {kLedGreen, kLedRed},
+    {kLedGreen, kLedRed},
+    {kLedGreen, kLedRed},
+    {kLedGreen, kLedRed},
 };
 
 constexpr MetronomeState metronomeStateFor(int linkBeat) {
