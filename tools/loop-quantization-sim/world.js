@@ -1,7 +1,7 @@
 'use strict';
 
 const { initLooperDsp, stepSample, MAXLEN } = require('./looper');
-const { createLinkWorld, LINK_QUANTUM, beatAtTime, phaseAtTime, requestPhaseImpose, applyPendingPhaseImpose } = require('./link');
+const { createLinkWorld, LINK_QUANTUM, beatAtTime, phaseAtTime, requestPhaseImpose, applyPendingPhaseImpose, countOtherConnectedFromSession } = require('./link');
 
 const PARAM_DEFAULTS = Object.freeze({
   'cmd/input1_recordable': 1.0,
@@ -287,9 +287,14 @@ function applyRecPlayCycle(w, looper) {
       const linkSnap = linkAudioRead(w);
       const adoptLinkTempo = w.legacyAdoptLinkTempo === true
         && linkSnap.synced && linkSnap.bpm > 1.0;
+      const legacyPeerGate = w.legacyPeerGate === true
+        && countOtherConnectedFromSession(w.link.session) > 0;
       let solvedBpm;
       let solvedBeats;
-      if (adoptLinkTempo) {
+      if (legacyPeerGate) {
+        solvedBpm = linkSnap.bpm;
+        solvedBeats = Math.max(1, Math.floor((recordedSeconds * linkSnap.bpm) / 60.0 + 0.5));
+      } else if (adoptLinkTempo) {
         solvedBpm = linkSnap.bpm;
         solvedBeats = snapBeatsToPow2((recordedSeconds * linkSnap.bpm) / 60.0);
       } else {
@@ -297,7 +302,7 @@ function applyRecPlayCycle(w, looper) {
         solvedBpm = solved.bpm;
         solvedBeats = solved.beats;
       }
-      if (adoptLinkTempo) {
+      if (adoptLinkTempo || legacyPeerGate) {
         const beatSamples = (60.0 / solvedBpm) * SIM_SAMPLE_RATE;
         w.masterLenSamples = Math.max(1, Math.min(Math.round(solvedBeats * beatSamples), SIM_MAXLEN));
       }
@@ -307,7 +312,7 @@ function applyRecPlayCycle(w, looper) {
         w.recordedBpm = solvedBpm;
         w.recordedBeats = solvedBeats;
       }
-      if (!adoptLinkTempo) {
+      if (!adoptLinkTempo && !legacyPeerGate) {
         w.link.local.imposeTempo(solvedBpm, timeMs);
         refreshLinkSnapshot(w);
       }

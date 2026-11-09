@@ -292,9 +292,11 @@ static void* worker(void*) {
     const int ch = g_cfg.channels;
     int64_t audioSampleCount = 0;
     int64_t armSampleOfLooper[AudioThread::Telemetry::kLoopers] = {};
+    int64_t armMonoOfLooper[AudioThread::Telemetry::kLoopers] = {};
     bool recWasOnLooper[AudioThread::Telemetry::kLoopers] = {};
     double lastTakeSpanSamples = 0.0;
     uint64_t lastTakeArmLocal = 0;
+    int64_t lastTakeArmMono = 0;
 
     const int wireCh = (ch < 2) ? 2 : ch;
     bool stereoOut = g_cfg.stereoOut && wireCh >= 4;
@@ -773,10 +775,16 @@ static void* worker(void*) {
                     auto& tz = looperTelemetryZones[lp];
                     g_telem.looperRec[lp]      = tz.rec      && *tz.rec > 0.5f;
                     const bool recNow = g_telem.looperRec[lp];
-                    if (recNow && !recWasOnLooper[lp]) armSampleOfLooper[lp] = audioSampleCount;
+                    if (recNow && !recWasOnLooper[lp]) {
+                        armSampleOfLooper[lp] = audioSampleCount;
+                        timespec armTs{};
+                        clock_gettime(CLOCK_MONOTONIC, &armTs);
+                        armMonoOfLooper[lp] = (int64_t)armTs.tv_sec * 1000000 + armTs.tv_nsec / 1000;
+                    }
                     if (!recNow && recWasOnLooper[lp]) {
                         lastTakeSpanSamples = (double)(audioSampleCount - armSampleOfLooper[lp]);
                         lastTakeArmLocal = (uint64_t)armSampleOfLooper[lp];
+                        lastTakeArmMono = armMonoOfLooper[lp];
                         g_telem.lastTakeSpanSamples = lastTakeSpanSamples;
                         g_telem.lastTakeArmSample = lastTakeArmLocal;
                     }
@@ -912,9 +920,8 @@ static void* worker(void*) {
                         timespec imposeTs{};
                         clock_gettime(CLOCK_MONOTONIC, &imposeTs);
                         const int64_t imposeMicros = (int64_t)imposeTs.tv_sec * 1000000 + imposeTs.tv_nsec / 1000;
-                        const int64_t armMicros = g_link->recordArmMicros();
                         const int64_t loopMicros = (int64_t)((double)masterLen / g_cfg.sampleRate * 1e6);
-                        const int64_t pressMicros = armMicros > 0 ? armMicros : imposeMicros - loopMicros;
+                        const int64_t pressMicros = lastTakeArmMono > 0 ? lastTakeArmMono : imposeMicros - loopMicros;
                         g_link->requestPhaseImpose(0.0, pressMicros - loopMicros, (double)recordedBeatsShared);
                         awaitingImposeRebase = true;
                         imposeRebaseSeqAtRequest = linkSnap.rebaseSeq;

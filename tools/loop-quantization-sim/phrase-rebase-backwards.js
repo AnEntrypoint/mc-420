@@ -225,6 +225,20 @@ function runMatrix(guardName) {
   return rows;
 }
 
+function runFirstLoopMatrix(guardName) {
+  const rows = [];
+  for (const bpm of kBpmSet) {
+    for (const rb of kRecordedBeats) {
+      for (const originBeat of kOriginBeats) {
+        const delta = rb - originBeat;
+        if (delta === 0) continue;
+        rows.push({ bpm, rb, originBeat, delta, result: runCase(bpm, rb, originBeat, delta, guardName) });
+      }
+    }
+  }
+  return rows;
+}
+
 function summarize(rows) {
   const clean = rows.filter((r) => r.result.clean).length;
   let maxGap = 0;
@@ -287,8 +301,11 @@ function main() {
   const s = summarize(rows);
   console.log('  ' + guardName + ': ' + s.clean + '/' + s.total + ' clean, jumpCases=' + s.jumpCases + ' backwardsJumps=' + s.totalJumps + ' decrease=' + s.totalDecrease + ' falseAtRebase=' + s.totalFalseAtRebase + ' offGrid=' + s.totalOffGrid + ' heldBack=' + s.totalHeldBack + ' maxGap=' + s.maxGap.toFixed(6) + 'b');
 
+  const firstRows = runFirstLoopMatrix(guardName);
+  const fs = summarize(firstRows);
+  console.log('  first-loop relabel (origin at the press, label = recorded beats) ' + guardName + ': ' + fs.clean + '/' + fs.total + ' clean, jumpCases=' + fs.jumpCases + ' heldBack=' + fs.totalHeldBack + ' falseAtRebase=' + fs.totalFalseAtRebase + ' maxGap=' + fs.maxGap.toFixed(6) + 'b');
   if (mode === 'fixed') {
-    const pass = vectors.failed === 0 && s.clean === s.total && s.totalJumps > 0
+    const pass = vectors.failed === 0 && s.clean === s.total && fs.clean === fs.total && s.totalJumps > 0
       && s.totalHeldBack === 0 && owner.resumedOk === true && ownerStale.resumedOk === false;
     const verdict = pass
       ? 'phrase rebase backwards: PASS (' + s.clean + '/' + s.total + ' cases, shipped guard vectors ' + vectors.total + '/' + vectors.total + ', ' + s.jumpCases + ' backwards phrase-jump cases quiet, forward boundaries resumed after every rebase, max loopBeatPos gap ' + s.maxGap.toFixed(6) + 'b)'
@@ -298,9 +315,9 @@ function main() {
   }
 
   const staleHold = guardName === 'stale-hold';
-  const reproduced = staleHold
+  const reproduced = (staleHold
     ? s.cleanJumpCases === 0 && s.jumpCases > 0 && s.totalHeldBack === s.jumpCases && ownerStale.resumedOk === false
-    : s.cleanJumpCases === 0 && s.jumpCases > 0 && s.totalFalseAtRebase > 0;
+    : s.cleanJumpCases === 0 && s.jumpCases > 0 && s.totalFalseAtRebase > 0) && fs.clean < fs.total;
   if (mode === 'assert-stale-hold' || mode === 'assert-control') {
     const verdict = reproduced
       ? (staleHold

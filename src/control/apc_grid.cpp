@@ -251,16 +251,19 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             m_masterLenSamples = lenSamples;
             double recordedSeconds = (double)m_masterLenSamples / (double)kSampleRate;
             const LinkBridge::BeatNow linkNow = link ? link->beatNow() : LinkBridge::BeatNow{};
-            const bool peersHaveTempo = link && linkNow.peerCount > 0;
-            const bool setsSessionTempo = !m_tempoEstablished && !peersHaveTempo;
+            const bool firstLoopOnCleanBank = [&] {
+                for (int i = 0; i < kLooperCount; i++) {
+                    if (i != looper && m_looperHasContent[i]) return false;
+                }
+                return true;
+            }();
+            const bool setsSessionTempo = firstLoopOnCleanBank;
             double sessionBpm = 120.0;
             if (link && linkNow.bpm > 1.0) sessionBpm = linkNow.bpm;
             TempoSolveResult solved;
             if (setsSessionTempo) {
                 solved = deriveTempoQuant(recordedSeconds, 120.0);
-                m_tempoEstablished = true;
             } else {
-                m_tempoEstablished = true;
                 solved.bpm = sessionBpm;
                 solved.beats = std::max(1.0, std::floor(recordedSeconds * sessionBpm / 60.0 + 0.5));
                 m_masterLenSamples = (long)(solved.beats * 60.0 / sessionBpm * kSampleRate + 0.5);

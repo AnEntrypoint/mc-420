@@ -152,4 +152,5 @@ module.exports = {
   forceBeatAtTime,
   requestPhaseImpose,
   applyPendingPhaseImpose,
+  countOtherConnectedFromSession,
 };

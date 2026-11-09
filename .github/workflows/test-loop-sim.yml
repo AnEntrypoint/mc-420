@@ -97,6 +97,13 @@ jobs:
       - name: First take phrase turnaround sits one loop before the press
         run: node tools/loop-quantization-sim/first-take-phrase-offset.js
 
+      - name: First take peer-gate control must fail the tempo owner check
+        run: |
+          if node tools/loop-quantization-sim/first-take-phrase-offset.js --legacy-peer-gate; then
+            echo "negative control unexpectedly passed"
+            exit 1
+          fi
+
       - name: First take origin on the record-press sample
         run: node tools/loop-quantization-sim/first-take-origin.js
 
