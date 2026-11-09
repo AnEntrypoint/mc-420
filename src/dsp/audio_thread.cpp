@@ -778,7 +778,7 @@ static void* worker(void*) {
                     if (recNow && !recWasOnLooper[lp]) {
                         armSampleOfLooper[lp] = audioSampleCount;
                         timespec armTs{};
-                        clock_gettime(CLOCK_MONOTONIC, &armTs);
+                        clock_gettime(CLOCK_MONOTONIC_RAW, &armTs);
                         armMonoOfLooper[lp] = (int64_t)armTs.tv_sec * 1000000 + armTs.tv_nsec / 1000;
                     }
                     if (!recNow && recWasOnLooper[lp]) {
@@ -918,7 +918,7 @@ static void* worker(void*) {
                     linkPhaseTrim = 0.0;
                     if (g_link) {
                         timespec imposeTs{};
-                        clock_gettime(CLOCK_MONOTONIC, &imposeTs);
+                        clock_gettime(CLOCK_MONOTONIC_RAW, &imposeTs);
                         const int64_t imposeMicros = (int64_t)imposeTs.tv_sec * 1000000 + imposeTs.tv_nsec / 1000;
                         const int64_t loopMicros = (int64_t)((double)masterLen / g_cfg.sampleRate * 1e6);
                         const int64_t pressMicros = lastTakeArmMono > 0 ? lastTakeArmMono : imposeMicros - loopMicros;
