@@ -647,6 +647,17 @@ Kept open, with the blocker:
 - Witness, device: `aloop-aarch64-musl` of `4bc3b73b` (md5 `8d7b2fe8726aa3211bf6e4571f4ebe22`) hot-deployed to `/opt/aloop/aloop` after the looper gate read empty twice (rec 0, play 0, levels 0, wraplen 1, master_len 0, recorded_beats 0), then one `rc-service aloop restart`. Link re-joined 15 s after restart. 32 consecutive `beat_pad_mark` marks, seq 58 to 89, table match 32/32. Stage changes: index 4 background 0 to 1 (seq 65 to 66), index 8 background 1 to 5 (seq 69 to 70), index 12 background 5 to 3 (seq 73 to 74). `late_ms` max 0.389, min 0.
 - Invisible tick on device data: seq 77 (index 15, flash 1, background 3) is followed by seq 78 (index 0, flash 3); the previous background (3) equals the flash (3), so the pad shows no change at beat 0.
 
+## Metronome beat pad: Link-only clock, black gap, deployed db823c7a, 2026-11-09
+
+- Change: `src/control/apc_leds.h` `beatPadVelocity` is a pure function of the Link beat and tempo; `src/control/midi.cpp` `beatPadClockFrom` gates on the Link object with tempo above 1, not on peer count or the take. Flash edges no longer follow the take index. A 15 ms black gap precedes a flash whose colour equals the lit background (beat 0). Commits 51d510cd, 4962b704 (harness window), 3b856659 (33 ms poll cap).
+- Witness, join reproduction on 4bc3b73b (before the change): peer count 1 to 0 at 14:18:26.109 (synced false), STALL 1592 ms, host probe joined at 14:18:32.6, RESUME at 14:18:33.129. Logs: `.gm/witness-out/ledbeat-join-repro-*.log`.
+- Witness, harness (CI test-led-beat-pad run 42489333311): visible 16/16, flashes 16/16 and backgrounds 16/16 sent, join 16/16, leave 12/12, dense check 0 mismatches over 25198 samples, max flash-start error 0 us; `--no-gap` fails as the control.
+- Deploy: `aloop-aarch64-musl` of CI run 42489402966 (commit 3b856659), md5 `db823c7a7a2663a414b41da6fdc87604`, copied to `/opt/aloop/aloop.new`, moved to `/opt/aloop/aloop`, one `rc-service aloop restart`. Rollback copy `/opt/aloop/aloop.rollback` md5 `8d7b2fe8726aa3211bf6e4571f4ebe22`. The restart cleared looper takes 1 and 5 (owner-approved; no other take existed).
+- Witness, device after restart: `md5sum /proc/<pid>/exe` = `db823c7a7a2663a414b41da6fdc87604`; loopers rec 0, play 0, wraplen all 1, stateflags all 0, master_len_samples 0, recorded_beats 0.
+- Witness, 32-beat telemetry (seq 71 to 102, 120 BPM): table match 32/32; late_ms max 0.002; visible 32/32. Index 0 is visible through the black-gap rule (inferred from the send path, not observed on the APC: the telemetry reports flash marks only). Log `.gm/witness-out/ledbeat-32beat-new-db823c7a-20261109.log`.
+- Witness, join: probe numPeers 1 at 08:06:20.231; Pi peers 1 to 2 at 08:06:20.559; 120 marks seq 197 to 316 with 0 seq gaps, 0 index breaks, no STALL; leave at 08:06:56.466 with the flash continuous. Logs `.gm/witness-out/ledbeat-join-new-db823c7a-20261109.log`, `ledbeat-join-probe-new-db823c7a-20261109.log`.
+- Not observed: the physical APC LEDs.
+
 ## Status JSON buffer headroom, 2026-10-25 (row telemetry-status-json-buffer-headroom)
 
 - Change: `src/control/telemetry.cpp`, status buffer 8192 bytes with an overflow guard (commit `a3016211`).
