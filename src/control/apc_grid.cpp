@@ -71,6 +71,8 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("cmd/halfspeed", 0.0f);
     ps.bind("cmd/doublespeed", 0.0f);
     ps.bind("cmd/sustain", loadSustainLatch() ? 1.0f : 0.0f);
+    ps.bind("cmd/sustain_latch", loadSustainLatch() ? 1.0f : 0.0f);
+    fprintf(stderr, "[sustain] latch %s at boot\n", loadSustainLatch() ? "on" : "off");
     ps.bind("cmd/input1_recordable", 1.0f);
     ps.bind("cmd/input2_recordable", 1.0f);
 
@@ -862,6 +864,7 @@ void ApcGrid::onSustainPedal(bool down, ParamStore& ps) {
 
 void ApcGrid::applySustainLatch(ParamStore& ps) {
     ps.setByName("cmd/sustain", (m_sustainHeld || m_sustainLatched) ? 1.0f : 0.0f);
+    ps.setByName("cmd/sustain_latch", m_sustainLatched ? 1.0f : 0.0f);
 }
 
 void ApcGrid::onShiftPress(ParamStore& ps) {

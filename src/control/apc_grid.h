@@ -27,7 +27,6 @@ constexpr int kApcPadGateMod = 7;
 constexpr int kApcBeatPadNotes[4] = { 15, 23, 31, 39 };
 constexpr int kApcInputRoutePadNotes[2] = { 14, 22 };
 constexpr int kApcInputRouteCount = 2;
-constexpr int kApcInputOfWire[kApcInputRouteCount] = { 1, 0 };
 
 inline const char* inputRecordableParamName(int input) {
     return input == 0 ? "cmd/input1_recordable" : "cmd/input2_recordable";
@@ -35,10 +34,10 @@ inline const char* inputRecordableParamName(int input) {
 
 inline bool loadSustainLatch() {
     FILE* f = fopen("/run/aloop/sustain_latch", "r");
-    if (!f) return false;
+    if (!f) return true;
     int c = fgetc(f);
     fclose(f);
-    return c == '1';
+    return c != '0';
 }
 
 inline void storeSustainLatch(bool latched) {
