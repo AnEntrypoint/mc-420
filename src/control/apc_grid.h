@@ -31,6 +31,9 @@ inline const char* inputRecordableParamName(int input) {
     return input == 0 ? "cmd/input1_recordable" : "cmd/input2_recordable";
 }
 
+bool loadSustainLatch();
+void storeSustainLatch(bool latched);
+
 enum class FxBank : uint8_t { Dub = 0, Guitar = 1, LofiFx = 2 };
 constexpr int kFxBankCount = 3;
 constexpr int kApcBtnDubFx    = 67;
@@ -76,6 +79,7 @@ public:
 
     void onLiveEngageToggle(ParamStore& ps);
     void onSustainPedal(bool down, ParamStore& ps);
+    void applySustainLatch(ParamStore& ps);
     bool liveEngaged() const { return m_liveEngaged; }
     bool keysMultiMode() const { return m_keysMode == KeysMode::MultiKey; }
 
@@ -167,7 +171,7 @@ private:
     bool m_shift = false;
     bool m_liveEngaged = false;
     bool m_sustainHeld = false;
-    bool m_sustainLatched = false;
+    bool m_sustainLatched = loadSustainLatch();
     bool m_drumRecordMode = false;
 
     enum class KeysMode : uint8_t { Normal = 0, MultiKey = 1 };
@@ -230,7 +234,7 @@ private:
     int m_shuffleMode = 0;
     int m_gateMode = 0;
     bool m_gateModHeld = false;
-    bool m_inputRecordable[kApcInputRouteCount] = { true, true };
+    bool m_inputRecordable[kApcInputRouteCount] = { true, !m_sustainLatched };
 
     void applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, class LinkBridge* link, class AudioThread* audio = nullptr);
     void capturePreset(int p, ParamStore& ps);

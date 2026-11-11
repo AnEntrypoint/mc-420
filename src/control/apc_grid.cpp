@@ -70,9 +70,9 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("cmd/clearall", 0.0f);
     ps.bind("cmd/halfspeed", 0.0f);
     ps.bind("cmd/doublespeed", 0.0f);
-    ps.bind("cmd/sustain", 0.0f);
+    ps.bind("cmd/sustain", loadSustainLatch() ? 1.0f : 0.0f);
     ps.bind("cmd/input1_recordable", 1.0f);
-    ps.bind("cmd/input2_recordable", 1.0f);
+    ps.bind("cmd/input2_recordable", loadSustainLatch() ? 0.0f : 1.0f);
 
     ps.bind("fx/reverb",  0.0f);
     ps.bind("fx/delay",   0.0f);
@@ -650,7 +650,10 @@ void ApcGrid::onStopImmediate(unsigned now_ms, ParamStore& ps, LinkBridge* link,
     updateLocalTransport(link);
 }
 void ApcGrid::onClearAll(unsigned now_ms, bool held, ParamStore& ps, LinkBridge* link, AudioThread* audio) {
-    if (held) ps.resetToDefaults();
+    if (held) {
+        ps.resetToDefaults();
+        applySustainLatch(ps);
+    }
     ps.setByName("cmd/clearall", held ? 1.0f : 0.0f);
     if (!held) return;
     for (int lp = 0; lp < kLooperCount; lp++) {
@@ -846,13 +849,40 @@ void ApcGrid::onSustainPedal(bool down, ParamStore& ps) {
     if (down) {
         if (m_shift) {
             m_sustainLatched = !m_sustainLatched;
+            storeSustainLatch(m_sustainLatched);
+            fprintf(stderr, "[sustain] latch %s -> input2 %s\n", m_sustainLatched ? "on" : "off",
+                    m_sustainLatched ? "passthrough-only" : "recordable");
         } else {
             m_sustainHeld = true;
         }
     } else {
         m_sustainHeld = false;
     }
+    applySustainLatch(ps);
+}
+
+void ApcGrid::applySustainLatch(ParamStore& ps) {
+    m_inputRecordable[1] = !m_sustainLatched;
+    ps.setByName(inputRecordableParamName(1), m_inputRecordable[1] ? 1.0f : 0.0f);
     ps.setByName("cmd/sustain", (m_sustainHeld || m_sustainLatched) ? 1.0f : 0.0f);
+}
+
+bool loadSustainLatch() {
+    FILE* f = fopen("/run/aloop/sustain_latch", "r");
+    if (!f) return false;
+    int c = fgetc(f);
+    fclose(f);
+    return c == '1';
+}
+
+void storeSustainLatch(bool latched) {
+    FILE* f = fopen("/run/aloop/sustain_latch", "w");
+    if (!f) {
+        fprintf(stderr, "[sustain] could not persist the latch to /run/aloop/sustain_latch\n");
+        return;
+    }
+    fputs(latched ? "1\n" : "0\n", f);
+    fclose(f);
 }
 
 void ApcGrid::onShiftPress(ParamStore& ps) {
