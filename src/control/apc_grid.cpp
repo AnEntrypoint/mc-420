@@ -72,7 +72,7 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("cmd/doublespeed", 0.0f);
     ps.bind("cmd/sustain", loadSustainLatch() ? 1.0f : 0.0f);
     ps.bind("cmd/input1_recordable", 1.0f);
-    ps.bind("cmd/input2_recordable", loadSustainLatch() ? 0.0f : 1.0f);
+    ps.bind("cmd/input2_recordable", 1.0f);
 
     ps.bind("fx/reverb",  0.0f);
     ps.bind("fx/delay",   0.0f);
@@ -850,8 +850,7 @@ void ApcGrid::onSustainPedal(bool down, ParamStore& ps) {
         if (m_shift) {
             m_sustainLatched = !m_sustainLatched;
             storeSustainLatch(m_sustainLatched);
-            fprintf(stderr, "[sustain] latch %s -> input2 %s\n", m_sustainLatched ? "on" : "off",
-                    m_sustainLatched ? "passthrough-only" : "recordable");
+            fprintf(stderr, "[sustain] latch %s\n", m_sustainLatched ? "on" : "off");
         } else {
             m_sustainHeld = true;
         }
@@ -862,8 +861,6 @@ void ApcGrid::onSustainPedal(bool down, ParamStore& ps) {
 }
 
 void ApcGrid::applySustainLatch(ParamStore& ps) {
-    m_inputRecordable[1] = !m_sustainLatched;
-    ps.setByName(inputRecordableParamName(1), m_inputRecordable[1] ? 1.0f : 0.0f);
     ps.setByName("cmd/sustain", (m_sustainHeld || m_sustainLatched) ? 1.0f : 0.0f);
 }
 

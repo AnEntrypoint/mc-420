@@ -250,7 +250,7 @@ private:
     int m_shuffleMode = 0;
     int m_gateMode = 0;
     bool m_gateModHeld = false;
-    bool m_inputRecordable[kApcInputRouteCount] = { true, !m_sustainLatched };
+    bool m_inputRecordable[kApcInputRouteCount] = { true, true };
 
     void applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, class LinkBridge* link, class AudioThread* audio = nullptr);
     void capturePreset(int p, ParamStore& ps);
