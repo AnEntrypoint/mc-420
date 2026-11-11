@@ -8,6 +8,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <chrono>
 #include <ctime>
 #include <algorithm>
 #include <zlib.h>
@@ -48,15 +49,18 @@ ClipExporter::ClipExporter(std::string mountPoint, int sampleRate)
     for (int lp = 0; lp < kClipExporterMaxLoopers; lp++) {
         m_looperCaptureBuf[lp] = new float[(size_t)kClipExporterMaxLen];
     }
+    m_worker = std::thread([this] { workerLoop(); });
 }
 
 ClipExporter::~ClipExporter() {
+    m_stopWorker.store(true, std::memory_order_release);
+    if (m_worker.joinable()) m_worker.join();
     for (int lp = 0; lp < kClipExporterMaxLoopers; lp++) delete[] m_looperCaptureBuf[lp];
 }
 
 void ClipExporter::trigger(const bool* looperHasContent, const float* looperWrapLen, unsigned now_ms) {
     ClipExportState cur = m_state.load(std::memory_order_relaxed);
-    if (cur == ClipExportState::Capturing) return;
+    if (cur == ClipExportState::Capturing || cur == ClipExportState::Writing) return;
 
     bool anyContent = false;
     for (int lp = 0; lp < kClipExporterMaxLoopers; lp++) {
@@ -131,9 +135,21 @@ bool ClipExporter::finalizeIfComplete() {
         if (!m_looperArmed[lp]) continue;
         if (m_looperCapturedSamples[lp] < m_looperTargetSamples[lp]) return false;
     }
-    bool ok = writeAllClips();
-    m_state.store(ok ? ClipExportState::Done : ClipExportState::Failed, std::memory_order_relaxed);
+    m_state.store(ClipExportState::Writing, std::memory_order_relaxed);
+    m_writeRequested.store(true, std::memory_order_release);
     return true;
+}
+
+void ClipExporter::workerLoop() {
+    while (!m_stopWorker.load(std::memory_order_acquire)) {
+        if (!m_writeRequested.load(std::memory_order_acquire)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            continue;
+        }
+        m_writeRequested.store(false, std::memory_order_relaxed);
+        bool ok = writeAllClips();
+        m_state.store(ok ? ClipExportState::Done : ClipExportState::Failed, std::memory_order_release);
+    }
 }
 
 std::string ClipExporter::makeUniqueSaveDir(unsigned now_ms) const {

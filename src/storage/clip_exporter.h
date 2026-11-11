@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdint>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace aloop {
@@ -11,7 +12,7 @@ namespace aloop {
 constexpr int kClipExporterMaxLoopers = 20;
 constexpr int kClipExporterMaxLen = 48000 * 60;
 
-enum class ClipExportState : uint8_t { Idle, Capturing, Done, Failed };
+enum class ClipExportState : uint8_t { Idle, Capturing, Done, Failed, Writing };
 
 class ClipExporter {
 public:
@@ -36,6 +37,10 @@ private:
     uint64_t m_looperCapturedSamples[kClipExporterMaxLoopers] = {};
     float* m_looperCaptureBuf[kClipExporterMaxLoopers] = {};
     std::string m_saveDir;
+    std::atomic<bool> m_writeRequested{false};
+    std::atomic<bool> m_stopWorker{false};
+    std::thread m_worker;
+    void workerLoop();
 
     bool driveHasHeadroom(uint64_t bytesNeeded) const;
     bool driveMounted() const;
