@@ -27,6 +27,7 @@ constexpr int kApcPadGateMod = 7;
 constexpr int kApcBeatPadNotes[4] = { 15, 23, 31, 39 };
 constexpr int kApcInputRoutePadNotes[2] = { 14, 22 };
 constexpr int kApcInputRouteCount = 2;
+constexpr int kApcInputOfWire[kApcInputRouteCount] = { 1, 0 };
 
 inline const char* inputRecordableParamName(int input) {
     return input == 0 ? "cmd/input1_recordable" : "cmd/input2_recordable";
