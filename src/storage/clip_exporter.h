@@ -38,6 +38,7 @@ private:
     std::string m_saveDir;
 
     bool driveHasHeadroom(uint64_t bytesNeeded) const;
+    bool driveMounted() const;
     bool finalizeIfComplete();
     bool writeAllClips();
     bool writeWavFile(const std::string& path, const float* samples, uint64_t n) const;

@@ -67,6 +67,11 @@ void ClipExporter::trigger(const bool* looperHasContent, const float* looperWrap
         return;
     }
 
+    if (!driveMounted()) {
+        m_state.store(ClipExportState::Failed, std::memory_order_relaxed);
+        return;
+    }
+
     m_saveDir = makeUniqueSaveDir(now_ms);
 
     for (int lp = 0; lp < kClipExporterMaxLoopers; lp++) {
@@ -94,6 +99,15 @@ void ClipExporter::pushBlock(int looper, const float* samples, int n) {
     float* dst = m_looperCaptureBuf[looper] + m_looperCapturedSamples[looper];
     for (uint64_t i = 0; i < take; i++) dst[i] = samples[i];
     m_looperCapturedSamples[looper] += take;
+}
+
+bool ClipExporter::driveMounted() const {
+    struct stat selfSt {};
+    struct stat parentSt {};
+    if (stat(m_mountPoint.c_str(), &selfSt) != 0) return false;
+    std::string parent = m_mountPoint + "/..";
+    if (stat(parent.c_str(), &parentSt) != 0) return false;
+    return selfSt.st_dev != parentSt.st_dev;
 }
 
 bool ClipExporter::driveHasHeadroom(uint64_t bytesNeeded) const {
