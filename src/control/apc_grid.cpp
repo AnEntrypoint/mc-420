@@ -867,24 +867,6 @@ void ApcGrid::applySustainLatch(ParamStore& ps) {
     ps.setByName("cmd/sustain", (m_sustainHeld || m_sustainLatched) ? 1.0f : 0.0f);
 }
 
-bool loadSustainLatch() {
-    FILE* f = fopen("/run/aloop/sustain_latch", "r");
-    if (!f) return false;
-    int c = fgetc(f);
-    fclose(f);
-    return c == '1';
-}
-
-void storeSustainLatch(bool latched) {
-    FILE* f = fopen("/run/aloop/sustain_latch", "w");
-    if (!f) {
-        fprintf(stderr, "[sustain] could not persist the latch to /run/aloop/sustain_latch\n");
-        return;
-    }
-    fputs(latched ? "1\n" : "0\n", f);
-    fclose(f);
-}
-
 void ApcGrid::onShiftPress(ParamStore& ps) {
     m_shift = true;
     ps.setByName("fx/monitorfold", 1.0f);

@@ -2,6 +2,7 @@
 #define ALOOP_APC_GRID_H
 
 #include <cstdint>
+#include <cstdio>
 #include "midi.h"
 
 namespace aloop {
@@ -31,8 +32,23 @@ inline const char* inputRecordableParamName(int input) {
     return input == 0 ? "cmd/input1_recordable" : "cmd/input2_recordable";
 }
 
-bool loadSustainLatch();
-void storeSustainLatch(bool latched);
+inline bool loadSustainLatch() {
+    FILE* f = fopen("/run/aloop/sustain_latch", "r");
+    if (!f) return false;
+    int c = fgetc(f);
+    fclose(f);
+    return c == '1';
+}
+
+inline void storeSustainLatch(bool latched) {
+    FILE* f = fopen("/run/aloop/sustain_latch", "w");
+    if (!f) {
+        fprintf(stderr, "[sustain] could not persist the latch to /run/aloop/sustain_latch\n");
+        return;
+    }
+    fputs(latched ? "1\n" : "0\n", f);
+    fclose(f);
+}
 
 enum class FxBank : uint8_t { Dub = 0, Guitar = 1, LofiFx = 2 };
 constexpr int kFxBankCount = 3;
