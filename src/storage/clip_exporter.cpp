@@ -186,9 +186,18 @@ bool ClipExporter::writeWavFile(const std::string& path, const float* samples, u
     memcpy(hdr + 36, "data", 4);
     writeU32LE(hdr + 40, dataBytes);
     if (write(fd, hdr, sizeof hdr) != (ssize_t)sizeof hdr) { close(fd); return false; }
-    ssize_t wrote = write(fd, samples, (size_t)dataBytes);
+    constexpr size_t kWriteChunkBytes = 64 * 1024;
+    const char* src = reinterpret_cast<const char*>(samples);
+    size_t done = 0;
+    while (done < (size_t)dataBytes) {
+        size_t n = std::min(kWriteChunkBytes, (size_t)dataBytes - done);
+        ssize_t w = write(fd, src + done, n);
+        if (w <= 0) { close(fd); return false; }
+        done += (size_t)w;
+        std::this_thread::sleep_for(std::chrono::microseconds(500));
+    }
     close(fd);
-    return wrote == (ssize_t)dataBytes;
+    return true;
 }
 
 bool ClipExporter::writeAllClips() {
