@@ -404,6 +404,8 @@ static void* worker(void*) {
     const float kFoldStepPerSample = (1.0f / 16.0f) / (float)N;
     float inputRecGain[kApcInputRouteCount] = { 1.0f, 1.0f };
     float loopDirectGateNow = 1.0f;
+    float audGainNow = 0.0f;
+    constexpr float kAudStepPerSample = 1.0f / 256.0f;
     struct ResolvedControl { int slot; float* zone; };
     std::vector<ResolvedControl> resolvedControls;
     int resolvedControlsForCount = -1;
@@ -489,6 +491,7 @@ static void* worker(void*) {
     std::vector<float> inputFxOut((size_t)N, 0.0f);
     float* postOuts[4] = { fout.data(), rawLoopSum.data(), rawFiltTap.data(), inputFxOut.data() };
     int sustainSlot = -1;
+    int sustainLatchSlot = -1;
     int fxBankSlot = -1;
 #endif
 
@@ -1214,9 +1217,8 @@ static void* worker(void*) {
                 }
                 if (sustainSlot < 0) sustainSlot = g_params->getSlot("cmd/sustain");
                 float sustainCmdRaw = sustainSlot >= 0 ? g_params->getBySlot(sustainSlot) : 0.0f;
-                bool sustainHeldNow = sustainCmdRaw > 0.5f;
-                bool glitchHeldNow = microrepeatDivVal > 0.5f;
-                float sustainGateNow = (sustainHeldNow || shiftHeldNow || glitchHeldNow) ? 1.0f : 0.0f;
+                if (sustainLatchSlot < 0) sustainLatchSlot = g_params->getSlot("cmd/sustain_latch");
+                float sustainGateNow = (sustainLatchSlot >= 0 && g_params->getBySlot(sustainLatchSlot) > 0.5f) ? 1.0f : 0.0f;
                 if (sustainGateFaustZone) *sustainGateFaustZone = sustainGateNow;
                 g_telem.sustainCmd = sustainCmdRaw;
                 g_telem.sustainGate = sustainGateNow;
@@ -1470,7 +1472,9 @@ static void* worker(void*) {
             }
             float outPeak = 0.0f, masterPeak = 0.0f;
             for (int i = 0; i < N; i++) {
-                float masterSample = rawLoopSum[i] * loopDirectGateNow + inputFxOut[i] + mixOnlyBuf[i];
+                if (audGainNow < g_telem.sustainGate) { audGainNow += kAudStepPerSample; if (audGainNow > g_telem.sustainGate) audGainNow = g_telem.sustainGate; }
+                else if (audGainNow > g_telem.sustainGate) { audGainNow -= kAudStepPerSample; if (audGainNow < g_telem.sustainGate) audGainNow = g_telem.sustainGate; }
+                float masterSample = rawLoopSum[i] * loopDirectGateNow + inputFxOut[i] + mixOnlyBuf[i] * audGainNow;
                 float cueSample = fout[i] + mixOnlyBuf[i];
 
                 float mv32 = masterSample * 2147483648.0f;
