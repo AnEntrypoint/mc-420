@@ -1474,7 +1474,7 @@ static void* worker(void*) {
             for (int i = 0; i < N; i++) {
                 if (audGainNow < g_telem.sustainGate) { audGainNow += kAudStepPerSample; if (audGainNow > g_telem.sustainGate) audGainNow = g_telem.sustainGate; }
                 else if (audGainNow > g_telem.sustainGate) { audGainNow -= kAudStepPerSample; if (audGainNow < g_telem.sustainGate) audGainNow = g_telem.sustainGate; }
-                float masterSample = rawLoopSum[i] * loopDirectGateNow + inputFxOut[i] + mixOnlyBuf[i] * audGainNow;
+                float masterSample = (rawLoopSum[i] * loopDirectGateNow + inputFxOut[i] + mixOnlyBuf[i]) * audGainNow;
                 float cueSample = fout[i] + mixOnlyBuf[i];
 
                 float mv32 = masterSample * 2147483648.0f;
