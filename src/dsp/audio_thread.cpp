@@ -1153,7 +1153,7 @@ static void* worker(void*) {
                 for (int c = 0; c < wireCh; c++) {
                     float s = (float)buf[(size_t)i * wireCh + c];
                     fullAcc += s;
-                    recAcc += (c < kApcInputRouteCount) ? s * inputRecGain[kApcInputOfWire[c]] : s;
+                    recAcc += (c < kApcInputRouteCount) ? s * inputRecGain[c] : s;
                 }
                 float fullNorm = (fullAcc / wireCh) / 2147483648.0f;
                 fin[i] = (recAcc / wireCh) / 2147483648.0f;
