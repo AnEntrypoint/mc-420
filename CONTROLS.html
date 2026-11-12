@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=2cbfc75103ffe55acdd63b208afce68399c5b270">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=9867588ecfc6ecddf5fbe03e23a2190f5ec4f3c7">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -91,6 +91,17 @@ by the log-space geometric midpoint between the two bracketing candidates —
 so any two loopers’ lengths are always in a clean power-of-2 ratio and stay
 drift-free forever.</li>
 </ul>
+
+<h2 id="input-pads-14-and-22-processed-and-looped-or-passthrough-only">Input pads 14 and 22: processed-and-looped or passthrough-only</h2>
+
+<p>Pads 14 (input 1, the beeper) and 22 (input 2) sit immediately left of the beat pads, beside the metronome at 15. Each press toggles that input between:</p>
+
+<ul>
+  <li><strong>processed and looped</strong> (recordable): the input goes through the input effects and into the take;</li>
+  <li><strong>passthrough-only</strong>: the input is unprocessed, not recorded, and monitored to master and cue.</li>
+</ul>
+
+<p>The mode is written to <code class="language-plaintext highlighter-rouge">/run/aloop/input_modes</code>, so it survives a service restart. At boot it comes from <code class="language-plaintext highlighter-rouge">[inputs]</code> <code class="language-plaintext highlighter-rouge">input1_mode</code> and <code class="language-plaintext highlighter-rouge">input2_mode</code> in <code class="language-plaintext highlighter-rouge">/etc/aloop.conf</code>, so it survives a reboot. CLEAR_ALL keeps the current mode. Telemetry reports <code class="language-plaintext highlighter-rouge">input_recordable</code> and <code class="language-plaintext highlighter-rouge">fx_bank</code>.</p>
 
 <h2 id="guitar-fx-held-sidechain-source-toggle">Guitar-FX held: sidechain-source toggle</h2>
 
