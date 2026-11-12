@@ -43,6 +43,10 @@ Pads 14 (input 1, the beeper) and 22 (input 2) sit immediately left of the beat 
 
 The mode is written to `/run/aloop/input_modes`, so it survives a service restart. At boot it comes from `[inputs]` `input1_mode` and `input2_mode` in `/etc/aloop.conf`, so it survives a reboot. CLEAR_ALL keeps the current mode. Telemetry reports `input_recordable` and `fx_bank`.
 
+## Cue and master outputs
+
+The **cue** output (the artist) always plays every input: effected inputs and passthrough inputs, whatever shift-sus is. The **master** output (the audience) is gated by shift-sus, the sustain latch set with SHIFT+sustain: with it off the audience hears nothing from the performance, and with it on master carries the effected and passthrough inputs. Pads 14 and 22 only choose effected or passthrough per input and never change either gate. Clips and loops record from the record tap, which is not gated, so they still record while master is silent.
+
 ## Guitar-FX held: sidechain-source toggle
 
 While the Guitar-FX pad is held, a looper-pad press is redirected entirely — it
