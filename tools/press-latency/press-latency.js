@@ -18,7 +18,8 @@ const kFloorWindows = 300;
 const kOnsetDb = 10;
 const kMinGapWindows = 60;
 const kMaxLatencyMs = 1000;
-const kKnown = new Set(['host', 'card', 'beepCh', 'recordNote', 'loopSeconds', 'outDir', 'waitFree']);
+const kKnown = new Set(['host', 'card', 'beepCh', 'recordNote', 'loopSeconds', 'outDir', 'waitFree', 'analyze', 'periodSamples']);
+const kReleaseMs = 80;
 
 const parseArgs = (argv) => {
   const out = {
@@ -43,6 +44,7 @@ const parseArgs = (argv) => {
   out.recordNote = Number(out.recordNote);
   out.loopSeconds = Number(out.loopSeconds);
   out.waitFree = Number(out.waitFree);
+  out.periodSamples = Number(out.periodSamples || 0);
   return out;
 };
 
@@ -223,7 +225,7 @@ const runMode = async () => {
   const seconds = (kPreRollMs + opts.loopSeconds * 1000 + kTailMs) / 1000;
   const before = await telemetryOrNull();
   const tSpawn = performance.now();
-  const rec = spawn('arecord', ['-q', '-D', opts.card, '-t', 'raw', '-c', String(kChannels), '-f', 'S32_LE', '-r', String(kRate), '-d', String(seconds), rawFile], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const rec = spawn('arecord', ['-q', '-D', opts.card, '-t', 'raw', '-c', String(kChannels), '-f', 'S32_LE', '-r', String(kRate), '-d', String(Math.ceil(seconds)), rawFile], { stdio: ['ignore', 'ignore', 'pipe'] });
   let stderr = '';
   rec.stderr.on('data', (d) => { stderr += d; });
   const exited = new Promise((resolve, reject) => {
@@ -233,9 +235,13 @@ const runMode = async () => {
   await sleep(kPreRollMs);
   const pressTimes = [performance.now()];
   await sendBytes([0x90, opts.recordNote, 127]);
-  await sleep(opts.loopSeconds * 1000);
+  await sleep(kReleaseMs);
+  await sendBytes([0x90, opts.recordNote, 0]);
+  await sleep(opts.loopSeconds * 1000 - kReleaseMs);
   pressTimes.push(performance.now());
   await sendBytes([0x90, opts.recordNote, 127]);
+  await sleep(kReleaseMs);
+  await sendBytes([0x90, opts.recordNote, 0]);
   const code = await exited;
   if (code !== 0) throw new Error('arecord exited ' + code + ': ' + stderr.trim());
   const after = await telemetryOrNull();
@@ -270,7 +276,33 @@ const runMode = async () => {
   console.log(JSON.stringify({ outFile, onsetCount: det.onsets.length, presses }, null, 2));
 };
 
+const analyzeMode = () => {
+  const bytes = fs.statSync(opts.analyze).size;
+  const frames = Math.floor(bytes / (4 * kChannels));
+  const samples = readChannel(opts.analyze, kChannels, opts.beepCh);
+  let acc = 0;
+  for (let i = 0; i < samples.length; i += 1) acc += samples[i] * samples[i];
+  const det = detectOnsets(samples);
+  const period = opts.periodSamples > 0 ? opts.periodSamples : 0;
+  console.log(JSON.stringify({
+    file: opts.analyze,
+    bytes,
+    frames,
+    seconds: +(frames / kRate).toFixed(3),
+    beepCh: opts.beepCh,
+    rms: +Math.sqrt(acc / Math.max(1, frames)).toFixed(6),
+    floor: det.floor,
+    threshold: det.threshold,
+    onsetCount: det.onsets.length,
+    onsets: det.onsets.map((s) => ({
+      ms: +((s / kRate) * 1000).toFixed(1),
+      phaseMs: period ? +(((s % period) / kRate) * 1000).toFixed(1) : null,
+    })),
+  }, null, 2));
+};
+
 const main = async () => {
+  if (opts.analyze) return analyzeMode();
   if (opts.mode === 'selftest') return selfTest();
   if (opts.mode === 'check') return checkMode();
   if (opts.mode === 'run') return runMode();
