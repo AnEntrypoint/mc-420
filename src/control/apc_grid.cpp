@@ -73,8 +73,10 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("cmd/sustain", loadSustainLatch() ? 1.0f : 0.0f);
     ps.bind("cmd/sustain_latch", loadSustainLatch() ? 1.0f : 0.0f);
     fprintf(stderr, "[sustain] latch %s at boot\n", loadSustainLatch() ? "on" : "off");
-    ps.bind("cmd/input1_recordable", 1.0f);
-    ps.bind("cmd/input2_recordable", 1.0f);
+    ps.bind("cmd/input1_recordable", inputRecordableAtBoot(0) ? 1.0f : 0.0f);
+    ps.bind("cmd/input2_recordable", inputRecordableAtBoot(1) ? 1.0f : 0.0f);
+    ps.bind("cmd/fx_bank", 0.0f);
+    fprintf(stderr, "[input] input1 %s, input2 %s at boot\n", inputRecordableAtBoot(0) ? "processed-looped" : "passthrough-only", inputRecordableAtBoot(1) ? "processed-looped" : "passthrough-only");
 
     ps.bind("fx/reverb",  0.0f);
     ps.bind("fx/delay",   0.0f);
@@ -655,6 +657,8 @@ void ApcGrid::onClearAll(unsigned now_ms, bool held, ParamStore& ps, LinkBridge*
     if (held) {
         ps.resetToDefaults();
         applySustainLatch(ps);
+        for (int c = 0; c < kApcInputRouteCount; c++) ps.setByName(inputRecordableParamName(c), m_inputRecordable[c] ? 1.0f : 0.0f);
+        ps.setByName("cmd/fx_bank", (float)m_activeBank);
     }
     ps.setByName("cmd/clearall", held ? 1.0f : 0.0f);
     if (!held) return;
@@ -1189,8 +1193,9 @@ static unsigned nonZeroDeadline(unsigned now_ms, unsigned windowMs) {
     return d != 0 ? d : 1;
 }
 
-void ApcGrid::onDubFxPress(unsigned now_ms, ParamStore&) {
+void ApcGrid::onDubFxPress(unsigned now_ms, ParamStore& ps) {
     m_activeBank = FxBank::Dub;
+    ps.setByName("cmd/fx_bank", (float)m_activeBank);
     m_dubShiftMode = m_shift;
     m_bankFlashWhich = FxBank::Dub;
     m_bankFlashReleaseAt = nonZeroDeadline(now_ms, kBankFlashMs);
@@ -1210,6 +1215,7 @@ void ApcGrid::toggleResonodeEngage(ParamStore& ps, AudioThread* audio) {
 void ApcGrid::onLofiFxPress(unsigned now_ms, ParamStore& ps, Sampler* sampler, AudioThread* audio) {
     if (m_granulatorHeld) return;
     m_activeBank = FxBank::LofiFx;
+    ps.setByName("cmd/fx_bank", (float)m_activeBank);
     m_lofiShiftMode = m_shift;
     m_bankFlashWhich = FxBank::LofiFx;
     m_bankFlashReleaseAt = nonZeroDeadline(now_ms, kBankFlashMs);
@@ -1224,8 +1230,9 @@ void ApcGrid::onLofiFxPress(unsigned now_ms, ParamStore& ps, Sampler* sampler, A
 void ApcGrid::onLofiFxRelease(unsigned, ParamStore&, Sampler*) {
     m_granulatorHeld = false;
 }
-void ApcGrid::onGuitarFxPress(unsigned now_ms, ParamStore&) {
+void ApcGrid::onGuitarFxPress(unsigned now_ms, ParamStore& ps) {
     m_activeBank = FxBank::Guitar;
+    ps.setByName("cmd/fx_bank", (float)m_activeBank);
     m_guitarShiftMode = m_shift;
     m_bankFlashWhich = FxBank::Guitar;
     m_bankFlashReleaseAt = nonZeroDeadline(now_ms, kBankFlashMs);
@@ -1266,6 +1273,7 @@ void ApcGrid::onInputRoutePadPress(int input, ParamStore& ps) {
     if (input < 0 || input >= kApcInputRouteCount) return;
     m_inputRecordable[input] = !m_inputRecordable[input];
     ps.setByName(inputRecordableParamName(input), m_inputRecordable[input] ? 1.0f : 0.0f);
+    storeInputRecordable(m_inputRecordable);
     fprintf(stderr, "[input-route] input%d %s\n", input + 1,
             m_inputRecordable[input] ? "recordable" : "passthrough-only");
 }

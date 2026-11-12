@@ -34,6 +34,15 @@ empty → ARM (rec=1, held) → FINISH (rec=0, play=1) → pause (play=0) → re
   so any two loopers' lengths are always in a clean power-of-2 ratio and stay
   drift-free forever.
 
+## Input pads 14 and 22: processed-and-looped or passthrough-only
+
+Pads 14 (input 1, the beeper) and 22 (input 2) sit immediately left of the beat pads, beside the metronome at 15. Each press toggles that input between:
+
+- **processed and looped** (recordable): the input goes through the input effects and into the take;
+- **passthrough-only**: the input is unprocessed, not recorded, and monitored to master and cue.
+
+The mode is written to `/run/aloop/input_modes`, so it survives a service restart. At boot it comes from `[inputs]` `input1_mode` and `input2_mode` in `/etc/aloop.conf`, so it survives a reboot. CLEAR_ALL keeps the current mode. Telemetry reports `input_recordable` and `fx_bank`.
+
 ## Guitar-FX held: sidechain-source toggle
 
 While the Guitar-FX pad is held, a looper-pad press is redirected entirely — it

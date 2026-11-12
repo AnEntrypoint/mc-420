@@ -2,6 +2,7 @@
 #include "link/link_bridge.h"
 #include "control/telemetry.h"
 #include "control/midi.h"
+#include "control/apc_grid.h"
 #include "control/remote_control.h"
 #include "control/midi_clock.h"
 #include "storage/usb_recorder.h"
@@ -132,6 +133,8 @@ aloop::AudioConfig loadConfig(const char* path) {
                                      strcmp(s, "yes") == 0  || strcmp(s, "on") == 0);
         }
         else if (sscanf(line, " usb_mount_point = %199s", s) == 1) cfg.usbMountPoint = s;
+        else if (sscanf(line, " input1_mode = %15s", s) == 1) aloop::inputRecordableDefaults()[0] = strcmp(s, "passthrough") != 0;
+        else if (sscanf(line, " input2_mode = %15s", s) == 1) aloop::inputRecordableDefaults()[1] = strcmp(s, "passthrough") != 0;
         else if (sscanf(line, " usb_chunk_minutes = %d", &v) == 1) cfg.usbChunkMinutes = v;
         else if (sscanf(line, " usb_chunk_count = %d", &v) == 1) cfg.usbChunkCount = v;
     }

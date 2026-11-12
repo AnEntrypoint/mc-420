@@ -77,6 +77,8 @@ public:
         float    effSpeed = 1.0f;
         float    sustainCmd = 0.0f;
         float    sustainGate = 0.0f;
+        float    inputRecordable[2] = {1.0f, 1.0f};
+        float    fxBank = 0.0f;
         float    alsaRoundTripSamples = 0.0f;
         float    latencyTrimSamples = 0.0f;
         float    latencyBiasSamples = 0.0f;

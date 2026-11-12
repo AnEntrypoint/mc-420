@@ -40,6 +40,43 @@ inline bool loadSustainLatch() {
     return c != '0';
 }
 
+inline bool* inputRecordableDefaults() {
+    static bool d[kApcInputRouteCount] = { true, true };
+    return d;
+}
+
+inline void loadInputRecordable(bool* out) {
+    bool* def = inputRecordableDefaults();
+    for (int c = 0; c < kApcInputRouteCount; c++) out[c] = def[c];
+    FILE* f = fopen("/run/aloop/input_modes", "r");
+    if (!f) return;
+    char buf[8] = {0};
+    size_t n = fread(buf, 1, sizeof buf - 1, f);
+    fclose(f);
+    if (n < (size_t)kApcInputRouteCount) return;
+    for (int c = 0; c < kApcInputRouteCount; c++) {
+        if (buf[c] == '0') out[c] = false;
+        else if (buf[c] == '1') out[c] = true;
+    }
+}
+
+inline bool inputRecordableAtBoot(int c) {
+    bool v[kApcInputRouteCount];
+    loadInputRecordable(v);
+    return v[c];
+}
+
+inline void storeInputRecordable(const bool* recordable) {
+    FILE* f = fopen("/run/aloop/input_modes", "w");
+    if (!f) {
+        fprintf(stderr, "[input] could not persist the input modes to /run/aloop/input_modes\n");
+        return;
+    }
+    for (int c = 0; c < kApcInputRouteCount; c++) fputc(recordable[c] ? '1' : '0', f);
+    fputc('\n', f);
+    fclose(f);
+}
+
 inline void storeSustainLatch(bool latched) {
     FILE* f = fopen("/run/aloop/sustain_latch", "w");
     if (!f) {
@@ -250,7 +287,7 @@ private:
     int m_shuffleMode = 0;
     int m_gateMode = 0;
     bool m_gateModHeld = false;
-    bool m_inputRecordable[kApcInputRouteCount] = { true, true };
+    bool m_inputRecordable[kApcInputRouteCount] = { inputRecordableAtBoot(0), inputRecordableAtBoot(1) };
 
     void applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, class LinkBridge* link, class AudioThread* audio = nullptr);
     void capturePreset(int p, ParamStore& ps);

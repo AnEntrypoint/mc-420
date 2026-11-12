@@ -142,6 +142,7 @@ void Telemetry::publish() {
         "\"resample_fold\":{\"sum\":%.1f,\"samples\":%llu},"
         "\"resample_chain\":{\"sum\":%.1f,\"samples\":%llu},"
         "\"sustain_cmd\":%.2f,\"sustain_gate\":%.2f,"
+        "\"input_recordable\":[%.0f,%.0f],\"fx_bank\":%.0f,"
         "\"grid_beat_index\":%d,\"master_phase_beats\":%.5f,\"master_len_samples\":%.1f,\"recorded_beats\":%.3f,"
         "\"beat_mark\":{\"valid\":%s,\"beat\":%.5f,\"index\":%d,\"ms_to_next\":%.1f,\"late_ms\":%.3f},"
         "\"beat_pad_mark\":{\"seq\":%llu,\"index\":%d,\"flash\":%d,\"background\":%d,\"late_ms\":%.3f,\"age_ms\":%lld,\"bpm\":%.3f},"
@@ -163,6 +164,7 @@ void Telemetry::publish() {
         t.resampleFoldSum, (unsigned long long)t.resampleFoldSamples,
         t.resampleChainSum, (unsigned long long)t.resampleChainSamples,
         t.sustainCmd, t.sustainGate,
+        t.inputRecordable[0], t.inputRecordable[1], t.fxBank,
         t.gridBeatIndex, t.masterPhaseBeats,
         t.masterLenSamples, t.recordedBeats,
         t.beatMarkValid ? "true" : "false", t.beatMarkBeat, t.beatMarkIndex,

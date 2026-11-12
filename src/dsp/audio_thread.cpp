@@ -318,10 +318,6 @@ static void* worker(void*) {
     FaustUI fuiPost; faustPost.buildUserInterface(&fuiPost);
     std::vector<float> clearBuf((size_t)N, 0.0f);
     std::vector<float> mixOnlyBuf((size_t)N, 0.0f);
-    std::vector<float> recRawCur((size_t)N, 0.0f);
-    std::vector<float> recRawPrev((size_t)N, 0.0f);
-    std::vector<float> recIn((size_t)N, 0.0f);
-    float monGainNow = 0.0f;
     std::vector<float> speedBuf((size_t)N, 1.0f);
     std::vector<float> manualSpeedBuf((size_t)N, 1.0f);
     std::vector<float> masterPhaseBuf((size_t)N, 0.0f);
@@ -357,7 +353,7 @@ static void* worker(void*) {
     std::vector<float> cueWetBuf((size_t)N, 0.0f);
     std::vector<float> masterWetBuf((size_t)N, 0.0f);
     float* fins[23] = {
-        fin.data(), recIn.data(), clearBuf.data(), speedBuf.data(), manualSpeedBuf.data(), masterPhaseBuf.data(), masterLenBuf.data(), sidechainEnvBuf.data(),
+        fin.data(), prevFiltOut.data(), clearBuf.data(), speedBuf.data(), manualSpeedBuf.data(), masterPhaseBuf.data(), masterLenBuf.data(), sidechainEnvBuf.data(),
         recordedBeatsBuf.data(),
         freeXposeBuf.data(),
         xposeNoteBuf[0].data(), xposeGateBuf[0].data(),
@@ -493,7 +489,7 @@ static void* worker(void*) {
     std::vector<float> inputFxOut((size_t)N, 0.0f);
     float* postOuts[4] = { fout.data(), rawLoopSum.data(), rawFiltTap.data(), inputFxOut.data() };
     int sustainSlot = -1;
-    int sustainLatchSlot = -1;
+    int fxBankSlot = -1;
 #endif
 
 #ifdef ALOOP_HAVE_FAUST_LOOP
@@ -1141,10 +1137,8 @@ static void* worker(void*) {
             bool inputRouteRamping = false;
             for (int c = 0; c < kApcInputRouteCount; c++) {
                 if (inputRecGain[c] != inputRecTarget[c]) inputRouteRamping = true;
+                g_telem.inputRecordable[c] = inputRecTarget[c];
             }
-            if (sustainLatchSlot < 0 && g_params) sustainLatchSlot = g_params->getSlot("cmd/sustain_latch");
-            const float latchTarget = (g_params && sustainLatchSlot >= 0 && g_params->getBySlot(sustainLatchSlot) > 0.5f) ? 1.0f : 0.0f;
-            constexpr float kMonStepPerSample = 1.0f / 256.0f;
             float inPeak = 0.0f;
             for (int i = 0; i < N; i++) {
                 if (inputRouteRamping) {
@@ -1155,27 +1149,17 @@ static void* worker(void*) {
                     }
                 }
                 float fullAcc = 0.0f;
-                float extraAcc = 0.0f;
+                float recAcc = 0.0f;
                 for (int c = 0; c < wireCh; c++) {
                     float s = (float)buf[(size_t)i * wireCh + c];
                     fullAcc += s;
-                    if (c >= kApcInputRouteCount) extraAcc += s;
+                    recAcc += (c < kApcInputRouteCount) ? s * inputRecGain[kApcInputOfWire[c]] : s;
                 }
                 float fullNorm = (fullAcc / wireCh) / 2147483648.0f;
-                float in1 = (float)buf[(size_t)i * wireCh] * inputRecGain[0] / (float)wireCh / 2147483648.0f;
-                float in2 = (float)buf[(size_t)i * wireCh + 1] * inputRecGain[1] / (float)wireCh / 2147483648.0f;
-                float extra = extraAcc / wireCh / 2147483648.0f;
-                mixOnlyBuf[i] = fullNorm - (in1 + in2 + extra);
-                if (monGainNow < latchTarget) { monGainNow += kMonStepPerSample; if (monGainNow > latchTarget) monGainNow = latchTarget; }
-                else if (monGainNow > latchTarget) { monGainNow -= kMonStepPerSample; if (monGainNow < latchTarget) monGainNow = latchTarget; }
-                fin[i] = in1 * monGainNow;
-                recRawCur[(size_t)i] = in2 + extra + in1 * (1.0f - monGainNow);
+                fin[i] = (recAcc / wireCh) / 2147483648.0f;
+                mixOnlyBuf[i] = fullNorm - fin[i];
                 float a = fullNorm < 0 ? -fullNorm : fullNorm;
                 if (a > inPeak) inPeak = a;
-            }
-            for (int i = 0; i < N; i++) {
-                recIn[(size_t)i] = prevFiltOut[(size_t)i] + recRawPrev[(size_t)i];
-                recRawPrev[(size_t)i] = recRawCur[(size_t)i];
             }
             g_telem.inPeak = inPeak;
             for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = 0;
@@ -1236,6 +1220,8 @@ static void* worker(void*) {
                 if (sustainGateFaustZone) *sustainGateFaustZone = sustainGateNow;
                 g_telem.sustainCmd = sustainCmdRaw;
                 g_telem.sustainGate = sustainGateNow;
+                if (fxBankSlot < 0 && g_params) fxBankSlot = g_params->getSlot("cmd/fx_bank");
+                if (fxBankSlot >= 0 && g_params) g_telem.fxBank = g_params->getBySlot(fxBankSlot);
             }
             for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = (int32_t)(prevFiltOut[i] * 32768.0f);
             g_sampler->captureBlock(samplerBuf.data(), N);
