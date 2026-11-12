@@ -51,9 +51,10 @@ mkdir -p "$WORK/ovl"
 tar -xzf "$ARCHIVE" -C "$WORK/ovl"
 mkdir -p "$WORK/ovl/effects/home" "$WORK/ovl/effects/resonode" \
          "$WORK/ovl/effects/pitchtracker" "$WORK/ovl/effects/delayverb" \
-         "$WORK/ovl/opt/aloop"
+         "$WORK/ovl/opt/aloop" "$WORK/ovl/etc/init.d"
 
 STAGED=0
+install -m 755 "$(cd "$(dirname "$0")" && pwd)/etc/init.d/aloop" "$WORK/ovl/etc/init.d/aloop"
 stage_bundles() {
   for bundle in "$1"/*.lv2; do
     if [ ! -d "$bundle" ]; then continue; fi

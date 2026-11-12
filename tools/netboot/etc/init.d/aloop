@@ -1,0 +1,27 @@
+#!/sbin/openrc-run
+name="aloop"
+description="aloop RT audio looper + effects"
+command="/opt/aloop/aloop"
+command_args="--config /etc/aloop.conf"
+command_background=true
+pidfile="/run/aloop.pid"
+output_log="/var/log/aloop.log"
+error_log="/var/log/aloop.log"
+respawn_delay=2
+respawn_max=0
+rc_ulimit="-l unlimited -r 95"
+depend() { after local autoap; need localmount; }
+start_pre() {
+    local i=0
+    while [ "$i" -lt 60 ]; do
+        if ip -4 addr show dev wlan0 2>/dev/null | grep -q "inet 192.168.4.1/" \
+           && ip route get 224.76.78.75 2>/dev/null | grep -q "dev wlan0" \
+           && pgrep hostapd >/dev/null 2>&1 && pgrep dnsmasq >/dev/null 2>&1; then
+            return 0
+        fi
+        i=$((i + 1))
+        sleep 1
+    done
+    einfo "autoap not ready after 60 s; starting aloop anyway"
+    return 0
+}
