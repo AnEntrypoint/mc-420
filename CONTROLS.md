@@ -47,6 +47,16 @@ The mode is written to `/run/aloop/input_modes`, so it survives a service restar
 
 The **cue** output (the artist) always plays every input: effected inputs and passthrough inputs, whatever shift-sus is. The **master** output (the audience) is gated by shift-sus, the sustain latch set with SHIFT+sustain: with it off the audience hears nothing from the performance, and with it on master carries the effected and passthrough inputs. Pads 14 and 22 only choose effected or passthrough per input and never change either gate. Clips and loops record from the record tap, which is not gated, so they still record while master is silent.
 
+## Verified final rig state
+
+Shift-sus (SHIFT+sustain) gates **only** the audience/master output. It does not gate cue, record taps, clips or loops. The cue output (the artist) always plays every input: effected inputs and passthrough inputs. With shift-sus off the master output is silent; with it on master carries the effected and passthrough inputs.
+
+Pads 14 and 22 set each channel to effected/loopable (`recordable`) or passthrough-only. They never change the output gates. The record tap depends only on the per-channel mode, not on shift-sus.
+
+Boot defaults are: latch on, input 1 passthrough, input 2 processed-looped, FX bank Dub. The AIR192 USB/Direct hardware knob must be fully at USB (hardware direct monitor off) so the Pi software passthrough carries the beeper; there is no ALSA control for this knob. The Focusrite input-2 guard re-applies `Line In 2 Pad = cap`, `Line In 2 Air = off`, `Line In 2 Level = Line` at boot and on Focusrite USB re-enumeration.
+
+Measured on the final tree with the local Pi ticker: first-loop arm offset mean -0.65 ms, stdev 1.81 ms over five bar-aligned trials; computed audio path 256 frames / 5.333 ms from 48 kHz, 64-frame block and a 2-period playback buffer; measured ALSA round trip 3.371-3.619 ms. Numeric evidence: archive#final-rig-timing.
+
 ## Guitar-FX held: sidechain-source toggle
 
 While the Guitar-FX pad is held, a looper-pad press is redirected entirely — it

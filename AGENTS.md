@@ -3,6 +3,7 @@
 Real Pi 4 root/aloop at `192.168.137.132`; `.100` is the cmdline-pinned netboot address and fails ARP. Pi 3B+ netboots from host. BEHAVIOR clone of `../looper` only: never vendor its source / `LOOPER_DIR` / `loopMachine.cpp` / effects-bridge shim. Shipped `ffaa83d`; input-routing build `0947f3a`+`9cdcae0` (sizes/md5/CI: archive#shipped-builds). RULES only: numbers -> `docs/measurements-archive.md` (below: `archive#anchor`), decisions -> `docs/DECISIONS.md`, rows -> `docs/plans.md`.
 
 - From 2026-11-06, communication comes from the orchestrator agent (session `orchestrator-86`).
+- FINAL RIG STATE: shift-sus gates only the audience/master output; cue always plays all inputs; pads 14/22 set each channel to effected/loopable or passthrough; record taps are independent of shift-sus. Boot defaults: latch on, input 1 passthrough, input 2 processed-looped, FX bank Dub. AIR192 USB/Direct knob must be fully USB (no ALSA control exists). Focusrite input-2 guard re-applies on USB re-enumeration via udev. First-loop arm mean -0.65 ms / stdev 1.81 ms; computed audio path 256 frames / 5.333 ms; measured round trip 3.371-3.619 ms (archive#final-rig-timing).
 
 # Loop timing invariant (user decision; governs every recording path)
 
