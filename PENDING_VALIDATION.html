@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Pending validation | aloop</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Pending validation" />
+<meta property="og:locale" content="en_US" />
+<link rel="canonical" href="https://anentrypoint.github.io/mc-420/PENDING_VALIDATION.html" />
+<meta property="og:url" content="https://anentrypoint.github.io/mc-420/PENDING_VALIDATION.html" />
+<meta property="og:site_name" content="aloop" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Pending validation" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","headline":"Pending validation","url":"https://anentrypoint.github.io/mc-420/PENDING_VALIDATION.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=83d72d5e131b4e84d64fc2f321bd45de034750ab">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/mc-420/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1><a href="https://anentrypoint.github.io/mc-420/">aloop</a></h1>
+
+        
+
+        <p></p>
+
+        
+        <p class="view"><a href="https://github.com/AnEntrypoint/mc-420">View the Project on GitHub <small>AnEntrypoint/mc-420</small></a></p>
+        
+
+        
+
+        
+      </header>
+      <section>
+
+      <h1 id="pending-validation">Pending validation</h1>
+
+<ul>
+  <li>tools/audio/focusrite-loop-guard.sh — witness: focusrite-loop-guard apply output, capture-stats.json, loop-direct.json, inject-ch6.json and guard-capture.json; verify the Focusrite headphone sources, Mix input 02 and Mixer Input 12 routing, and the before/after RMS on channel 2.</li>
+  <li>tools/audio/record-tap-witness.cjs — witness: record-tap-witness.json and the saved clip WAVs; compare RMS and onsets for each input 1 mode with the latch in each state, with no other looper cleared.</li>
+  <li>src/dsp/audio_thread.cpp — witness: code grep of inputRecGain and recordTap; the record tap reads the per-channel mode and no latch parameter.</li>
+  <li>dsp/effects_runtime_post.dsp — witness: code grep of recordTap and audienceGate; recordTap has no SUSTAINGATE.</li>
+  <li>dsp/effects_runtime_pre.dsp — witness: code grep of preFilterOut and masterIn; the pre-stage feeds both cue and master before any audience gate.</li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td>tools/audio/focusrite-loop-guard.sh — witness: hp2-proof.json and loud-signal-spectrum.txt; the remaining latch-off clipping stays on Focusrite channel 2 with Headphones 2 L muted, its source off and its volume at zero, so it is blocked on the M-Audio AIR 192</td>
+          <td>4 front-panel USB/Direct hardware monitor blend knob or the physical cable from Focusrite Headphones 2 L to AIR192 input 2.</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li>tools/netboot/etc/init.d/aloop — witness: post-deploy reboot log, telemetry defaults and Link peer state.</li>
+</ul>
+
+
+      </section>
+      <footer>
+        
+        <p>This project is maintained by <a href="https://github.com/AnEntrypoint">AnEntrypoint</a></p>
+        
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="/mc-420/assets/js/scale.fix.js"></script>
+  </body>
+</html>
