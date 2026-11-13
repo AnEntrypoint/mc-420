@@ -1,0 +1,1 @@
+ACTION=="add", SUBSYSTEM=="sound", ENV{ID_VENDOR_ID}=="1235", ENV{ID_MODEL_ID}=="8214", RUN+="/usr/bin/systemctl restart focusrite-input2-guard.service"
