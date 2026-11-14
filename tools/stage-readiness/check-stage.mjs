@@ -199,15 +199,26 @@ function evaluate(r) {
   eq('guard.pad', r.guard.pad, 'on');
   eq('guard.air', r.guard.air, 'off');
   eq('guard.level', r.guard.level, 'Line');
+  return fails;
+}
+function beeperEvaluate(r) {
+  const fails = [];
+  const finite = value => typeof value === 'number' && Number.isFinite(value);
   if (!(finite(r.capture.rms) && r.capture.rms >= 0.0005)) fails.push('capture.rms');
   if (!(finite(r.capture.peak) && r.capture.peak >= 0.005 && r.capture.peak <= 0.99)) fails.push('capture.peak');
   if (!(r.capture.beepOnsetCount >= 1)) fails.push('capture.beepOnsetCount');
   if (!(finite(r.capture.medianPeriodMs) && r.capture.medianPeriodMs >= 100 && r.capture.medianPeriodMs <= 2000)) fails.push('capture.medianPeriodMs');
-  eq('capture.clippedSampleCount', r.capture.clippedSampleCount, 0);
+  if (r.capture.clippedSampleCount !== 0) fails.push('capture.clippedSampleCount');
   return fails;
 }
 function finalLine(fails) {
   return fails.length ? 'STAGE_READY FAIL fields=' + fails.join(',') : 'STAGE_READY PASS';
+}
+function beeperLine(fails) {
+  return fails.length ? 'BEEPER_TEST_READY FAIL fields=' + fails.join(',') : 'BEEPER_TEST_READY PASS';
+}
+function beeperNote() {
+  return 'BEEPER_TEST_NOTE the 500 ms beep train needs high mic/beeper gain for the timing test; measurement-only, not a stage requirement';
 }
 function warningLine(usb) {
   return usb.usbDrive === 'real' ? null : 'WARN usbDrive=' + usb.usbDrive + ' clipExportWillNotPersist=true';
@@ -216,11 +227,15 @@ async function main() {
   if (kSelfTest) {
     const bad = syntheticResult();
     bad.pi.sustain_cmd = 0;
+    bad.capture = { channel: 1, rms: 0, peak: 0, beepOnsetCount: 0, medianPeriodMs: null, clippedSampleCount: 0 };
     const fails = evaluate(bad);
+    const beeperFails = beeperEvaluate(bad);
     console.log('SELF_TEST known_bad_value=' + JSON.stringify({ sustain_cmd: 0 }));
     console.log('SELF_TEST_FAILS ' + fails.join(','));
+    console.log(beeperLine(beeperFails));
+    console.log(beeperNote());
     console.log(finalLine(fails));
-    process.exitCode = fails.includes('sustain_cmd') ? 1 : 0;
+    process.exitCode = fails.length === 1 && fails.includes('sustain_cmd') ? 1 : 0;
     return;
   }
   const [pi, esp, guard, usb, raw] = await Promise.all([telemetry(), espStatus(), guardState(), usbState(), capture()]);
@@ -233,6 +248,9 @@ async function main() {
   console.log('USB_STORAGE ' + JSON.stringify(usb));
   const warning = warningLine(usb);
   if (warning) console.log(warning);
+  const beeperFails = beeperEvaluate(result);
+  console.log(beeperLine(beeperFails));
+  console.log(beeperNote());
   const fails = evaluate(result);
   console.log(finalLine(fails));
   process.exitCode = fails.length ? 1 : 0;
