@@ -763,6 +763,9 @@ Method: `tools/pitch-reference/comb.mjs --only <file>` (default flags; excludes 
 
 Correction to the row's earlier note: vocal_tenor_operatic_PD was recorded as "none certified". Two reruns of comb.mjs certify 114.18 Hz.
 
+## Pitch-reference floor rule (archive#pitch-reference-floor-rule)
+
+- `tools/pitch-reference/comb.mjs` uses the median FFT-bin power over 60-4000 Hz and a 12 dB margin. `tools/pitch-reference/submultiple.mjs` uses the median Goertzel magnitude over the requested test band and a 12 dB margin plus a 12 dB peak margin. For vocal_tenor_operatic_PD, comb certifies 114.18 Hz against 60-4000 Hz while submultiple finds no clearing candidate against 100-150 Hz. This disagreement is expected, not a defect: every verdict must name its floor band and estimator.
 
 ## Creation-window origin, rb 3 first take, 2026-10-26 (archive#creation-impose-window)
 
