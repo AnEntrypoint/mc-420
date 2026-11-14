@@ -53,7 +53,7 @@ Shift-sus (SHIFT+sustain) gates **only** the audience/master output. It does not
 
 Pads 14 and 22 set each channel to effected/loopable (`recordable`) or passthrough-only. They never change the output gates. The record tap depends only on the per-channel mode, not on shift-sus.
 
-Boot defaults are: latch on, input 1 passthrough, input 2 processed-looped, FX bank Dub. The AIR192 USB/Direct hardware knob must be fully at USB (hardware direct monitor off) so the Pi software passthrough carries the beeper; there is no ALSA control for this knob. The Focusrite input-2 guard re-applies `Line In 2 Pad = cap`, `Line In 2 Air = off`, `Line In 2 Level = Line` at boot and on Focusrite USB re-enumeration.
+Boot defaults are: latch on, input 1 passthrough, input 2 processed-looped, FX bank Dub. The AIR192 USB/Direct knob is already fully USB (there is no ALSA control for this knob). Latch-off clipping on Focusrite channel 2 comes from the high mic/beeper gain used for the timing test, not a hardware direct-monitor loop. `focusrite-input2-guard.service` (Line In 2 Pad on, Air off, Level Line, with its udev rule) is the mitigation, and lowering the mic gain after the test removes the condition. The Focusrite input-2 guard re-applies `Line In 2 Pad = cap`, `Line In 2 Air = off`, `Line In 2 Level = Line` at boot and on Focusrite USB re-enumeration.
 
 Measured on the final tree with the local Pi ticker: first-loop arm offset mean -0.65 ms, stdev 1.81 ms over five bar-aligned trials; computed audio path 256 frames / 5.333 ms from 48 kHz, 64-frame block and a 2-period playback buffer; measured ALSA round trip 3.371-3.619 ms. Numeric evidence: archive#final-rig-timing.
 
