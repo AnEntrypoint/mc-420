@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d8950db4383f69f896e0bb7ff6b9997d925295f6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c4b58592103d88e8d53e97f1d5fc653b2f8ae583">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1097,6 +1097,7 @@ on references).</p>
   <li>Final-tree first-loop bar-aligned trials: five arm offsets 1.73, -0.53, -2.90, -1.83, 0.30 ms; mean -0.65 ms, stdev 1.81 ms. Finish offsets 4.44, 2.64, -0.53, -2.77, 3.26 ms; mean 1.41 ms, stdev 2.97 ms. Accent phase 2, ratio 1.347, period 500.03 ms, 120 calibration beeps.</li>
   <li>Computed audio path from /etc/aloop.conf and src/dsp/audio_thread.cpp: 48000 Hz, 64-frame block, period=N, bufSize=period*2 -&gt; 2 periods / 128-frame playback buffer / 2.667 ms; capture + processing + playback buffer = 256 frames / 5.333 ms. Measured telemetry round trip 161.8 samples / 3.371 ms early and 173.7 samples / 3.619 ms final; latency bias 225.8 then 237.7 samples (4.704 then 4.952 ms).</li>
   <li>Focusrite input-2 guard with Line In 2 Pad cap, Air off, Level Line: latch-on channel 2 RMS 0.000901, peak 0.0466, 20 onsets at 500 ms; latch-off RMS 0.06418, peak 0.7028, 22 onsets at 500 ms, zero clipped samples. Press-to-beep harness note 2 gave quantisation-to-next-beat 353.875 and 336.458 ms, not device latency.</li>
+  <li>Owner-confirmed correction (2026-11-14): the AIR192 USB/Direct knob is already fully USB; latch-off clipping on Focusrite channel 2 is the high mic/beeper gain used for the timing test, not a hardware direct-monitor loop. <code class="language-plaintext highlighter-rouge">focusrite-input2-guard.service</code> (Line In 2 Pad on, Air off, Level Line, with its udev rule) is the mitigation, and lowering the mic gain after the test removes the condition. The earlier claim that the knob must be turned fully USB or is the remaining root fix is wrong.</li>
 </ul>
 
 

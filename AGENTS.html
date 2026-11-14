@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop - current-state constraints","url":"https://anentrypoint.github.io/mc-420/AGENTS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d8950db4383f69f896e0bb7ff6b9997d925295f6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c4b58592103d88e8d53e97f1d5fc653b2f8ae583">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -61,7 +61,7 @@
 
 <ul>
   <li>From 2026-11-06, communication comes from the orchestrator agent (session <code class="language-plaintext highlighter-rouge">orchestrator-86</code>).</li>
-  <li>FINAL RIG STATE: shift-sus gates only the audience/master output; cue always plays all inputs; pads 14/22 set each channel to effected/loopable or passthrough; record taps are independent of shift-sus. Boot defaults: latch on, input 1 passthrough, input 2 processed-looped, FX bank Dub. AIR192 USB/Direct knob must be fully USB (no ALSA control exists). Focusrite input-2 guard re-applies on USB re-enumeration via udev. First-loop arm mean -0.65 ms / stdev 1.81 ms; computed audio path 256 frames / 5.333 ms; measured round trip 3.371-3.619 ms (archive#final-rig-timing).</li>
+  <li>FINAL RIG STATE: shift-sus gates only the audience/master output; cue always plays all inputs; pads 14/22 set each channel to effected/loopable or passthrough; record taps are independent of shift-sus. Boot defaults: latch on, input 1 passthrough, input 2 processed-looped, FX bank Dub. AIR192 USB/Direct knob is already fully USB (no ALSA control exists). Latch-off clipping on Focusrite channel 2 is the high mic/beeper gain used for the timing test, not a hardware direct-monitor loop. focusrite-input2-guard.service (Line In 2 Pad on, Air off, Level Line, re-applied by its udev rule on USB re-enumeration) is the mitigation, and lowering the mic gain after the test removes the condition. First-loop arm mean -0.65 ms / stdev 1.81 ms; computed audio path 256 frames / 5.333 ms; measured round trip 3.371-3.619 ms (archive#final-rig-timing).</li>
 </ul>
 
 <h1 id="loop-timing-invariant-user-decision-governs-every-recording-path">Loop timing invariant (user decision; governs every recording path)</h1>

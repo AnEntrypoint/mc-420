@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Pending validation","url":"https://anentrypoint.github.io/mc-420/PENDING_VALIDATION.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d8950db4383f69f896e0bb7ff6b9997d925295f6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c4b58592103d88e8d53e97f1d5fc653b2f8ae583">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -63,16 +63,7 @@
   <li>src/dsp/audio_thread.cpp — witness: code grep of inputRecGain and recordTap; the record tap reads the per-channel mode and no latch parameter.</li>
   <li>dsp/effects_runtime_post.dsp — witness: code grep of recordTap and audienceGate; recordTap has no SUSTAINGATE.</li>
   <li>dsp/effects_runtime_pre.dsp — witness: code grep of preFilterOut and masterIn; the pre-stage feeds both cue and master before any audience gate.</li>
-  <li>
-    <table>
-      <tbody>
-        <tr>
-          <td>tools/audio/focusrite-loop-guard.sh — witness: hp2-proof.json and loud-signal-spectrum.txt; the remaining latch-off clipping stays on Focusrite channel 2 with Headphones 2 L muted, its source off and its volume at zero, so it is blocked on the M-Audio AIR 192</td>
-          <td>4 front-panel USB/Direct hardware monitor blend knob or the physical cable from Focusrite Headphones 2 L to AIR192 input 2.</td>
-        </tr>
-      </tbody>
-    </table>
-  </li>
+  <li>tools/audio/focusrite-loop-guard.sh — witness: hp2-proof.json and loud-signal-spectrum.txt; with Headphones 2 L muted, its source off and its volume at zero, latch-off clipping stays on Focusrite channel 2 because the mic/beeper preamp gain is deliberately high for the timing test. The AIR192 USB/Direct knob is already fully USB; the clipping is not a hardware direct-monitor loop and the knob is not the remaining root fix. <code class="language-plaintext highlighter-rouge">focusrite-input2-guard.service</code> (Line In 2 Pad on, Air off, Level Line, with its udev rule) is the mitigation, and lowering the mic gain after the test removes the condition.</li>
   <li>tools/audio/99-focusrite-input2-guard.rules — witness: udevadm test reads the rule, synthetic sound add restarts focusrite-input2-guard.service, and two guard runs leave Line In 2 Pad, Air and Level unchanged.</li>
   <li>tools/netboot/check-refresh-pinning.cjs — witness: offline harness rebuilds a fake served apkovl from a pinned binary and five LV2 bundles; stale LV2 is removed, ttl/so sha256 match, binary sha256 matches and non-LV2 entries survive.</li>
   <li>tools/netboot/check-netboot-pin.cjs — witness: node –check image/serve-netboot-win.js and check-netboot-pin.cjs report every pin-handling assertion green.</li>

@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Open plans (mirror of gm PRD rows)","url":"https://anentrypoint.github.io/mc-420/plans.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d8950db4383f69f896e0bb7ff6b9997d925295f6">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c4b58592103d88e8d53e97f1d5fc653b2f8ae583">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -307,7 +307,7 @@
   <li>Item 4 <code class="language-plaintext highlighter-rouge">pitch-reference-comb-submultiple-floor-disagree</code>: <code class="language-plaintext highlighter-rouge">node tools/pitch-reference/check-floor-rule.mjs</code> ran both tools on one 432044-byte WAV with a 96 MB heap, asserted comb certifies 114.18 Hz, submultiple reports zero clearing candidates and excludes the file, and <code class="language-plaintext highlighter-rouge">archive#pitch-reference-floor-rule</code> states both floors. The disagreement is recorded as a stated rule. The check is offline, uses no rig or audio capture, and no archived verdict was changed.</li>
 </ul>
 
-<p>Additional non-row blockers: the AIR192 USB/Direct knob must be fully USB (owner hardware); the no-chip-reset console witness is held by esp-idf-link; hot-deploy reboot persistence remains an open PRD; gm release propagation is held on auto-update.</p>
+<p>Additional non-row blockers: the no-chip-reset console witness is held by esp-idf-link; hot-deploy reboot persistence remains an open PRD; gm release propagation is held on auto-update. The AIR192 USB/Direct knob is already fully USB, so it is not a blocker: latch-off clipping on Focusrite channel 2 is high mic/beeper gain for the timing test, <code class="language-plaintext highlighter-rouge">focusrite-input2-guard.service</code> (Line In 2 Pad on, Air off, Level Line, with its udev rule) is the mitigation, and lowering the mic gain after the test removes the condition.</p>
 <h2 id="current-state-2026-11-06-34-open-rows">Current state, 2026-11-06 (34 open rows)</h2>
 
 <p>Generated from <code class="language-plaintext highlighter-rouge">.gm/prd/*.yml</code>, the gitignored gm row store. This section is the tracked copy of the CURRENT open rows; the historical <code class="language-plaintext highlighter-rouge">prd-list</code> dump below is preserved unchanged. Full campaign shas, verdicts and holds: <code class="language-plaintext highlighter-rouge">.gm/witness-out/campaign-ledger-20261106.txt</code>.</p>
