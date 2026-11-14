@@ -1,0 +1,10 @@
+const fs = require("fs");
+const crypto = require("crypto");
+const { execFileSync } = require("child_process");
+const archive = process.argv[2] || "/srv/tftp/aloop-netboot/aloop.apkovl.tar.gz";
+const expected = process.env.PIN_BINARY_SHA256 || "5426053891ad284818c3e352dd6d222ea31bd936f4d5fd62326eaa232d4f64f6";
+const exists = fs.existsSync(archive);
+const actual = exists ? crypto.createHash("sha256").update(execFileSync("tar", ["-xzOf", archive, "./opt/aloop/aloop"], { maxBuffer: 16 * 1024 * 1024 })).digest("hex") : null;
+const pass = exists && actual === expected;
+console.log(JSON.stringify({ archive, exists, expected, actual, pass }));
+if (!pass) process.exitCode = 1;

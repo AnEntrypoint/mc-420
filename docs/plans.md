@@ -42,6 +42,7 @@ Current item: rank 1, worked offline. It does not use the Pi, ESP, Focusrite, ow
 ## Offline witnesses, 2026-11-14
 
 - Item 2 `netboot-windows-poller-ignores-pin`: `node tools/netboot/check-netboot-pin.cjs image/serve-netboot-win.js` -> `{"checks":9,"failed":[],"pass":true,"file":"image/serve-netboot-win.js"}`. Held witness: a Windows host running the poller with both `NETBOOT_PIN` and a newer green `main` must serve only the pinned SHA; that needs owner hardware. No rig action was taken.
+- Item 3 `netboot-served-payload-not-pin-build`: `node tools/netboot/check-served-pin.cjs` compares the served apkovl binary with the row pin SHA. It fails offline as designed: served binary sha256 `e094c5af355ae5c24c872307dbee5c61111846c5f38e85f492d850518d06ab50`, expected pin sha256 `5426053891ad284818c3e352dd6d222ea31bd936f4d5fd62326eaa232d4f64f6`, `pass:false`. Held witness: a deliberate full refresh from that pinned build-binary artifact plus its build-lv2 artifacts, validate-netboot.sh PASS, and device verification after reboot. No served payload or rig state was changed.
 
 Additional non-row blockers: the AIR192 USB/Direct knob must be fully USB (owner hardware); the no-chip-reset console witness is held by esp-idf-link; hot-deploy reboot persistence remains an open PRD; gm release propagation is held on auto-update.
 ## Current state, 2026-11-06 (34 open rows)
