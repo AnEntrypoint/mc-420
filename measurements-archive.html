@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fec0527b2610001f79b766b9e3f83798303d1c31">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=d8950db4383f69f896e0bb7ff6b9997d925295f6">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1048,6 +1048,12 @@ on references).</p>
 </ul>
 
 <p>Correction to the row’s earlier note: vocal_tenor_operatic_PD was recorded as “none certified”. Two reruns of comb.mjs certify 114.18 Hz.</p>
+
+<h2 id="pitch-reference-floor-rule-archivepitch-reference-floor-rule">Pitch-reference floor rule (archive#pitch-reference-floor-rule)</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">tools/pitch-reference/comb.mjs</code> uses the median FFT-bin power over 60-4000 Hz and a 12 dB margin. <code class="language-plaintext highlighter-rouge">tools/pitch-reference/submultiple.mjs</code> uses the median Goertzel magnitude over the requested test band and a 12 dB margin plus a 12 dB peak margin. For vocal_tenor_operatic_PD, comb certifies 114.18 Hz against 60-4000 Hz while submultiple finds no clearing candidate against 100-150 Hz. This disagreement is expected, not a defect: every verdict must name its floor band and estimator.</li>
+</ul>
 
 <h2 id="creation-window-origin-rb-3-first-take-2026-10-26-archivecreation-impose-window">Creation-window origin, rb 3 first take, 2026-10-26 (archive#creation-impose-window)</h2>
 
