@@ -39,6 +39,10 @@ Current item: rank 1, worked offline. It does not use the Pi, ESP, Focusrite, ow
 | 31 | midi-transport-realign-needs-on-device-din-capture | pending | on-device DIN/UART capture | no |
 | 32 | visual-metronome-beat-cue-onset | pending | hardware LED/cue witness | no |
 
+## Offline witnesses, 2026-11-14
+
+- Item 2 `netboot-windows-poller-ignores-pin`: `node tools/netboot/check-netboot-pin.cjs image/serve-netboot-win.js` -> `{"checks":9,"failed":[],"pass":true,"file":"image/serve-netboot-win.js"}`. Held witness: a Windows host running the poller with both `NETBOOT_PIN` and a newer green `main` must serve only the pinned SHA; that needs owner hardware. No rig action was taken.
+
 Additional non-row blockers: the AIR192 USB/Direct knob must be fully USB (owner hardware); the no-chip-reset console witness is held by esp-idf-link; hot-deploy reboot persistence remains an open PRD; gm release propagation is held on auto-update.
 ## Current state, 2026-11-06 (34 open rows)
 
