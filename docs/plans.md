@@ -1,5 +1,45 @@
 # Open plans (mirror of gm PRD rows)
 
+# Ranked remaining backlog, 2026-11-14
+
+Current item: rank 1, worked offline. It does not use the Pi, ESP, Focusrite, owner hardware or audio capture.
+
+| rank | id | status | dependency | offline |
+| --- | --- | --- | --- | --- |
+| 1 | netboot-refresh-replaces-binary-only-lv2-stale | pending, offline witness added | refresh-apkovl.sh and local archive | yes |
+| 2 | netboot-windows-poller-ignores-pin | pending, offline pin check added | serve-netboot-win.js | yes |
+| 3 | netboot-served-payload-not-pin-build | pending, host archive only | served apkovl file | yes |
+| 4 | pitch-reference-comb-submultiple-floor-disagree | pending | offline corpus tools | yes |
+| 5 | gate-level-normalisation | pending | offline render, owner pre-registration | partial |
+| 6 | gate-silence-23-of-37 | pending | cause found; no render needed | yes |
+| 7 | gate-level-normalised-pin-rule-reregister | pending | external owner recompute | no |
+| 8 | gate-silence-23-of-37-ready-unvoiced | pending | external per-file settled output | no |
+| 9 | resonode-m1-envelope-follow-target-0-30 | parked | external DawDreamer round 5 | no |
+| 10 | lp-slope-control-binding | pending | code plus MIDI injection on device | no |
+| 11 | filter-chain-swap-lp-before-hp | pending | code plus device listen check | no |
+| 12 | defect-piano-low-a1-tau-sensitive | pending | offline DSP render, no rig | yes |
+| 13 | defect-marimba-c2-3p6-685hz-segment | pending | offline DSP render, no rig | yes |
+| 14 | defect-pin-vocal-tenor-137-vs-certified-114 | pending | offline DSP render, no rig | yes |
+| 15 | defect-2093-grid-ext-low-register-regression | pending | offline DSP render, no rig | yes |
+| 16 | defect-sine-2093-subharmonic | pending | offline DSP render, no rig | yes |
+| 17 | defect-rb3-link-target-fold-origin-drift | pending | simulator plus hardware witness | no |
+| 18 | defect-rb3-origin-level-per-run-offset | pending | simulator plus hardware witness | no |
+| 19 | defect-rb3-origin-rate-41ppm | pending | simulator plus hardware witness | no |
+| 20 | first-loop-master-timing | pending | simulator plus hardware witness | no |
+| 21 | first-loop-phrase-offset-by-loop-length | pending | simulator plus hardware witness | no |
+| 22 | first-loop-own-take-after-peer-origin | pending | peer hardware witness | no |
+| 23 | timing-empty-slave-adoption | pending | peer hardware witness | no |
+| 24 | timing-origin-exact-sample-unwitnessed | pending | hardware witness | no |
+| 25 | adr034-impose-target-not-published | pending | hardware telemetry witness | no |
+| 26 | adr034-peer-present-hardware-witness | pending | peer hardware witness | no |
+| 27 | link-peer-not-reacquired-after-aloop-restart-180s | pending | Pi/ESP console witness held by peer | no |
+| 28 | peer-reacquisition-alsa-roundtrip-rise | pending | Pi telemetry with peer | no |
+| 29 | pi-phase-rebase-backwards-phrase-jump | pending | Pi/ESP | no |
+| 30 | esp-no-realign-on-phase-rebase-without-ltmp | pending | ESP peer | no |
+| 31 | midi-transport-realign-needs-on-device-din-capture | pending | on-device DIN/UART capture | no |
+| 32 | visual-metronome-beat-cue-onset | pending | hardware LED/cue witness | no |
+
+Additional non-row blockers: the AIR192 USB/Direct knob must be fully USB (owner hardware); the no-chip-reset console witness is held by esp-idf-link; hot-deploy reboot persistence remains an open PRD; gm release propagation is held on auto-update.
 ## Current state, 2026-11-06 (34 open rows)
 
 Generated from `.gm/prd/*.yml`, the gitignored gm row store. This section is the tracked copy of the CURRENT open rows; the historical `prd-list` dump below is preserved unchanged. Full campaign shas, verdicts and holds: `.gm/witness-out/campaign-ledger-20261106.txt`.

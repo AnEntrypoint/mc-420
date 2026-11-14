@@ -7,4 +7,6 @@
 - dsp/effects_runtime_pre.dsp — witness: code grep of preFilterOut and masterIn; the pre-stage feeds both cue and master before any audience gate.
 - tools/audio/focusrite-loop-guard.sh — witness: hp2-proof.json and loud-signal-spectrum.txt; the remaining latch-off clipping stays on Focusrite channel 2 with Headphones 2 L muted, its source off and its volume at zero, so it is blocked on the M-Audio AIR 192|4 front-panel USB/Direct hardware monitor blend knob or the physical cable from Focusrite Headphones 2 L to AIR192 input 2.
 - tools/audio/99-focusrite-input2-guard.rules — witness: udevadm test reads the rule, synthetic sound add restarts focusrite-input2-guard.service, and two guard runs leave Line In 2 Pad, Air and Level unchanged.
+- tools/netboot/check-refresh-pinning.cjs — witness: offline harness rebuilds a fake served apkovl from a pinned binary and five LV2 bundles; stale LV2 is removed, ttl/so sha256 match, binary sha256 matches and non-LV2 entries survive.
+- tools/netboot/check-netboot-pin.cjs — witness: node --check image/serve-netboot-win.js and check-netboot-pin.cjs report every pin-handling assertion green.
 - tools/netboot/etc/init.d/aloop — witness: post-deploy reboot log, telemetry defaults and Link peer state.
