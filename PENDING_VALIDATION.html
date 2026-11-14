@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Pending validation","url":"https://anentrypoint.github.io/mc-420/PENDING_VALIDATION.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c60255dc2cc52de07f755f1eadf0af8aa84cc16a">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=fec0527b2610001f79b766b9e3f83798303d1c31">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -74,6 +74,8 @@
     </table>
   </li>
   <li>tools/audio/99-focusrite-input2-guard.rules — witness: udevadm test reads the rule, synthetic sound add restarts focusrite-input2-guard.service, and two guard runs leave Line In 2 Pad, Air and Level unchanged.</li>
+  <li>tools/netboot/check-refresh-pinning.cjs — witness: offline harness rebuilds a fake served apkovl from a pinned binary and five LV2 bundles; stale LV2 is removed, ttl/so sha256 match, binary sha256 matches and non-LV2 entries survive.</li>
+  <li>tools/netboot/check-netboot-pin.cjs — witness: node –check image/serve-netboot-win.js and check-netboot-pin.cjs report every pin-handling assertion green.</li>
   <li>tools/netboot/etc/init.d/aloop — witness: post-deploy reboot log, telemetry defaults and Link peer state.</li>
 </ul>
 
