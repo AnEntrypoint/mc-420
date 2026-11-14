@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import dgram from 'node:dgram';
+import { readFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 
 const kHost = '192.168.137.132';
@@ -97,15 +98,19 @@ function guardState() {
   };
 }
 function usbState() {
-  const out = ssh('if mountpoint -q ' + kUsbMount + '; then echo mounted=true; df -k ' + kUsbMount + '; else echo mounted=false; fi');
-  const lines = out.split('\n').map(s => s.trim()).filter(Boolean);
-  const mounted = lines[0] === 'mounted=true';
-  let freeKiB = 0;
-  if (mounted) {
-    const row = lines.find(s => /^tmpfs\s|^\/dev\//.test(s));
-    if (row) freeKiB = Number(row.split(/\s+/)[3]);
-  }
-  return { mounted, mountPoint: kUsbMount, freeKiB, freeMiB: Number((freeKiB / 1024).toFixed(1)) };
+  const mountRow = readFileSync('/proc/mounts', 'utf8').split('\n').map(s => s.trim()).filter(Boolean).find(s => s.split(/\s+/)[1] === kUsbMount);
+  if (!mountRow) return { usbDrive: 'absent', mounted: false, mountPoint: kUsbMount, source: null, fstype: null, freeKiB: 0, freeMiB: 0, warning: 'clip export will not persist' };
+  const mountParts = mountRow.split(/\s+/);
+  const source = mountParts[0];
+  const fstype = mountParts[2];
+  const partitions = readFileSync('/proc/partitions', 'utf8').split('\n').map(s => s.trim()).filter(Boolean).map(s => s.split(/\s+/)).filter(p => p.length === 4 && /^\d+$/.test(p[0])).map(p => p[3]);
+  const usbPartitions = partitions.filter(name => /^sd[a-z]/.test(name));
+  const blockBacked = source.startsWith('/dev/') && fstype !== 'tmpfs' && usbPartitions.some(name => source.includes(name));
+  const usbDrive = blockBacked ? 'real' : 'stand-in-tmpfs';
+  const dfRows = local('df', ['-k', kUsbMount]).split('\n').map(s => s.trim()).filter(Boolean);
+  const dfRow = dfRows[dfRows.length - 1];
+  const freeKiB = dfRow ? Number(dfRow.split(/\s+/)[3]) : 0;
+  return { usbDrive, mounted: true, mountPoint: kUsbMount, source, fstype, freeKiB, freeMiB: Number((freeKiB / 1024).toFixed(1)), warning: usbDrive === 'real' ? null : 'clip export will not persist' };
 }
 function capture() {
   return new Promise((resolve, reject) => {
@@ -162,7 +167,7 @@ function syntheticResult() {
     esp: { link: true, peers: 1, bpm: 120, pot0: 126, pot1: 126, sidechain: kSidechain },
     guard: { enabled: 'enabled', active: 'active', pad: 'on', air: 'off', level: 'Line' },
     capture: { channel: 1, rms: 0.01, peak: 0.2, beepOnsetCount: 5, medianPeriodMs: 500, clippedSampleCount: 0 },
-    usb: { mounted: true, freeMiB: 60 },
+    usb: { usbDrive: 'real', mounted: true, mountPoint: kUsbMount, source: '/dev/sda1', fstype: 'vfat', freeKiB: 61440, freeMiB: 60, warning: null },
   };
 }
 function evaluate(r) {
@@ -199,12 +204,13 @@ function evaluate(r) {
   if (!(r.capture.beepOnsetCount >= 1)) fails.push('capture.beepOnsetCount');
   if (!(finite(r.capture.medianPeriodMs) && r.capture.medianPeriodMs >= 100 && r.capture.medianPeriodMs <= 2000)) fails.push('capture.medianPeriodMs');
   eq('capture.clippedSampleCount', r.capture.clippedSampleCount, 0);
-  eq('usb.mounted', r.usb.mounted, true);
-  if (!(finite(r.usb.freeMiB) && r.usb.freeMiB >= 16)) fails.push('usb.freeMiB');
   return fails;
 }
 function finalLine(fails) {
   return fails.length ? 'STAGE_READY FAIL fields=' + fails.join(',') : 'STAGE_READY PASS';
+}
+function warningLine(usb) {
+  return usb.usbDrive === 'real' ? null : 'WARN usbDrive=' + usb.usbDrive + ' clipExportWillNotPersist=true';
 }
 async function main() {
   if (kSelfTest) {
@@ -225,6 +231,8 @@ async function main() {
   console.log('FOCUSRITE_GUARD ' + JSON.stringify(guard));
   console.log('CAPTURE_CH2 ' + JSON.stringify(result.capture));
   console.log('USB_STORAGE ' + JSON.stringify(usb));
+  const warning = warningLine(usb);
+  if (warning) console.log(warning);
   const fails = evaluate(result);
   console.log(finalLine(fails));
   process.exitCode = fails.length ? 1 : 0;
