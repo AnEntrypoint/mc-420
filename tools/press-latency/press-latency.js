@@ -21,11 +21,13 @@ const kMaxLatencyMs = 1000;
 const kKnown = new Set(['host', 'card', 'beepCh', 'recordNote', 'loopSeconds', 'outDir', 'waitFree', 'analyze', 'periodSamples']);
 const kReleaseMs = 80;
 
+const scarlettCard = () => { const row = require('fs').readFileSync('/proc/asound/cards', 'utf8').split('\n').find((l) => /Scarlett/.test(l)); if (!row) throw new Error('no Scarlett card in /proc/asound/cards'); return row.trim().split(/\s+/)[0]; };
+
 const parseArgs = (argv) => {
   const out = {
     mode: 'check',
     host: '192.168.137.132',
-    card: 'plughw:0,0',
+    card: 'plughw:' + scarlettCard() + ',0',
     beepCh: 1,
     recordNote: -1,
     loopSeconds: 3,

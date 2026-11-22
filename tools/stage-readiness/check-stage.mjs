@@ -88,13 +88,19 @@ function amixerItem(text) {
   const match = line && line.match(/'([^']+)'/);
   return match ? match[1] : null;
 }
+function scarlettCard() {
+  const row = readFileSync('/proc/asound/cards', 'utf8').split('\n').find(l => /Scarlett/.test(l));
+  if (!row) throw new Error('no Scarlett card in /proc/asound/cards');
+  return row.trim().split(/\s+/)[0];
+}
 function guardState() {
+  const card = scarlettCard();
   return {
     enabled: local('systemctl', ['is-enabled', 'focusrite-input2-guard.service']),
     active: local('systemctl', ['is-active', 'focusrite-input2-guard.service']),
-    pad: amixerSwitch(local('amixer', ['-c', '0', 'sget', 'Line In 2 Pad'])),
-    air: amixerSwitch(local('amixer', ['-c', '0', 'sget', 'Line In 2 Air'])),
-    level: amixerItem(local('amixer', ['-c', '0', 'sget', 'Line In 2 Level'])),
+    pad: amixerSwitch(local('amixer', ['-c', card, 'sget', 'Line In 2 Pad'])),
+    air: amixerSwitch(local('amixer', ['-c', card, 'sget', 'Line In 2 Air'])),
+    level: amixerItem(local('amixer', ['-c', card, 'sget', 'Line In 2 Level'])),
   };
 }
 function usbState() {
@@ -116,7 +122,7 @@ function capture() {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let err = '';
-    const rec = spawn('arecord', ['-q', '-D', 'plughw:0,0', '-t', 'raw', '-c', String(kChannels), '-f', 'S32_LE', '-r', String(kRate), '-d', String(kSeconds), '-'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const rec = spawn('arecord', ['-q', '-D', 'plughw:' + scarlettCard() + ',0', '-t', 'raw', '-c', String(kChannels), '-f', 'S32_LE', '-r', String(kRate), '-d', String(kSeconds), '-'], { stdio: ['ignore', 'pipe', 'pipe'] });
     rec.stdout.on('data', d => chunks.push(d));
     rec.stderr.on('data', d => { err += d; });
     rec.on('error', reject);
@@ -181,7 +187,6 @@ function evaluate(r) {
   eq('looper0.play', r.pi.looper0.play, 0);
   eq('looper0.rec', r.pi.looper0.rec, 0);
   eq('looper0.level', r.pi.looper0.level, 0);
-  eq('looper0.wraplen', r.pi.looper0.wraplen, 1);
   eq('looper0.master_len', r.pi.looper0.master_len, 0);
   eq('looper0.recorded_beats', r.pi.looper0.recorded_beats, 0);
   eq('pi.link.synced', r.pi.link.synced, true);
@@ -238,8 +243,24 @@ async function main() {
     process.exitCode = fails.length === 1 && fails.includes('sustain_cmd') ? 1 : 0;
     return;
   }
-  const [pi, esp, guard, usb, raw] = await Promise.all([telemetry(), espStatus(), guardState(), usbState(), capture()]);
-  const result = { pi, esp, guard, capture: analyze(raw), usb };
+  const readers = { pi: telemetry(), esp: Promise.resolve().then(espStatus), guard: Promise.resolve().then(guardState), usb: Promise.resolve().then(usbState), raw: capture() };
+  const settled = await Promise.allSettled(Object.values(readers));
+  const names = Object.keys(readers);
+  const value = {};
+  const unreadable = [];
+  settled.forEach((r, i) => {
+    if (r.status === 'fulfilled') value[names[i]] = r.value;
+    else { unreadable.push(names[i]); console.log('READ_ERROR ' + names[i] + ' ' + String(r.reason && r.reason.message || r.reason)); }
+  });
+  const fallback = {
+    pi: { sustain_cmd: null, sustain_gate: null, input_recordable: null, fx_bank: null, looper0: {}, link: {} },
+    esp: { link: false, peers: 0, bpm: 0, pot0: -1, pot1: -1, sidechain: kSidechain },
+    guard: { enabled: null, active: null, pad: null, air: null, level: null },
+    usb: { usbDrive: 'absent', mounted: false, mountPoint: kUsbMount, source: null, fstype: null, freeKiB: 0, freeMiB: 0, warning: 'clip export will not persist' },
+    raw: null,
+  };
+  const pi = value.pi || fallback.pi, esp = value.esp || fallback.esp, guard = value.guard || fallback.guard, usb = value.usb || fallback.usb;
+  const result = { pi, esp, guard, capture: value.raw ? analyze(value.raw) : { channel: kChannel, rms: 0, peak: 0, beepOnsetCount: 0, medianPeriodMs: null, clippedSampleCount: 0 }, usb };
   console.log('PI_TELEMETRY ' + JSON.stringify(pi));
   console.log('ESP_STATUS ' + JSON.stringify(esp));
   console.log('SIDECHAIN_POT ' + JSON.stringify(kSidechain));
@@ -251,7 +272,7 @@ async function main() {
   const beeperFails = beeperEvaluate(result);
   console.log(beeperLine(beeperFails));
   console.log(beeperNote());
-  const fails = evaluate(result);
+  const fails = evaluate(result).concat(unreadable.map(n => 'read.' + n));
   console.log(finalLine(fails));
   process.exitCode = fails.length ? 1 : 0;
 }

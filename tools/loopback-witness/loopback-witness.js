@@ -20,6 +20,8 @@ const kMinSilentDb = 10;
 const kNoteOnMs = 500;
 const kWorkDir = path.join(os.tmpdir(), 'loopback-witness');
 
+const scarlettCard = () => { const row = fs.readFileSync('/proc/asound/cards', 'utf8').split('\n').find((l) => /Scarlett/.test(l)); if (!row) throw new Error('no Scarlett card in /proc/asound/cards'); return row.trim().split(/\s+/)[0]; };
+
 const args = process.argv.slice(2);
 const opts = {
   host: '192.168.137.132',
@@ -27,8 +29,8 @@ const opts = {
   semis: 0,
   seconds: 6,
   out: path.join(kWorkDir, 'capture.wav'),
-  playCard: 'plughw:0,0',
-  capCard: 'plughw:0,0',
+  playCard: 'plughw:' + scarlettCard() + ',0',
+  capCard: 'plughw:' + scarlettCard() + ',0',
   playChannels: 8,
   capChannels: 20,
   playCh: 6,
