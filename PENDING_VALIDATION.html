@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Pending validation","url":"https://anentrypoint.github.io/mc-420/PENDING_VALIDATION.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=7a68a1cee51e7c8f1c19b137088449192d446e50">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=44b8952b9772a71f3ebf1a63d6dc515f1543136a">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -71,8 +71,8 @@
   <li>src/control/apc_grid.cpp, apc_grid.h, apc_leds.h, telemetry.cpp, audio_thread.cpp/.h (exponent-list quant, pad 6 toggle) — witness: CI build-binary green on the pushed sha; on the device, telemetry <code class="language-plaintext highlighter-rouge">quant_all_beats</code> 0 at boot, a non-first take of about 3.4 beats lands at 4 beats and one of about 5.5 beats at 4 beats (<code class="language-plaintext highlighter-rouge">[diag-quant]</code> finalBeats), pad 6 via MIDI inject flips <code class="language-plaintext highlighter-rouge">quant_all_beats</code> to 1 and back to 0. Red check: <code class="language-plaintext highlighter-rouge">exponent-quantize.js --all-beats</code> must fail.</li>
   <li>tools/loop-quantization-sim/exponent-quantize.js, world.js — witness: <code class="language-plaintext highlighter-rouge">node tools/loop-quantization-sim/exponent-quantize.js</code> reads PASS; red check <code class="language-plaintext highlighter-rouge">--all-beats</code> exits non-zero; the full test-loop-sim step list passes, including long-take-quantize, first-take-phrase-offset and loop-quantum-fold pinned to accept-all-beats.</li>
   <li>AGENTS.md, docs/CONTROLS.md, docs/DECISIONS.md (ADR-037) — witness: <code class="language-plaintext highlighter-rouge">node tools/check-archive-anchors.js</code> passes and AGENTS.md stays under 30 KB.</li>
+  <li>tools/netboot/refresh-apkovl.sh, tools/netboot/check-served-pin.cjs, docs/NETBOOT.md (default pin 7a68a1ce) — witness: <code class="language-plaintext highlighter-rouge">refresh-apkovl.sh</code> with no NETBOOT_PIN override fetches build-binary run 44999992611 and build-lv2 run 44999992527 and installs aloop sha256 b54a16a6; <code class="language-plaintext highlighter-rouge">check-served-pin.cjs</code> reads pass:true; <code class="language-plaintext highlighter-rouge">check-refresh-pinning.cjs &lt;repo&gt;</code> and <code class="language-plaintext highlighter-rouge">check-netboot-pin.cjs</code> stay green. Held: netboot reboot from the served payload.</li>
 </ul>
-
 
 
       </section>

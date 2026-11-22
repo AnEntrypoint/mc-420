@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Measurement archive","url":"https://anentrypoint.github.io/mc-420/measurements-archive.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=7a68a1cee51e7c8f1c19b137088449192d446e50">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=44b8952b9772a71f3ebf1a63d6dc515f1543136a">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -1099,6 +1099,10 @@ on references).</p>
   <li>Focusrite input-2 guard with Line In 2 Pad cap, Air off, Level Line: latch-on channel 2 RMS 0.000901, peak 0.0466, 20 onsets at 500 ms; latch-off RMS 0.06418, peak 0.7028, 22 onsets at 500 ms, zero clipped samples. Press-to-beep harness note 2 gave quantisation-to-next-beat 353.875 and 336.458 ms, not device latency.</li>
   <li>Owner-confirmed correction (2026-11-14): the AIR192 USB/Direct knob is already fully USB; latch-off clipping on Focusrite channel 2 is the high mic/beeper gain used for the timing test, not a hardware direct-monitor loop. <code class="language-plaintext highlighter-rouge">focusrite-input2-guard.service</code> (Line In 2 Pad on, Air off, Level Line, with its udev rule) is the mitigation, and lowering the mic gain after the test removes the condition. The earlier claim that the knob must be turned fully USB or is the remaining root fix is wrong.</li>
 </ul>
+
+<h2 id="exponent-list-loop-quant-on-the-device-2026-11-22-archiveexponent-quant-device">Exponent-list loop quant on the device, 2026-11-22 (archive#exponent-quant-device)</h2>
+
+<p>Build <code class="language-plaintext highlighter-rouge">7a68a1ce</code> (aloop sha256 <code class="language-plaintext highlighter-rouge">b54a16a6</code>, build-binary run 44999992611) hot-deployed over <code class="language-plaintext highlighter-rouge">e094c5af</code>, standalone Link, MIDI injected over tcp/9401. Boot log <code class="language-plaintext highlighter-rouge">[quant] exponent-list at boot</code>, telemetry <code class="language-plaintext highlighter-rouge">quant_all_beats</code> 0. First take held 1450 ms: <code class="language-plaintext highlighter-rouge">solvedBeats=4.000 solvedBpm=156.252 masterLen=73727</code>, loop 73727 samples, so the first loop was not cut. Non-first takes, <code class="language-plaintext highlighter-rouge">[diag-quant]</code> takeBeats -&gt; finalBeats: 5.5000 -&gt; 4, 3.3993 -&gt; 4, 1.3958 -&gt; 1, 0.5937 -&gt; 0.5, 1.5972 -&gt; 2. Pad 6 flipped <code class="language-plaintext highlighter-rouge">quant_all_beats</code> to 1; the same 1.5972-beat take then gave finalBeats 1 (accept-all-beats ladder); a second press returned it to 0 and <code class="language-plaintext highlighter-rouge">/run/aloop/quant_mode</code> read <code class="language-plaintext highlighter-rouge">0</code>. CLEAR_ALL left play 0, rec 0, master_len 0, latch on, inputs [0,1], FX bank Dub. The served netboot apkovl was refreshed with <code class="language-plaintext highlighter-rouge">NETBOOT_PIN=7a68a1ce</code> (backup <code class="language-plaintext highlighter-rouge">aloop.apkovl.tar.gz.bak-20261122T075647Z</code>, sha256 <code class="language-plaintext highlighter-rouge">b2064863</code>); same 212 entries and 4 LV2 bundles. Witness files: <code class="language-plaintext highlighter-rouge">.gm/witness-out/quant-exponent-20261122/</code>.</p>
 
 
       </section>
