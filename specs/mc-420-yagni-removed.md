@@ -1,13 +1,12 @@
 # mc-420 YAGNI and DRY: paths removed from HEAD
 
-Generated from `git diff 7d41ed2f HEAD` with the S1/S2 classes. Every removal is recoverable from git history; untracked paths stay on disk.
+Generated from `git diff 7d41ed2f HEAD` with the S1/S2 classes, minus the user-provided corpus restored in 48b55523. Every removal is recoverable from git history; untracked paths stay on disk.
 
 ## Counts
 
 | class / stage | paths |
 | --- | --- |
 | dead / S3 deleted | 66 |
-| dead / S4 untracked, kept on disk | 18 |
 | duplicate / S2 untracked, kept on disk | 561 |
 | generated / S2 untracked, kept on disk | 654 |
 | generated / S5 untracked: its only citer was untracked | 1 |
@@ -16,7 +15,7 @@ Generated from `git diff 7d41ed2f HEAD` with the S1/S2 classes. Every removal is
 | runtime / S5 moved | 1 |
 | runtime / S5 untracked: citation moved | 1 |
 
-Total: 1377.
+Total: 1359.
 
 ## Paths
 
@@ -1321,24 +1320,6 @@ Total: 1377.
 - docs/witness/wav.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
 - docs/witness/witness-440-57.txt: generated; S5 untracked: its only citer was untracked; path suffix witness/witness-440-57.txt in docs/plans.md
 - docs/witness/witness-piano-lock.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
-- test-audio-corpus/user-provided/alx.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/alx2.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/bassline.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/bleep_bloop.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/cleetus.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/didnt.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/dingle.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/drugs.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/energy.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/hair.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/jax.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/jaxsales.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/kimmels_famous_last_words.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/machine1.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/sexy1.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/sexy2.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/test.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
-- test-audio-corpus/user-provided/vampire.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
 - test/control-surface/verify-lpslope-binding.js: dead; S3 deleted; named only by unkept .gm/witness-out/offline-validation-20261106.txt
 - test/faust-flags/README.md: dead; S3 deleted; no reference anywhere in tracked text
 - test/faust-flags/_render_worker.py: dead; S3 deleted; named only by unkept test/faust-flags/README.md, test/faust-flags/ab_fm_def.py

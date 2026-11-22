@@ -111,6 +111,7 @@ const keep = (f, why) => { if (!reason.has(f)) { reason.set(f, why); queue.push(
 for (const f of files) {
   if (buildRoots.some((r) => r.test(f))) keep(f, 'architecture: device build or CI tree');
   else if (docRoots.has(f)) keep(f, 'architecture: owner root document');
+  else if (f.startsWith('test-audio-corpus/user-provided/')) keep(f, 'owner decision: the permanent user-provided corpus (cfa4988a)');
   else if (f.startsWith('specs/')) keep(f, 'sweep record: the YAGNI and DRY classes and their generator');
 }
 const reachDirs = (f) => {
@@ -210,7 +211,7 @@ if (outMd) {
   lines.push(`- Red check, dead paths named by a workflow, AGENTS.md or docs/PENDING_VALIDATION.md: ${redDead.length}; dead paths named by any kept file: ${deadNamedByKept.length}.`);
   lines.push(`- Identical-blob groups inside the kept set: ${keptDup.length}, all under docs/witness.`, '');
   lines.push('## Rules', '');
-  lines.push('- keep: under src, dsp, effects, kernel, image, config, vendor, ci or .github/workflows; an owner root document (AGENTS.md, README.md, CLAUDE.md, LICENSE, .gitignore, .gitattributes, docs/PENDING_VALIDATION.md); or reached from a kept file by its repo path, a two-component path suffix, a unique basename, a require/import, a C/C++ include, a Faust import, a Python import, a script run (source, sh, bash, python, node), or a directory under test-audio-corpus, vendor, docs/demo or tools that a kept file names; a nested .gitignore beside kept files; an npm manifest and its lock file when a kept script under it requires one of its dependencies.');
+  lines.push('- keep: under src, dsp, effects, kernel, image, config, vendor, ci or .github/workflows; an owner root document (AGENTS.md, README.md, CLAUDE.md, LICENSE, .gitignore, .gitattributes, docs/PENDING_VALIDATION.md); or reached from a kept file by its repo path, a two-component path suffix, a unique basename, a require/import, a C/C++ include, a Faust import, a Python import, a script run (source, sh, bash, python, node), a user-provided corpus recording (owner decision), or a directory under test-audio-corpus, vendor, docs/demo or tools that a kept file names; a nested .gitignore beside kept files; an npm manifest and its lock file when a kept script under it requires one of its dependencies.');
   lines.push('- runtime: .gm, closes and .vscode state.');
   lines.push('- duplicate: the same blob as another path, the kept or lexically first copy being canonical.');
   lines.push('- generated: a docs/witness output that nothing kept reaches.');
