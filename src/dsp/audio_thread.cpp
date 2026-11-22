@@ -493,6 +493,7 @@ static void* worker(void*) {
     int sustainSlot = -1;
     int sustainLatchSlot = -1;
     int fxBankSlot = -1;
+    int quantAllBeatsSlot = -1;
 #endif
 
 #ifdef ALOOP_HAVE_FAUST_LOOP
@@ -1224,6 +1225,8 @@ static void* worker(void*) {
                 g_telem.sustainGate = sustainGateNow;
                 if (fxBankSlot < 0 && g_params) fxBankSlot = g_params->getSlot("cmd/fx_bank");
                 if (fxBankSlot >= 0 && g_params) g_telem.fxBank = g_params->getBySlot(fxBankSlot);
+                if (quantAllBeatsSlot < 0 && g_params) quantAllBeatsSlot = g_params->getSlot(kQuantAllBeatsParam);
+                if (quantAllBeatsSlot >= 0 && g_params) g_telem.quantAllBeats = g_params->getBySlot(quantAllBeatsSlot);
             }
             for (int i = 0; i < N; i++) samplerBuf[(size_t)i] = (int32_t)(prevFiltOut[i] * 32768.0f);
             g_sampler->captureBlock(samplerBuf.data(), N);

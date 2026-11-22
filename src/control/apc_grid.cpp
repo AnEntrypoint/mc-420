@@ -76,6 +76,8 @@ void ApcGrid::bindAll(ParamStore& ps) {
     ps.bind("cmd/input1_recordable", inputRecordableAtBoot(0) ? 1.0f : 0.0f);
     ps.bind("cmd/input2_recordable", inputRecordableAtBoot(1) ? 1.0f : 0.0f);
     ps.bind("cmd/fx_bank", 0.0f);
+    ps.bind(kQuantAllBeatsParam, loadQuantAllBeats() ? 1.0f : 0.0f);
+    fprintf(stderr, "[quant] %s at boot\n", loadQuantAllBeats() ? "accept-all-beats" : "exponent-list");
     fprintf(stderr, "[input] input1 %s, input2 %s at boot\n", inputRecordableAtBoot(0) ? "processed-looped" : "passthrough-only", inputRecordableAtBoot(1) ? "processed-looped" : "passthrough-only");
 
     ps.bind("fx/reverb",  0.0f);
@@ -106,13 +108,25 @@ struct TempoSolveResult {
     double bpm;
     double beats;
 };
-static TempoSolveResult deriveTempoQuant(double seconds, double anchorBpm = 120.0) {
+static constexpr double kExponentQuantBeats[] = { 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0 };
+
+static double nearestExponentQuantBeats(double takeBeats, double minBeats = kExponentQuantBeats[0]) {
+    double best = 0.0;
+    for (double q : kExponentQuantBeats) {
+        if (q < minBeats) continue;
+        if (best == 0.0 || std::fabs(takeBeats - q) < std::fabs(takeBeats - best)) best = q;
+    }
+    return best;
+}
+
+static TempoSolveResult deriveTempoQuant(double seconds, bool powersOfTwoOnly, double anchorBpm = 120.0) {
     const double anchor = (anchorBpm > 1.0) ? anchorBpm : 120.0;
     if (seconds <= 0.0) return {120.0, 16.0};
     TempoSolveResult best = {120.0, 16.0};
     double bestScore = 1e18;
     bool bestInWindow = false;
-    for (double beats = 1.0; beats <= 128.0; beats += 1.0) {
+    const double maxBeats = powersOfTwoOnly ? 64.0 : 128.0;
+    for (double beats = 1.0; beats <= maxBeats; beats = powersOfTwoOnly ? beats * 2.0 : beats + 1.0) {
         double bpm = 60.0 * beats / seconds;
         bool inWindow = (bpm >= anchor * 0.5 && bpm <= anchor * 2.0);
         double score = std::fabs(std::log2(bpm / anchor));
@@ -266,10 +280,12 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
             if (link && linkNow.bpm > 1.0) sessionBpm = linkNow.bpm;
             TempoSolveResult solved;
             if (setsSessionTempo) {
-                solved = deriveTempoQuant(recordedSeconds, 120.0);
+                solved = deriveTempoQuant(recordedSeconds, !m_quantAllBeats, 120.0);
             } else {
                 solved.bpm = sessionBpm;
-                solved.beats = std::max(1.0, std::floor(recordedSeconds * sessionBpm / 60.0 + 0.5));
+                const double sessionBeats = recordedSeconds * sessionBpm / 60.0;
+                solved.beats = m_quantAllBeats ? std::max(1.0, std::floor(sessionBeats + 0.5))
+                                               : nearestExponentQuantBeats(sessionBeats, 1.0);
                 m_masterLenSamples = (long)(solved.beats * 60.0 / sessionBpm * kSampleRate + 0.5);
                 if (m_masterLenSamples > kMaxLoopSamples) m_masterLenSamples = kMaxLoopSamples;
             }
@@ -331,6 +347,7 @@ void ApcGrid::applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, Lin
                     ? pastNodeBeats
                     : futureNodeBeats);
             if (takeLenBeats < 2.0 * phraseBeats && finalBeats > phraseBeats) finalBeats = phraseBeats;
+            if (!m_quantAllBeats) finalBeats = nearestExponentQuantBeats(takeLenBeats);
             double beatLenSamplesNow = oneBeatSamples * tempoScale;
             long quantized = (long)(finalBeats * beatLenSamplesNow + 0.5);
             if (quantized < 64) quantized = 64;
@@ -386,6 +403,11 @@ void ApcGrid::onPadPress(int note, unsigned now_ms, ParamStore& ps, LinkBridge* 
             onInputRoutePadPress(c, ps);
             return;
         }
+    }
+
+    if (note == kApcQuantModePadNote) {
+        onQuantModePadPress(ps);
+        return;
     }
 
     int looper = gridLooperIndex(row, col);
@@ -659,6 +681,7 @@ void ApcGrid::onClearAll(unsigned now_ms, bool held, ParamStore& ps, LinkBridge*
         applySustainLatch(ps);
         for (int c = 0; c < kApcInputRouteCount; c++) ps.setByName(inputRecordableParamName(c), m_inputRecordable[c] ? 1.0f : 0.0f);
         ps.setByName("cmd/fx_bank", (float)m_activeBank);
+        ps.setByName(kQuantAllBeatsParam, m_quantAllBeats ? 1.0f : 0.0f);
     }
     ps.setByName("cmd/clearall", held ? 1.0f : 0.0f);
     if (!held) return;
@@ -1276,6 +1299,13 @@ void ApcGrid::onInputRoutePadPress(int input, ParamStore& ps) {
     storeInputRecordable(m_inputRecordable);
     fprintf(stderr, "[input-route] input%d %s\n", input + 1,
             m_inputRecordable[input] ? "recordable" : "passthrough-only");
+}
+
+void ApcGrid::onQuantModePadPress(ParamStore& ps) {
+    m_quantAllBeats = !m_quantAllBeats;
+    ps.setByName(kQuantAllBeatsParam, m_quantAllBeats ? 1.0f : 0.0f);
+    storeQuantAllBeats(m_quantAllBeats);
+    fprintf(stderr, "[quant] %s\n", m_quantAllBeats ? "accept-all-beats" : "exponent-list");
 }
 
 void ApcGrid::onSidechainLooperToggle(int looper, ParamStore& ps) {

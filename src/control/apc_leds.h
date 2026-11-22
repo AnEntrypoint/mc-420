@@ -147,12 +147,13 @@ public:
         for (int row = 0; row < kApcRows; row++) {
             for (int col = 0; col < kApcCols; col++) {
                 int note = row * kApcCols + col;
-                if (isBeatPadNote(note) || isInputRoutePadNote(note)) continue;
+                if (isBeatPadNote(note) || isInputRoutePadNote(note) || note == kApcQuantModePadNote) continue;
                 sendCoalesced(note, gridColor(row, col, grid, looperLevels), write);
             }
         }
         drawBeatPads(grid, clock, write);
         drawInputRoutePads(grid, write);
+        sendCoalesced(kApcQuantModePadNote, grid.quantAllBeats() ? kLedYellow : kLedGreen, write);
         sendCoalesced(kApcPadGateMod, grid.gateModHeld() ? kLedYellow :
                                       grid.gateMode() > 0 ? kLedGreen : kLedOff, write);
         sendCoalesced(kApcBtnPlay, grid.shiftHeld() ? kLedYellow : kLedOff, write);

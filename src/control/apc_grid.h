@@ -27,6 +27,27 @@ constexpr int kApcPadGateMod = 7;
 constexpr int kApcBeatPadNotes[4] = { 15, 23, 31, 39 };
 constexpr int kApcInputRoutePadNotes[2] = { 14, 22 };
 constexpr int kApcInputRouteCount = 2;
+constexpr int kApcQuantModePadNote = 6;
+constexpr const char* kQuantModePath = "/run/aloop/quant_mode";
+constexpr const char* kQuantAllBeatsParam = "cmd/quant_all_beats";
+
+inline bool loadQuantAllBeats() {
+    FILE* f = fopen(kQuantModePath, "r");
+    if (!f) return false;
+    int c = fgetc(f);
+    fclose(f);
+    return c == '1';
+}
+
+inline void storeQuantAllBeats(bool allBeats) {
+    FILE* f = fopen(kQuantModePath, "w");
+    if (!f) {
+        fprintf(stderr, "[quant] could not persist the quant mode to %s\n", kQuantModePath);
+        return;
+    }
+    fputs(allBeats ? "1\n" : "0\n", f);
+    fclose(f);
+}
 
 inline const char* inputRecordableParamName(int input) {
     return input == 0 ? "cmd/input1_recordable" : "cmd/input2_recordable";
@@ -170,6 +191,8 @@ public:
     void onShuffleButtonRelease(int note, ParamStore& ps);
     void onInputRoutePadPress(int input, ParamStore& ps);
     bool inputRecordable(int input) const { return m_inputRecordable[input]; }
+    void onQuantModePadPress(ParamStore& ps);
+    bool quantAllBeats() const { return m_quantAllBeats; }
     void onGateModPress();
     void onGateModRelease();
     int shuffleMode() const { return m_shuffleMode; }
@@ -288,6 +311,7 @@ private:
     int m_gateMode = 0;
     bool m_gateModHeld = false;
     bool m_inputRecordable[kApcInputRouteCount] = { inputRecordableAtBoot(0), inputRecordableAtBoot(1) };
+    bool m_quantAllBeats = loadQuantAllBeats();
 
     void applyRecPlayCycle(int looper, unsigned now_ms, ParamStore& ps, class LinkBridge* link, class AudioThread* audio = nullptr);
     void capturePreset(int p, ParamStore& ps);
