@@ -1,2 +1,0 @@
- * Stopping aloop ... [ ok ]
- * Starting aloop ... [ ok ]

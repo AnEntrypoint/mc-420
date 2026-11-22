@@ -30,7 +30,7 @@ for (const f of files) {
   size.set(f, st.size);
   const buf = fs.readFileSync(full);
   blob.set(f, crypto.createHash('sha1').update(buf).digest('hex'));
-  if (st.size <= 4 << 20 && isText(buf)) text.set(f, buf.toString('utf8'));
+  if (st.size <= 4 << 20 && isText(buf) && !f.startsWith('specs/')) text.set(f, buf.toString('utf8'));
 }
 
 const baseCount = new Map();
@@ -106,6 +106,7 @@ const keep = (f, why) => { if (!reason.has(f)) { reason.set(f, why); queue.push(
 for (const f of files) {
   if (buildRoots.some((r) => r.test(f))) keep(f, 'architecture: device build or CI tree');
   else if (docRoots.has(f)) keep(f, 'architecture: owner root document');
+  else if (f.startsWith('specs/')) keep(f, 'sweep record: the YAGNI and DRY classes and their generator');
   else if (operatorTools.has(f)) keep(f, operatorTools.get(f));
 }
 const reachDirs = (f) => {
