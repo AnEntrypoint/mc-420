@@ -38,8 +38,10 @@ void faultHandler(int sig, siginfo_t* info, void*) {
     signal(sig, SIG_DFL);
     raise(sig);
 }
+constexpr size_t kWatchdogAltStackBytes = 64 * 1024;
+
 void installWatchdog() {
-    static char altStack[SIGSTKSZ * 4];
+    static char altStack[kWatchdogAltStackBytes];
     stack_t ss{};
     ss.ss_sp = altStack;
     ss.ss_size = sizeof(altStack);
