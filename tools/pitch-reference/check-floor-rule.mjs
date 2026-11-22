@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-const root = process.argv[2];
+import { fileURLToPath } from "node:url";
+const root = process.argv[2] || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const wav = path.join(root, "test-audio-corpus/instruments/vocal_tenor_operatic_PD.wav");
 const comb = path.join(root, "tools/pitch-reference/comb.mjs");
 const sub = path.join(root, "tools/pitch-reference/submultiple.mjs");
