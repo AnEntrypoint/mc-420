@@ -4,40 +4,40 @@
 
 Current item: rank 1, worked offline. It does not use the Pi, ESP, Focusrite, owner hardware or audio capture.
 
-| rank | id | status | dependency | offline |
-| --- | --- | --- | --- | --- |
-| 1 | netboot-refresh-replaces-binary-only-lv2-stale | pending, offline witness added | refresh-apkovl.sh and local archive | yes |
-| 2 | netboot-windows-poller-ignores-pin | pending, offline pin check added | serve-netboot-win.js | yes |
-| 3 | netboot-served-payload-not-pin-build | pending, host archive only | served apkovl file | yes |
-| 4 | pitch-reference-comb-submultiple-floor-disagree | pending | offline corpus tools | yes |
-| 5 | gate-level-normalisation | pending | offline render, owner pre-registration | partial |
-| 6 | gate-silence-23-of-37 | pending | cause found; no render needed | yes |
-| 7 | gate-level-normalised-pin-rule-reregister | pending | external owner recompute | no |
-| 8 | gate-silence-23-of-37-ready-unvoiced | pending | external per-file settled output | no |
-| 9 | resonode-m1-envelope-follow-target-0-30 | parked | external DawDreamer round 5 | no |
-| 10 | lp-slope-control-binding | pending | code plus MIDI injection on device | no |
-| 11 | filter-chain-swap-lp-before-hp | pending | code plus device listen check | no |
-| 12 | defect-piano-low-a1-tau-sensitive | pending | offline DSP render, no rig | yes |
-| 13 | defect-marimba-c2-3p6-685hz-segment | pending | offline DSP render, no rig | yes |
-| 14 | defect-pin-vocal-tenor-137-vs-certified-114 | pending | offline DSP render, no rig | yes |
-| 15 | defect-2093-grid-ext-low-register-regression | pending | offline DSP render, no rig | yes |
-| 16 | defect-sine-2093-subharmonic | pending | offline DSP render, no rig | yes |
-| 17 | defect-rb3-link-target-fold-origin-drift | pending | simulator plus hardware witness | no |
-| 18 | defect-rb3-origin-level-per-run-offset | pending | simulator plus hardware witness | no |
-| 19 | defect-rb3-origin-rate-41ppm | pending | simulator plus hardware witness | no |
-| 20 | first-loop-master-timing | pending | simulator plus hardware witness | no |
-| 21 | first-loop-phrase-offset-by-loop-length | pending | simulator plus hardware witness | no |
-| 22 | first-loop-own-take-after-peer-origin | pending | peer hardware witness | no |
-| 23 | timing-empty-slave-adoption | pending | peer hardware witness | no |
-| 24 | timing-origin-exact-sample-unwitnessed | pending | hardware witness | no |
-| 25 | adr034-impose-target-not-published | pending | hardware telemetry witness | no |
-| 26 | adr034-peer-present-hardware-witness | pending | peer hardware witness | no |
-| 27 | link-peer-not-reacquired-after-aloop-restart-180s | pending | Pi/ESP console witness held by peer | no |
-| 28 | peer-reacquisition-alsa-roundtrip-rise | pending | Pi telemetry with peer | no |
-| 29 | pi-phase-rebase-backwards-phrase-jump | pending | Pi/ESP | no |
-| 30 | esp-no-realign-on-phase-rebase-without-ltmp | pending | ESP peer | no |
-| 31 | midi-transport-realign-needs-on-device-din-capture | pending | on-device DIN/UART capture | no |
-| 32 | visual-metronome-beat-cue-onset | pending | hardware LED/cue witness | no |
+| rank | id | status | dependency | offline | subject |
+| --- | --- | --- | --- | --- | --- |
+| 1 | netboot-refresh-replaces-binary-only-lv2-stale | pending, offline witness added | refresh-apkovl.sh and local archive | yes | refresh-apkovl.sh swaps only the binary, leaving LV2 from the old payload |
+| 2 | netboot-windows-poller-ignores-pin | pending, offline pin check added | serve-netboot-win.js | yes | serve-netboot-win.js polls newest green main, not the pin |
+| 3 | netboot-served-payload-not-pin-build | pending, host archive only | served apkovl file | yes | served apkovl is pre-offset but not the pinned build |
+| 4 | pitch-reference-comb-submultiple-floor-disagree | pending | offline corpus tools | yes | comb.mjs certifies vocal 114.18 Hz while submultiple.mjs finds no clearing line in 100-150 Hz |
+| 5 | gate-level-normalisation | pending | offline render, owner pre-registration | partial | Normalise gate inputs to a fixed rms so the energy floor stops deciding which files are scoreable |
+| 6 | gate-silence-23-of-37 | pending | cause found; no render needed | yes | 23 of 37 gate inputs publish no voiced settled block: check the gain convention |
+| 7 | gate-level-normalised-pin-rule-reregister | pending | external owner recompute | no | Level-normalised gate needs re-registration on the pin rule |
+| 8 | gate-silence-23-of-37-ready-unvoiced | pending | external per-file settled output | no | 3 of the 23 silent gate inputs are energy-ready at the corpus gain but publish no voiced settled block |
+| 9 | resonode-m1-envelope-follow-target-0-30 | parked | external DawDreamer round 5 | no | resonode envelope-follow M1: re-registered target 0.30, round 5 pending |
+| 10 | lp-slope-control-binding | pending | code plus MIDI injection on device | no | LPSLOPE (fx/lpslope) has no control-surface binding, so 24 dB/oct is unreachable from the device |
+| 11 | filter-chain-swap-lp-before-hp | pending | code plus device listen check | no | swap filter chain order to low-pass then high-pass |
+| 12 | defect-piano-low-a1-tau-sensitive | pending | offline DSP render, no rig | yes | piano_low_A1 is voiced at corrAtLagVar tau 0.01 and silent at 0.02 on identical input |
+| 13 | defect-marimba-c2-3p6-685hz-segment | pending | offline DSP render, no rig | yes | marimba_low_C2B2 3.6-6.0 s segment settles at 685.7 Hz in the CI traces |
+| 14 | defect-pin-vocal-tenor-137-vs-certified-114 | pending | offline DSP render, no rig | yes | vocal_tenor_operatic_PD settles at 137.5 Hz; the certified comb F0 is 114.18 Hz (321.7 cents, not an octave or subharmonic) |
+| 15 | defect-2093-grid-ext-low-register-regression | pending | offline DSP render, no rig | yes | 2093 grid extension moves vibraphone_mid_C5B5 to 189 Hz and runs piano_low_A1 to 1714 Hz |
+| 16 | defect-sine-2093-subharmonic | pending | offline DSP render, no rig | yes | sine_2093 settles at 700.24 Hz, a 3:1 subharmonic (-1895.6 c), at both correlation taus |
+| 17 | defect-rb3-link-target-fold-origin-drift | pending | simulator plus hardware witness | no | rb 3 first take: Link target folds on 16 beats, phase trim drifts the origin by a beat |
+| 18 | defect-rb3-origin-level-per-run-offset | pending | simulator plus hardware witness | no | rb 3 origin settles at a per-run level from -3 to +78 samples off the arm edge |
+| 19 | defect-rb3-origin-rate-41ppm | pending | simulator plus hardware witness | no | rb 3 origin drifts 41-49 ppm after creation (constant slope in every run) |
+| 20 | first-loop-master-timing | pending | simulator plus hardware witness | no | First loop sets master tempo, phrase and origin on every path, predictably |
+| 21 | first-loop-phrase-offset-by-loop-length | pending | simulator plus hardware witness | no | First loop's phrase turnaround sits one loop before the record press, not at the press |
+| 22 | first-loop-own-take-after-peer-origin | pending | peer hardware witness | no | A device's own first take after adopting a peer origin re-origins the network |
+| 23 | timing-empty-slave-adoption | pending | peer hardware witness | no | Empty slave must adopt a peer's first recording seamlessly and fast |
+| 24 | timing-origin-exact-sample-unwitnessed | pending | hardware witness | no | Exact-sample origin claim is unwitnessed on hardware |
+| 25 | adr034-impose-target-not-published | pending | hardware telemetry witness | no | ADR-034 press-minus-L phrase origin is not observable in telemetry |
+| 26 | adr034-peer-present-hardware-witness | pending | peer hardware witness | no | ADR-034 press-minus-L origin needs a hardware witness with a live Link peer |
+| 27 | link-peer-not-reacquired-after-aloop-restart-180s | pending | Pi/ESP console witness held by peer | no | Link peer did not re-acquire within 180 s of a single aloop service restart |
+| 28 | peer-reacquisition-alsa-roundtrip-rise | pending | Pi telemetry with peer | no | ALSA roundtrip and latency bias rise ~52 samples on Link peer re-acquisition and stay elevated |
+| 29 | pi-phase-rebase-backwards-phrase-jump | pending | Pi/ESP | no | Pi phase rebase can make the ESP emit a false phrase boundary |
+| 30 | esp-no-realign-on-phase-rebase-without-ltmp | pending | ESP peer | no | ESP does not queue a realign on a Pi phase rebase that arrives without an LTMP |
+| 31 | midi-transport-realign-needs-on-device-din-capture | pending | on-device DIN/UART capture | no | Gear-side MIDI Start after a real peer loss has no on-device DIN/UART byte witness |
+| 32 | visual-metronome-beat-cue-onset | pending | hardware LED/cue witness | no | Visual beat cue onset is within 7 ms of the Link beat origin it marks |
 
 ## Offline witnesses, 2026-11-14
 
@@ -46,410 +46,33 @@ Current item: rank 1, worked offline. It does not use the Pi, ESP, Focusrite, ow
 - Item 4 `pitch-reference-comb-submultiple-floor-disagree`: `node tools/pitch-reference/check-floor-rule.mjs` ran both tools on one 432044-byte WAV with a 96 MB heap, asserted comb certifies 114.18 Hz, submultiple reports zero clearing candidates and excludes the file, and `archive#pitch-reference-floor-rule` states both floors. The disagreement is recorded as a stated rule. The check is offline, uses no rig or audio capture, and no archived verdict was changed.
 
 Additional non-row blockers: the no-chip-reset console witness is held by esp-idf-link; hot-deploy reboot persistence remains an open PRD; gm release propagation is held on auto-update. The AIR192 USB/Direct knob is already fully USB, so it is not a blocker: latch-off clipping on Focusrite channel 2 is high mic/beeper gain for the timing test, `focusrite-input2-guard.service` (Line In 2 Pad on, Air off, Level Line, with its udev rule) is the mitigation, and lowering the mic gain after the test removes the condition.
-## Current state, 2026-11-06 (34 open rows)
 
-Generated from `.gm/prd/*.yml`, the gitignored gm row store. This section is the tracked copy of the CURRENT open rows; the historical `prd-list` dump below is preserved unchanged. Full campaign shas, verdicts and holds: `.gm/witness-out/campaign-ledger-20261106.txt`.
+## Closed rows
 
-| id | subject |
-| --- | --- |
-| adr034-impose-target-not-published | ADR-034 press-minus-L phrase origin is not observable in telemetry |
-| adr034-peer-present-hardware-witness | ADR-034 press-minus-L origin needs a hardware witness with a live Link peer |
-| decision-7ms-invariant-peer-present-engaged-figure | Owner decision and live loopback witness for the ~7 ms invariant with a Link peer present |
-| defect-2093-grid-ext-low-register-regression | 2093 grid extension moves vibraphone_mid_C5B5 to 189 Hz and runs piano_low_A1 to 1714 Hz |
-| defect-marimba-c2-3p6-685hz-segment | marimba_low_C2B2 3.6-6.0 s segment settles at 685.7 Hz in the CI traces |
-| defect-piano-low-a1-tau-sensitive | piano_low_A1 is voiced at corrAtLagVar tau 0.01 and silent at 0.02 on identical input |
-| defect-pin-vocal-tenor-137-vs-certified-114 | vocal_tenor_operatic_PD settles at 137.5 Hz; the certified comb F0 is 114.18 Hz (321.7 cents, not an octave or subharmonic) |
-| defect-rb3-link-target-fold-origin-drift | rb 3 first take: Link target folds on 16 beats, phase trim drifts the origin by a beat |
-| defect-rb3-origin-level-per-run-offset | rb 3 origin settles at a per-run level from -3 to +78 samples off the arm edge |
-| defect-rb3-origin-rate-41ppm | rb 3 origin drifts 41-49 ppm after creation (constant slope in every run) |
-| defect-sine-2093-subharmonic | sine_2093 settles at 700.24 Hz, a 3:1 subharmonic (-1895.6 c), at both correlation taus |
-| docs-archive-anchor-references-unresolved | AGENTS.md references 58 archive# anchors but the measurements archive defines only 15 |
-| esp-no-realign-on-phase-rebase-without-ltmp | ESP does not queue a realign on a Pi phase rebase that arrives without an LTMP |
-| filter-chain-swap-lp-before-hp | swap filter chain order to low-pass then high-pass |
-| first-loop-master-timing | First loop sets master tempo, phrase and origin on every path, predictably |
-| first-loop-own-take-after-peer-origin | A device's own first take after adopting a peer origin re-origins the network |
-| first-loop-phrase-offset-by-loop-length | First loop's phrase turnaround sits one loop before the record press, not at the press |
-| gate-level-normalisation | Normalise gate inputs to a fixed rms so the energy floor stops deciding which files are scoreable |
-| gate-level-normalised-pin-rule-reregister | Level-normalised gate needs re-registration on the pin rule |
-| gate-silence-23-of-37-ready-unvoiced | 3 of the 23 silent gate inputs are energy-ready at the corpus gain but publish no voiced settled block |
-| gate-silence-23-of-37 | 23 of 37 gate inputs publish no voiced settled block: check the gain convention |
-| link-peer-not-reacquired-after-aloop-restart-180s | Link peer did not re-acquire within 180 s of a single aloop service restart |
-| lp-slope-control-binding | LPSLOPE (fx/lpslope) has no control-surface binding, so 24 dB/oct is unreachable from the device |
-| midi-transport-realign-needs-on-device-din-capture | Gear-side MIDI Start after a real peer loss has no on-device DIN/UART byte witness |
-| netboot-refresh-replaces-binary-only-lv2-stale | refresh-apkovl.sh swaps only the binary, leaving LV2 from the old payload |
-| netboot-served-payload-not-pin-build | served apkovl is pre-offset but not the pinned build |
-| netboot-windows-poller-ignores-pin | serve-netboot-win.js polls newest green main, not the pin |
-| peer-reacquisition-alsa-roundtrip-rise | ALSA roundtrip and latency bias rise ~52 samples on Link peer re-acquisition and stay elevated |
-| pi-phase-capture-128-fold-rb | 128-beat phase capture is folded at rb when rb does not divide 128 |
-| pi-phase-rebase-backwards-phrase-jump | Pi phase rebase can make the ESP emit a false phrase boundary |
-| pitch-reference-comb-submultiple-floor-disagree | comb.mjs certifies vocal 114.18 Hz while submultiple.mjs finds no clearing line in 100-150 Hz |
-| resonode-m1-envelope-follow-target-0-30 | resonode envelope-follow M1: re-registered target 0.30, round 5 pending |
-| timing-empty-slave-adoption | Empty slave must adopt a peer's first recording seamlessly and fast |
-| timing-origin-exact-sample-unwitnessed | Exact-sample origin claim is unwitnessed on hardware |
+Rows that left the open list; the open rows are the ranked table above. Where a row has more detail, the named doc holds it; otherwise this line is its only record.
 
-Owner status: devices FULLY FROZEN, no polls of any kind; the ~7 ms invariant call, the four gate rows, resonode round 5 and the netboot flash/soak/peer-present windows are owner-held. Closed this campaign: docs-origin-formula-misses-phase-wrap, phrase-gap-triage-mc420-gm-scope-23, gap-38-20813-status-field-semantics, gap-76-ci-hardware-verifiers, gap-80-duplicate-sim-step, gap-81-phrase-anchor-path-gate, gap-51-join-race-tempo-authority, clear-reset-corrected-gate.
-
-## Historical prd-list dump (preserved)
-
-```
-dispatch_id: 1792225771179-500-a8612c4934bf630
-ok: true
-verb: prd-list
-brief: false
-count: 25
-full: true
-hint: >-
-  pass {"id":"<row id>"} for one full row (repeated blocks of an id fold to the last one),
-  {"status":"pending"} to filter, {"status":"pending","limit":<n>} to cap the listing (total counts
-  every match), {"status":"all","limit":<n>,"offset":<n>} to page every status (next_offset names
-  the next page, null when done), or {"full":true} for every full body. .gm/prd/ holds OPEN work
-  only: a resolved row i... [500 chars total, full text at
-  /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-  field 'hint']
-items:
-  - id: chore-x64-lv2-target
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      Closed. The x64 LV2 build target is in CI and green. Run 38955256278 on commit bad5ecbb: all
-      six build-lv2 jobs succeed, including home-fx-lv2-x64 (ubuntu-24.04), with the arm64 jobs
-      unchanged. Built from the same pinned recipe as the arm64 path
-      (tools/faust-pinned/compile.sh). Witness: gm.ci_status for bad5ecbb returns status success
-      with the six jobs listed.
-  - id: defect-lock-above-1500hz-clamp
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      OPEN. The candidate fix 934258b (refine K = P/4, ceiling 2600) is a FAIL under the agreed
-      gate, confirmed by an independent DawDreamer render (dawdreamer-de, pinned driver drv_p934 sha
-      bcbb71ac2e42f188eedc52b3affd9cf74c0778dc7218a60afb44104e81923b5d): crotale_high_C7 at held
-      note 96 (true pitch, gate row) moves +6.6 cents on the lock; marimba_mid_C5B5 at held note 74
-      moves +7.4 cents. Both exceed ... [1131 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: defect-lock-transient-flapping
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      OPEN, blocked on measurement. The piano transient cases cannot be judged on valid captures:
-      piano C4 at MIDI 60 and MIDI 45 gives INVALID in every rep (2.3 to 2.9 dB over the 30e-6
-      silence, below the 10 dB rule). Earlier piano readings used the absolute floor, which was
-      wrong (fixed in 0938101). The lock output during the piano note window is too quiet to
-      measure, so the 'octave flapping' cannot b... [656 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: defect-lock-unpitched-floor-2000hz
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      RE-SCOPED. The 2000 Hz readings are NOT a lock defect.
-      tools/loopback-witness/loopback-witness.js:235 sets minLag = rate/2000, so a capture with no
-      periodic structure returns exactly 2000.00 Hz at the search edge. Evidence:
-      .gm/witness/witness-440-57.txt, rep 1: capture rms 0.00106 (rep 2 was 0.00169), 'input (pre
-      note-on) f0 not detected', trajectory 0 valid hops, score 0.194 with no validity gat... [796
-      chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: defect-transpose-a1-splice-residual
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      OPEN. After 8ed5946 the tracker follows piano_low_A1 (59.7 cents mean), but the splices are
-      still not clean: glitch count at threshold 0.25 minGapMs 5 is 27/28/29 at +12/+19/+24 against
-      a baseline of 24/27/31, and the render's splice count fell 294->192. The lane's own finding is
-      that the hits sit at 0.25-0.31 first differences after a 30x normalisation, clustered at the
-      same timestamps in the bas... [732 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: defect-witness-range-4khz
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      OPEN. tools/loopback-witness/loopback-witness.js searches only 50 to 4000 Hz, so any output
-      above 4 kHz is reported at its octave below. Evidence: the offline lock output at MIDI 90 is
-      4309.6 Hz, and the device's 2154.6 Hz reading is exactly half of it, so the device 'octave
-      error' at MIDI 90 is the witness's range cap. Fix: raise the search ceiling to at least 8 kHz,
-      keep the search-edge INVALID ... [521 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: gm-commit-refusals-message-lint
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      Partial cause of git_commit failures in this project: the commit-message gate refuses subjects
-      over 50 characters and body lines over 72. Measured from the 5 spool replies still on disk: 3
-      failed (subjects of 78 and 83 characters, one body line of 292 characters), 0 failed on
-      identity or on concurrency. The other 16 failed records have no surviving reply, so this
-      covers 3 of 19 failures. Execute: ... [679 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: gm-lean-walk-evidence-missing
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      gm walks in this project write no .gm/lean-walk evidence. phase_history shows JTBD, XYPROB,
-      EARS and INVEST were reached, and none of them left a file, so the walk coverage the dream-rsi
-      inference reads is 0 by construction. Reported to the gm session as its finding 3
-      (cross-session message cd13a1e8). Execute: when the gm session commits its change, run one
-      real walk through a node and confirm .gm... [524 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: goal-transpose-vocoder-predictable
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      GOAL (means-free). Acceptance in EARS.
-
-
-      WHEN a monophonic source whose fundamental lies between 55 Hz and 2000 Hz is presented, THE
-      transpose stage SHALL report a fundamental within 25 cents of the true fundamental, and SHALL
-      NEVER report a fundamental one octave (1200 cents) above or below it.
-
-      WHEN the source contains an attack transient, THE transpose stage SHALL NOT change its octave
-      decision a... [1408 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - acceptance_criteria: >-
-      A control-surface layout that carries 6 patch weights and still leaves at least the density
-      dial; or a documented decision that 4 patches plus 3 dials is the better surface.
-    description: >-
-      docs claimed 6 named grain patches; the code ships 4 (Glass/Cloud/Chop/Shatter). The docs now
-      match the code. Freeze is already reachable as scanRate 0 but has no named patch, and Tape (a
-      slow warm drift) exists nowhere. Restoring both needs two more knob slots, which costs direct
-      dials (scan/density/spray) - a control-surface decision, not a DSP one, so it is its own row.
-    id: granulator-freeze-and-tape-patches
-    session_id: mcp-codemode-2234-1791905128946
-    status: pending
-    subject: 'Granulator: restore the Freeze and Tape patch characters the docs promise'
-    witness_plan: Offline or live A/B of each named patch's grain-onset rate and spectral centroid.
-  - acceptance_criteria: >-
-      A control surface slot exists and the grain pitch ratio is exposed; measured centroid span and
-      CPU per block recorded before and after.
-    description: >-
-      Deferred out of c738d01 with the exact edits recorded in ADR-027. Measured character is large
-      (7.2x centroid span) and CPU cost is ~0, but every one of the 8 LofiFx knob slots is taken, so
-      there is nowhere to put the control. Ships when a slot frees or the granulator gets a second
-      bank.
-    id: granulator-grain-transposition
-    session_id: mcp-codemode-301034-1791967039111
-    status: pending
-    subject: 'Granulator: per-grain pitch transposition independent of note rate and spray'
-    witness_plan: >-
-      Offline or live render per patch with grain transposition swept; grain-onset rate and spectral
-      centroid.
-  - acceptance_criteria: >-
-      Each of the 6 named patches is objectively distinguishable (grain-rate, RMS envelope
-      statistics and spectral centroid measured over a 5 s render of a held chord). 'Freeze'
-      actually holds a static spectrum. 'Shatter' produces a measurably higher grain-onset rate than
-      'Cloud'. No added audio-path latency; the granulator still runs within its existing CPU budget
-      or the budget is re-measured and recor... [404 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'acceptance_criteria']
-    description: >-
-      effects/home/faust/grainFormant.h is a PSOLA pitch-shifter core, not a texture instrument:
-      grain length is hard-coded to (scale>1 ? 2*outHop : 2*Tin), hop is hard-coded to
-      outHop=Tin/scale, the window is a fixed Hann, there are only VOICES=6 grains, the resplice
-      deadband is a fixed 5 periods, and there is no spray/jitter, no reverse, no freeze, no density
-      control, no scan-rate control. docs/CONTRO... [792 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'description']
-    id: granulator-real-params
-    session_id: mcp-codemode-2234-1791903272192
-    status: pending
-    subject: 'Granulator: make grain size, density, spray, scan, reverse, freeze and envelope real controls'
-    witness_plan: >-
-      Offline render of the compiled chain per patch; measure grain onset rate (envelope flux),
-      spectral centroid, RMS crest factor; then live witness.
-  - id: means-ac-tracker-octave-flip
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      MEANS: remove octave jumps at their source. Acceptance in EARS.
-
-
-      WHEN a detected candidate is promoted, THE AC tracker SHALL require stability as well as
-      level: takeNew SHALL additionally require stableRun >= confirmSamples (512), counting samples
-      in which coarseFreq moved less than 6 percent.
-
-      WHILE counting stability, THE stability counter SHALL read coarseFreq and SHALL NOT read
-      refinedNow.
-
-      WHEN... [1268 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: means-live-loopback-witness
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      MEANS: a live witness loop needing no human. Acceptance in EARS.
-
-
-      WHEN the harness starts, IT SHALL inject SHIFT (note 0x62, channel 0) and then sustain (CC 64
-      value >= 64, channel 1) over tcp/9401, at least 0.3 s apart, before it expects any passthrough
-      audio.
-
-      WHEN the harness plays a source file, IT SHALL play it out of the Focusrite into the client
-      instrument input and SHALL capture the client ... [1017 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: means-transpose-corpus-breadth
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      MEANS: prove behaviour over as much real material as exists. Acceptance in EARS.
-
-
-      WHEN the corpus is extended, EVERY added source SHALL carry a stated provenance: source URL,
-      licence (CC0, CC-BY or public domain only), and the attribution string required by that
-      licence.
-
-      WHEN a source's licence cannot be verified, THEN the source SHALL be dropped and not
-      downloaded.
-
-      WHEN a source is added, THE cor... [1255 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: means-transpose-latency-floor
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      MEANS: lowest achievable latency, proved. Acceptance in EARS.
-
-
-      WHILE any baseline measurement is taken, THE ledger SHALL name every fixed delay on the live
-      path in samples, with the constant and the line that consumes it.
-
-      WHEN the shift stage is engaged and then disengaged, THE path SHALL return to within one
-      sample of the bypassed delay: the ENGAGED latch SHALL be cleared on the disengage branch....
-      [1023 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: means-vocoder-formant-quality
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      MEANS: make the vocoder and formant layer as predictable as the transpose. Acceptance in EARS.
-
-
-      WHEN both the transpose and the vocoder need a pitch estimate, THE two SHALL read the SAME
-      estimate object; a second independent estimate SHALL NOT exist, or SHALL be shown to agree
-      with the first on every corpus source.
-
-      WHILE the vocoder is engaged, IT SHALL add no more than 128 samples of delay over t... [899
-      chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: plan-crotale-window-sensitivity
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      OPEN. The crotale baseline tracker output is bimodal (61, 170, 708 Hz plateau, 941, 1400-1500
-      Hz), so its settled value moves about 4 times with the window (t >= 1.0 s gives 708.6 Hz;
-      second-half gives 170.2 Hz). Any crotale lock result is window-sensitive until the settle
-      window is fixed by rule. Plan: pin one window rule across all harnesses and record it in the
-      lock table header. Witness: both ... [429 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: plan-dawdreamer-harness-commit
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      BLOCKED ON USER. The DawDreamer offline render harness (dd_faust_render.py, dd_pitch_run.py,
-      drafted by the DawDreamer session in dd-render) is not committed to mc-420. Plan: once the
-      user confirms it, copy into tools/dawdreamer-render/ with its hash, and commit. Not committed
-      until then, because the user has not approved the commit itself.
-  - id: plan-defect-midi96-instability
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      OPEN. The device lock for a 2093 Hz input held at MIDI 96 reads 149.55 Hz (about 4 octaves
-      low) consistently, while the offline lock run for the same inputs is unstable (2009 Hz, ncc
-      0.65). The formula that fits MIDI 84 and 90 does not fit MIDI 96. Plan: trace the lock's
-      applied shift at MIDI 96 from the offline harness and compare with the device's shift via the
-      diag_extfreq trace; determine whet... [525 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: plan-defect-piano-lowbass-ac-silent
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      OPEN. pitchtracker_ac outputs 0 Hz on the whole of piano_low_A1.wav (55.69 Hz) and on
-      balloon_pop_transient.wav, on both the 5d298ed2 and 934258b builds and on the c2100 variant.
-      This is a separate fact from the SNAC tracker figure (the 1116 to 59.7 cent fix is dsp_cli
-      --trk, SNAC, not AC). Plan: find why the AC tracker's energy or confidence gate never opens on
-      this file (energyReady, the lowpass... [540 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: plan-piano-transient-measurement
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      OPEN, blocked on measurement. The piano transient-octave claim cannot be judged: the piano
-      note window sits 2 to 3 dB over silence, below the 10 dB validity rule, so every piano lock
-      case is INVALID. Plan: either a source whose note window clears 10 dB over silence, or a
-      measured output level for the piano window, before any octave claim about transients is made.
-      Witness: a valid capture with its ... [436 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: plan-profile-voice-path
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      OPEN. Profile the remaining hotspot items from the list sent to the DawDreamer session: item 2
-      (six pitch_poly voices) measured at 3.5 percent of one core with the shared tracker included
-      and about 2.4 percent with the tracker stubbed; the LPC formant shaper adds about 3.3 points.
-      Items 3 (multitranspose graph) and 5 (audio thread bookkeeping) are not measured. Rule: do NOT
-      cut the SNAC sweep boun... [612 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - id: plan-variant-v3-gate
-    session_id: mc420tv-1792091542814
-    status: pending
-    subject: >-
-      OPEN. Variant v3 (full 2600 candidate list used only when the base pick is above 1000 Hz;
-      sha256 2b7a6698..., scratchpad v2/var/v3.dsp) is being compiled and gated by the DawDreamer
-      session. v1 and v2 both fail the gate (v1 marimba -7.4 c and piano C7 worse; v2 crotale +42
-      c). Admit v3 only if sine 2093 is within 2 percent, sine 1000 and 440 within 0.5 percent,
-      crotale at note 96 and marimba at no... [512 chars total, full text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'subject']
-  - acceptance_criteria: >-
-      Stereo output with a measurable inter-channel difference at default settings; effect parity
-      still holds (record and cue see the same content); no change to the mono sum's level.
-    blocker_notes:
-      - >-
-        DSP half architecturally blocked; ADR-028. No L/R bus exists (ch0 master, ch1 cue, one mono
-        float per sample; audio_thread.cpp:1114 sums the sampler into mono fin). Per-voice pan
-        collapses because apc_grid.cpp:730-745 allocates lowest-free-index-first, so one- and
-        two-note play lands both voices on L. Alternating mode groups failed Faust elaboration at
-        27.4 s. Mono-summing a stereo pair is -6.02 dB and fails the le -120 dB effect-parity rows.
-        Unblocking measurement: a Focusrite 4-channel with out3/out4 as a second master pair. The
-        host half DID land in c738d01: lv2_host counts audio ports per direction and disables any
-        plugin wanting more than the host has instead of aliasing every audio port onto one
-        ioBuffer_; numChannels_==1 for all five mono bundles so it is a no-op today.
-    description: >-
-      Resonode is mono end to end: process(exciteIn) has one input and one output, and every audio
-      port of the LV2 host is connected to the same ioBuffer_ pointer
-      (src/host/lv2_host.cpp:229-231), so channel 2 is never written or read. The reference
-      instrument's mixer exposes per-section pan and an Object width control, and stereo width is
-      one of the cheapest available wins for 'interesting'. Alternate m... [510 chars total, full
-      text at
-      /config/workspace/mc-420/.gm/exec-spool/out/prd-list-mc420tv-1792091542814-563819-1792225771107-9.json
-      field 'description']
-    id: resonode-stereo-width
-    session_id: mcp-codemode-2234-1791905128946
-    status: pending
-    subject: 'Resonode: make the instrument stereo'
-    witness_plan: effect-parity-test plus a rendered L/R correlation measurement.
-limit: 200
-offset: 0
-store_total: 25
-total: 25
-truncated: false
-continuation:
-  state: running
-  pending_rows: null
-  idle_ms: 10846
-  action: none
-
-```
+- `decision-7ms-invariant-peer-present-engaged-figure`: closed. Owner decision and live loopback witness for the ~7 ms invariant with a Link peer present. Detail: DECISIONS.md.
+- `docs-archive-anchor-references-unresolved`: closed. AGENTS.md references 58 archive# anchors but the measurements archive defines only 15.
+- `pi-phase-capture-128-fold-rb`: closed. 128-beat phase capture is folded at rb when rb does not divide 128.
+- `chore-x64-lv2-target`: left the open list after the 2026-11-06 dump. Last recorded: Closed. The x64 LV2 build target is in CI and green.
+- `defect-lock-above-1500hz-clamp`: left the open list after the 2026-11-06 dump. Last recorded: OPEN. The candidate fix 934258b (refine K = P/4, ceiling 2600) is a FAIL under the agreed gate, confirmed by an independent DawDreamer render (dawdreamer-de, pinned driver drv_p934 sha bcbb71ac2e42f188eedc52b3affd9cf74c0778dc7218a60afb44104e81923b5d): crotale_high_C7 at held note 96 (true pitch, gate row) moves… Detail: DECISIONS.md, measurements-archive.md.
+- `defect-lock-transient-flapping`: left the open list after the 2026-11-06 dump. Last recorded: OPEN, blocked on measurement. The piano transient cases cannot be judged on valid captures: piano C4 at MIDI 60 and MIDI 45 gives INVALID in every rep (2.3 to 2.9 dB over the 30e-6 silence, below the 10 dB rule).
+- `defect-lock-unpitched-floor-2000hz`: left the open list after the 2026-11-06 dump. Last recorded: RE-SCOPED. The 2000 Hz readings are NOT a lock defect.
+- `defect-transpose-a1-splice-residual`: left the open list after the 2026-11-06 dump. Last recorded: OPEN. After 8ed5946 the tracker follows piano_low_A1 (59.7 cents mean), but the splices are still not clean: glitch count at threshold 0.25 minGapMs 5 is 27/28/29 at +12/+19/+24 against a baseline of 24/27/31, and the render's splice count fell 294->192. Detail: DECISIONS.md.
+- `defect-witness-range-4khz`: left the open list after the 2026-11-06 dump. Last recorded: OPEN. tools/loopback-witness/loopback-witness.js searches only 50 to 4000 Hz, so any output above 4 kHz is reported at its octave below.
+- `gm-commit-refusals-message-lint`: left the open list after the 2026-11-06 dump. Last recorded: Partial cause of git_commit failures in this project: the commit-message gate refuses subjects over 50 characters and body lines over 72. Detail: DECISIONS.md.
+- `gm-lean-walk-evidence-missing`: left the open list after the 2026-11-06 dump. Last recorded: gm walks in this project write no .gm/lean-walk evidence. phase_history shows JTBD, XYPROB, EARS and INVEST were reached, and none of them left a file, so the walk coverage the dream-rsi inference reads is 0 by construction. Detail: DECISIONS.md.
+- `goal-transpose-vocoder-predictable`: left the open list after the 2026-11-06 dump. Last recorded: GOAL (means-free). Acceptance in EARS. Detail: DECISIONS.md.
+- `means-ac-tracker-octave-flip`: left the open list after the 2026-11-06 dump. Last recorded: MEANS: remove octave jumps at their source. Acceptance in EARS. Detail: DECISIONS.md.
+- `means-live-loopback-witness`: left the open list after the 2026-11-06 dump. Last recorded: MEANS: a live witness loop needing no human. Acceptance in EARS.
+- `means-transpose-corpus-breadth`: left the open list after the 2026-11-06 dump. Last recorded: MEANS: prove behaviour over as much real material as exists. Acceptance in EARS. Detail: DECISIONS.md.
+- `means-transpose-latency-floor`: left the open list after the 2026-11-06 dump. Last recorded: MEANS: lowest achievable latency, proved. Acceptance in EARS. Detail: DECISIONS.md, measurements-archive.md.
+- `means-vocoder-formant-quality`: left the open list after the 2026-11-06 dump. Last recorded: MEANS: make the vocoder and formant layer as predictable as the transpose. Acceptance in EARS. Detail: DECISIONS.md.
+- `plan-crotale-window-sensitivity`: left the open list after the 2026-11-06 dump. Last recorded: OPEN. The crotale baseline tracker output is bimodal (61, 170, 708 Hz plateau, 941, 1400-1500 Hz), so its settled value moves about 4 times with the window (t >= 1.0 s gives 708.6 Hz; second-half gives 170.2 Hz). Detail: DECISIONS.md.
+- `plan-dawdreamer-harness-commit`: left the open list after the 2026-11-06 dump. Last recorded: BLOCKED ON USER. The DawDreamer offline render harness (dd_faust_render.py, dd_pitch_run.py, drafted by the DawDreamer session in dd-render) is not committed to mc-420. Detail: DECISIONS.md.
+- `plan-defect-midi96-instability`: left the open list after the 2026-11-06 dump. Last recorded: OPEN. The device lock for a 2093 Hz input held at MIDI 96 reads 149.55 Hz (about 4 octaves low) consistently, while the offline lock run for the same inputs is unstable (2009 Hz, ncc 0.65). Detail: DECISIONS.md.
+- `plan-defect-piano-lowbass-ac-silent`: left the open list after the 2026-11-06 dump. Last recorded: OPEN. pitchtracker_ac outputs 0 Hz on the whole of piano_low_A1.wav (55.69 Hz) and on balloon_pop_transient.wav, on both the 5d298ed2 and 934258b builds and on the c2100 variant. Detail: DECISIONS.md.
+- `plan-piano-transient-measurement`: left the open list after the 2026-11-06 dump. Last recorded: OPEN, blocked on measurement. The piano transient-octave claim cannot be judged: the piano note window sits 2 to 3 dB over silence, below the 10 dB validity rule, so every piano lock case is INVALID. Detail: DECISIONS.md.
+- `plan-profile-voice-path`: left the open list after the 2026-11-06 dump. Last recorded: OPEN. Profile the remaining hotspot items from the list sent to the DawDreamer session: item 2 (six pitch_poly voices) measured at 3.5 percent of one core with the shared tracker included and about 2.4 percent with the tracker stubbed; the LPC formant shaper adds about 3.3 points. Detail: DECISIONS.md.
+- `plan-variant-v3-gate`: left the open list after the 2026-11-06 dump. Last recorded: OPEN. Variant v3 (full 2600 candidate list used only when the base pick is above 1000 Hz; sha256 2b7a6698..., scratchpad v2/var/v3.dsp) is being compiled and gated by the DawDreamer session. Detail: DECISIONS.md.
+- Closed in the 2026-11-06 campaign: `docs-origin-formula-misses-phase-wrap`, `phrase-gap-triage-mc420-gm-scope-23`, `gap-38-20813-status-field-semantics`, `gap-76-ci-hardware-verifiers`, `gap-80-duplicate-sim-step`, `gap-81-phrase-anchor-path-gate`, `gap-51-join-race-tempo-authority`, `clear-reset-corrected-gate`.

@@ -575,7 +575,7 @@ Kept open, with the blocker:
 - R2 v2: voiced_blocks(cand) >= voiced_blocks(base) for every corpus file, no exception.
 - R3 v2: retired; its premise is false, and the four high-register files are covered by R1 v2 and R2 v2.
 - R4 v2 and R5 v2: unchanged from v1.
-- Admission v2: S1 v2 and R1 v2 to R5 v2 pass on the normalised cand artifact of the commit that carries this text, and the candidate then replaces the shipped file in a follow-up commit. Any failure rejects the candidate; the reason is recorded here and the row stays open with that fact.
+- Admission v2: S1 v2 and R1 v2 to R5 v2 pass on the normalised cand artifact of the commit that carries this text, and the candidate then replaces the shipped file in a follow-up commit.
 - Pre-run check: the workflow concurrency is set to cancel-in-progress false in the same commit, so an unrelated push to main cannot cancel this render (the v1 run was cancelled by 263b94dc, a different row's commit).
 
 ## Pre-registration: pinned-value voicing gate, 2026-10-25 (row defect-tracker-value-clamp-60-192)

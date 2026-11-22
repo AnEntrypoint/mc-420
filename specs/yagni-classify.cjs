@@ -12,10 +12,6 @@ const fileSet = new Set(files);
 const buildRoots = [/^src\//, /^dsp\//, /^effects\//, /^kernel\//, /^image\//, /^config\//, /^vendor\//, /^ci\//, /^\.github\/workflows\//];
 const docRoots = new Set(['AGENTS.md', 'README.md', 'CLAUDE.md', 'LICENSE', '.gitignore', '.gitattributes', 'docs/PENDING_VALIDATION.md']);
 const runtimeRoots = [/^\.gm\//, /^closes\//, /^\.vscode\//];
-const operatorTools = new Map([
-  ['tools/stage-readiness/check-stage.mjs', 'operate: owner-requested pre-set readiness command (2026-11-14); no doc names it yet'],
-  ['tools/press-latency/press-latency.js', 'operate: press-to-beep harness behind archive#final-rig-timing; no doc names it yet'],
-]);
 const dirReachRoots = [/^test-audio-corpus\//, /^vendor\//, /^docs\/demo\//, /^tools\//];
 const includeRoots = ['src', 'effects/home/faust', 'dsp', 'effects/home', 'vendor/include'];
 
@@ -116,7 +112,6 @@ for (const f of files) {
   if (buildRoots.some((r) => r.test(f))) keep(f, 'architecture: device build or CI tree');
   else if (docRoots.has(f)) keep(f, 'architecture: owner root document');
   else if (f.startsWith('specs/')) keep(f, 'sweep record: the YAGNI and DRY classes and their generator');
-  else if (operatorTools.has(f)) keep(f, operatorTools.get(f));
 }
 const reachDirs = (f) => {
   for (const [d, by] of dirNamedBy) {
@@ -216,14 +211,12 @@ if (outMd) {
   lines.push(`- Red check, dead paths named by a workflow, AGENTS.md or docs/PENDING_VALIDATION.md: ${redDead.length}; dead paths named by any kept file: ${deadNamedByKept.length}.`);
   lines.push(`- Identical-blob groups inside the kept set: ${keptDup.length}, all under docs/witness.`, '');
   lines.push('## Rules', '');
-  lines.push('- keep: under src, dsp, effects, kernel, image, config, vendor, ci or .github/workflows; an owner root document (AGENTS.md, README.md, CLAUDE.md, LICENSE, .gitignore, .gitattributes, docs/PENDING_VALIDATION.md); an operator tool listed below; or reached from a kept file by its repo path, a two-component path suffix, a unique basename, a require/import, a C/C++ include, a Faust import, a Python import, a script run (source, sh, bash, python, node), or a directory under test-audio-corpus, vendor, docs/demo or tools that a kept file names; a nested .gitignore beside kept files; an npm manifest and its lock file when a kept script under it requires one of its dependencies.');
+  lines.push('- keep: under src, dsp, effects, kernel, image, config, vendor, ci or .github/workflows; an owner root document (AGENTS.md, README.md, CLAUDE.md, LICENSE, .gitignore, .gitattributes, docs/PENDING_VALIDATION.md); or reached from a kept file by its repo path, a two-component path suffix, a unique basename, a require/import, a C/C++ include, a Faust import, a Python import, a script run (source, sh, bash, python, node), or a directory under test-audio-corpus, vendor, docs/demo or tools that a kept file names; a nested .gitignore beside kept files; an npm manifest and its lock file when a kept script under it requires one of its dependencies.');
   lines.push('- runtime: .gm, closes and .vscode state.');
   lines.push('- duplicate: the same blob as another path, the kept or lexically first copy being canonical.');
   lines.push('- generated: a docs/witness output that nothing kept reaches.');
   lines.push('- dead: nothing kept reaches it.', '');
-  lines.push('## Operator-tool overrides', '');
-  for (const [p, why] of operatorTools) lines.push(`- ${p}: ${why}`);
-  lines.push('', '## Counts by directory', '', '| directory | class | files |', '| --- | --- | --- |');
+  lines.push('## Counts by directory', '', '| directory | class | files |', '| --- | --- | --- |');
   for (const [k, v] of [...byDir].sort()) { const [d, c] = k.split('\t'); lines.push(`| ${d} | ${c} | ${v} |`); }
   for (const cls of ['dead', 'runtime', 'duplicate', 'generated']) {
     lines.push('', `## ${cls} paths`, '');
