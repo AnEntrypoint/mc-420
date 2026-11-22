@@ -1,0 +1,1399 @@
+# mc-420 YAGNI and DRY: paths removed from HEAD
+
+Generated from `git diff 7d41ed2f HEAD` with the S1/S2 classes. Every removal is recoverable from git history; untracked paths stay on disk.
+
+## Counts
+
+| class / stage | paths |
+| --- | --- |
+| dead / S3 deleted | 66 |
+| dead / S4 untracked, kept on disk | 18 |
+| duplicate / S2 untracked, kept on disk | 561 |
+| generated / S2 untracked, kept on disk | 654 |
+| generated / S5 untracked: its only citer was untracked | 1 |
+| keep / S3 deleted | 1 |
+| runtime / S2 untracked, kept on disk | 74 |
+| runtime / S5 moved | 1 |
+| runtime / S5 untracked: citation moved | 1 |
+
+Total: 1377.
+
+## Paths
+
+- .gm/analyze-hiss.py: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/deploy-device-binary.js: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/disciplines/default/fiber-state.json: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/fsm-graph-rejected.json: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/mcast-rate.js: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/mutables.yml: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/pull-usbrec-slice.js: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/reassoc-watch.js: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/resnap-rb3.js: runtime; S5 moved to tools/timing/resnap-rb3.js; gm runtime or editor state (.gm)
+- .gm/scan-deps-stamp.json: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/adr034-formula-check-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/adr034-hardware-rerun-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/adr034-impose-target-pathline-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/adr034-telemetry-change-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/alsa-roundtrip-77bd050c-vs-6abaacee-source-check-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/alsa-roundtrip-peer-shift-analysis-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/archive-truncation-restore-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/attribution-compliance-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/campaign-ledger-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/consistency-check-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-auto-update-landed-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-item1-landed-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-item1-lane-restart-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-item2-landed-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-item2-lane-restart-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-job-status-wait-cap-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-next-lane-handoff-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-pin-loss-at-a73f023-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-push-true-landed-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-repin-landed-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/gm-windows-release-red-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/hotdeploy-adr034-after.json: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/hotdeploy-adr034-before.json: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/hotdeploy-item2-after.json: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/hotdeploy-item2-before.json: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item1-clear-reset-preregistration-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item1-clear-reset-run-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item1-clear-reset-witness-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item1-corrected-gate-run-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item1-corrected-gate-witness-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item1-grep-untracked-probe.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item11-gap-38-76-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item11-gap-80-81-51-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item11-phrase-gap-triage-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item2-hotdeploy-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item3-window3-adr034-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/item5-rb3-origin-drift-analysis-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/offline-validation-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/parent-alsa-roundtrip-pregistered-verdict-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/peer-path-diff-pregistered-verdict-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/plans-restore-and-anchor-verification-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/post-restore-offline-suite-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/restart-control-20261106.jsonl: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/restart-control-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/restart-control-verdict-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/row-store-hygiene-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/served-skill-propagation-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/window4a-end-to-end-verdict-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/window4a-peer-present-latency-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/window4a-peer-present-latency.jsonl: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/write-back-audit-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness-out/write-back-rule-20261106.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .gm/witness/corpus-pitch-reference.txt: runtime; S5 untracked: citation moved to docs/witness/corpus-pitch-reference.md; gm runtime or editor state (.gm)
+- .gm/witness/mutables-triage-6.json: runtime; S2 untracked, kept on disk; gm runtime or editor state (.gm)
+- .vscode/settings.json: runtime; S2 untracked, kept on disk; gm runtime or editor state (.vscode)
+- CONTRIBUTING.md: dead; S3 deleted; no reference anywhere in tracked text
+- Dockerfile.arm64build: dead; S3 deleted; no reference anywhere in tracked text
+- Dockerfile.codegen: dead; S3 deleted; no reference anywhere in tracked text
+- build-local.sh: dead; S3 deleted; no reference anywhere in tracked text
+- closes/clear-reset-corrected-gate.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- closes/decision-7ms-invariant-peer-present-engaged-figure.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- closes/docs-archive-anchor-references-unresolved.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- closes/docs-origin-formula-misses-phase-wrap.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- closes/gap-38-20813-status-field-semantics.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- closes/gap-51-join-race-tempo-authority.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- closes/gap-76-ci-hardware-verifiers.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- closes/gap-80-duplicate-sim-step.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- closes/gap-81-phrase-anchor-path-gate.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- closes/phrase-gap-triage-mc420-gm-scope-23.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- closes/pi-phase-capture-128-fold-rb.txt: runtime; S2 untracked, kept on disk; gm runtime or editor state (closes)
+- docs/GLOSSARY.md: dead; S3 deleted; named only by unkept docs/README.md
+- docs/HARDWARE-TIMING-RUNBOOK.md: dead; S3 deleted; named only by unkept .gm/witness-out/item5-rb3-origin-drift-analysis-20261106.txt
+- docs/README.md: dead; S3 deleted; named only by unkept CONTRIBUTING.md
+- docs/VISUAL-METRONOME-ON-DEVICE-PLAN.md: dead; S3 deleted; no reference anywhere in tracked text
+- docs/sources/iowa-mis-index.html: dead; S3 deleted; no reference anywhere in tracked text
+- docs/witness/ALLDONE: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/a1-dropout/gate.py: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/a1-dropout/hv_base_marimba_m43.done: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/a1-dropout/hv_base_marimba_m43.err: duplicate; S2 untracked, kept on disk; same blob as .gm/fsm-graph-rejected.json
+- docs/witness/a1-dropout/hv_hv_marimba_m43.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/a1-dropout/hv_hv_marimba_m43.err: duplicate; S2 untracked, kept on disk; same blob as .gm/fsm-graph-rejected.json
+- docs/witness/a1-dropout/old_a1.err: duplicate; S2 untracked, kept on disk; same blob as .gm/fsm-graph-rejected.json
+- docs/witness/a1-dropout/old_dbg.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/a1-dropout/sha256.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/a1-dropout/va_a1.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/a1-dropout/va_a1.err: duplicate; S2 untracked, kept on disk; same blob as .gm/fsm-graph-rejected.json
+- docs/witness/a1-dropout/va_dbg.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/agentsmd-compaction.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c1r1.restart.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c1r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c1r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c1r3.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c1r3.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c2a_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c2a_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c2a_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c2b_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c2b_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c2b_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c2b_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c3_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c3_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c3_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c3_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c4_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c4_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c4_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c4_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c5_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c5_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/c5_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/c5_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/captures.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/ceiling-m84-r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/ceiling-m84-r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/ceiling-m90-r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/ceiling-m90-r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/ceiling-m96-r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/ceiling-m96-r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/ceiling-sha256.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-A1.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-A1.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-A2.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-A2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-B1.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-B1.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-B2.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-C1.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-C1.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-C2.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/clamp-C2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/granulator-live.js: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/granulator-live.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/granulator-live2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/granulator-tonal.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/guard-trace-m84.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/guard-trace-m84.witness.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/guard-trace-m90.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/guard-trace-m90.witness.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/guard-trace-m96.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/guard-trace-m96.witness.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/BASELINE-PIN.md: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/base.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/hv-corpus/base.err: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/hv-corpus/hv.err: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/base.err
+- docs/witness/hv-corpus/hv.go: duplicate; S2 untracked, kept on disk; same blob as .gm/fsm-graph-rejected.json
+- docs/witness/hv-corpus/hv__balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-corpus/hv__bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-corpus/hv__bells_glock_run_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-corpus/hv__cello_low_sulC_A2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__clarinet_high_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__crotale_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-corpus/hv__cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-corpus/hv__flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__glockenspiel_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-corpus/hv__guitar_pluck_C4B4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__guitar_pluck_C4B4.txt
+- docs/witness/hv-corpus/hv__marimba_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-corpus/hv__marimba_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/a1-dropout/hv_hv_marimba_m43.txt
+- docs/witness/hv-corpus/hv__marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-corpus/hv__piano_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/hv-corpus/hv__piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/hv-corpus/hv__piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/hv-corpus/hv__soprano_sax_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-corpus/hv__trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__trumpet_high_C6.txt
+- docs/witness/hv-corpus/hv__trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__trumpet_low_A3.txt
+- docs/witness/hv-corpus/hv__tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-corpus/hv__vibraphone_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-corpus/hv__violin_high_sulE_C7E7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-corpus/hv__violin_low_sulG_G3B3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-corpus/hv__vocal_female_vibrato.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__vocal_soprano_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__vocal_tenor_operatic_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__vocal_tenor_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-corpus/hv__xylophone_roll_AM_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-corpus/hv__xylophone_run_C7B7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/hv-floor/hv.err: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv__balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv__bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv__bells_glock_run_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv__cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__cello_low_sulC_A2.txt
+- docs/witness/hv-floor/hv__clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__clarinet_high_C6B6.txt
+- docs/witness/hv-floor/hv__crotale_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv__cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv__flute_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__flute_high_C7.txt
+- docs/witness/hv-floor/hv__flute_trill_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__flute_trill_high_C7.txt
+- docs/witness/hv-floor/hv__glockenspiel_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv__guitar_pluck_C4B4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__guitar_pluck_C4B4.txt
+- docs/witness/hv-floor/hv__marimba_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv__marimba_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/a1-dropout/hv_hv_marimba_m43.txt
+- docs/witness/hv-floor/hv__marimba_roll_AM_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__marimba_roll_AM_C5B5.txt
+- docs/witness/hv-floor/hv__noise_rms1e-4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv__noise_rms3e-5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv__oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv__piano_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/hv-floor/hv__piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/hv-floor/hv__piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/hv-floor/hv__sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/hv-floor/hv__sine_110.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_110.base.txt
+- docs/witness/hv-floor/hv__sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_220.base.txt
+- docs/witness/hv-floor/hv__sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_440.base.txt
+- docs/witness/hv-floor/hv__sine_55.69.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_55.69.base.txt
+- docs/witness/hv-floor/hv__soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__soprano_sax_high_C6.txt
+- docs/witness/hv-floor/hv__tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv__trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__trumpet_high_C6.txt
+- docs/witness/hv-floor/hv__trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__trumpet_low_A3.txt
+- docs/witness/hv-floor/hv__tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv__vibraphone_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv__violin_high_sulE_C7E7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv__violin_low_sulG_G3B3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv__vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__vocal_female_vibrato.txt
+- docs/witness/hv-floor/hv__vocal_male_baritone_scale.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__vocal_male_baritone_scale.txt
+- docs/witness/hv-floor/hv__vocal_melody_twinkle_CC0.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__vocal_melody_twinkle_CC0.txt
+- docs/witness/hv-floor/hv__vocal_soprano_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__vocal_soprano_range_PD.txt
+- docs/witness/hv-floor/hv__vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__vocal_tenor_operatic_PD.txt
+- docs/witness/hv-floor/hv__vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__vocal_tenor_range_PD.txt
+- docs/witness/hv-floor/hv__xylophone_roll_AM_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv__xylophone_run_C7B7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv_floor1e-7.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/hv-floor/hv_floor1e-7.err: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-floor/hv.err
+- docs/witness/hv-floor/hv_floor1e-7__balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv_floor1e-7__bassoon_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__bells_glock_run_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__cello_low_sulC_A2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__clarinet_high_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__crotale_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv_floor1e-7__cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv_floor1e-7__flute_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__flute_high_C7.txt
+- docs/witness/hv-floor/hv_floor1e-7__flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__glockenspiel_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv_floor1e-7__guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__noise_rms1e-4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv_floor1e-7__noise_rms3e-5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv_floor1e-7__oboe_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__piano_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/hv-floor/hv_floor1e-7__piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/hv-floor/hv_floor1e-7__piano_mid_C4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/hv-floor/hv_floor1e-7__sine_110.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_110.base.txt
+- docs/witness/hv-floor/hv_floor1e-7__sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_220.base.txt
+- docs/witness/hv-floor/hv_floor1e-7__sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_440.base.txt
+- docs/witness/hv-floor/hv_floor1e-7__sine_55.69.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_55.69.base.txt
+- docs/witness/hv-floor/hv_floor1e-7__soprano_sax_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__tamtam_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__trumpet_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__trumpet_low_A3.txt
+- docs/witness/hv-floor/hv_floor1e-7__tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv_floor1e-7__vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__vocal_female_vibrato.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__vocal_soprano_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/hv-floor/hv_floor1e-7__vocal_tenor_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-7__xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/hv-floor/hv_floor1e-8.err: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-floor/hv.err
+- docs/witness/hv-floor/hv_floor1e-8__balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv_floor1e-8__bassoon_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__bells_glock_run_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__cello_low_sulC_A2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__clarinet_high_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/hv-floor/hv_floor1e-8__flute_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-corpus/hv__flute_high_C7.txt
+- docs/witness/hv-floor/hv_floor1e-8__flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__noise_rms1e-4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv_floor1e-8__noise_rms3e-5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/hv-floor/hv_floor1e-8__oboe_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/hv-floor/hv_floor1e-8__piano_mid_C4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/hv-floor/hv_floor1e-8__sine_110.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_110.base.txt
+- docs/witness/hv-floor/hv_floor1e-8__sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_220.base.txt
+- docs/witness/hv-floor/hv_floor1e-8__sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_440.base.txt
+- docs/witness/hv-floor/hv_floor1e-8__sine_55.69.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_55.69.base.txt
+- docs/witness/hv-floor/hv_floor1e-8__soprano_sax_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__tamtam_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__trumpet_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__trumpet_low_A3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__tuba_run_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__vocal_female_vibrato.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__vocal_soprano_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/hv-floor/hv_floor1e-8__vocal_tenor_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/hv-floor/hv_floor1e-8__xylophone_run_C7B7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/hv-floor/hv_floor1e-7__xylophone_run_C7B7.txt
+- docs/witness/hv-floor/sha256.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/job2-piano-highC7-note96.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/job2-sine2093-note96-gain09.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/job2-sine2093-note96.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/first_minimum_sim.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/lock_flute_high_C7_t98.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/lock_piano_high_C7_t98.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/lock_piano_low_A1_t35.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/lock_piano_t62.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/lock_piano_t62_g1.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/lock_soprano_sax_t86.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/lock_trumpet_low_A3_t59.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/sweep/sweep_guitar_pluck_C4B4_t62.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/sweep/sweep_vibraphone_mid_C5B5_t74.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/live-ground-truth/sweep/sweep_violin_high_sulE_C7E7_t98.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/logs.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/loopback-closed.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/loopback-granulator.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/loopback-witness-selftest-8khz.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/midi96/hyp1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/midi96/hyp3.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/midi96/nsd.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/midi96/spec.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/midi96/sweep.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/midi96/sweep2.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/midi96/sweep_semis12-24_and_ext400-2000.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/midi96/sweep_semis20-24_and_ext520-640.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/mutables-triage-6.json: duplicate; S2 untracked, kept on disk; same blob as .gm/witness/mutables-triage-6.json
+- docs/witness/note-change/hv.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/note-change/hv.harm.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/note-change/hv.inharm.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/note-change/hv__note_change.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/note-change/hv__note_change_harm.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/note-change/hv__note_change_inharm_freeFreeBeam.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/note-change/hv__note_change_inharm_quoted1x4x10.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/note-change/hv_floor1e-8.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/note-change/hv_floor1e-8.harm.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/note-change/hv_floor1e-8.inharm.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/note-change/hv_floor1e-8__note_change.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/note-change/hv_floor1e-8__note_change_harm.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/note-change/hv_floor1e-8__note_change_inharm_freeFreeBeam.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/note-change/hv_floor1e-8__note_change_inharm_quoted1x4x10.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/note-change/note_change_inharm_freeFreeBeam.truth.json: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/note-change/note_change_inharm_quoted1x4x10.truth.json: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline-lock-render.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_2093.notes.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_2093.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_2093_m84.csv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_2093_m84.err: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_2093_m90.csv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_2093_m90.err: duplicate; S2 untracked, kept on disk; same blob as docs/witness/offline_trace_2093_m84.err
+- docs/witness/offline_trace_2093_m96.csv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_2093_m96.err: duplicate; S2 untracked, kept on disk; same blob as docs/witness/offline_trace_2093_m84.err
+- docs/witness/offline_trace_ext1500.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_ext1500_m84.csv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_ext1500_m84.err: duplicate; S2 untracked, kept on disk; same blob as docs/witness/offline_trace_2093_m84.err
+- docs/witness/offline_trace_ext1500_m90.csv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_ext1500_m90.err: duplicate; S2 untracked, kept on disk; same blob as docs/witness/offline_trace_2093_m84.err
+- docs/witness/offline_trace_ext1500_m96.csv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/offline_trace_ext1500_m96.err: duplicate; S2 untracked, kept on disk; same blob as docs/witness/offline_trace_2093_m84.err
+- docs/witness/piano-valid-2/n45_g1_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid-2/n45_g1_r1.restart.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid-2/n45_g1_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid-2/n45_g1_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/piano-valid-2/n45_g1_r1.restart.txt
+- docs/witness/piano-valid-2/n60_g1_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid-2/n60_g1_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/piano-valid-2/n45_g1_r1.restart.txt
+- docs/witness/piano-valid-2/n60_g1_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid-2/n60_g1_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/piano-valid-2/n45_g1_r1.restart.txt
+- docs/witness/piano-valid-2/results.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid-2/s440_57_g1_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid-2/s440_57_g1_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/piano-valid-2/n45_g1_r1.restart.txt
+- docs/witness/piano-valid-2/s440_57_g1_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid-2/s440_57_g1_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/piano-valid-2/n45_g1_r1.restart.txt
+- docs/witness/piano-valid-2/selftest.log: duplicate; S2 untracked, kept on disk; same blob as docs/witness/loopback-witness-selftest-8khz.log
+- docs/witness/piano-valid-2/sha256.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/case.sh: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/levels.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/lvl.js: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/n45_g1_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/n45_g1_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/piano-valid/n45_g1_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/n60_g1_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/n60_g1_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/piano-valid/n60_g1_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/p60_g1_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/p60_g1_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/piano-valid/p60_g2_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/p60_g2_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/piano-valid/results.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/s440_57_g1_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/s440_57_g1_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/piano-valid/s440_57_g1_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/piano-valid/sha256.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/evidence.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/gate.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/gate30.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/lock_results.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/prep30.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/table.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_bells_glock_run_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bells_glock_run_C6B6.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_cello_low_sulC_A2.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_clarinet_high_C6B6.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_cymbal_inharmonic.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_flute_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__flute_high_C7.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_flute_trill_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_flute_trill_high_C7.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_oboe_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_piano_mid_C4.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_sine_1500.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_sine_2093.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_2093.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_220.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_sine_3000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_soprano_sax_high_C6.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tamtam_inharmonic.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_high_C6.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tuba_run_C2B2.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_vibraphone_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vibraphone_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_female_vibrato.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_vocal_melody_twinkle_CC0.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_melody_twinkle_CC0.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_vocal_soprano_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_soprano_range_PD.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_range_PD.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_bells_glock_run_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bells_glock_run_C6B6.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_cello_low_sulC_A2.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_clarinet_high_C6B6.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_cymbal_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_guitar_pluck_C4B4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_guitar_pluck_C4B4.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_oboe_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_piano_mid_C4.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_sine_1500.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_sine_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_220.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_sine_3000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_soprano_sax_high_C6.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tamtam_inharmonic.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_high_C6.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tuba_run_C2B2.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_female_vibrato.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_vocal_soprano_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_soprano_range_PD.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_range_PD.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_bells_glock_run_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_cello_low_sulC_A2.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_clarinet_high_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_cymbal_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_marimba_roll_AM_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_marimba_roll_AM_C5B5.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_oboe_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_piano_mid_C4.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_sine_1500.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_sine_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_220.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_sine_3000.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_soprano_sax_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tamtam_inharmonic.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_trumpet_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tuba_run_C2B2.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_vibraphone_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_vibraphone_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_female_vibrato.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_vocal_male_baritone_scale.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_vocal_male_baritone_scale.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_vocal_soprano_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_soprano_range_PD.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_range_PD.txt
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/variants.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/variants/v1.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock-sub30/variants/v3.faust.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/lock/table.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/sha256.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/table.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/tools/analyze.py: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/tools/gen.py: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/tools/main.inc: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/tools/mkdrv.py: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/tools/noalarm.c: duplicate; S2 untracked, kept on disk; same blob as kept tools/faust-pinned/noalarm.c
+- docs/witness/pitch-2093-raw/tools/runall.sh: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_bells_glock_run_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_cello_low_sulC_A2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_clarinet_high_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_cymbal_inharmonic.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_oboe_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_piano_mid_C4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_sine_1500.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_sine_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_sine_220.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_sine_3000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_soprano_sax_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_tamtam_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_trumpet_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tuba_run_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_vocal_female_vibrato.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_vocal_soprano_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_base_vocal_tenor_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_base_xylophone_run_C7B7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_xylophone_run_C7B7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_bells_glock_run_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_bells_glock_run_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_cello_low_sulC_A2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_clarinet_high_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_crotale_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_crotale_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_cymbal_inharmonic.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_flute_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_flute_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_flute_trill_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_flute_trill_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_glockenspiel_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_glockenspiel_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_guitar_pluck_C4B4.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_guitar_pluck_C4B4.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_marimba_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_marimba_low_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_marimba_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_marimba_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_marimba_roll_AM_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_marimba_roll_AM_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_oboe_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_bells_glock_run_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_bells_glock_run_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_cello_low_sulC_A2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_clarinet_high_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v2_cymbal_inharmonic.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_oboe_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_piano_mid_C4.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_sine_1500.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_sine_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_sine_220.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_sine_3000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_soprano_sax_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_tamtam_inharmonic.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_trumpet_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tuba_run_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_female_vibrato.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vocal_soprano_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_soprano_range_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_tenor_range_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_bells_glock_run_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_cello_low_sulC_A2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_clarinet_high_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_cymbal_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_flute_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_flute_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_flute_trill_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_flute_trill_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_glockenspiel_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_glockenspiel_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_oboe_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_piano_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_piano_mid_C4.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_sine_1500.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_sine_2093.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_sine_2093.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_sine_220.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_sine_3000.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_soprano_sax_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_tamtam_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_trumpet_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_tuba_run_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_vocal_female_vibrato.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_vocal_soprano_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_vocal_tenor_operatic_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_vocal_tenor_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_piano_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_piano_mid_C4.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_sine_1500.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_sine_2093.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_sine_2093.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_sine_220.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_sine_3000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_soprano_sax_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_tamtam_inharmonic.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_trumpet_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tuba_run_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_vibraphone_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vibraphone_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_violin_high_sulE_C7E7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_violin_high_sulE_C7E7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_violin_low_sulG_G3B3.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_violin_low_sulG_G3B3.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_female_vibrato.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_vocal_male_baritone_scale.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_male_baritone_scale.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_vocal_melody_twinkle_CC0.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_melody_twinkle_CC0.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_vocal_soprano_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_soprano_range_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_tenor_range_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_xylophone_roll_AM_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_xylophone_roll_AM_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q2_xylophone_run_C7B7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_xylophone_run_C7B7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_bells_glock_run_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_cello_low_sulC_A2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_clarinet_high_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_cymbal_inharmonic.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_glockenspiel_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_glockenspiel_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_guitar_pluck_C4B4.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_guitar_pluck_C4B4.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_marimba_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_marimba_low_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_marimba_roll_AM_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_marimba_roll_AM_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_oboe_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_bells_glock_run_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_bells_glock_run_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_cello_low_sulC_A2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_clarinet_high_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_cymbal_inharmonic.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_oboe_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_piano_mid_C4.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_1000.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_1500.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_sine_220.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_3000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_soprano_sax_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_tamtam_inharmonic.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_trumpet_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tuba_run_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_female_vibrato.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_vocal_male_baritone_scale.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vocal_male_baritone_scale.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_vocal_melody_twinkle_CC0.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vocal_melody_twinkle_CC0.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_vocal_soprano_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_tenor_range_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_bells_glock_run_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_cello_low_sulC_A2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_clarinet_high_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_cymbal_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_flute_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_flute_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_flute_trill_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_flute_trill_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_glockenspiel_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_glockenspiel_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_oboe_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_piano_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_piano_mid_C4.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_1000.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_sine_1500.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_sine_2093.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_2093.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_sine_220.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_sine_3000.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_soprano_sax_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_tamtam_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_trumpet_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_tuba_run_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_vocal_female_vibrato.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_vocal_soprano_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_vocal_tenor_operatic_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_vocal_tenor_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_4200_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_piano_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_piano_mid_C4.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_1000.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_sine_1500.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_sine_2093.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_sine_2093.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_sine_220.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_sine_3000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_soprano_sax_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_tamtam_inharmonic.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_trumpet_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tuba_run_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_female_vibrato.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_vocal_male_baritone_scale.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_male_baritone_scale.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_vocal_melody_twinkle_CC0.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_melody_twinkle_CC0.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_vocal_soprano_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q4_p2_2600_vocal_soprano_range_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_tenor_range_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p1q4_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_bells_glock_run_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_bells_glock_run_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_cello_low_sulC_A2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_clarinet_high_C6B6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_cymbal_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_oboe_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_piano_mid_C4.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_sine_1500.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_sine_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_sine_220.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_sine_3000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_1500.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_soprano_sax_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_tamtam_inharmonic.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_trumpet_high_C6.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tuba_run_C2B2.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_vibraphone_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vibraphone_mid_C5B5.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_female_vibrato.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_vocal_male_baritone_scale.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_2600_vocal_male_baritone_scale.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_vocal_soprano_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_soprano_range_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_base_vocal_tenor_range_PD.txt
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/traces/trace_p2_2600_xylophone_run_C7B7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_v1_xylophone_run_C7B7.txt
+- docs/witness/pitch-2093-raw/variants/p1q2.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/variants/p1q2_p2_2600.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/variants/p1q2_p2_4200.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/variants/p1q4.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/variants/p1q4_p2_2600.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/variants/p1q4_p2_4200.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-2093-raw/variants/p2_2600.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-934258b-flute-trill/drv_wav.c: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-934258b-flute-trill/evidence.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-934258b-flute-trill/pt_base_5d298ed2.dsp: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/variants/base.dsp
+- docs/witness/pitch-934258b-flute-trill/pt_new_934258b.dsp: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/variants/p1q4_p2_2600.dsp
+- docs/witness/pitch-934258b-flute-trill/settle.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-934258b-flute-trill/sha256.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-934258b-flute-trill/trace_base.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-934258b-flute-trill/trace_new.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/BASELINE-PIN.md: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/base.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/pitch-ceiling/base.err: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/base__note_change.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/base__note_change_harm.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/base__note_change_inharm_freeFreeBeam.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/base__note_change_inharm_quoted1x4x10.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/ceiling.done: duplicate; S2 untracked, kept on disk; same blob as docs/witness/a1-dropout/hv_base_marimba_m43.done
+- docs/witness/pitch-ceiling/ceiling.err: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/ceiling__balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-ceiling/ceiling__bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/pitch-ceiling/ceiling__bells_glock_run_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-ceiling/ceiling__cello_low_sulC_A2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/ceiling__clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__clarinet_high_C6B6.txt
+- docs/witness/pitch-ceiling/ceiling__crotale_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-ceiling/ceiling__cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-ceiling/ceiling__flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/ceiling__flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/ceiling__glockenspiel_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-ceiling/ceiling__guitar_pluck_C4B4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__guitar_pluck_C4B4.txt
+- docs/witness/pitch-ceiling/ceiling__marimba_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/pitch-ceiling/ceiling__marimba_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/a1-dropout/hv_base_marimba_m43.txt
+- docs/witness/pitch-ceiling/ceiling__marimba_roll_AM_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__marimba_roll_AM_C5B5.txt
+- docs/witness/pitch-ceiling/ceiling__note_change.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/ceiling__note_change_harm.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-ceiling/base__note_change_harm.txt
+- docs/witness/pitch-ceiling/ceiling__note_change_inharm_freeFreeBeam.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-ceiling/base__note_change_inharm_freeFreeBeam.txt
+- docs/witness/pitch-ceiling/ceiling__note_change_inharm_quoted1x4x10.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-ceiling/base__note_change_inharm_quoted1x4x10.txt
+- docs/witness/pitch-ceiling/ceiling__oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/pitch-ceiling/ceiling__piano_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-ceiling/ceiling__piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-ceiling/ceiling__piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-ceiling/ceiling__sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-ceiling/ceiling__sine_110.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_sine_220.txt
+- docs/witness/pitch-ceiling/ceiling__sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/traces/trace_p1q2_p2_4200_sine_220.txt
+- docs/witness/pitch-ceiling/ceiling__sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_440.base.txt
+- docs/witness/pitch-ceiling/ceiling__sine_55.69.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/ceiling__soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__soprano_sax_high_C6.txt
+- docs/witness/pitch-ceiling/ceiling__tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-ceiling/ceiling__trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__trumpet_high_C6.txt
+- docs/witness/pitch-ceiling/ceiling__trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__trumpet_low_A3.txt
+- docs/witness/pitch-ceiling/ceiling__tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-ceiling/ceiling__vibraphone_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/pitch-ceiling/ceiling__violin_high_sulE_C7E7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/pitch-ceiling/ceiling__violin_low_sulG_G3B3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__bassoon_low_C2B2.txt
+- docs/witness/pitch-ceiling/ceiling__vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__vocal_female_vibrato.txt
+- docs/witness/pitch-ceiling/ceiling__vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/ceiling__vocal_melody_twinkle_CC0.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-ceiling/ceiling__vocal_soprano_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/ceiling__vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-ceiling/ceiling__vocal_tenor_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-ceiling/ceiling__xylophone_roll_AM_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-ceiling/ceiling__xylophone_run_C7B7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-lowhz-168b38c2/compile.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/evidence.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/lock_results.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/prep.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/run.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/table.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_bassoon_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bassoon_low_C2B2.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_bells_glock_run_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_bells_glock_run_C6B6.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_cello_low_sulC_A2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_cello_low_sulC_A2.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_clarinet_high_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_clarinet_high_C6B6.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_crotale_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_crotale_high_C7.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_cymbal_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_cymbal_inharmonic.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_flute_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__flute_high_C7.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_flute_trill_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_flute_trill_high_C7.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_glockenspiel_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_glockenspiel_high_C7.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_guitar_pluck_C4B4.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_guitar_pluck_C4B4.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_marimba_low_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_marimba_low_C2B2.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_marimba_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_marimba_mid_C5B5.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_marimba_roll_AM_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_marimba_roll_AM_C5B5.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_oboe_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_oboe_mid_C5B5.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_piano_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_piano_high_C7.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_piano_mid_C4.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_piano_mid_C4.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_sine_110.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_sine_2093.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_2093.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_220.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_sine_55.69.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_55.69.base.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_soprano_sax_high_C6.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_tamtam_inharmonic.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tamtam_inharmonic.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_trumpet_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_high_C6.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_trumpet_low_A3.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_trumpet_low_A3.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_tuba_run_C2B2.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_tuba_run_C2B2.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_vibraphone_mid_C5B5.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vibraphone_mid_C5B5.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_violin_high_sulE_C7E7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_violin_high_sulE_C7E7.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_violin_low_sulG_G3B3.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_violin_low_sulG_G3B3.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_vocal_female_vibrato.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_female_vibrato.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_vocal_male_baritone_scale.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_vocal_male_baritone_scale.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_vocal_melody_twinkle_CC0.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_melody_twinkle_CC0.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_vocal_soprano_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_soprano_range_PD.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_vocal_tenor_operatic_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_operatic_PD.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_tenor_range_PD.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_xylophone_roll_AM_C6B6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_xylophone_roll_AM_C6B6.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_base_xylophone_run_C7B7.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-2093-raw/lock-sub30/traces/trace_base_xylophone_run_C7B7.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_bassoon_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_bells_glock_run_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_cello_low_sulC_A2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_clarinet_high_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_cymbal_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_oboe_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_piano_low_A1.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_piano_mid_C4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_sine_1000.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_sine_110.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_sine_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_sine_220.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_sine_440.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_sine_55.69.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_soprano_sax_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_tamtam_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_trumpet_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_trumpet_low_A3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_tuba_run_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_vocal_female_vibrato.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_vocal_soprano_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_vocal_tenor_operatic_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_vocal_tenor_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-period/cheaper-tau-proposal.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/compile.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/evidence.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/lock_results_va.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/lock_results_vs.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/mkgate.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/split.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/table_va.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/table_vs.tsv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-lowhz-split/traces/trace_va_bassoon_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_bells_glock_run_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_cello_low_sulC_A2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_clarinet_high_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_cymbal_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_flute_trill_high_C7.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_flute_trill_high_C7.txt
+- docs/witness/pitch-lowhz-split/traces/trace_va_glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_oboe_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_piano_low_A1.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_piano_mid_C4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_1000.base.txt
+- docs/witness/pitch-lowhz-split/traces/trace_va_sine_110.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_sine_2093.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_2093.txt
+- docs/witness/pitch-lowhz-split/traces/trace_va_sine_220.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_220.txt
+- docs/witness/pitch-lowhz-split/traces/trace_va_sine_440.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_sine_440.txt
+- docs/witness/pitch-lowhz-split/traces/trace_va_sine_55.69.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_soprano_sax_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_tamtam_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_trumpet_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_trumpet_low_A3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_tuba_run_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_vocal_female_vibrato.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_vocal_soprano_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/pitch-2093-raw/traces/trace_c2100_vocal_soprano_range_PD.txt
+- docs/witness/pitch-lowhz-split/traces/trace_va_vocal_tenor_operatic_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_vocal_tenor_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_va_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_balloon_pop_transient.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__balloon_pop_transient.txt
+- docs/witness/pitch-lowhz-split/traces/trace_vs_bassoon_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_bells_glock_run_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_cello_low_sulC_A2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_clarinet_high_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_crotale_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_cymbal_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_flute_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_flute_trill_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_glockenspiel_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_guitar_pluck_C4B4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_marimba_low_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_marimba_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_marimba_roll_AM_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_oboe_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_piano_high_C7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_piano_low_A1.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/base__piano_high_C7.txt
+- docs/witness/pitch-lowhz-split/traces/trace_vs_piano_mid_C4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_sine_1000.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_sine_1000.txt
+- docs/witness/pitch-lowhz-split/traces/trace_vs_sine_110.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_sine_2093.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_sine_2093.txt
+- docs/witness/pitch-lowhz-split/traces/trace_vs_sine_220.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_sine_440.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_sine_55.69.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/hv-corpus/sine_55.69.base.txt
+- docs/witness/pitch-lowhz-split/traces/trace_vs_soprano_sax_high_C6.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_soprano_sax_high_C6.txt
+- docs/witness/pitch-lowhz-split/traces/trace_vs_tamtam_inharmonic.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_trumpet_high_C6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_trumpet_low_A3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_tuba_run_C2B2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_vibraphone_mid_C5B5.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_violin_high_sulE_C7E7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_violin_low_sulG_G3B3.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_vocal_female_vibrato.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_vocal_male_baritone_scale.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_vocal_melody_twinkle_CC0.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_vocal_soprano_range_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_vocal_tenor_operatic_PD.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_vocal_tenor_range_PD.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/pitch-lowhz-168b38c2/traces/trace_cand_vocal_tenor_range_PD.txt
+- docs/witness/pitch-lowhz-split/traces/trace_vs_xylophone_roll_AM_C6B6.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/traces/trace_vs_xylophone_run_C7B7.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/va.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/pitch-lowhz-split/vs.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/profile-voice-path.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/resonode-after-c738d01.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/resonode-after.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/resonode-after2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/resonode-before.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/return-path-sweep.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/selftest-relfloor.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/selftest.txt
+- docs/witness/silence-control.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/solad-read-lag/compare.mjs: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/solad-read-lag/measure.sh: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/solad-read-lag/results-base.csv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/solad-read-lag/results-u100.csv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/solad-read-lag/results-v32.csv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/solad-read-lag/results-v48.csv: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/drv_p3_2093.c: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/drv_pt_2093.c: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/drv_zc_2093.c: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/mkpt.sh: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/sha256.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/stage-hunt-trace_p3_1000.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/stage-hunt-trace_p3_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/stage-hunt-trace_pt_1000.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/stage-hunt-trace_pt_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/stage-hunt-trace_refinespread4_1000.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/stage-hunt-trace_refinespread4_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/stage-hunt-trace_zc_1000.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/stage-hunt-trace_zc_2093.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/stage-hunt.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/stage-hunt-719/zc_probe.dsp: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/sub16-A-rep1-g2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/sub16-A-rep1-g4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/sub16-A-rep1.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/sub16-A-rep2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/sub16-B-rep1-g4.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/sub16-B-rep2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/sub16-C-rep1.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/sub16-C-rep2.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/sub16-selftest.txt: duplicate; S2 untracked, kept on disk; same blob as kept docs/witness/loopback-witness-selftest.txt
+- docs/witness/tracker-parameter-sweep-addendum.md: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_after12.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_after12.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_after18.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_after18.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_after24.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_after24.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_after30.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_after30.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_after36.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_after36.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_after42.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_after42.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_after48.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_after48.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_after6.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_after6.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_end.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_end.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_redo11_after.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_redo11_after.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_start1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_start1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/c_start2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/c_start2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/hf/acf_check.py: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/hf/acf_result.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/hf/hf_abs.py: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/hf/hf_result.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/hf/spread_result.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/selftest-resume.log: duplicate; S2 untracked, kept on disk; same blob as docs/witness/loopback-witness-selftest-8khz.log
+- docs/witness/transient-sweep/selftest.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/sha256.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_balloon_pop_transient_n48_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_balloon_pop_transient_n48_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_balloon_pop_transient_n48_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_balloon_pop_transient_n48_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_balloon_pop_transient_n60_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_balloon_pop_transient_n60_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_balloon_pop_transient_n60_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_balloon_pop_transient_n60_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_bassoon_low_C2B2_n36_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_bassoon_low_C2B2_n36_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_bassoon_low_C2B2_n36_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_bassoon_low_C2B2_n36_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_bassoon_low_C2B2_n48_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_bassoon_low_C2B2_n48_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_bassoon_low_C2B2_n48_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_bassoon_low_C2B2_n48_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_cello_low_sulC_A2_n45_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_cello_low_sulC_A2_n45_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_cello_low_sulC_A2_n45_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_cello_low_sulC_A2_n45_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_cello_low_sulC_A2_n57_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_cello_low_sulC_A2_n57_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_cello_low_sulC_A2_n57_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_cello_low_sulC_A2_n57_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_crotale_high_C7_n84_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_crotale_high_C7_n84_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_crotale_high_C7_n84_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_crotale_high_C7_n84_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_crotale_high_C7_n96_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_crotale_high_C7_n96_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_crotale_high_C7_n96_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_crotale_high_C7_n96_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_glockenspiel_high_C7_n84_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_glockenspiel_high_C7_n84_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_glockenspiel_high_C7_n84_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_glockenspiel_high_C7_n84_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_glockenspiel_high_C7_n96_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_glockenspiel_high_C7_n96_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_glockenspiel_high_C7_n96_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_glockenspiel_high_C7_n96_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_guitar_pluck_C4B4_n48_r1.FAILED-aplay.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_guitar_pluck_C4B4_n48_r1.FAILED-aplay.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_guitar_pluck_C4B4_n48_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_guitar_pluck_C4B4_n48_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_guitar_pluck_C4B4_n48_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_guitar_pluck_C4B4_n48_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_guitar_pluck_C4B4_n60_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_guitar_pluck_C4B4_n60_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_guitar_pluck_C4B4_n60_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_guitar_pluck_C4B4_n60_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_marimba_mid_C5B5_n60_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_marimba_mid_C5B5_n60_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_marimba_mid_C5B5_n60_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_marimba_mid_C5B5_n60_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_marimba_mid_C5B5_n72_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_marimba_mid_C5B5_n72_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_marimba_mid_C5B5_n72_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_marimba_mid_C5B5_n72_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_trumpet_low_A3_n45_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_trumpet_low_A3_n45_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_trumpet_low_A3_n45_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_trumpet_low_A3_n45_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_trumpet_low_A3_n57_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_trumpet_low_A3_n57_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_trumpet_low_A3_n57_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_trumpet_low_A3_n57_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vibraphone_mid_C5B5_n60_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vibraphone_mid_C5B5_n60_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vibraphone_mid_C5B5_n60_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vibraphone_mid_C5B5_n60_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vibraphone_mid_C5B5_n72_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vibraphone_mid_C5B5_n72_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vibraphone_mid_C5B5_n72_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vibraphone_mid_C5B5_n72_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_violin_low_sulG_G3B3_n43_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_violin_low_sulG_G3B3_n43_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_violin_low_sulG_G3B3_n43_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_violin_low_sulG_G3B3_n43_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_violin_low_sulG_G3B3_n55_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_violin_low_sulG_G3B3_n55_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_violin_low_sulG_G3B3_n55_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_violin_low_sulG_G3B3_n55_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vocal_female_vibrato_n49_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vocal_female_vibrato_n49_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vocal_female_vibrato_n49_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vocal_female_vibrato_n49_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vocal_female_vibrato_n61_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vocal_female_vibrato_n61_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vocal_female_vibrato_n61_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vocal_female_vibrato_n61_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vocal_male_baritone_scale_n41_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vocal_male_baritone_scale_n41_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vocal_male_baritone_scale_n41_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vocal_male_baritone_scale_n41_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vocal_male_baritone_scale_n53_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vocal_male_baritone_scale_n53_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_vocal_male_baritone_scale_n53_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_vocal_male_baritone_scale_n53_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_xylophone_run_C7B7_n84_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_xylophone_run_C7B7_n84_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_xylophone_run_C7B7_n84_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_xylophone_run_C7B7_n84_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_xylophone_run_C7B7_n96_r1.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_xylophone_run_C7B7_n96_r1.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/transient-sweep/t_xylophone_run_C7B7_n96_r2.log: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/transient-sweep/t_xylophone_run_C7B7_n96_r2.restart.txt: duplicate; S2 untracked, kept on disk; same blob as docs/witness/c1r1.restart.txt
+- docs/witness/trk-below60.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/voiced-count-subblock-prereg.md: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/wav.sha256: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- docs/witness/witness-440-57.txt: generated; S5 untracked: its only citer was untracked; path suffix witness/witness-440-57.txt in docs/plans.md
+- docs/witness/witness-piano-lock.txt: generated; S2 untracked, kept on disk; witness output, no reference from the build, CI, a kept witness or a kept doc
+- test-audio-corpus/user-provided/alx.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/alx2.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/bassline.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/bleep_bloop.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/cleetus.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/didnt.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/dingle.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/drugs.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/energy.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/hair.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/jax.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/jaxsales.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/kimmels_famous_last_words.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/machine1.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/sexy1.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/sexy2.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/test.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test-audio-corpus/user-provided/vampire.wav: dead; S4 untracked, kept on disk; no reference anywhere in tracked text
+- test/control-surface/verify-lpslope-binding.js: dead; S3 deleted; named only by unkept .gm/witness-out/offline-validation-20261106.txt
+- test/faust-flags/README.md: dead; S3 deleted; no reference anywhere in tracked text
+- test/faust-flags/_render_worker.py: dead; S3 deleted; named only by unkept test/faust-flags/README.md, test/faust-flags/ab_fm_def.py
+- test/faust-flags/ab_fm_def.py: dead; S3 deleted; named only by unkept test/faust-flags/README.md
+- test/hardware/adr034-impose-target-preregistration.md: dead; S3 deleted; named only by unkept .gm/witness-out/item3-window3-adr034-20261106.txt, .gm/witness-out/write-back-audit-20261106.txt
+- test/hardware/adr034-peer-present-preregistration.md: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/analyze-diag-gap.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/auto-deploy-watch.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/clear-reset-corrected-gate-preregistration.md: dead; S3 deleted; named only by unkept .gm/witness-out/item1-corrected-gate-witness-20261106.txt, closes/clear-reset-corrected-gate.txt
+- test/hardware/deploy-binary.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/deploy-local-binary.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/deploy.js: dead; S3 deleted; named only by unkept .gm/witness-out/item2-hotdeploy-20261106.txt
+- test/hardware/gen-burst-wav.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/glitch-normalize.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/inject-alsa.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/inject-corpus.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/inject-tone.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/phrase-rebase-backwards-on-device-preregistration.md: dead; S3 deleted; named only by unkept test/hardware/phrase-rebase-backwards-preregistration-amendment-20261107.md
+- test/hardware/phrase-rebase-backwards-preregistration-amendment-20261107.md: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/pull-usb-recording.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/rb3-phase-take-preregistration.md: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/readpos-wrap.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/restart-control-preregistration.md: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/run-restart-control.js: dead; S3 deleted; named only by unkept .gm/witness-out/restart-control-verdict-20261106.txt, .gm/witness-out/offline-validation-20261106.txt
+- test/hardware/ssh-run.js: dead; S3 deleted; named only by unkept test/hardware/run-restart-control.js, test/hardware/restart-control-preregistration.md, .gm/witness-out/item2-hotdeploy-20261106.txt
+- test/hardware/varispeed-record.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/verify-adr034-impose-target.js: dead; S3 deleted; named only by unkept .gm/witness-out/item3-window3-adr034-20261106.txt, test/hardware/adr034-peer-present-preregistration.md
+- test/hardware/verify-armpress-cycle.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/verify-clear-reset-first-take.js: dead; S3 deleted; named only by unkept test/hardware/adr034-impose-target-preregistration.md, .gm/witness-out/item3-window3-adr034-20261106.txt, .gm/witness-out/item1-clear-reset-witness-20261106.txt
+- test/hardware/verify-first-loop-owner.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/verify-groove-gates.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/verify-hotdeploy-latency-gate.js: dead; S3 deleted; named only by unkept .gm/witness-out/item2-hotdeploy-20261106.txt
+- test/hardware/verify-late-lineup.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/verify-link-tempo-follow.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/verify-recorded-beats-declobber.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/verify-three-beat-first-take.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/watch-during-arm.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/hardware/watch-take.js: dead; S3 deleted; no reference anywhere in tracked text
+- test/parity/README.md: dead; S3 deleted; no reference anywhere in tracked text
+- test/pitch-tracker-transient/README.md: dead; S3 deleted; no reference anywhere in tracked text
+- test/pitch-tracker-transient/__pycache__/pitch_measure.cpython-312.pyc: dead; S3 deleted; no reference anywhere in tracked text
+- test/pitch-tracker-transient/autocorr_tracker_reference.dsp: dead; S3 deleted; no reference anywhere in tracked text
+- test/pitch-tracker-transient/model_ac_tracker.py: dead; S3 deleted; named only by unkept test/pitch-tracker-transient/README.md, .gm/mutables.yml
+- test/pitch-tracker-transient/verify_coldstart_window_freeze.py: dead; S3 deleted; no reference anywhere in tracked text
+- test/pitch-tracker-transient/verify_xpose_crossfade_smoothness.py: dead; S3 deleted; no reference anywhere in tracked text
+- test/resonode-sweetspot/gain_fix_ab.py: dead; S3 deleted; no reference anywhere in tracked text
+- test/resonode-sweetspot/real_corpus_excitation.py: dead; S3 deleted; no reference anywhere in tracked text
+- tools/loop-quantization-sim/phrase-turnaround.js: keep; S3 deleted; directory tools/loop-quantization-sim/ read by .github/workflows/test-loop-sim.yml
+- tools/snac-confidence/analyze.py: dead; S3 deleted; no reference anywhere in tracked text
+- tools/snac-confidence/build-dsp.ps1: dead; S3 deleted; named only by unkept docs/witness/offline_trace_2093.notes.txt
+- tools/snac-confidence/diag.py: dead; S3 deleted; no reference anywhere in tracked text
+- tools/snac-confidence/hist.py: dead; S3 deleted; no reference anywhere in tracked text
+- tools/snac-confidence/probe.cpp: dead; S3 deleted; no reference anywhere in tracked text
+- tools/snac-confidence/real.py: dead; S3 deleted; no reference anywhere in tracked text
+- tools/snac-confidence/trace.cpp: dead; S3 deleted; named only by unkept docs/witness/offline_trace_2093.notes.txt
+- tools/snac-confidence/voiced.py: dead; S3 deleted; no reference anywhere in tracked text
+- tools/spectrum/analyze_spectrum.py: dead; S3 deleted; no reference anywhere in tracked text
+- tools/transpose-lab/measure.py: dead; S3 deleted; named only by unkept .gm/mutables.yml
