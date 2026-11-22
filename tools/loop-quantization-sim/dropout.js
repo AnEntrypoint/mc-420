@@ -6,7 +6,9 @@ const {
 const {
   createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples, SIM_SAMPLE_RATE,
 } = require('./world');
-const { readHeadError, makePair } = require('./read-head-lineup');
+const { readHeadError } = require('./read-head-lineup');
+const { makePair } = require('./world');
+const { advancePair } = require('./world');
 
 const kHoldMs = 2000;
 const kStaggerMs = 700;
@@ -16,10 +18,6 @@ const kWatchMs = 25000;
 const kStepMs = 50;
 const kToleranceBeats = 0.05;
 const kNewTempo = 100.0;
-
-function advancePair(a, b, samples) {
-  for (let i = 0; i < samples; i++) { stepOneSample(a); stepOneSample(b); }
-}
 
 function circGap(a, b, period) {
   let d = (a - b) % period;

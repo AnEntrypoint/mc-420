@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-const net = require('net');
-const dgram = require('dgram');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -23,40 +21,9 @@ const kJumpToleranceBeats = 0.2;
 const kPhaseToleranceBeats = 0.05;
 const kPressAlignToleranceBeats = 0.08;
 
-function sendBytes(bytes) {
-  return new Promise((resolve, reject) => {
-    const sock = net.connect({ host, port: 9401 }, () => {
-      sock.write(Buffer.from(bytes), (err) => {
-        if (err) return reject(err);
-        sock.end();
-      });
-    });
-    sock.setTimeout(5000);
-    sock.on('timeout', () => { sock.destroy(); reject(new Error(`connect/write to ${host}:9401 timed out`)); });
-    sock.on('close', resolve);
-    sock.on('error', reject);
-  });
-}
+const { sendBytes, queryTelemetry, pressPad, releasePad } = require('./device-io').deviceIo(host);
+const { sleep, deriveTempoQuantBeats } = require('./device-io');
 
-const pressPad = (note) => sendBytes([0x90, note, 127]);
-const releasePad = (note) => sendBytes([0x80, note, 0]);
-
-function queryTelemetry() {
-  return new Promise((resolve, reject) => {
-    const sock = dgram.createSocket('udp4');
-    const timer = setTimeout(() => { sock.close(); reject(new Error('telemetry query timed out')); }, 3000);
-    sock.on('message', (msg) => {
-      clearTimeout(timer);
-      sock.close();
-      try { resolve(JSON.parse(msg.toString())); }
-      catch (e) { reject(e); }
-    });
-    sock.on('error', (e) => { clearTimeout(timer); reject(e); });
-    sock.send('status', 4445, host);
-  });
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const frac = (v) => v - Math.floor(v);
 const circularDelta = (a, b, len) => {
   let d = (a - b) % len;
@@ -64,24 +31,6 @@ const circularDelta = (a, b, len) => {
   if (d < -len * 0.5) d += len;
   return d;
 };
-
-function deriveTempoQuantBeats(seconds, anchorBpm) {
-  const anchor = anchorBpm > 1 ? anchorBpm : 120;
-  let best = 16;
-  let bestScore = Infinity;
-  let bestInWindow = false;
-  for (let beats = 1; beats <= 128; beats += 1) {
-    const bpm = (60 * beats) / seconds;
-    const inWindow = bpm >= anchor * 0.5 && bpm <= anchor * 2;
-    const score = Math.abs(Math.log2(bpm / anchor));
-    if ((inWindow && !bestInWindow) || (inWindow === bestInWindow && score < bestScore)) {
-      best = beats;
-      bestScore = score;
-      bestInWindow = inWindow;
-    }
-  }
-  return best;
-}
 
 function startPeer() {
   const child = spawn(peerPath, [String(peerBpm), '16', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });

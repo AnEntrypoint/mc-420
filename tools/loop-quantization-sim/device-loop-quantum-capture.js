@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { LINK_QUANTUM, LINK_PHASE_QUANTUM } = require('./link');
 const simCase = require('./phase-capture-128-fold');
+const { circularGap } = require('./world');
 
 const kSrcRoot = path.resolve(__dirname, '..', '..', 'src');
 const kRecordedBeats = [3, 5, 6, 7];
@@ -20,12 +21,6 @@ function parseConst(text, name) {
   const m = text.match(re);
   if (!m) throw new Error('missing constexpr double ' + name);
   return Number(m[1]);
-}
-
-function circularGap(a, b, period) {
-  let d = (a - b) % period;
-  if (d < 0) d += period;
-  return Math.min(d, period - d);
 }
 
 function wrap(value, period) {

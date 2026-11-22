@@ -70,6 +70,15 @@ for (const [f, t] of text) {
   for (const m of t.matchAll(/#\s*include\s*[<"]([^>"]+)[>"]/g)) {
     for (const p of resolveInclude(f, m[1])) addEdge(f, p, 'include ' + m[1]);
   }
+  if (f.endsWith('.py')) {
+    for (const m of t.matchAll(/^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))/gm)) {
+      const mod = (m[1] || m[2]).split('.')[0];
+      for (const p of resolveRel(f, './' + mod, ['.py', '/__init__.py'])) addEdge(f, p, 'python import ' + mod);
+    }
+  }
+  for (const m of t.matchAll(/(?:^|[\s;(&|])(?:source|\.|bash|sh|python3?|node)\s+["']?([\w./-]+\.(?:sh|py|js|cjs|mjs))/gm)) {
+    for (const p of [path.normalize(path.join(path.dirname(f), m[1])), path.normalize(m[1])]) if (fileSet.has(p)) addEdge(f, p, 'runs ' + m[1]);
+  }
   for (const m of t.matchAll(/(?:import|library|component)\s*\(\s*"([^"]+\.(?:dsp|lib))"\s*\)/g)) {
     for (const p of resolveInclude(f, m[1])) addEdge(f, p, 'faust import ' + m[1]);
   }
@@ -120,6 +129,24 @@ while (queue.length) {
   const out = edges.get(f);
   if (out) for (const [to, why] of out) keep(to, why + ' in ' + f);
   reachDirs(f);
+}
+
+const builtins = new Set(require('module').builtinModules);
+for (const manifest of files.filter((f) => path.basename(f) === 'package.json' && text.has(f))) {
+  const dir = path.dirname(manifest) === '.' ? '' : path.dirname(manifest) + '/';
+  const deps = Object.keys(JSON.parse(text.get(manifest)).dependencies || {});
+  const user = files.find((f) => reason.has(f) && !runtimeRoots.some((r) => r.test(f)) && f.startsWith(dir) && /\.(c|m)?js$/.test(f)
+    && [...(text.get(f) || '').matchAll(/require\(\s*['"]([^'".][^'"]*)['"]\s*\)/g)].some((m) => deps.includes(m[1]) && !builtins.has(m[1])));
+  if (!user) continue;
+  keep(manifest, 'npm manifest: ' + user + ' requires its dependencies');
+  const lock = dir + 'package-lock.json';
+  if (fileSet.has(lock)) keep(lock, 'npm lock file of kept ' + manifest);
+}
+
+for (const ig of files.filter((f) => path.basename(f) === '.gitignore' && f.includes('/'))) {
+  const dir = path.dirname(ig) + '/';
+  const sibling = files.find((f) => f !== ig && f.startsWith(dir) && reason.has(f));
+  if (sibling) keep(ig, 'ignore rules for the kept directory of ' + sibling);
 }
 
 const byBlob = new Map();
@@ -189,7 +216,7 @@ if (outMd) {
   lines.push(`- Red check, dead paths named by a workflow, AGENTS.md or docs/PENDING_VALIDATION.md: ${redDead.length}; dead paths named by any kept file: ${deadNamedByKept.length}.`);
   lines.push(`- Identical-blob groups inside the kept set: ${keptDup.length}, all under docs/witness.`, '');
   lines.push('## Rules', '');
-  lines.push('- keep: under src, dsp, effects, kernel, image, config, vendor, ci or .github/workflows; an owner root document (AGENTS.md, README.md, CLAUDE.md, LICENSE, .gitignore, .gitattributes, docs/PENDING_VALIDATION.md); an operator tool listed below; or reached from a kept file by its repo path, a two-component path suffix, a unique basename, a require/import, a C/C++ include, a Faust import, or a directory under test-audio-corpus, vendor, docs/demo or tools that a kept file names.');
+  lines.push('- keep: under src, dsp, effects, kernel, image, config, vendor, ci or .github/workflows; an owner root document (AGENTS.md, README.md, CLAUDE.md, LICENSE, .gitignore, .gitattributes, docs/PENDING_VALIDATION.md); an operator tool listed below; or reached from a kept file by its repo path, a two-component path suffix, a unique basename, a require/import, a C/C++ include, a Faust import, a Python import, a script run (source, sh, bash, python, node), or a directory under test-audio-corpus, vendor, docs/demo or tools that a kept file names; a nested .gitignore beside kept files; an npm manifest and its lock file when a kept script under it requires one of its dependencies.');
   lines.push('- runtime: .gm, closes and .vscode state.');
   lines.push('- duplicate: the same blob as another path, the kept or lexically first copy being canonical.');
   lines.push('- generated: a docs/witness output that nothing kept reaches.');

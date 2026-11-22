@@ -2,6 +2,7 @@
 
 const { setPhaseQuantum, beatAtTime } = require('./link');
 const W = require('./world');
+const { circularGap } = require('./world');
 
 const kRecordedBeats = [3, 5, 6, 7];
 const kCaptureQuantumBeats = 128.0;
@@ -9,12 +10,6 @@ const kBpm = 120.0;
 const kHorizonBeats = 288.0;
 const kStepSamples = 12;
 const kCleanToleranceBeats = 1e-3;
-
-function circularGap(a, b, period) {
-  let d = (a - b) % period;
-  if (d < 0) d += period;
-  return Math.min(d, period - d);
-}
 
 function makeWorld(rb, fixed) {
   setPhaseQuantum(kCaptureQuantumBeats);

@@ -2,7 +2,7 @@
 
 const { setPhaseQuantum } = require('./link');
 const W = require('./world');
-const { makePair } = require('./read-head-lineup');
+const { makePair } = require('./world');
 
 const kMasterBpm = 120.0;
 const kTakeMs = 2000;

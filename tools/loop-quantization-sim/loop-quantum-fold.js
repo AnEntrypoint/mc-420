@@ -4,6 +4,7 @@ const { createLinkSession, createLinkPeer, registerPeer, setPhaseQuantum, beatAt
 const {
   createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples, SIM_SAMPLE_RATE,
 } = require('./world');
+const { circularGap, advancePair } = require('./world');
 
 const kStaggerMs = 700;
 const kSettleMs = 500;
@@ -26,10 +27,6 @@ function makeSharedPair(initialBpm) {
   return { session, a, b };
 }
 
-function advancePair(a, b, samples) {
-  for (let i = 0; i < samples; i++) { stepOneSample(a); stepOneSample(b); }
-}
-
 function nowMs(w) {
   return (w.t / SIM_SAMPLE_RATE) * 1000;
 }
@@ -38,12 +35,6 @@ function beatPhase(w) {
   if (w.masterLenSamples <= 0 || w.recordedBeats < 1.0) return null;
   const beats = w.recordedBeats;
   return (w.masterPhaseSamples / w.masterLenSamples) * beats;
-}
-
-function circularGap(a, b, period) {
-  let d = (a - b) % period;
-  if (d < 0) d += period;
-  return Math.min(d, period - d);
 }
 
 function gridError(w, session) {

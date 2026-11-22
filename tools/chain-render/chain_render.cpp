@@ -214,7 +214,7 @@ Stage makeStage(dsp* obj, int sampleRate)
     return s;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv)
 {

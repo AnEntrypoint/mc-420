@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-const net = require('net');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -26,24 +25,8 @@ const kPeerBuild = 'g++ -std=c++14 -O1 -DLINK_PLATFORM_WINDOWS -D_WIN32_WINNT=0x
 
 const peerPath = path.join(__dirname, '..', '..', 'build', 'link-peer-sweep.exe');
 
-function sendBytes(bytes) {
-  return new Promise((resolve, reject) => {
-    const sock = net.connect({ host, port: 9401 }, () => {
-      sock.write(Buffer.from(bytes), (err) => {
-        if (err) return reject(err);
-        sock.end();
-      });
-    });
-    sock.setTimeout(5000);
-    sock.on('timeout', () => { sock.destroy(); reject(new Error(`connect/write to ${host}:9401 timed out`)); });
-    sock.on('close', resolve);
-    sock.on('error', reject);
-  });
-}
-
-const pressPad = (note) => sendBytes([0x90, note, 127]);
-const releasePad = (note) => sendBytes([0x80, note, 0]);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { sendBytes, pressPad, releasePad } = require('./device-io').deviceIo(host);
+const { sleep } = require('./device-io');
 
 async function settleWrapLen(looperIndex, maxMs) {
   let last = null, stableCount = 0;

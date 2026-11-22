@@ -1603,11 +1603,8 @@ int AudioThread::blockSizeSamples() const { return cfg_.blockSize; }
 Sampler* AudioThread::sampler() const { return g_sampler; }
 Lv2Host* AudioThread::homeFx() const { return g_homeFx; }
 UsbRecorder* AudioThread::usbRecorder() const { return g_usbRecorder; }
-ClipExporter* AudioThread::clipExporter() const { return g_clipExporter; }
 
 void AudioThread::triggerClipExport() { g_clipExportTriggerPending.store(true, std::memory_order_relaxed); }
 void AudioThread::setLatencyTrim(int samples) { g_liveLatencyTrimSamples.store(samples, std::memory_order_relaxed); }
-bool AudioThread::setRealtime(int core, int prio) { return setRealtimeSelf(core, prio); }
-void AudioThread::workerLoop() {}
 
 }

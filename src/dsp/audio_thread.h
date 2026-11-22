@@ -11,7 +11,6 @@ class  LinkBridge;
 class  Sampler;
 class  Lv2Host;
 class  UsbRecorder;
-class  ClipExporter;
 
 struct AudioConfig {
     int sampleRate = 48000;
@@ -143,11 +142,7 @@ public:
 
     UsbRecorder* usbRecorder() const;
 
-    ClipExporter* clipExporter() const;
-
 private:
-    void workerLoop();
-    bool setRealtime(int core, int prio);
     AudioConfig cfg_;
 };
 

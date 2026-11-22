@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-const net = require('net');
-const dgram = require('dgram');
 
 const [, , host] = process.argv;
 if (!host) {
@@ -8,35 +6,7 @@ if (!host) {
   process.exit(2);
 }
 
-function sendBytes(bytes) {
-  return new Promise((resolve, reject) => {
-    const sock = net.connect({ host, port: 9401 }, () => {
-      sock.write(Buffer.from(bytes), (err) => {
-        if (err) return reject(err);
-        sock.end();
-      });
-    });
-    sock.setTimeout(5000);
-    sock.on('timeout', () => { sock.destroy(); reject(new Error(`connect/write to ${host}:9401 timed out after 5s`)); });
-    sock.on('close', resolve);
-    sock.on('error', reject);
-  });
-}
-
-function queryTelemetry() {
-  return new Promise((resolve, reject) => {
-    const sock = dgram.createSocket('udp4');
-    const timeout = setTimeout(() => { sock.close(); reject(new Error('telemetry query timed out')); }, 3000);
-    sock.on('message', (msg) => {
-      clearTimeout(timeout);
-      sock.close();
-      try { resolve(JSON.parse(msg.toString())); }
-      catch (e) { reject(e); }
-    });
-    sock.on('error', (e) => { clearTimeout(timeout); reject(e); });
-    sock.send('status', 4445, host);
-  });
-}
+const { sendBytes, queryTelemetry } = require('./device-io').deviceIo(host);
 
 const MICROREPEAT_DIVISION_1_NOTE = 82;
 

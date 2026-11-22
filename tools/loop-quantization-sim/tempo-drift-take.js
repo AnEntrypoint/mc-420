@@ -2,7 +2,8 @@
 
 const { setPhaseQuantum, setTempoContinuous } = require('./link');
 const W = require('./world');
-const { makePair, readHeadError } = require('./read-head-lineup');
+const { readHeadError } = require('./read-head-lineup');
+const { makePair } = require('./world');
 
 const kMasterBpm = 120.0;
 const kTakeBeats = 4.0;

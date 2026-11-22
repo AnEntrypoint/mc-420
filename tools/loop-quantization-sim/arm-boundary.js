@@ -2,7 +2,7 @@
 
 const W = require('./world');
 const { setPhaseQuantum } = require('./link');
-const { makePair } = require('./read-head-lineup');
+const { makePair } = require('./world');
 
 const kHoldMs = 2000;
 

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-const net = require('net');
 
 const [, , host, cmd, ...rest] = process.argv;
 if (!host || !cmd) {
@@ -8,20 +7,7 @@ if (!host || !cmd) {
   process.exit(2);
 }
 
-function sendBytes(bytes) {
-  return new Promise((resolve, reject) => {
-    const sock = net.connect({ host, port: 9401 }, () => {
-      sock.write(Buffer.from(bytes), (err) => {
-        if (err) return reject(err);
-        sock.end();
-      });
-    });
-    sock.setTimeout(5000);
-    sock.on('timeout', () => { sock.destroy(); reject(new Error(`connect/write to ${host}:9401 timed out after 5s`)); });
-    sock.on('close', resolve);
-    sock.on('error', reject);
-  });
-}
+const { sendBytes } = require('./device-io').deviceIo(host);
 
 async function main() {
   if (cmd === 'raw') {

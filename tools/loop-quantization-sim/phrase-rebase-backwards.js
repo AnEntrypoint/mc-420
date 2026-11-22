@@ -5,6 +5,7 @@ const {
   setPhaseQuantum, LINK_PHASE_QUANTUM,
   beatAtTime, phaseAtTime, requestPhaseImpose, applyPendingPhaseImpose,
 } = require('./link');
+const { circularGap } = require('./world');
 
 const kPhraseBeats = 64.0;
 const kCaptureQuantumBeats = 128.0;
@@ -107,12 +108,6 @@ function sppUnitsAt(session, timeMs) {
 function sppOffGrid(units) {
   const rest = units % kSppPhraseAlignment;
   return Math.min(rest, kSppPhraseAlignment - rest) > kSppToleranceUnits;
-}
-
-function circularGap(a, b, period) {
-  let d = (a - b) % period;
-  if (d < 0) d += period;
-  return Math.min(d, period - d);
 }
 
 function loopGap(w, session, timeMs, rb) {

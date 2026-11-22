@@ -1,7 +1,7 @@
 'use strict';
 
 const { initLooperDsp, stepSample, MAXLEN } = require('./looper');
-const { createLinkWorld, LINK_QUANTUM, beatAtTime, phaseAtTime, requestPhaseImpose, applyPendingPhaseImpose, countOtherConnectedFromSession } = require('./link');
+const { createLinkWorld, LINK_QUANTUM, beatAtTime, phaseAtTime, requestPhaseImpose, applyPendingPhaseImpose, countOtherConnectedFromSession, createLinkSession, createLinkPeer, registerPeer } = require('./link');
 
 const PARAM_DEFAULTS = Object.freeze({
   'cmd/input1_recordable': 1.0,
@@ -707,7 +707,31 @@ function advance(w, samples) {
   for (let i = 0; i < samples; i++) stepOneSample(w);
 }
 
+function circularGap(a, b, period) {
+  let d = (a - b) % period;
+  if (d < 0) d += period;
+  return Math.min(d, period - d);
+}
+
+function advancePair(a, b, samples) {
+  for (let i = 0; i < samples; i++) { stepOneSample(a); stepOneSample(b); }
+}
+
+function makePair(bpm) {
+  const session = createLinkSession(bpm);
+  const peerA = createLinkPeer('A', session);
+  const peerB = createLinkPeer('B', session);
+  registerPeer(peerA);
+  registerPeer(peerB);
+  const a = createWorld({ looperCount: 4, initialLinkBpm: bpm });
+  const b = createWorld({ looperCount: 4, initialLinkBpm: bpm });
+  a.link = { session, local: peerA, remote: peerB };
+  b.link = { session, local: peerB, remote: peerA };
+  return { session, peerA, peerB, a, b };
+}
+
 module.exports = {
+  circularGap, advancePair, makePair,
   createWorld, advance, stepOneSample, PARAM_DEFAULTS, resetParamDefaults,
   onPadPress, onPadRelease, onClearAll, onShiftPress, onShiftRelease,
   msToSimSamples, SIM_SAMPLE_RATE, SIM_MAXLEN,

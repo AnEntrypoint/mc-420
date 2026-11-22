@@ -23,7 +23,7 @@ Right-to-repair is not a marketing label here — it is the actual architecture:
   `src/control/midi.cpp`.
 - **The user effect is a plain LV2 directory, not a locked plugin slot.** Drop
   your own `.lv2` bundle onto the flash storage and it loads at service start
-  (a restart; `Lv2Host::rescanUser()` has no caller) —
+  (a restart) —
   write it in Faust or use any existing LV2 plugin.
 - **The whole runtime is standard Linux**, debuggable with the same tools that
   work on any Linux box — SSH, `/proc`, ALSA, standard cross-compilers — instead
@@ -116,7 +116,7 @@ compiled into the firmware:
 - **You** drop your own `.lv2` bundle into `/effects/user/` on the SD card and it
   loads at service start on that same worker — write it in
   [Faust](https://faust.grame.fr), or use any of the thousands of existing LV2
-  plugins. A restart is needed; `Lv2Host::rescanUser()` has no caller. See
+  plugins. A restart is needed. See
   [`effects/README.md`](effects/README.md).
 
 This is only possible because Linux gives us a filesystem and a dynamic linker —

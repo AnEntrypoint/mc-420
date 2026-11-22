@@ -2,6 +2,7 @@
 
 const { setPhaseQuantum, beatAtTime, requestPhaseImpose, applyPendingPhaseImpose } = require('./link');
 const W = require('./world');
+const { circularGap } = require('./world');
 
 const kRecordedBeats = [3, 5, 6, 7];
 const kCaptureQuantumBeats = 128.0;
@@ -10,12 +11,6 @@ const kCaptureBeat = 10.0;
 const kRebaseDeltaBeats = 134.0;
 const kSettleBeat = 160.0;
 const kCleanToleranceBeats = 1e-3;
-
-function circularGap(a, b, period) {
-  let d = (a - b) % period;
-  if (d < 0) d += period;
-  return Math.min(d, period - d);
-}
 
 function wrappedForward(from, to, period) {
   let d = (to - from) % period;

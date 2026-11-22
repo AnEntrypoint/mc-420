@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-const net = require('net');
-const dgram = require('dgram');
 
 const [, , host, ...holdArgs] = process.argv;
 if (!host) {
@@ -9,20 +7,8 @@ if (!host) {
 }
 const holds = (holdArgs.length ? holdArgs : ['2000', '600', '8100']).map(Number);
 
-function sendBytes(bytes) {
-  return new Promise((resolve, reject) => {
-    const sock = net.connect({ host, port: 9401 }, () => {
-      sock.write(Buffer.from(bytes), (err) => {
-        if (err) return reject(err);
-        sock.end();
-      });
-    });
-    sock.setTimeout(5000);
-    sock.on('timeout', () => { sock.destroy(); reject(new Error(`connect/write to ${host}:9401 timed out after 5s`)); });
-    sock.on('close', resolve);
-    sock.on('error', reject);
-  });
-}
+const { sendBytes, queryTelemetry, pressPad, releasePad } = require('./device-io').deviceIo(host);
+const { deriveTempoQuantBeats } = require('./device-io');
 
 function padNote(looperIndex) {
   if (looperIndex < 0 || looperIndex > 3) {
@@ -30,28 +16,6 @@ function padNote(looperIndex) {
   }
   const row = 0, col = looperIndex + 2;
   return row * 8 + col;
-}
-
-async function pressPad(note) {
-  await sendBytes([0x90, note, 127]);
-}
-async function releasePad(note) {
-  await sendBytes([0x80, note, 0]);
-}
-
-function queryTelemetry() {
-  return new Promise((resolve, reject) => {
-    const sock = dgram.createSocket('udp4');
-    const timeout = setTimeout(() => { sock.close(); reject(new Error('telemetry query timed out')); }, 3000);
-    sock.on('message', (msg) => {
-      clearTimeout(timeout);
-      sock.close();
-      try { resolve(JSON.parse(msg.toString())); }
-      catch (e) { reject(e); }
-    });
-    sock.on('error', (e) => { clearTimeout(timeout); reject(e); });
-    sock.send('status', 4445, host);
-  });
 }
 
 async function settleWrapLen(looperIndex, maxMs) {
@@ -93,20 +57,6 @@ function ladderAnchorBeats(phraseBeats, takeLenBeats) {
   while (anchor * 0.5 >= 1.0 && anchor > takeLenBeats + eps) anchor *= 0.5;
   if (anchor > takeLenBeats + eps) anchor = 1.0;
   return anchor;
-}
-
-function deriveTempoQuantBeats(recordedSeconds, anchorBpm) {
-  const anchor = (anchorBpm > 1) ? anchorBpm : 120;
-  let best = 16, bestScore = Infinity, bestInWindow = false;
-  for (let beats = 1; beats <= 128; beats += 1) {
-    const bpm = (60 * beats) / recordedSeconds;
-    const inWindow = bpm >= anchor * 0.5 && bpm <= anchor * 2;
-    const score = Math.abs(Math.log2(bpm / anchor));
-    if ((inWindow && !bestInWindow) || (inWindow === bestInWindow && score < bestScore)) {
-      best = beats; bestScore = score; bestInWindow = inWindow;
-    }
-  }
-  return best;
 }
 
 const NEAR_CUT_BEATS = 1.0;

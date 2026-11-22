@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 'use strict';
-const net = require('net');
-const dgram = require('dgram');
 const { despikedSpread } = require('./lib/gridlock');
 
 const [, , host, holdMsArg, watchMsArg, trialsArg] = process.argv;
@@ -26,7 +24,9 @@ const kTakePads = [3, 4, 5, 10, 11, 12, 13, 18];
 const kClearAllNote = 0x5b;
 const kAnchorBpm = 120;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { sendBytes, queryTelemetry, pressPad, releasePad } = require('./device-io').deviceIo(host);
+const { sleep, deriveTempoQuantBeats } = require('./device-io');
+
 const wrap = (v, len) => ((v % len) + len) % len;
 const center = (v, len) => wrap(v + len * 0.5, len) - len * 0.5;
 
@@ -37,63 +37,12 @@ function padLooper(note) {
   return row * 4 + (col - 2);
 }
 
-function sendBytes(bytes) {
-  return new Promise((resolve, reject) => {
-    const sock = net.connect({ host, port: 9401 }, () => {
-      sock.write(Buffer.from(bytes), (err) => {
-        if (err) return reject(err);
-        sock.end();
-      });
-    });
-    sock.setTimeout(5000);
-    sock.on('timeout', () => { sock.destroy(); reject(new Error(`connect/write to ${host}:9401 timed out`)); });
-    sock.on('close', resolve);
-    sock.on('error', reject);
-  });
-}
-
-const pressPad = (note) => sendBytes([0x90, note, 127]);
-const releasePad = (note) => sendBytes([0x80, note, 0]);
-
-function queryTelemetry() {
-  return new Promise((resolve, reject) => {
-    const sock = dgram.createSocket('udp4');
-    const timer = setTimeout(() => { sock.close(); reject(new Error('telemetry query timed out')); }, 3000);
-    sock.on('message', (msg) => {
-      clearTimeout(timer);
-      sock.close();
-      try { resolve(JSON.parse(msg.toString())); }
-      catch (e) { reject(e); }
-    });
-    sock.on('error', (e) => { clearTimeout(timer); reject(e); });
-    sock.send('status', 4445, host);
-  });
-}
-
 function slopePerSecond(series) {
   let sx = 0, sy = 0, sxx = 0, sxy = 0;
   for (const [x, y] of series) { sx += x; sy += y; sxx += x * x; sxy += x * y; }
   const n = series.length;
   const denom = n * sxx - sx * sx;
   return denom === 0 ? 0 : (n * sxy - sx * sy) / denom;
-}
-
-function deriveTempoQuantBeats(seconds, anchorBpm) {
-  const anchor = anchorBpm > 1 ? anchorBpm : 120;
-  let best = 16;
-  let bestScore = Infinity;
-  let bestInWindow = false;
-  for (let beats = 1; beats <= 128; beats += 1) {
-    const bpm = (60 * beats) / seconds;
-    const inWindow = bpm >= anchor * 0.5 && bpm <= anchor * 2;
-    const score = Math.abs(Math.log2(bpm / anchor));
-    if ((inWindow && !bestInWindow) || (inWindow === bestInWindow && score < bestScore)) {
-      best = beats;
-      bestScore = score;
-      bestInWindow = inWindow;
-    }
-  }
-  return best;
 }
 
 function nearestNodeSamples(phase, masterLen, cell) {

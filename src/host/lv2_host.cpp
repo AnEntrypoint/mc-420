@@ -338,10 +338,6 @@ Lv2Host::ControlHandle Lv2Host::resolveControl(const std::string& symbol) const 
     return h;
 }
 
-void Lv2Host::rescanUser(const std::string& userDir) {
-    loadDir(userDir);
-}
-
 void Lv2Host::disablePlugin(Lv2Plugin* p) { if (p) p->enabled = false; }
 
 }

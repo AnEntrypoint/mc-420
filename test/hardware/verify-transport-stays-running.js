@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-const net = require('net');
-const dgram = require('dgram');
 
 const [, , host, holdMsArg] = process.argv;
 if (!host) {
@@ -13,41 +11,10 @@ const kPollMs = 100;
 const kWatchMs = 5000;
 const kMinGridSteps = 4;
 
-function sendBytes(bytes) {
-  return new Promise((resolve, reject) => {
-    const sock = net.connect({ host, port: 9401 }, () => {
-      sock.write(Buffer.from(bytes), (err) => {
-        if (err) return reject(err);
-        sock.end();
-      });
-    });
-    sock.setTimeout(5000);
-    sock.on('timeout', () => { sock.destroy(); reject(new Error(`connect/write to ${host}:9401 timed out`)); });
-    sock.on('close', resolve);
-    sock.on('error', reject);
-  });
-}
+const { sendBytes, queryTelemetry, pressPad, releasePad } = require('./device-io').deviceIo(host);
+const { sleep } = require('./device-io');
 
-const pressPad = (note) => sendBytes([0x90, note, 127]);
-const releasePad = (note) => sendBytes([0x80, note, 0]);
 const tapPad = async (note) => { await pressPad(note); await releasePad(note); };
-
-function queryTelemetry() {
-  return new Promise((resolve, reject) => {
-    const sock = dgram.createSocket('udp4');
-    const timer = setTimeout(() => { sock.close(); reject(new Error('telemetry query timed out')); }, 3000);
-    sock.on('message', (msg) => {
-      clearTimeout(timer);
-      sock.close();
-      try { resolve(JSON.parse(msg.toString())); }
-      catch (e) { reject(e); }
-    });
-    sock.on('error', (e) => { clearTimeout(timer); reject(e); });
-    sock.send('status', 4445, host);
-  });
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
   console.log(`[transport] target=${host} take=${kHoldMs}ms`);

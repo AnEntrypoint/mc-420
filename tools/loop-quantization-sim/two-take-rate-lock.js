@@ -6,6 +6,7 @@ const {
 const {
   createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples, SIM_SAMPLE_RATE,
 } = require('./world');
+const { advancePair, makePair } = require('./world');
 
 const kHoldMs = 2000;
 const kJumpBeats = 1.0;
@@ -15,23 +16,6 @@ const kStepMs = 50;
 const kCycleTolerance = 1e-6;
 const kDriftToleranceSamples = 8;
 const kLeadOffsetsMs = [370, 610, 1130, 1790];
-
-function makePair(bpm) {
-  const session = createLinkSession(bpm);
-  const peerA = createLinkPeer('A', session);
-  const peerB = createLinkPeer('B', session);
-  registerPeer(peerA);
-  registerPeer(peerB);
-  const a = createWorld({ looperCount: 4, initialLinkBpm: bpm });
-  const b = createWorld({ looperCount: 4, initialLinkBpm: bpm });
-  a.link = { session, local: peerA, remote: peerB };
-  b.link = { session, local: peerB, remote: peerA };
-  return { session, peerA, peerB, a, b };
-}
-
-function advancePair(a, b, samples) {
-  for (let i = 0; i < samples; i++) { stepOneSample(a); stepOneSample(b); }
-}
 
 function shiftSessionPhase(session, beats) {
   session.gridOriginTimeMs -= (beats / session.tempo) * 60000;
@@ -171,4 +155,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { run, worstOver, makePair, cyclesPerRepeat };
+module.exports = { run, worstOver, cyclesPerRepeat };

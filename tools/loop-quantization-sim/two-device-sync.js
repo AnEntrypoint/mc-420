@@ -4,6 +4,7 @@ const { createLinkSession, createLinkPeer, registerPeer, setPhaseQuantum } = req
 const {
   createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples, effSpeedNow,
 } = require('./world');
+const { circularGap, advancePair } = require('./world');
 
 const kStaggerMs = 700;
 
@@ -18,10 +19,6 @@ function makeSharedPair(initialBpm) {
   a.link = { session, local: peerA, remote: peerB };
   b.link = { session, local: peerB, remote: peerA };
   return { session, a, b };
-}
-
-function advancePair(a, b, samples) {
-  for (let i = 0; i < samples; i++) { stepOneSample(a); stepOneSample(b); }
 }
 
 function beatPhase(w) {
@@ -39,12 +36,6 @@ function beatGcd(a, b) {
     x = t;
   }
   return Math.max(1, x);
-}
-
-function circularGap(a, b, period) {
-  let d = (a - b) % period;
-  if (d < 0) d += period;
-  return Math.min(d, period - d);
 }
 
 function runPair(opts) {

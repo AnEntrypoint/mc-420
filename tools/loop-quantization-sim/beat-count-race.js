@@ -4,6 +4,7 @@ const { createLinkSession, createLinkPeer, registerPeer, setPhaseQuantum, beatAt
 const {
   createWorld, stepOneSample, onPadPress, onPadRelease, msToSimSamples, SIM_SAMPLE_RATE,
 } = require('./world');
+const { circularGap, advancePair, makePair } = require('./world');
 
 const kHoldMs = 2000;
 const kWatchMs = 40000;
@@ -12,23 +13,6 @@ const kToleranceBeats = 0.05;
 const kGapToleranceBeats = 0.25;
 const kImposeWindowMs = 500;
 const kSettleMsMax = 1000;
-
-function makePair(bpm) {
-  const session = createLinkSession(bpm);
-  const peerA = createLinkPeer('A', session);
-  const peerB = createLinkPeer('B', session);
-  registerPeer(peerA);
-  registerPeer(peerB);
-  const a = createWorld({ looperCount: 4, initialLinkBpm: bpm });
-  const b = createWorld({ looperCount: 4, initialLinkBpm: bpm });
-  a.link = { session, local: peerA, remote: peerB };
-  b.link = { session, local: peerB, remote: peerA };
-  return { session, a, b };
-}
-
-function advancePair(a, b, samples) {
-  for (let i = 0; i < samples; i++) { stepOneSample(a); stepOneSample(b); }
-}
 
 function sessionBeat(session, w) {
   return beatAtTime(session, (w.t / SIM_SAMPLE_RATE) * 1000);
@@ -49,12 +33,6 @@ function trueTargetBeats(w) {
   const linkBeat = frac * (s.quantumMicroBeats / 1e6);
   const loopBeatPos = ((linkBeat % beats) + beats) % beats;
   return loopBeatPos;
-}
-
-function circularGap(a, b, period) {
-  let d = (a - b) % period;
-  if (d < 0) d += period;
-  return Math.min(d, period - d);
 }
 
 function runRace(legacy, offsetMs) {
@@ -181,4 +159,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { runRace, makePair };
+module.exports = { runRace };

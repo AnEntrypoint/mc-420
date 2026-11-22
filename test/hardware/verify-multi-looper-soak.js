@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-const net = require('net');
 
 const { despikedSpread, gridBeatLen, queryTelemetry } = require('./lib/gridlock');
 
@@ -18,23 +17,7 @@ const kTrimSettleMs = 6000;
 const kSpreadToleranceSamples = 24;
 const kRateTolerance = 5e-5;
 
-function sendBytes(bytes) {
-  return new Promise((resolve, reject) => {
-    const sock = net.connect({ host, port: 9401 }, () => {
-      sock.write(Buffer.from(bytes), (err) => {
-        if (err) return reject(err);
-        sock.end();
-      });
-    });
-    sock.setTimeout(5000);
-    sock.on('timeout', () => { sock.destroy(); reject(new Error(`connect/write to ${host}:9401 timed out`)); });
-    sock.on('close', resolve);
-    sock.on('error', reject);
-  });
-}
-
-const pressPad = (note) => sendBytes([0x90, note, 127]);
-const releasePad = (note) => sendBytes([0x80, note, 0]);
+const { sendBytes, pressPad, releasePad } = require('./device-io').deviceIo(host);
 
 async function settleWrapLen(looperIndex, maxMs) {
   let last = null, stableCount = 0;

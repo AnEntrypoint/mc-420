@@ -58,7 +58,6 @@ public:
         for (float* cell : h.cells) *cell = value;
     }
 
-    void rescanUser(const std::string& userDir);
 
     enum class Topology { SERIAL, FORK_JOIN };
     void setTopology(Topology t) { topology_ = t; }

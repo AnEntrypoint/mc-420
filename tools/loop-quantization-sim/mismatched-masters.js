@@ -2,7 +2,8 @@
 
 const { setPhaseQuantum } = require('./link');
 const W = require('./world');
-const { makePair, readHeadError } = require('./read-head-lineup');
+const { readHeadError } = require('./read-head-lineup');
+const { makePair } = require('./world');
 
 const kToleranceBeats = 0.05;
 const kWatchMs = 20000;

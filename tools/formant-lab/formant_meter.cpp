@@ -212,7 +212,7 @@ Metrics analyze(const Mono& w) {
     return m;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
     if (argc < 3) {
