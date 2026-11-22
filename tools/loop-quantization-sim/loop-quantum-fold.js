@@ -19,8 +19,8 @@ function makeSharedPair(initialBpm) {
   const peerB = createLinkPeer('B', session);
   registerPeer(peerA);
   registerPeer(peerB);
-  const a = createWorld({ looperCount: 4, initialLinkBpm: initialBpm });
-  const b = createWorld({ looperCount: 4, initialLinkBpm: initialBpm });
+  const a = createWorld({ looperCount: 4, initialLinkBpm: initialBpm, quantAllBeats: true });
+  const b = createWorld({ looperCount: 4, initialLinkBpm: initialBpm, quantAllBeats: true });
   a.link = { session, local: peerA, remote: peerB };
   b.link = { session, local: peerB, remote: peerA };
   return { session, a, b };

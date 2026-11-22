@@ -35,7 +35,7 @@ function advance(w, ms) {
 }
 
 function run(legacy, takeBeats, masterMs = kMasterHoldMs) {
-  const w = W.createWorld({ looperCount: 4, initialLinkBpm: kBpm });
+  const w = W.createWorld({ looperCount: 4, initialLinkBpm: kBpm, quantAllBeats: true });
   w.legacyFinishAnchor = legacy;
 
   advance(w, 300);

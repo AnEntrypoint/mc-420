@@ -59,14 +59,25 @@ function msToSimSamples(ms) {
 }
 
 const kCandidates = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0];
+const kExponentQuantBeats = [0.25, 0.5, 1, 2, 4, 8, 16, 32, 64];
 
-function deriveTempoQuant(seconds, anchorBpm) {
+function nearestExponentQuantBeats(takeBeats, minBeats = kExponentQuantBeats[0]) {
+  let best = 0;
+  for (const q of kExponentQuantBeats) {
+    if (q < minBeats) continue;
+    if (best === 0 || Math.abs(takeBeats - q) < Math.abs(takeBeats - best)) best = q;
+  }
+  return best;
+}
+
+function deriveTempoQuant(seconds, anchorBpm, powersOfTwoOnly = false) {
   const anchor = (anchorBpm !== undefined && anchorBpm > 1.0) ? anchorBpm : 120.0;
   if (seconds <= 0.0) return { bpm: 120.0, beats: 16.0 };
   let best = { bpm: 120.0, beats: 16.0 };
   let bestScore = 1e18;
   let bestInWindow = false;
-  for (let beats = 1; beats <= 128; beats += 1) {
+  const maxBeats = powersOfTwoOnly ? 64 : 128;
+  for (let beats = 1; beats <= maxBeats; beats = powersOfTwoOnly ? beats * 2 : beats + 1) {
     const bpm = (60.0 * beats) / seconds;
     const inWindow = bpm >= anchor * 0.5 && bpm <= anchor * 2.0;
     const score = Math.abs(Math.log2(bpm / anchor));
@@ -153,6 +164,7 @@ function createWorld(opts) {
     resnapOnReconnect: true,
     resnapAfterRebase: true,
     joinSnapEnabled: true,
+    quantAllBeats: (opts && opts.quantAllBeats) === true,
     beatsGuessEnabled: false,
     tempoScaleInverted: false,
     deferBeatsWrite: false,
@@ -255,6 +267,11 @@ function snapshotWrapLen(w, looper) {
   return w.loopers[looper].dsp.wlen;
 }
 
+function toggleQuantAllBeats(w) {
+  w.quantAllBeats = !w.quantAllBeats;
+  return w.quantAllBeats;
+}
+
 function applyRecPlayCycle(w, looper) {
   const lp = w.loopers[looper];
   const timeMs = (w.t / SIM_SAMPLE_RATE) * 1000;
@@ -298,7 +315,7 @@ function applyRecPlayCycle(w, looper) {
         solvedBpm = linkSnap.bpm;
         solvedBeats = snapBeatsToPow2((recordedSeconds * linkSnap.bpm) / 60.0);
       } else {
-        const solved = deriveTempoQuant(recordedSeconds, 120.0);
+        const solved = deriveTempoQuant(recordedSeconds, 120.0, !w.quantAllBeats);
         solvedBpm = solved.bpm;
         solvedBeats = solved.beats;
       }
@@ -358,6 +375,7 @@ function applyRecPlayCycle(w, looper) {
           ? pastNodeBeats
           : futureNodeBeats);
       if (!legacy && takeLenBeats < 2 * phraseBeats && finalBeats > phraseBeats) finalBeats = phraseBeats;
+      if (!legacy && !w.quantAllBeats) finalBeats = nearestExponentQuantBeats(takeLenBeats);
       const beatLenSamplesNow = w.tempoScaleInverted ? oneBeat / tempoScale : oneBeat * tempoScale;
       let quantized = Math.round(finalBeats * beatLenSamplesNow);
       if (quantized < 1) quantized = 1;
@@ -694,5 +712,6 @@ module.exports = {
   onPadPress, onPadRelease, onClearAll, onShiftPress, onShiftRelease,
   msToSimSamples, SIM_SAMPLE_RATE, SIM_MAXLEN,
   snapshotWriteIdx, snapshotWrapLen, linkAudioRead, deriveTempoQuant, snapBeatsToPow2,
+  nearestExponentQuantBeats, kExponentQuantBeats, toggleQuantAllBeats,
   effSpeedNow, beatsFoldBasis, refreshLinkSnapshot, linkTargetSamplesAt,
 };

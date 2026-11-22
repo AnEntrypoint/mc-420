@@ -82,8 +82,18 @@ jobs:
       - name: Take recorded at a drifted tempo
         run: node tools/loop-quantization-sim/tempo-drift-take.js
 
-      - name: Long take lands on the phrase grid
+      - name: Long take lands on the phrase grid with accept-all-beats
         run: node tools/loop-quantization-sim/long-take-quantize.js
+
+      - name: Takes cut to the nearest exponent-list quant and land without a shift
+        run: node tools/loop-quantization-sim/exponent-quantize.js
+
+      - name: Accept-all-beats control must fail the exponent-list quant check
+        run: |
+          if node tools/loop-quantization-sim/exponent-quantize.js --all-beats; then
+            echo "negative control unexpectedly passed"
+            exit 1
+          fi
 
       - name: Varispeed punch stays baked in the take
         run: node tools/loop-quantization-sim/varispeed-record.js

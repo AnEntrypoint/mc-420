@@ -23,6 +23,7 @@ function firstTakeOnNetwork(holdMs, legacyPeerGate) {
   setPhaseQuantum(LINK_PHASE_QUANTUM);
   const { session, a, b } = makeJoinPair();
   a.legacyPeerGate = legacyPeerGate;
+  a.quantAllBeats = true;
   initRemoteTransport(b, true);
   advancePairMs(a, b, 300);
   W.onPadPress(a, 0); W.onPadRelease(a, 0);
