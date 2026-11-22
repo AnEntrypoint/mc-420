@@ -10,3 +10,7 @@
 - tools/netboot/check-refresh-pinning.cjs — witness: offline harness rebuilds a fake served apkovl from a pinned binary and five LV2 bundles; stale LV2 is removed, ttl/so sha256 match, binary sha256 matches and non-LV2 entries survive.
 - tools/netboot/check-netboot-pin.cjs — witness: node --check image/serve-netboot-win.js and check-netboot-pin.cjs report every pin-handling assertion green.
 - tools/netboot/etc/init.d/aloop — witness: post-deploy reboot log, telemetry defaults and Link peer state.
+- src/control/apc_grid.cpp, apc_grid.h, apc_leds.h, telemetry.cpp, audio_thread.cpp/.h (exponent-list quant, pad 6 toggle) — witness: CI build-binary green on the pushed sha; on the device, telemetry `quant_all_beats` 0 at boot, a non-first take of about 3.4 beats lands at 4 beats and one of about 5.5 beats at 4 beats (`[diag-quant]` finalBeats), pad 6 via MIDI inject flips `quant_all_beats` to 1 and back to 0. Red check: `exponent-quantize.js --all-beats` must fail.
+- tools/loop-quantization-sim/exponent-quantize.js, world.js — witness: `node tools/loop-quantization-sim/exponent-quantize.js` reads PASS; red check `--all-beats` exits non-zero; the full test-loop-sim step list passes, including long-take-quantize, first-take-phrase-offset and loop-quantum-fold pinned to accept-all-beats.
+- AGENTS.md, docs/CONTROLS.md, docs/DECISIONS.md (ADR-037) — witness: `node tools/check-archive-anchors.js` passes and AGENTS.md stays under 30 KB.
+

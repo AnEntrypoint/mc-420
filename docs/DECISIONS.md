@@ -820,3 +820,31 @@ after results, forbidden by the row and AGENTS.md).
 
 Revisit if: the owner orders a live peer-present USB loopback capture, or a
 future build changes the non-exempt idle bias so that it exceeds 7 ms.
+
+## ADR-037 — Loops land on the nearest power-of-two quant by default; accept-all-beats is a toggle (2026-11-22)
+
+Decision: the default quant list is 0.25, 0.5, 1, 2, 4, 8, 16, 32 and 64 beats.
+A non-first loop's finish target is the list value nearest its measured take
+length in beats (linear distance). Ties go to the shorter value, matching the
+earlier rule that an unintentional late press takes the earlier boundary. The
+nearest value is never above the smallest list value at or above the take, so
+only values up to the recording are reachable. The first loop is not cut: it
+owns the tempo, so its length stays the recorded press-to-press samples and
+only its beat count is drawn from the whole-beat powers of two (1 to 64),
+choosing the one whose tempo is nearest 120 BPM inside 60-240 BPM. Fractional
+counts are excluded for the first loop because `recorded_beats` below one
+would break the phrase and Link quantum maths. Accept-all-beats keeps the
+previous behaviour unchanged (first loop 1-128 beats, MC-505 fold for later
+loops) and is toggled by grid pad 6, lit green for the list and yellow for
+accept-all.
+
+Alternatives rejected: cutting the first loop to a list length (it would move
+the press-to-press length the tempo is derived from, contradicting the timing
+invariant); log-space nearest (a 5.9-beat take would extend to 8 instead of
+cutting to 4, losing the "nearest boundary in time" meaning); ties to the longer
+value (makes an exactly-on-midpoint late press extend).
+
+Witness: `tools/loop-quantization-sim/exponent-quantize.js` (cut-to-nearest,
+ties, first loop uncut, toggle) and its `--all-beats` negative control; the
+rule is live on the device only after a hardware witness.
+

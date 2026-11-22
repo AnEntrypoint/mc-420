@@ -26,13 +26,25 @@ empty → ARM (rec=1, held) → FINISH (rec=0, play=1) → pause (play=0) → re
 - Real APC Key25 hardware re-sends note-on for an already-held pad; a press
   guard treats the repeat as a no-op so it can't reset a hold timer or
   re-trigger ARM/FINISH mid-recording.
-- **Successive recordings snap to a musical subdivision** of the first
-  recording's real length — the master phrase length is read from live
-  `writeIdx` telemetry (sample-accurate), never estimated from wall-clock time.
-  Candidates are always powers of 2 relative to the established length, chosen
-  by the log-space geometric midpoint between the two bracketing candidates —
-  so any two loopers' lengths are always in a clean power-of-2 ratio and stay
-  drift-free forever.
+- **Every loop lands on a power-of-two length.** When a recording stops, its
+  length goes to the nearest value in 0.25, 0.5, 1, 2, 4, 8, 16, 32 and 64
+  beats (a 16th up to 16 bars) of the first loop's tempo, measured from live
+  `writeIdx` telemetry, never wall-clock time. A take nearer a longer value
+  keeps recording to it; nearer a shorter value it is cut back; an exact tie
+  takes the shorter value. Playback carries on without any shift. The first
+  loop is never cut: it sets the tempo, and its beat count is the power of two
+  (1 to 64 beats) that puts the tempo nearest 120 BPM.
+
+## Quant pad 6: exponent list or accept all beats
+
+Pad 6 sits in the bottom row directly under the input pads 14 and 22. It
+lights **green** while the default exponent list above is active, and
+**yellow** while **accept all beats** is active. Accept all beats is the older
+rule: the first loop takes any beat count from 1 to 128 (so 3, 5, 6 and 7 beat
+phrases are possible) and later loops fold to halves and quarters of that
+phrase. Each press toggles the mode. The mode is written to
+`/run/aloop/quant_mode`, so it survives a service restart and CLEAR_ALL; a
+reboot returns to the exponent list. Telemetry reports `quant_all_beats`.
 
 ## Input pads 14 and 22: processed-and-looped or passthrough-only
 
