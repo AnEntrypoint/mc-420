@@ -11,7 +11,7 @@ resolution). Sub-multiple test: if the power at peak/2, peak/3 or peak/4 is with
 peak, the lower frequency is taken instead. `h2` and `h3` are the second and third harmonic margins
 in dB below the chosen peak - a large negative margin means the peak really is the fundamental.
 
-Witness: the per-file sweep of `4acd1333`, whose rows this table reproduces. Cross-checked against an independent
+Witness: `.gm/witness/corpus-pitch-reference.txt`. Cross-checked against an independent
 power-averaged FFT with Hann windows at 50 percent overlap and parabolic interpolation (the two
 agree: sax 1049.1 here vs 1051.5 there, marimba C5 559.6 vs 558.9, cello 111.8 vs 111.6).
 
