@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=44b8952b9772a71f3ebf1a63d6dc515f1543136a">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8e096b945d44adb4a561f56caa4c74949611286b">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -128,6 +128,13 @@ reboot returns to the exponent list. Telemetry reports <code class="language-pla
 <p>Boot defaults are: latch on, input 1 passthrough, input 2 processed-looped, FX bank Dub. The AIR192 USB/Direct knob is already fully USB (there is no ALSA control for this knob). Latch-off clipping on Focusrite channel 2 comes from the high mic/beeper gain used for the timing test, not a hardware direct-monitor loop. <code class="language-plaintext highlighter-rouge">focusrite-input2-guard.service</code> (Line In 2 Pad on, Air off, Level Line, with its udev rule) is the mitigation, and lowering the mic gain after the test removes the condition. The Focusrite input-2 guard re-applies <code class="language-plaintext highlighter-rouge">Line In 2 Pad = cap</code>, <code class="language-plaintext highlighter-rouge">Line In 2 Air = off</code>, <code class="language-plaintext highlighter-rouge">Line In 2 Level = Line</code> at boot and on Focusrite USB re-enumeration.</p>
 
 <p>Measured on the final tree with the local Pi ticker: first-loop arm offset mean -0.65 ms, stdev 1.81 ms over five bar-aligned trials; computed audio path 256 frames / 5.333 ms from 48 kHz, 64-frame block and a 2-period playback buffer; measured ALSA round trip 3.371-3.619 ms. Numeric evidence: archive#final-rig-timing.</p>
+
+<h2 id="operator-checks-before-a-set">Operator checks before a set</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">node tools/stage-readiness/check-stage.mjs --askpass &lt;script that prints the Pi password&gt;</code> reads Pi telemetry, the ESP status (including the sidechain pot, <code class="language-plaintext highlighter-rouge">pot0</code>), the Focusrite input-2 guard and a 10 s capture of Focusrite channel 2, then prints one <code class="language-plaintext highlighter-rouge">STAGE_READY PASS|FAIL</code> line for the clock and audio, and a <code class="language-plaintext highlighter-rouge">WARN</code> line when clip storage is not a real block-backed USB drive. <code class="language-plaintext highlighter-rouge">--self-test</code> shows it failing on a known-bad latch value without touching the rig.</li>
+  <li><code class="language-plaintext highlighter-rouge">node tools/press-latency/press-latency.js --run --record-note 2</code> presses the looper 0 record pad over MIDI and measures press to beep on Focusrite channel 2. Its numbers are quantisation to the next beat, not device latency (archive#final-rig-timing).</li>
+</ul>
 
 <h2 id="guitar-fx-held-sidechain-source-toggle">Guitar-FX held: sidechain-source toggle</h2>
 

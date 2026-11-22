@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"aloop architecture","url":"https://anentrypoint.github.io/mc-420/ARCHITECTURE.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=44b8952b9772a71f3ebf1a63d6dc515f1543136a">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=8e096b945d44adb4a561f56caa4c74949611286b">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -174,8 +174,7 @@ the A/B artifact, <strong>not</strong> what the aloop binary loads.</p>
 
 <p>A user drops their own <code class="language-plaintext highlighter-rouge">.lv2</code> bundle into <code class="language-plaintext highlighter-rouge">user_dir</code> (<code class="language-plaintext highlighter-rouge">/effects/user</code>) on flash and
 the audio thread’s in-process host loads it <strong>by directory</strong> (any <code class="language-plaintext highlighter-rouge">*.lv2</code> present)
-at worker startup — no recompile, no firmware flash. A restart is required:
-<code class="language-plaintext highlighter-rouge">Lv2Host::rescanUser()</code> (<code class="language-plaintext highlighter-rouge">src/host/lv2_host.cpp:339</code>) has no callers. This is the
+at worker startup — no recompile, no firmware flash. A restart is required. This is the
 moddability the whole project is for. LV2 gives the standard plugin ABI
 (<code class="language-plaintext highlighter-rouge">instantiate</code> / <code class="language-plaintext highlighter-rouge">connect_port</code> / <code class="language-plaintext highlighter-rouge">run</code>) + <code class="language-plaintext highlighter-rouge">.ttl</code> metadata. The effect dirs come
 from <code class="language-plaintext highlighter-rouge">aloop.conf [effects]</code> with hardcoded defaults in

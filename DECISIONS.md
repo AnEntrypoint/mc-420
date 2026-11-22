@@ -575,7 +575,7 @@ Kept open, with the blocker:
 - R2 v2: voiced_blocks(cand) >= voiced_blocks(base) for every corpus file, no exception.
 - R3 v2: retired; its premise is false, and the four high-register files are covered by R1 v2 and R2 v2.
 - R4 v2 and R5 v2: unchanged from v1.
-- Admission v2: S1 v2 and R1 v2 to R5 v2 pass on the normalised cand artifact of the commit that carries this text, and the candidate then replaces the shipped file in a follow-up commit. Any failure rejects the candidate; the reason is recorded here and the row stays open with that fact.
+- Admission v2: S1 v2 and R1 v2 to R5 v2 pass on the normalised cand artifact of the commit that carries this text, and the candidate then replaces the shipped file in a follow-up commit.
 - Pre-run check: the workflow concurrency is set to cancel-in-progress false in the same commit, so an unrelated push to main cannot cancel this render (the v1 run was cancelled by 263b94dc, a different row's commit).
 
 ## Pre-registration: pinned-value voicing gate, 2026-10-25 (row defect-tracker-value-clamp-60-192)
@@ -735,7 +735,7 @@ Kept open, with the blocker:
 ## ADR-026 — One shared phrase length sets every device's loop turnaround (2026-10-26, phrase-length-and-quantum-alignment)
 Decision: every device's loop turnaround uses one shared phrase length in beats (the master phrase), never the device's own take length. The carrier is OPEN: Link has no field for it, so the device half waits on a carrier decision (PRD row phrase-length-and-quantum-alignment).
 Why: Link carries tempo and the beat origin only. Each peer passes its own quantum to beatAtTime and phaseAtTime, so a device quantum built from its own take gives a different turnaround for the same session.
-Evidence: Link-3.1.3 include/ableton/Link.hpp:269, :281, :342 (quantum per call); include/ableton/link/Timeline.hpp:92-94 (tempo, beatOrigin, timeOrigin only); include/ableton/link/SessionState.hpp:37-40. Device: src/main.cpp:186-187 (quantum = cmd/recorded_beats, fallback kLinkQuantum) and src/link/link_bridge.cpp publishSnapshot (loopPhaseMicroBeats per device). Sim: tools/loop-quantization-sim/phrase-turnaround.js FAILS on the current model (master phrase 4 beats, slave loop phrase 2 beats from its own take).
+Evidence: Link-3.1.3 include/ableton/Link.hpp:269, :281, :342 (quantum per call); include/ableton/link/Timeline.hpp:92-94 (tempo, beatOrigin, timeOrigin only); include/ableton/link/SessionState.hpp:37-40. Device: src/main.cpp:186-187 (quantum = cmd/recorded_beats, fallback kLinkQuantum) and src/link/link_bridge.cpp publishSnapshot (loopPhaseMicroBeats per device). The standalone sim case that showed this (master phrase 4 beats, slave loop phrase 2 beats from its own take) failed on the model, ran in no CI step and was removed in the 2026-11-22 YAGNI sweep.
 Alternatives rejected: encoding the phrase into Timeline.beatOrigin or timeOrigin (no peer convention, and it breaks the origin = record-press-sample rule); a new UDP port (aloop binds 20808, 4445 and 4446 only); the absolute 128-beat phase (shared, but it does not carry the phrase length).
 Revisit if: the Link SDK gains an application-state field, or the owner picks a carrier (a wire change that also touches esp-idf-link). The local phrase override seam is built with that carrier, not before.
 

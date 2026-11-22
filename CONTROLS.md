@@ -69,6 +69,11 @@ Boot defaults are: latch on, input 1 passthrough, input 2 processed-looped, FX b
 
 Measured on the final tree with the local Pi ticker: first-loop arm offset mean -0.65 ms, stdev 1.81 ms over five bar-aligned trials; computed audio path 256 frames / 5.333 ms from 48 kHz, 64-frame block and a 2-period playback buffer; measured ALSA round trip 3.371-3.619 ms. Numeric evidence: archive#final-rig-timing.
 
+## Operator checks before a set
+
+- `node tools/stage-readiness/check-stage.mjs --askpass <script that prints the Pi password>` reads Pi telemetry, the ESP status (including the sidechain pot, `pot0`), the Focusrite input-2 guard and a 10 s capture of Focusrite channel 2, then prints one `STAGE_READY PASS|FAIL` line for the clock and audio, and a `WARN` line when clip storage is not a real block-backed USB drive. `--self-test` shows it failing on a known-bad latch value without touching the rig.
+- `node tools/press-latency/press-latency.js --run --record-note 2` presses the looper 0 record pad over MIDI and measures press to beep on Focusrite channel 2. Its numbers are quantisation to the next beat, not device latency (archive#final-rig-timing).
+
 ## Guitar-FX held: sidechain-source toggle
 
 While the Guitar-FX pad is held, a looper-pad press is redirected entirely — it

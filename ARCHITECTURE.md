@@ -85,8 +85,7 @@ the A/B artifact, **not** what the aloop binary loads.
 
 A user drops their own `.lv2` bundle into `user_dir` (`/effects/user`) on flash and
 the audio thread's in-process host loads it **by directory** (any `*.lv2` present)
-at worker startup — no recompile, no firmware flash. A restart is required:
-`Lv2Host::rescanUser()` (`src/host/lv2_host.cpp:339`) has no callers. This is the
+at worker startup — no recompile, no firmware flash. A restart is required. This is the
 moddability the whole project is for. LV2 gives the standard plugin ABI
 (`instantiate` / `connect_port` / `run`) + `.ttl` metadata. The effect dirs come
 from `aloop.conf [effects]` with hardcoded defaults in

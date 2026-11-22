@@ -17,7 +17,7 @@ Numeric evidence relocated verbatim from AGENTS.md. Each section is one bullet; 
 
 ## Faust codegen cliff
 
-- Faust codegen cliff: a NEW UI primitive in `resonode_synth.dsp`/`pitchtracker_ac.dsp`/`multitranspose.dsp`/`dsp/loop.dsp` risks unbounded compile; new controls go in `effects_runtime.dsp`. Measured: `pitchtracker_ac.dsp` arm 10.2-10.8 s, demote 12.6, promote 16.1, both >120 s rc=142; `ubuntu-24.04-arm` 53.3 s base: fixed-lag +8/+32/+148, +1 var-lag `@` 70.2 s, +4 120.1 s rc=142. Cost tracks what FEEDS an index, not tap count (13 rwtable taps 0.0 s). Read lag taps from a 4096-deep `rwtable` with a modulo-bounded counter, never variable-lag `@` or a float accumulator (not integer-exact past 2^24).
+- Measured (the rule is in AGENTS.md): `pitchtracker_ac.dsp` arm 10.2-10.8 s, demote 12.6, promote 16.1, both >120 s rc=142; `ubuntu-24.04-arm` 53.3 s base: fixed-lag +8/+32/+148, +1 var-lag `@` 70.2 s, +4 120.1 s rc=142. Cost tracks what FEEDS an index, not tap count (13 rwtable taps 0.0 s). Read lag taps from a 4096-deep `rwtable` with a modulo-bounded counter, never variable-lag `@` or a float accumulator (not integer-exact past 2^24).
 
 ## Per-block fprintf
 
@@ -44,7 +44,7 @@ Numeric evidence relocated verbatim from AGENTS.md. Each section is one bullet; 
 
 ## Link tempo authority
 
-- `setTempo` rewrites EVERY peer; `imposeTempo(bpm)` unconditioned, only writer of `weOwnTempo`; never gate `linkSpeedRatio` on it. Match tempo by read RATE (`linkSpeedRatio=linkBpm/recordedBpm` > `effSpeed`); `imposeTempo()` republishes in the same call or the finish edge doubles the take. Latches `g_ownedBpm`, re-imposed by `controlTick()` after `kPeerSettleTicks=2` (~400 ms) on join/leave; else a joiner merges its own 120.000 session and `eff_speed` settles 1.0067. `resetTempoAuthority()` clears it.
+- `setTempo` rewrites EVERY peer; `imposeTempo(bpm)` unconditioned, only writer of `weOwnTempo`; never gate `linkSpeedRatio` on it. Match tempo by read RATE (`linkSpeedRatio=linkBpm/recordedBpm` > `effSpeed`); Latches `g_ownedBpm`, re-imposed by `controlTick()` after `kPeerSettleTicks=2` (~400 ms) on join/leave; else a joiner merges its own 120.000 session and `eff_speed` settles 1.0067. `resetTempoAuthority()` clears it.
 
 ## Two quantums
 
@@ -56,7 +56,7 @@ Numeric evidence relocated verbatim from AGENTS.md. Each section is one bullet; 
 
 ## Resnap witness rb=3
 
-- `.gm/resnap-rb3.js 900000`, `recorded_beats=3` (`128 mod 3 = 2` -> a mis-fold reads ~2 beats): shipped `d316e22` max 0.0010 mean 0.0002 (n=483) vs pre-resnap `aloop.fixed` max 0.9880 mean 0.1473 (n=569). Judge the NEXT 1.5 s after the impose (both <=0.011 at first); needs 0->1 WHILE audible (2 of 4 windows caught none). Restore only from CI md5 `e624728ac1aa50ecfad4db4a1b0d3087`.
+- `tools/timing/resnap-rb3.js 900000`, `recorded_beats=3` (`128 mod 3 = 2` -> a mis-fold reads ~2 beats): shipped `d316e22` max 0.0010 mean 0.0002 (n=483) vs pre-resnap `aloop.fixed` max 0.9880 mean 0.1473 (n=569). Judge the NEXT 1.5 s after the impose (both <=0.011 at first); needs 0->1 WHILE audible (2 of 4 windows caught none). Restore only from CI md5 `e624728ac1aa50ecfad4db4a1b0d3087`.
 
 ## Sim mirrors device Link
 
@@ -80,7 +80,7 @@ Numeric evidence relocated verbatim from AGENTS.md. Each section is one bullet; 
 
 ## Netbooted address and dsp shippability
 
-- The netbooted client's address drifts: the firmware-stage lease was 192.168.137.132 while `cmdline.txt` pins .100, and .100 answered nothing. `/var/lib/misc/dnsmasq.leases` is the authority, not the pinned address. SSH is root/aloop; no `ssh2` in this checkout, so use `SSH_ASKPASS` + `setsid ssh`. A `.dsp` edit is NOT shippable from this host: `build-binary.yml` regenerates only `aloop_pre`/`aloop_post`, `dsp_generated.cpp` is committed and compiled as-is, the pinned faust is 2.85.9 and this host has 2.81.10, which also hits faust's own 120 s SIGALRM (exit 142) on `pitchtracker_ac.dsp`. So the multitranspose-side lead (`lastConvergedNote` carrying the previous note's decision across a note-on, seeded from `targetNote` only at `ba.time == 0`) is UNTESTED, not disproven.
+- The netbooted client's address drifts: the firmware-stage lease was 192.168.137.132 while `cmdline.txt` pins .100, and .100 answered nothing. SSH is root/aloop; no `ssh2` in this checkout, so use `SSH_ASKPASS` + `setsid ssh`. A `.dsp` edit is NOT shippable from this host: `build-binary.yml` regenerates only `aloop_pre`/`aloop_post`, `dsp_generated.cpp` is committed and compiled as-is, the pinned faust is 2.85.9 and this host has 2.81.10, which also hits faust's own 120 s SIGALRM (exit 142) on `pitchtracker_ac.dsp`. So the multitranspose-side lead (`lastConvergedNote` carrying the previous note's decision across a note-on, seeded from `targetNote` only at `ba.time == 0`) is UNTESTED, not disproven.
 
 ## Upward-shift fold-back refuted
 
@@ -457,7 +457,7 @@ the same 17 blocks.
 
 ## Host build limits
 
-- This host: no cmake, no X11/GL/freetype/alsa headers, uid 1000 so no apt, so a clean-install check is a CI job, never a local run. A Linux clean install on ubuntu-latest additionally needed the GL development packages, plus freetype via `CPATH`.
+- Host device build, 2026-11-22 (rule in AGENTS.md): cmake 3, ninja and faust 2.81 present; ALSA and pkgconf extracted without root. Faust pre-generation 55-100 s, the cold first configure 579 s = 9.6 min (Ableton Link fetched with submodules, cached after), compile and link 197-245 s at `-j2`; the S6 full `build-device.sh` window (faust, configure on the cached fetch, compile, link) took 441 s. glibc 2.34+ made `SIGSTKSZ` a runtime value, fixed in `src/host/lv2_host.cpp` with `kWatchdogAltStackBytes`.
 
 ## ENGAGED latch
 
@@ -473,11 +473,11 @@ the same 17 blocks.
 
 ## Corpus pitch reference (labels are not ground truth)
 
-- `.gm/witness/corpus-pitch-reference.txt` (`4acd1333`) records a measured spectral peak per swept file with harmonic margins; score against it, not the filename note. Files whose peak is nowhere near their label include `bassoon_low_C2B2` (label 65.41, peak 486.70, +3474.5 c), `tuba_run_C2B2` (65.41 / 496.50, +3509.1 c), `trumpet_low_A3` (220.00 / 1091.84, +2773.4 c) and `violin_low_sulG_G3B3` (196.00 / 394.71, +1211.9 c). Per-window medians (`11ab5e91`): sax 1052.13, trumpet 1048.63, clarinet 1049.63, cello 111.50 (+23.4 c against its label, mostly label error), vibraphone 590.81; oboe reads a partial. C6 labels are sound (+2 to +8 c); C5 reads 114 c low, so C5 numbers need their reference named. Output error against the target equals source/detected, so all live error is detector bias.
+- `docs/witness/corpus-pitch-reference.md` (sweep `4acd1333`) records a measured spectral peak per swept file with harmonic margins; score against it, not the filename note. Files whose peak is nowhere near their label include `bassoon_low_C2B2` (label 65.41, peak 486.70, +3474.5 c), `tuba_run_C2B2` (65.41 / 496.50, +3509.1 c), `trumpet_low_A3` (220.00 / 1091.84, +2773.4 c) and `violin_low_sulG_G3B3` (196.00 / 394.71, +1211.9 c). Per-window medians (`11ab5e91`): sax 1052.13, trumpet 1048.63, clarinet 1049.63, cello 111.50 (+23.4 c against its label, mostly label error), vibraphone 590.81; oboe reads a partial. C6 labels are sound (+2 to +8 c); C5 reads 114 c low, so C5 numbers need their reference named. Output error against the target equals source/detected, so all live error is detector bias.
 
 ## Confidence gates
 
-- `confidenceGate = 0.85` (`multitranspose.dsp`) gates re-tracking only; `kContGate = 0.50` (`snacPeriodTracker.h`) gates whether `confidence()` reports it. `updateContinuity` uses window `min(2p+128, SNAC_WIN)` and the best r over ±6%: `confidence()` >=0.50 on 96.3% of real-audio blocks with a good lock.
+- `confidenceGate = 0.85` (`multitranspose.dsp`) gates re-tracking only; `updateContinuity` uses window `min(2p+128, SNAC_WIN)` and the best r over ±6%: `confidence()` >=0.50 on 96.3% of real-audio blocks with a good lock.
 
 ## Refine spread is lag-proportional (archive#refine-spread-lag-proportional)
 
@@ -794,7 +794,7 @@ Window 4a: read-only, no deploy, no restart, no flash. Pre-registration 8ac272b2
 - Final-tree first-loop bar-aligned trials: five arm offsets 1.73, -0.53, -2.90, -1.83, 0.30 ms; mean -0.65 ms, stdev 1.81 ms. Finish offsets 4.44, 2.64, -0.53, -2.77, 3.26 ms; mean 1.41 ms, stdev 2.97 ms. Accent phase 2, ratio 1.347, period 500.03 ms, 120 calibration beeps.
 - Computed audio path from /etc/aloop.conf and src/dsp/audio_thread.cpp: 48000 Hz, 64-frame block, period=N, bufSize=period*2 -> 2 periods / 128-frame playback buffer / 2.667 ms; capture + processing + playback buffer = 256 frames / 5.333 ms. Measured telemetry round trip 161.8 samples / 3.371 ms early and 173.7 samples / 3.619 ms final; latency bias 225.8 then 237.7 samples (4.704 then 4.952 ms).
 - Focusrite input-2 guard with Line In 2 Pad cap, Air off, Level Line: latch-on channel 2 RMS 0.000901, peak 0.0466, 20 onsets at 500 ms; latch-off RMS 0.06418, peak 0.7028, 22 onsets at 500 ms, zero clipped samples. Press-to-beep harness note 2 gave quantisation-to-next-beat 353.875 and 336.458 ms, not device latency.
-- Owner-confirmed correction (2026-11-14): the AIR192 USB/Direct knob is already fully USB; latch-off clipping on Focusrite channel 2 is the high mic/beeper gain used for the timing test, not a hardware direct-monitor loop. `focusrite-input2-guard.service` (Line In 2 Pad on, Air off, Level Line, with its udev rule) is the mitigation, and lowering the mic gain after the test removes the condition. The earlier claim that the knob must be turned fully USB or is the remaining root fix is wrong.
+- Owner-confirmed correction (2026-11-14): the AIR192 USB/Direct knob is already fully USB; latch-off clipping on Focusrite channel 2 is the high mic/beeper gain used for the timing test, not a hardware direct-monitor loop. The earlier claim that the knob must be turned fully USB or is the remaining root fix is wrong.
 
 ## Exponent-list loop quant on the device, 2026-11-22 (archive#exponent-quant-device)
 
