@@ -457,7 +457,7 @@ the same 17 blocks.
 
 ## Host build limits
 
-- Host device build, 2026-11-22 (rule in AGENTS.md): cmake 3, ninja and faust 2.81 present; ALSA and pkgconf extracted without root. Faust pre-generation 55-100 s, the first configure 579 s (Ableton Link fetched with submodules, cached after), compile and link 197-245 s at `-j2`. glibc 2.34+ made `SIGSTKSZ` a runtime value, fixed in `src/host/lv2_host.cpp` with `kWatchdogAltStackBytes`.
+- Host device build, 2026-11-22 (rule in AGENTS.md): cmake 3, ninja and faust 2.81 present; ALSA and pkgconf extracted without root. Faust pre-generation 55-100 s, the cold first configure 579 s = 9.6 min (Ableton Link fetched with submodules, cached after), compile and link 197-245 s at `-j2`; the S6 full `build-device.sh` window (faust, configure on the cached fetch, compile, link) took 441 s. glibc 2.34+ made `SIGSTKSZ` a runtime value, fixed in `src/host/lv2_host.cpp` with `kWatchdogAltStackBytes`.
 
 ## ENGAGED latch
 
