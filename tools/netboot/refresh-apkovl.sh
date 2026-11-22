@@ -3,7 +3,7 @@ set -euo pipefail
 SERVED_DIR=${SERVED_DIR:-/srv/tftp/aloop-netboot}
 ARCHIVE="$SERVED_DIR/aloop.apkovl.tar.gz"
 REPO=${REPO:-AnEntrypoint/mc-420}
-PIN=${NETBOOT_PIN:-5acb7d3b48269432e64de63eb120f4fa5b4ab356}
+PIN=${NETBOOT_PIN:-7a68a1cee51e7c8f1c19b137088449192d446e50}
 LV2_SOURCE=${NETBOOT_LV2_DIR:-}
 BINARY=${1:-}
 if [ $# -ge 2 ]; then LV2_SOURCE=$2; fi
