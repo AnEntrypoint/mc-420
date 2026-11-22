@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Controls — the real, current control surface","url":"https://anentrypoint.github.io/mc-420/CONTROLS.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c4b58592103d88e8d53e97f1d5fc653b2f8ae583">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=7a68a1cee51e7c8f1c19b137088449192d446e50">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -83,14 +83,26 @@ recording re-establishes it from scratch.</li>
   <li>Real APC Key25 hardware re-sends note-on for an already-held pad; a press
 guard treats the repeat as a no-op so it can’t reset a hold timer or
 re-trigger ARM/FINISH mid-recording.</li>
-  <li><strong>Successive recordings snap to a musical subdivision</strong> of the first
-recording’s real length — the master phrase length is read from live
-<code class="language-plaintext highlighter-rouge">writeIdx</code> telemetry (sample-accurate), never estimated from wall-clock time.
-Candidates are always powers of 2 relative to the established length, chosen
-by the log-space geometric midpoint between the two bracketing candidates —
-so any two loopers’ lengths are always in a clean power-of-2 ratio and stay
-drift-free forever.</li>
+  <li><strong>Every loop lands on a power-of-two length.</strong> When a recording stops, its
+length goes to the nearest value in 0.25, 0.5, 1, 2, 4, 8, 16, 32 and 64
+beats (a 16th up to 16 bars) of the first loop’s tempo, measured from live
+<code class="language-plaintext highlighter-rouge">writeIdx</code> telemetry, never wall-clock time. A take nearer a longer value
+keeps recording to it; nearer a shorter value it is cut back; an exact tie
+takes the shorter value. Playback carries on without any shift. The first
+loop is never cut: it sets the tempo, and its beat count is the power of two
+(1 to 64 beats) that puts the tempo nearest 120 BPM.</li>
 </ul>
+
+<h2 id="quant-pad-6-exponent-list-or-accept-all-beats">Quant pad 6: exponent list or accept all beats</h2>
+
+<p>Pad 6 sits in the bottom row directly under the input pads 14 and 22. It
+lights <strong>green</strong> while the default exponent list above is active, and
+<strong>yellow</strong> while <strong>accept all beats</strong> is active. Accept all beats is the older
+rule: the first loop takes any beat count from 1 to 128 (so 3, 5, 6 and 7 beat
+phrases are possible) and later loops fold to halves and quarters of that
+phrase. Each press toggles the mode. The mode is written to
+<code class="language-plaintext highlighter-rouge">/run/aloop/quant_mode</code>, so it survives a service restart and CLEAR_ALL; a
+reboot returns to the exponent list. Telemetry reports <code class="language-plaintext highlighter-rouge">quant_all_beats</code>.</p>
 
 <h2 id="input-pads-14-and-22-processed-and-looped-or-passthrough-only">Input pads 14 and 22: processed-and-looped or passthrough-only</h2>
 

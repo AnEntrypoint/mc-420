@@ -20,7 +20,7 @@
 {"@context":"https://schema.org","@type":"WebPage","headline":"Pending validation","url":"https://anentrypoint.github.io/mc-420/PENDING_VALIDATION.html"}</script>
 <!-- End Jekyll SEO tag -->
 
-    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=c4b58592103d88e8d53e97f1d5fc653b2f8ae583">
+    <link rel="stylesheet" href="/mc-420/assets/css/style.css?v=7a68a1cee51e7c8f1c19b137088449192d446e50">
     <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
     <![endif]-->
@@ -68,7 +68,11 @@
   <li>tools/netboot/check-refresh-pinning.cjs — witness: offline harness rebuilds a fake served apkovl from a pinned binary and five LV2 bundles; stale LV2 is removed, ttl/so sha256 match, binary sha256 matches and non-LV2 entries survive.</li>
   <li>tools/netboot/check-netboot-pin.cjs — witness: node –check image/serve-netboot-win.js and check-netboot-pin.cjs report every pin-handling assertion green.</li>
   <li>tools/netboot/etc/init.d/aloop — witness: post-deploy reboot log, telemetry defaults and Link peer state.</li>
+  <li>src/control/apc_grid.cpp, apc_grid.h, apc_leds.h, telemetry.cpp, audio_thread.cpp/.h (exponent-list quant, pad 6 toggle) — witness: CI build-binary green on the pushed sha; on the device, telemetry <code class="language-plaintext highlighter-rouge">quant_all_beats</code> 0 at boot, a non-first take of about 3.4 beats lands at 4 beats and one of about 5.5 beats at 4 beats (<code class="language-plaintext highlighter-rouge">[diag-quant]</code> finalBeats), pad 6 via MIDI inject flips <code class="language-plaintext highlighter-rouge">quant_all_beats</code> to 1 and back to 0. Red check: <code class="language-plaintext highlighter-rouge">exponent-quantize.js --all-beats</code> must fail.</li>
+  <li>tools/loop-quantization-sim/exponent-quantize.js, world.js — witness: <code class="language-plaintext highlighter-rouge">node tools/loop-quantization-sim/exponent-quantize.js</code> reads PASS; red check <code class="language-plaintext highlighter-rouge">--all-beats</code> exits non-zero; the full test-loop-sim step list passes, including long-take-quantize, first-take-phrase-offset and loop-quantum-fold pinned to accept-all-beats.</li>
+  <li>AGENTS.md, docs/CONTROLS.md, docs/DECISIONS.md (ADR-037) — witness: <code class="language-plaintext highlighter-rouge">node tools/check-archive-anchors.js</code> passes and AGENTS.md stays under 30 KB.</li>
 </ul>
+
 
 
       </section>
